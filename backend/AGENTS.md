@@ -39,4 +39,5 @@ Before writing, changing, or exploring tests for a crate, read its guide:
 - `tb_domain` → [`docs/tests/domain.md`](docs/tests/domain.md) — `MockStore` (the `mock!` store double), fixtures, the prepopulated snapshot and its data rules
 - `tb_strava` → [`docs/tests/strava.md`](docs/tests/strava.md) — `MockStravaConn` (the `mock!` store double), `strava_session`/`strava_admin_session`, JSON helpers
 - `tb_axum` → [`docs/tests/axum.md`](docs/tests/axum.md) — `test_app`, router tests, coverage map
+- `tb_exec` → [`docs/tests/exec.md`](docs/tests/exec.md) — `MockConn` (the `mock!` store/`Txn` witness), the loop's control-flow units, the frame-push/orchestration ownership boundary
 - `tb_sqlx` → [`docs/tests/sqlx.md`](docs/tests/sqlx.md) — entity-mapping roundtrips, the seam integration suites

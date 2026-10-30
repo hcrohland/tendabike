@@ -1,6 +1,13 @@
 # tb_domain tests
 
-All `tb_domain` tests run DB-free (no database): pure value-logic needs no store, and every store-touching test runs the real domain operation over a `mockall` `mock!` double, [`MockStore`]. One `<name>_tests.rs` module per entity under `domain/src/entities/<name>/`. Store *behavior* (keying, normalization, commit/abort, `RowNotFound` mapping, the read/write roundtrips) is not duplicated here — it is verified once on the real Postgres path, the sqlx seam suite (`sqlx/tests/store_seam.rs`), where Postgres is the source of truth. See [`sqlx.md`](sqlx.md).
+All `tb_domain` tests run DB-free (no database). One `<name>_tests.rs` module per entity under `domain/src/entities/<name>/`.
+
+## Behavior ownership
+
+`tb_domain` owns the **domain-level results**: pure value-logic needs no store, and every store-touching test runs the real domain operation over a `mockall` `mock!` double, [`MockStore`], asserting the domain result (the `Summary`, the `TbResult`). The domain logic runs for real; only the store I/O the operation calls is scripted.
+
+- **What it mocks** — the **store trait seam**: [`MockStore`] accumulates the full `Store` surface (the nine sub-traits + the method-free `Store` marker). The double implements the trait; it never re-implements store behavior.
+- **What it delegates to the seam** — store *behavior*: keying, normalization, commit/abort, `RowNotFound` mapping, the read/write roundtrips. That is not duplicated here; it is verified once on the real Postgres path, the sqlx seam suite (`sqlx/tests/store_seam.rs`), which seeds a scratch database from the checked-in `SNAPSHOT_JSON` fixture and drives representative store paths through `SqlxConn`. It is the real-Postgres behavioral bar for database-specific behavior (PK violations, ordering, `RowNotFound` mapping). It is `#[ignore]`d by default and runs with `--include-ignored` + a scratch Postgres URL. See [`sqlx.md`](sqlx.md) for the run recipe and the seam contract (recorded in [`docs/agents/domain-flow.md`](../../../docs/agents/domain-flow.md), "The store seam").
 
 ## Test tiers
 
@@ -50,10 +57,6 @@ async fn my_test() -> TbResult<()> {
 - Canned rows are built as struct literals (all domain entities have pub fields) via `sample_purchase_date()` for their times.
 - Pure value-logic (a field projection, a static-table lookup with no I/O) needs no `MockStore` at all.
 - Where the rule is about the *database* (roundtrips, `RowNotFound`, offset rounding), do not re-implement it here — rest on the sqlx seam.
-
-## The behavioral bar
-
-Store behavior is verified once, on the real Postgres path: the sqlx seam suite (`sqlx/tests/store_seam.rs`) seeds a scratch database from the checked-in `SNAPSHOT_JSON` fixture and drives representative domain operations through `SqlxConn`, asserting the same domain-level results. It is `#[ignore]`d by default and runs with `--include-ignored` + a scratch Postgres URL. See [`sqlx.md`](sqlx.md) for the run recipe and the seam contract (recorded in [`docs/agents/domain-flow.md`](../../../docs/agents/domain-flow.md), "The store seam").
 
 ## Fixture regeneration
 
