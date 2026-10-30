@@ -653,9 +653,9 @@ async fn gear_hydration_frame_and_fifo_read() {
 
     // The created part row is committed: the fixture's 17 parts plus the
     // hydration's, visible to a fresh connection.
-    let mut conn = seam.pool.begin().await.expect("a fresh connection");
+    let mut conn = seam.pool.raw().acquire().await.expect("a fresh connection");
     let n: i64 = sqlx::query_scalar("SELECT count(*) FROM parts")
-        .fetch_one(&mut **conn)
+        .fetch_one(&mut *conn)
         .await
         .expect("reading the parts table");
     assert_eq!(n, 18, "the hydration's part row is committed (17 → 18)");

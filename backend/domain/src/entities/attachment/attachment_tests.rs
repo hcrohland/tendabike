@@ -653,9 +653,11 @@ async fn detach_assembly_api_returns_error_if_not_attached() -> TbResult<()> {
     store
         .expect_partid_get_part()
         .returning(move |_| Ok(part_row(part, test_user(), CHAIN, UsageId::new())));
-    // No attachment at the detach time.
+    // No attachment at the detach time; the lookup must be performed exactly
+    // once — the `NotFound` is owned by this empty state, not any other path.
     store
         .expect_attachment_get_by_part_and_time()
+        .times(1)
         .returning(|_, _| Ok(None));
 
     let result = detach_assembly(&test_session(), part, later_time(), false, &mut store).await;
