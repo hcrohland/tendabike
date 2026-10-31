@@ -1,6 +1,6 @@
 # Domain Flow
 
-How the Tendabike client stays in sync with the backend. Read this when adding or modifying a mutating operation — a domain operation, an endpoint that serves it, or its client handler. Terminology: `CONTEXT.md`.
+How the Tendabike client stays in sync with the backend. Read this when adding or modifying a mutating operation — a domain operation, an endpoint that serves it, or its client handler. Terminology: `GLOSSARY.md`.
 
 ## The claim
 
