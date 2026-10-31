@@ -208,19 +208,22 @@ impl ShopId {
     /// Returns a Summary with the unregistered part and its attachments
     ///
     /// Side effect: a `part_unregistered` (transient) notification to the
-    /// part owner.
+    /// other party (never the actor): the shop owner when the part owner (or
+    /// a subscribed user) acts, the part owner when the shop owner acts. No
+    /// notification when the actor is both the shop owner and the part owner.
     pub async fn unregister_part(
         self,
         part_id: PartId,
         session: &dyn Session,
         store: &mut (impl AttachmentStore + PartStore + ShopStore + NotificationStore),
     ) -> TbResult<Summary> {
+        let actor = session.user_id();
         let parts = parts_for_register(part_id, session, store).await?;
 
         let parts = store.parts_unregister_shop(parts).await?;
         // The top-level part is last in the list (parts_for_register pushes
-        // subparts first, then the top-level part). Its owner is the correct
-        // notification recipient.
+        // subparts first, then the top-level part). Its owner is the part
+        // owner.
         let part_owner = parts
             .last()
             .map(|p| p.owner)
@@ -229,17 +232,27 @@ impl ShopId {
         let mut summary = Summary::default();
         summary.parts.upsert_all(parts);
 
-        // Notify the part owner (transient)
-        let notification = store
-            .notification_create(
-                part_owner,
-                NotificationLifecycle::Transient,
-                NotificationKind::PartUnregistered,
-                NotificationSubject::Part(part_id),
-                None,
-            )
-            .await?;
-        summary.notifications.upsert(notification);
+        // Notify the other party (never the actor).
+        let shop = store.shop_get(self).await?;
+        let recipient = if actor == shop.owner {
+            // Shop owner acts: notify the part owner (if different).
+            (actor != part_owner).then_some(part_owner)
+        } else {
+            // Part owner (or subscribed user) acts: notify the shop owner.
+            Some(shop.owner)
+        };
+        if let Some(recipient) = recipient {
+            let notification = store
+                .notification_create(
+                    recipient,
+                    NotificationLifecycle::Transient,
+                    NotificationKind::PartUnregistered,
+                    NotificationSubject::Part(part_id),
+                    None,
+                )
+                .await?;
+            summary.notifications.upsert(notification);
+        }
         Ok(summary)
     }
 

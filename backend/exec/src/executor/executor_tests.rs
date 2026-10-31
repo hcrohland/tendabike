@@ -1915,7 +1915,8 @@ async fn deliver_no_cross_recipient_for_part_owner_in_shop_context() {
 }
 
 /// A shop-context write that produces a notification for a third party (neither
-/// the acting user nor the part owner) pushes it to that user's personal stream.
+/// the acting user nor the part owner) pushes it to that user's personal stream
+/// and to the shop stream (so a recipient "in" the shop receives it).
 #[tokio::test]
 async fn deliver_cross_recipient_third_party_in_shop_context() {
     let pusher = RecordingPusher::new();
@@ -1943,6 +1944,14 @@ async fn deliver_cross_recipient_third_party_in_shop_context() {
             |call| matches!(call, PushCall::User(uid, s) if *uid == third_party && *s == summary)
         ),
         "the third party's personal stream receives the notification, got {:?}",
+        calls
+    );
+    // The shop stream also receives the notification (for recipients "in" the shop).
+    assert!(
+        calls
+            .iter()
+            .any(|call| matches!(call, PushCall::Shop(sid, s) if *sid == shop_id && *s == summary)),
+        "the shop stream receives the cross-recipient notification, got {:?}",
         calls
     );
 }

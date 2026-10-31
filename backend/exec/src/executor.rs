@@ -281,7 +281,9 @@ pub(crate) async fn deliver_frame(
     // recipient's personal stream. The acting user's own notifications ride
     // the normal frame above; in a shop context the part owner's
     // notifications also ride the normal frame (pushed to their personal
-    // stream).
+    // stream). In a shop context the notification is also pushed to the shop
+    // stream so a recipient whose client is on the shop stream (because they
+    // are "in" the shop) receives it.
     for notification in summary.notifications.live() {
         let recipient = notification.recipient;
         if recipient == user_id {
@@ -294,7 +296,12 @@ pub(crate) async fn deliver_frame(
         }
         let mut recipient_summary = Summary::default();
         recipient_summary.notifications.upsert(notification);
-        pusher.push_to_user(recipient, recipient_summary).await;
+        pusher
+            .push_to_user(recipient, recipient_summary.clone())
+            .await;
+        if let Some(shop_id) = shop {
+            pusher.push_to_shop(shop_id, recipient_summary).await;
+        }
     }
 }
 

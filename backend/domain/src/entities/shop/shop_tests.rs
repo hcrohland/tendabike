@@ -476,6 +476,7 @@ async fn register_part_attached_rejected() -> TbResult<()> {
 async fn unregister_part_by_owner() -> TbResult<()> {
     let shop_id = ShopId::from(1);
     let customer = UserId::from(1);
+    let shop_owner = UserId::from(2);
     let bike = PartId::from(1);
 
     let mut store = MockStore::new();
@@ -483,6 +484,9 @@ async fn unregister_part_by_owner() -> TbResult<()> {
     store
         .expect_partid_get_part()
         .returning(move |_| Ok(bike_row.clone()));
+    store
+        .expect_shop_get()
+        .returning(move |_| Ok(shop_row(shop_id, shop_owner, "Bike Barn", true)));
     store
         .expect_attachment_get_by_part_and_time()
         .returning(|_, _| Ok(None));
@@ -498,9 +502,10 @@ async fn unregister_part_by_owner() -> TbResult<()> {
                 .map(|p| part_row(p, customer, BIKE, None))
                 .collect())
         });
+    // The part owner (actor) unregisters: notify the shop owner.
     store.expect_notification_create().returning(
         move |recipient, lifecycle, kind, subject, message| {
-            assert_eq!(recipient, customer);
+            assert_eq!(recipient, shop_owner);
             assert_eq!(lifecycle, NotificationLifecycle::Transient);
             assert_eq!(kind, NotificationKind::PartUnregistered);
             assert_eq!(subject, NotificationSubject::Part(bike));
