@@ -1839,6 +1839,96 @@ async fn deliver_cross_recipient_notification_to_user_stream() {
     );
 }
 
+/// A user-context write (the acting session has no shop — the subscriber
+/// registers a part from their personal view) whose summary carries a part
+/// registered in a shop pushes the cross-recipient notification to that
+/// shop's stream (issue #687): the shop owner's open shop view listens on
+/// the shop stream, and the session's context is the actor's, not the
+/// shop's.
+#[tokio::test]
+async fn deliver_cross_recipient_notification_to_shop_stream_without_shop_context() {
+    let pusher = RecordingPusher::new();
+    let (frames, _frame_rx) = broadcast::channel(4);
+    let acting_user = UserId::from(1);
+    let shop_owner = UserId::from(2);
+    let shop_id = ShopId::from(7);
+    // The registered part (in the shop, owned by the acting user), the
+    // `part_registered` notification to the shop owner, and the shop itself
+    // (the domain operation carries it in the summary, issue #687).
+    let mut part = part_owned_by(acting_user);
+    part.shop = Some(shop_id);
+    let mut summary = Summary::default();
+    summary.parts.upsert(part);
+    summary.shops.upsert(shop_owned_by(shop_owner));
+    let notification = Notification {
+        id: NotificationId::from(Uuid::now_v7()),
+        recipient: shop_owner,
+        lifecycle: NotificationLifecycle::Transient,
+        kind: NotificationKind::PartRegistered,
+        subject: NotificationSubject::Part(PartId::from(1)),
+        message: None,
+        state: NotificationState::New,
+        created_at: sample_purchase_date(),
+    };
+    summary.notifications.upsert(notification.clone());
+
+    deliver_frame(&pusher, &frames, acting_user, None, None, &summary).await;
+
+    // The shop stream receives the notification (the shop owner is "in" the
+    // shop).
+    assert!(
+        calls_contain_notification(&pusher.calls(), shop_id, notification.id),
+        "the shop stream receives the cross-recipient notification, got {:?}",
+        pusher.calls()
+    );
+}
+
+/// Whether the recorded pushes contain a `push_to_shop` for `shop_id` whose
+/// summary carries the notification `id`.
+fn calls_contain_notification(calls: &[PushCall], shop_id: ShopId, id: NotificationId) -> bool {
+    calls.iter().any(|call| match call {
+        PushCall::Shop(sid, s) if *sid == shop_id => {
+            s.notifications.live().iter().any(|n| n.id == id)
+        }
+        _ => false,
+    })
+}
+
+/// A shop-context write whose summary carries the session's own shop does not
+/// push a duplicate frame to the shop stream (the session's shop is already
+/// delivered by the normal routing; the summary's shop is skipped).
+#[tokio::test]
+async fn deliver_shop_context_no_duplicate_shop_push() {
+    let pusher = RecordingPusher::new();
+    let (frames, _frame_rx) = broadcast::channel(4);
+    let shop_id = ShopId::from(7);
+    let part_owner = UserId::from(2);
+    let mut summary = summary_owned_by(part_owner);
+    summary.shops.upsert(shop_owned_by(UserId::from(1)));
+
+    deliver_frame(
+        &pusher,
+        &frames,
+        UserId::from(1),
+        Some(shop_id),
+        Some(part_owner),
+        &summary,
+    )
+    .await;
+
+    let shop_pushes = pusher
+        .calls()
+        .iter()
+        .filter(|call| matches!(call, PushCall::Shop(sid, _) if *sid == shop_id))
+        .count();
+    assert_eq!(
+        shop_pushes,
+        1,
+        "the shop stream receives the frame exactly once, got {:?}",
+        pusher.calls()
+    );
+}
+
 /// A user-context write that produces a notification for the acting user
 /// does NOT push it again via `push_to_user` (it already rides the normal
 /// frame).

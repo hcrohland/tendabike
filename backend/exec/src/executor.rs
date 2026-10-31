@@ -248,6 +248,14 @@ pub(crate) async fn select_message(
 ///   foreign part must not leak into the shop owner's personal view; the part
 ///   owner, who may be the shop owner, receives the frame via `push_to_user`).
 ///
+/// **Shops the operation touched** (issue #687): each `Shop` in the
+/// `Summary` (not the session's own) also receives the frame via
+/// [`FramePusher::push_to_shop`]. The session's context is the actor's — a
+/// subscriber registering a part in a shop acts from their personal view
+/// (no shop context) — while the `Shop` the domain operation carried in the
+/// `Summary` names the shop whose stream's subscriber (the shop owner's open
+/// shop view) must receive the shop's state, parts and notifications alike.
+///
 /// **Cross-recipient notification routing** (issue #677): after the normal
 /// frame is delivered, each notification in the `Summary` whose recipient is
 /// not the acting user (and not the part owner in a shop context) is pushed
@@ -275,6 +283,17 @@ pub(crate) async fn deliver_frame(
             if let Some(owner) = part_owner {
                 pusher.push_to_user(owner, summary.clone()).await;
             }
+        }
+    }
+    // Shops the operation touched (issue #687): a frame for a shop the
+    // acting session is not "in" (a subscriber registering a part from
+    // their personal view) is routed by the summary's content, not by the
+    // session's context — the shop stream's subscriber (the shop owner's
+    // open shop view) receives the shop's state, parts and notifications
+    // alike. The session's own shop was already delivered above.
+    for shop_entry in summary.shops.live() {
+        if Some(shop_entry.id) != shop {
+            pusher.push_to_shop(shop_entry.id, summary.clone()).await;
         }
     }
     // Cross-recipient notification routing: push each notification to its
