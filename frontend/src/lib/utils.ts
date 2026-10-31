@@ -86,8 +86,8 @@ export function checkStatus(response: Response) {
   });
 }
 
-export function handleError(e: Error) {
-  error(e.message);
+export function handleError(e: unknown) {
+  error(e instanceof Error ? e.message : String(e));
 }
 
 export const icons = new Map([

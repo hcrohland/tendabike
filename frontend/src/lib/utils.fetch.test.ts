@@ -128,6 +128,16 @@ describe("checkStatus", () => {
     const toasts = toastsDoor();
     expect(toasts).toHaveLength(0);
   });
+
+  it("handleError queues a toast with the server detail text", async () => {
+    const text = "Something failed";
+    await checkStatus(resp(text, 500, false, "Bad Gateway"))!.catch(
+      handleError,
+    );
+    const toasts = toastsDoor();
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0].message).toBe(text);
+  });
 });
 
 describe("checkStatus 401", () => {
