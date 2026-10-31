@@ -27,9 +27,8 @@
   let userShops = $derived(getShop() ? [] : stateValues(shops));
 
   async function unregisterFromShop() {
-    if (part.shop == null) return;
     try {
-      await Shop.unregisterPart(part, part.shop);
+      await Shop.unregisterPart(part);
     } catch (error) {
       console.error("Error unregistering part:", error);
     }

@@ -51,9 +51,10 @@ export class Shop {
     }).catch(handleError);
   }
 
-  static async unregisterPart(part: Part, shopid: number) {
+  static async unregisterPart(part: Part) {
+    if (part.shop == null) return;
     return await myfetch(
-      `/api/shop/${shopid}/parts/${part.id}`,
+      `/api/shop/${part.shop}/parts/${part.id}`,
       "DELETE",
     ).catch(handleError);
   }
