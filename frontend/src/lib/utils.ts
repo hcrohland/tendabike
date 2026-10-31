@@ -82,7 +82,6 @@ export function checkStatus(response: Response) {
   }
 
   return response.text().then((text) => {
-    error(text);
     return Promise.reject(text);
   });
 }

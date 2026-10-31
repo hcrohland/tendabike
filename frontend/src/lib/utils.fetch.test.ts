@@ -122,13 +122,11 @@ describe("checkStatus", () => {
     ).rejects.toBe(text);
   });
 
-  it("queues an ephemeral toast on error", async () => {
+  it("does not queue a toast on error (handleError is the sole toast creator)", async () => {
     const text = "Something failed";
     await checkStatus(resp(text, 500, false, "Bad Gateway"))!.catch(() => {});
     const toasts = toastsDoor();
-    expect(toasts).toHaveLength(1);
-    expect(toasts[0].message).toBe(text);
-    expect(toasts[0].kind).toBe("error");
+    expect(toasts).toHaveLength(0);
   });
 });
 
