@@ -90,7 +90,7 @@
   async function registerGear(part: Part, shopid: number, checked: boolean) {
     try {
       if (checked) await Shop.registerPart(part, shopid);
-      else await Shop.unregisterPart(part);
+      else await Shop.unregisterPart(part, shopid);
     } catch (error) {
       console.error("Error unregistering part:", error);
     }

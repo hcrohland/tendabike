@@ -124,12 +124,12 @@ describe("Shop CRUD", () => {
   });
 
   describe("unregisterPart", () => {
-    it("DELETEs /api/shop/0/parts/{part_id}", async () => {
+    it("DELETEs /api/shop/{shopid}/parts/{part_id}", async () => {
       fetchMock.mockResolvedValue(resp(summary()));
       const p = new Part(partData({ id: 5 }));
-      await Shop.unregisterPart(p);
+      await Shop.unregisterPart(p, 10);
       const [url, option] = fetchMock.mock.calls[0];
-      expect(url).toBe("/api/shop/0/parts/5");
+      expect(url).toBe("/api/shop/10/parts/5");
       expect(option.method).toBe("DELETE");
     });
   });
