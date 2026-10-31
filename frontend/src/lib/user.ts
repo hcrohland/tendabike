@@ -27,8 +27,6 @@ export async function initData() {
 }
 
 export async function refresh() {
-  // The shop scope rides the `X-Active-Shop` header the fetch layer injects
-  // from the tab's active shop (ADR-0009) — no `?shop=` query.
   let state = await myfetch("/api/user");
   if (state) {
     // The user is set once by initData(); refresh only updates the summary

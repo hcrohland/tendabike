@@ -27,8 +27,6 @@ pub(super) fn router() -> Router<AppState> {
 /// (the hydration write) before the read, so a read can change state —
 /// the committed hydration is visible to the pure-FIFO snapshot.
 async fn getuser(session: RequestSession, State(state): State<AppState>) -> ApiResult<UserState> {
-    // The shop scope is the acting session's per-request context (ADR-0009 —
-    // the `X-Active-Shop` header, read by the session extractor).
     // The hydration write (spec #558 §4), then the unified user read (spec
     // #558 §3.5): two FIFO-ordered messages on the user's executor — the
     // loop runs `update_gear` in its own transaction, and the read's
