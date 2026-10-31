@@ -512,24 +512,33 @@ pub async fn exec(
         // subscription itself is not in the summary. The notifications it
         // creates (side effects) ride the summary.
         ApiWrite::ShopSubscriptionCreate { shop, message } => Ok(WriteOutcome::Summary(
-            SubscriptionId::create(shop, message, session.user_id(), store).await?,
+            shop.subscribe(message, session.user_id(), store).await?,
         )),
         ApiWrite::ShopSubscriptionApprove { id, message } => {
-            let id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
+            let sub_id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
+            let shop_id = store.subscription_get(sub_id).await?.shop_id;
             Ok(WriteOutcome::Summary(
-                id.approve(message, session.user_id(), store).await?,
+                shop_id
+                    .approve_subscription(sub_id, message, session.user_id(), store)
+                    .await?,
             ))
         }
         ApiWrite::ShopSubscriptionReject { id, message } => {
-            let id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
+            let sub_id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
+            let shop_id = store.subscription_get(sub_id).await?.shop_id;
             Ok(WriteOutcome::Summary(
-                id.reject(message, session.user_id(), store).await?,
+                shop_id
+                    .reject_subscription(sub_id, message, session.user_id(), store)
+                    .await?,
             ))
         }
         ApiWrite::ShopSubscriptionCancel { id } => {
-            let id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
+            let sub_id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
+            let shop_id = store.subscription_get(sub_id).await?.shop_id;
             Ok(WriteOutcome::Summary(
-                id.cancel(session.user_id(), store).await?,
+                shop_id
+                    .cancel_subscription(sub_id, session.user_id(), store)
+                    .await?,
             ))
         }
 

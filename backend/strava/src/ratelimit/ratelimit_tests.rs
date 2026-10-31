@@ -165,7 +165,8 @@ fn limited_until_both_exhausted_returns_later() {
         ..Default::default()
     };
     let until = limited_until_inner(&state).unwrap();
-    // The latest boundary of the exhausted windows wins.
+    // The midnight boundary is always ≥ the 15-min boundary (which expires at
+    // the next :00/:15/:30/:45 mark), so the max is midnight.
     let expected = next_15min_boundary().max(next_midnight_utc());
     assert_eq!(until, expected, "the latest boundary wins");
 }

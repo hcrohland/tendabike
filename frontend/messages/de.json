@@ -351,7 +351,7 @@
   "sync_processed": "Verarbeite ...",
   "sync_process_queue": "Warteschlange abarbeiten",
   "notif_title_sub_request": "Werkstatt-Anmeldung",
-  "notif_body_sub_request": "Eine Werkstatt möchte sich bei dir anmelden. Prüfe die Anfrage und antworte.",
+  "notif_body_sub_request": "Eine Person möchte sich bei deiner Werkstatt anmelden. Prüfe die Anfrage und antworte.",
   "notif_title_sub_response": "Antwort auf Werkstatt-Anmeldung",
   "notif_body_sub_response": "Eine Werkstatt hat auf deine Anfrage geantwortet.",
   "notif_title_sub_cancelled": "Mitgliedschaft beendet",

@@ -2,7 +2,8 @@ use super::*;
 use crate::test_support::MockStore;
 use crate::test_support::fixtures::sample_purchase_date;
 use crate::{
-    Notification, NotificationId, NotificationState, Part, PartId, PartTypeId, Summary, UsageId,
+    Notification, NotificationId, NotificationKind, NotificationLifecycle, NotificationState,
+    NotificationSubject, Part, PartId, PartTypeId, Summary, UsageId,
 };
 
 /// A canned `Shop` row: the minimal shape the domain logic needs (id, owner,
@@ -156,7 +157,7 @@ async fn subscription_create_auto_approve_active() -> TbResult<()> {
         },
     );
 
-    let summary = SubscriptionId::create(shop, None, subscriber, &mut store).await?;
+    let summary = shop.subscribe(None, subscriber, &mut store).await?;
 
     let notification = sole_notification(&summary);
     assert_eq!(notification.recipient, subscriber);
@@ -220,7 +221,7 @@ async fn subscription_create_pending_notifies_shop_owner() -> TbResult<()> {
         },
     );
 
-    let summary = SubscriptionId::create(shop, None, subscriber, &mut store).await?;
+    let summary = shop.subscribe(None, subscriber, &mut store).await?;
 
     let notification = sole_notification(&summary);
     assert_eq!(notification.recipient, owner);
@@ -251,7 +252,7 @@ async fn subscription_create_dup_pending_conflict() -> TbResult<()> {
         .expect_subscription_find_pending()
         .returning(move |_, _| Ok(Some(existing.clone())));
 
-    let result = SubscriptionId::create(shop, None, subscriber, &mut store).await;
+    let result = shop.subscribe(None, subscriber, &mut store).await;
     assert!(matches!(result, Err(Error::Conflict(_))));
     Ok(())
 }
@@ -281,7 +282,7 @@ async fn subscription_create_dup_active_conflict() -> TbResult<()> {
         .expect_subscription_find_active()
         .returning(move |_, _| Ok(Some(active.clone())));
 
-    let result = SubscriptionId::create(shop, None, subscriber, &mut store).await;
+    let result = shop.subscribe(None, subscriber, &mut store).await;
     assert!(matches!(result, Err(Error::Conflict(_))));
     Ok(())
 }
@@ -433,13 +434,14 @@ async fn subscription_approve_owner_only() -> TbResult<()> {
     );
 
     // Non-owner cannot approve
-    let denied = sub.id.approve(None, subscriber, &mut store).await;
+    let denied = shop
+        .approve_subscription(sub.id, None, subscriber, &mut store)
+        .await;
     assert!(matches!(denied, Err(Error::Forbidden(_))));
 
     // Owner can approve
-    let summary = sub
-        .id
-        .approve(Some("Welcome!".to_string()), owner, &mut store)
+    let summary = shop
+        .approve_subscription(sub.id, Some("Welcome!".to_string()), owner, &mut store)
         .await?;
     let notification = sole_notification(&summary);
     assert_eq!(notification.recipient, subscriber);
@@ -473,7 +475,9 @@ async fn subscription_approve_pending_only() -> TbResult<()> {
         .expect_shop_get()
         .returning(move |_| Ok(shop_row(shop, owner, "Bike Barn", true)));
 
-    let result = sub.id.approve(None, owner, &mut store).await;
+    let result = shop
+        .approve_subscription(sub.id, None, owner, &mut store)
+        .await;
     assert!(matches!(result, Err(Error::Conflict(_))));
     Ok(())
 }
@@ -536,9 +540,8 @@ async fn subscription_reject_owner_only() -> TbResult<()> {
         },
     );
 
-    let summary = sub
-        .id
-        .reject(Some("Nope".to_string()), owner, &mut store)
+    let summary = shop
+        .reject_subscription(sub.id, Some("Nope".to_string()), owner, &mut store)
         .await?;
     let notification = sole_notification(&summary);
     assert_eq!(notification.recipient, subscriber);
@@ -571,7 +574,9 @@ async fn subscription_reject_non_owner_forbidden() -> TbResult<()> {
         .expect_shop_get()
         .returning(move |_| Ok(shop_row(shop, owner, "Bike Barn", false)));
 
-    let result = sub.id.reject(None, subscriber, &mut store).await;
+    let result = shop
+        .reject_subscription(sub.id, None, subscriber, &mut store)
+        .await;
     assert!(matches!(result, Err(Error::Forbidden(_))));
     Ok(())
 }
@@ -638,11 +643,13 @@ async fn subscription_cancel_subscriber_only() -> TbResult<()> {
     );
 
     // Shop owner cannot cancel
-    let denied = sub.id.cancel(owner, &mut store).await;
+    let denied = shop.cancel_subscription(sub.id, owner, &mut store).await;
     assert!(matches!(denied, Err(Error::Forbidden(_))));
 
     // Subscriber can cancel
-    let summary = sub.id.cancel(subscriber, &mut store).await?;
+    let summary = shop
+        .cancel_subscription(sub.id, subscriber, &mut store)
+        .await?;
     let notification = sole_notification(&summary);
     assert_eq!(notification.recipient, owner);
     assert_eq!(notification.kind, NotificationKind::SubCancelled);
@@ -691,7 +698,9 @@ async fn subscription_cancel_active_ok() -> TbResult<()> {
             Ok(notification.clone())
         });
 
-    let summary = sub.id.cancel(subscriber, &mut store).await?;
+    let summary = shop
+        .cancel_subscription(sub.id, subscriber, &mut store)
+        .await?;
     let notification = sole_notification(&summary);
     assert_eq!(notification.recipient, owner);
     assert_eq!(notification.kind, NotificationKind::SubCancelled);
@@ -723,7 +732,9 @@ async fn subscription_cancel_conflict_parts_in_shop() -> TbResult<()> {
         .expect_shop_get_parts()
         .returning(move |_| Ok(vec![bike.clone()]));
 
-    let result = sub.id.cancel(subscriber, &mut store).await;
+    let result = shop
+        .cancel_subscription(sub.id, subscriber, &mut store)
+        .await;
     assert!(matches!(&result, Err(Error::Conflict(msg)) if msg.contains("parts in the shop")));
     Ok(())
 }

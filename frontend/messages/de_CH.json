@@ -351,7 +351,7 @@
   "sync_processed": "Verarbeite ...",
   "sync_process_queue": "Warteschlange abarbeite",
   "notif_title_sub_request": "Werkstatt-Aameldig",
-  "notif_body_sub_request": "E Werkstaat wott sich bi dir aamälde. Prüef d'Aafrag und antworte.",
+  "notif_body_sub_request": "E Person wott sich bi diner Werkstatt aamälde. Prüef d'Aafrag und antworte.",
   "notif_title_sub_response": "Antwort uf Aameldig",
   "notif_body_sub_response": "E Werkstaat het uf dini Aafrag antworte.",
   "notif_title_sub_cancelled": "Mitgliedschaftabe broche",

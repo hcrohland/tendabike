@@ -14,7 +14,7 @@
  */
 import { mapableState, stateValues } from "./mapable.svelte";
 import { getUser } from "./user.svelte";
-import { read as apiRead, readAll as apiReadAll } from "./notification";
+import { myfetch, handleError } from "./utils";
 
 /// The wire shape of a server notification.
 export type Notification = {
@@ -128,4 +128,15 @@ export function error(message: string) {
 /// Clear all ephemeral toasts.
 export function clearToasts() {
   toasts = [];
+}
+
+/// Read a single notification (lifecycle-aware: persistent → mark seen,
+/// transient → delete). The change rides the stream frame.
+async function apiRead(id: string) {
+  await myfetch("/api/notification/" + id + "/read", "POST").catch(handleError);
+}
+
+/// Read all of the user's notifications (lifecycle-aware for each).
+async function apiReadAll() {
+  await myfetch("/api/notification/read-all", "POST").catch(handleError);
 }
