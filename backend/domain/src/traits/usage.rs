@@ -55,5 +55,5 @@ pub trait UsageStore {
     /// # Returns
     ///
     /// Returns a `Result` containing the number of reset parts or an error if the operation fails.
-    async fn delete_all(&mut self) -> TbResult<usize>;
+    async fn usage_delete_all(&mut self) -> TbResult<usize>;
 }

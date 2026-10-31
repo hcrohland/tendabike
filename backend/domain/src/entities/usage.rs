@@ -93,7 +93,16 @@ impl Usage {
     }
 
     pub(crate) async fn delete_all(store: &mut impl UsageStore) -> TbResult<usize> {
-        store.delete_all().await
+        store.usage_delete_all().await
+    }
+
+    /// Deletes a specific set of usages. The user-deletion cascade (ADR-0010)
+    /// uses this: the caller already owns these usages, so no per-row check.
+    pub(crate) async fn delete_many(
+        usages: &[Usage],
+        store: &mut impl UsageStore,
+    ) -> TbResult<usize> {
+        store.usages_delete(usages).await
     }
 
     pub(crate) async fn get_vec(

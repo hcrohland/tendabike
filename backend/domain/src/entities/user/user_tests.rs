@@ -83,3 +83,27 @@ fn user_id_check_owner_different() {
         .unwrap_err();
     assert!(matches!(err, Error::Forbidden(_)));
 }
+
+#[tokio::test]
+async fn user_id_set_onboarding_status_delegates_to_store() -> crate::TbResult<()> {
+    let mut store = crate::test_support::MockStore::new();
+    let id = UserId::from(1i32);
+    let updated = User {
+        id,
+        name: "Doe".into(),
+        firstname: "John".into(),
+        avatar: None,
+        is_admin: false,
+        onboarding_status: OnboardingStatus::Completed,
+    };
+    store
+        .expect_update_onboarding_status()
+        .withf(move |uid, status| *uid == id && *status == OnboardingStatus::Completed)
+        .times(1)
+        .returning(move |_, _| Ok(updated.clone()));
+    let result = id
+        .set_onboarding_status(OnboardingStatus::Completed, &mut store)
+        .await?;
+    assert_eq!(result.onboarding_status, OnboardingStatus::Completed);
+    Ok(())
+}

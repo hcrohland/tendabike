@@ -516,7 +516,7 @@ pub async fn exec(
         )),
         ApiWrite::ShopSubscriptionApprove { id, message } => {
             let sub_id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
-            let shop_id = store.subscription_get(sub_id).await?.shop_id;
+            let shop_id = sub_id.read(session.user_id(), store).await?.shop_id;
             Ok(WriteOutcome::Summary(
                 shop_id
                     .approve_subscription(sub_id, message, session.user_id(), store)
@@ -525,7 +525,7 @@ pub async fn exec(
         }
         ApiWrite::ShopSubscriptionReject { id, message } => {
             let sub_id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
-            let shop_id = store.subscription_get(sub_id).await?.shop_id;
+            let shop_id = sub_id.read(session.user_id(), store).await?.shop_id;
             Ok(WriteOutcome::Summary(
                 shop_id
                     .reject_subscription(sub_id, message, session.user_id(), store)
@@ -534,7 +534,7 @@ pub async fn exec(
         }
         ApiWrite::ShopSubscriptionCancel { id } => {
             let sub_id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
-            let shop_id = store.subscription_get(sub_id).await?.shop_id;
+            let shop_id = sub_id.read(session.user_id(), store).await?.shop_id;
             Ok(WriteOutcome::Summary(
                 shop_id
                     .cancel_subscription(sub_id, session.user_id(), store)
@@ -567,8 +567,9 @@ pub async fn exec(
                     "Initial sync already triggered".to_string(),
                 ));
             }
-            store
-                .update_onboarding_status(&session.user_id(), OnboardingStatus::Completed)
+            session
+                .user_id()
+                .set_onboarding_status(OnboardingStatus::Completed, store)
                 .await?;
             Ok(WriteOutcome::Summary(Summary::default()))
         }
@@ -579,11 +580,9 @@ pub async fn exec(
                     "Initial sync already completed or postponed".to_string(),
                 ));
             }
-            store
-                .update_onboarding_status(
-                    &session.user_id(),
-                    OnboardingStatus::InitialSyncPostponed,
-                )
+            session
+                .user_id()
+                .set_onboarding_status(OnboardingStatus::InitialSyncPostponed, store)
                 .await?;
             Ok(WriteOutcome::Summary(Summary::default()))
         }

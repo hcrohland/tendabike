@@ -167,6 +167,14 @@ impl PartId {
         Ok(self.read(store).await?.name)
     }
 
+    /// The part's owner, with no ownership check. The session-less read the
+    /// executor uses to route a shop-context frame to the part's owner
+    /// (ADR-0010): the executor is not an entity, so it must not call the
+    /// store directly.
+    pub async fn owner(self, store: &mut impl PartStore) -> TbResult<UserId> {
+        Ok(self.read(store).await?.owner)
+    }
+
     pub async fn is_main(self, store: &mut impl PartStore) -> TbResult<bool> {
         let part = self.read(store).await?;
         part.what.is_main()
@@ -266,6 +274,37 @@ impl PartId {
 }
 
 impl Part {
+    /// Deletes a specific set of parts. The user-deletion cascade (ADR-0010)
+    /// uses this: the caller already owns these parts, so no per-row check.
+    pub(crate) async fn delete_many(parts: &[Part], store: &mut impl PartStore) -> TbResult<usize> {
+        store.parts_delete(parts).await
+    }
+
+    /// All parts registered to a shop.
+    pub(crate) async fn for_shop(
+        shop_id: ShopId,
+        store: &mut impl PartStore,
+    ) -> TbResult<Vec<Part>> {
+        store.part_get_for_shop(shop_id).await
+    }
+
+    /// Register a set of parts to a shop (sets their `shop` field).
+    pub(crate) async fn register_to_shop(
+        shop_id: ShopId,
+        part_ids: Vec<PartId>,
+        store: &mut impl PartStore,
+    ) -> TbResult<Vec<Part>> {
+        store.parts_register_shop(shop_id, part_ids).await
+    }
+
+    /// Unregister a set of parts from their shop (clears their `shop` field).
+    pub(crate) async fn unregister_from_shop(
+        part_ids: Vec<PartId>,
+        store: &mut impl PartStore,
+    ) -> TbResult<Vec<Part>> {
+        store.parts_unregister_shop(part_ids).await
+    }
+
     pub(crate) async fn get_all(pid: &UserId, store: &mut impl PartStore) -> TbResult<Vec<Part>> {
         store.part_get_all_for_userid(pid).await
     }

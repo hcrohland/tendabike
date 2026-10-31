@@ -7,7 +7,7 @@
 ## Architecture
 
 - **Crates**: `app` (binary), `axum` (web layer), `domain` (business logic), `exec` (per-user executor — the `Txn`/`TxnSource` transaction seam), `sqlx` (PostgreSQL), `strava` (API client); workspace root at [`Cargo.toml`](../Cargo.toml).
-- **Layering**: domain traits in [`domain/src/traits/`](domain/src/traits/) → sqlx impls in [`sqlx/src/store/`](sqlx/src/store/) → axum handlers in [`axum/src/domain/`](axum/src/domain/); spec #446 §1 edges: `exec` → `domain` + `strava`, `sqlx` → `exec`, `axum` → `exec` (never `tb_sqlx` — it takes the `PgPool` for its `PostgresStore` session store).
+- **Layering**: domain traits in [`domain/src/traits/`](domain/src/traits/) → sqlx impls in [`sqlx/src/store/`](sqlx/src/store/) → axum handlers in [`axum/src/domain/`](axum/src/domain/); spec #446 §1 edges: `exec` → `domain` + `strava`, `sqlx` → `exec`, `axum` → `exec` (never `tb_sqlx` — it takes the `PgPool` for its `PostgresStore` session store). **The entity owns its store (ADR-0010)**: a store method (`<entity>_<op>`) is called only from its owning entity's code; a cross-entity need goes through the callee's entity method, never its store. Enforced by `.githooks/check-store-access.py`.
 
 ## Code Conventions
 

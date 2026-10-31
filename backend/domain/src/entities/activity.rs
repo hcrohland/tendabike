@@ -207,6 +207,15 @@ impl ActivityId {
 }
 
 impl Activity {
+    /// Deletes a specific set of activities. The user-deletion cascade
+    /// (ADR-0010) uses this: the caller already owns these activities.
+    pub(crate) async fn delete_many(
+        activities: &[Activity],
+        store: &mut impl ActivityStore,
+    ) -> TbResult<usize> {
+        store.activities_delete(activities).await
+    }
+
     /// create a new activity
     ///
     /// returns the activity and all affected parts  
@@ -331,7 +340,7 @@ impl Activity {
     /// A `Vec` of `Activity` objects representing all activities for the given user.
     ///
     pub async fn get_all(user: &UserId, store: &mut impl ActivityStore) -> TbResult<Vec<Activity>> {
-        store.get_all(user).await
+        store.activity_get_all(user).await
     }
 
     pub async fn categories(
@@ -339,7 +348,7 @@ impl Activity {
         store: &mut impl ActivityStore,
     ) -> TbResult<HashSet<PartTypeId>> {
         let act_types = store
-            .get_all(&user.user_id())
+            .activity_get_all(&user.user_id())
             .await?
             .into_iter()
             .map(|a| a.what)

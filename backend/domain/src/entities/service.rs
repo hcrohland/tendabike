@@ -86,6 +86,15 @@ impl IdKeyed for Service {
 }
 
 impl Service {
+    /// Deletes a specific set of services. The user-deletion cascade
+    /// (ADR-0010) uses this: the caller already owns these services.
+    pub(crate) async fn delete_many(
+        services: &[Service],
+        store: &mut impl ServiceStore,
+    ) -> TbResult<usize> {
+        store.services_delete(services).await
+    }
+
     /// The shared creation logic: no ownership check. The public [`Service::create`]
     /// and [`Service::redo`] check the part's ownership at their entry point and
     /// delegate here — the guard lives at the public op (ADR-0008), the creation
@@ -277,7 +286,7 @@ impl Service {
         store: &mut (impl PartStore + ServiceStore),
     ) -> TbResult<Vec<Service>> {
         let mut res = Vec::new();
-        for part in store.part_get_all_for_userid(&owner).await? {
+        for part in Part::get_all(&owner, store).await? {
             for mut service in store.services_by_part(part.id).await? {
                 if service.plans.contains(&plan) {
                     service.plans.retain(|p| *p != plan);

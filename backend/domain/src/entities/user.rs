@@ -247,6 +247,17 @@ impl UserId {
         UserStore::user_get(store, *self).await.map(|u| u.is_admin)
     }
 
+    /// Sets the user's onboarding status. The single door for the status
+    /// transitions the write dispatch performs (ADR-0010) — it calls this
+    /// instead of the store directly.
+    pub(crate) async fn set_onboarding_status(
+        &self,
+        status: OnboardingStatus,
+        store: &mut impl UserStore,
+    ) -> TbResult<User> {
+        store.update_onboarding_status(self, status).await
+    }
+
     /// get all parts, attachments and activities for the user
     ///
     /// `caller` is the pre-fetched [`UserPublic`] of `self`: when `Some`,
@@ -263,7 +274,7 @@ impl UserId {
         let activities = Activity::get_all(self, store).await?;
         let shops = Shop::get_all_for_user(self, store).await?;
         let users = Shop::get_users(&shops, self, caller, store).await?;
-        let notifications = store.notification_all_for_user(*self).await?;
+        let notifications = Notification::all_for_user(*self, store).await?;
         let mut summary = {
             let parts = match shop {
                 None => Part::get_all(self, store).await?,
@@ -319,7 +330,7 @@ impl UserId {
             usages.append(&mut uses);
             services.append(&mut servs);
             plans.append(&mut splans);
-            part_notes.append(&mut store.partnote_all_by_part(part.id).await?);
+            part_notes.append(&mut PartNote::all_for_part(part.id, store).await?);
         }
         let mut summary = Summary::default();
         summary.parts.upsert_all(parts);
@@ -341,17 +352,17 @@ impl UserId {
         let parts = summary.parts.live();
         let activities = summary.activities.live();
         let usages = summary.usages.live();
-        let n = store.services_delete(&services).await?;
+        let n = Service::delete_many(&services, store).await?;
         debug!("deleted {n} services");
-        let n = store.serviceplans_delete(&plans).await?;
+        let n = ServicePlan::delete_many(&plans, store).await?;
         debug!("deleted {n} serviceplans");
-        let n = store.attachments_delete_by_parts(&parts).await?;
+        let n = Attachment::delete_by_parts(&parts, store).await?;
         debug!("deleted {n} attachments");
-        let n = store.activities_delete(&activities).await?;
+        let n = Activity::delete_many(&activities, store).await?;
         debug!("deleted {n} activities");
-        let n = store.parts_delete(&parts).await?;
+        let n = Part::delete_many(&parts, store).await?;
         debug!("deleted {n} parts");
-        let n = store.usages_delete(&usages).await?;
+        let n = Usage::delete_many(&usages, store).await?;
         debug!("deleted {n} usages");
         let n = store.user_delete(self).await?;
         debug!("deleted {n} user");

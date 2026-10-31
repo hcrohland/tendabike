@@ -211,7 +211,7 @@ impl<'c> tb_domain::ActivityStore for SqlxConn<'c> {
         Ok(result.rows_affected() as usize)
     }
 
-    async fn get_all(&mut self, uid: &UserId) -> TbResult<Vec<Activity>> {
+    async fn activity_get_all(&mut self, uid: &UserId) -> TbResult<Vec<Activity>> {
         vec_tryinto(
             sqlx::query_as!(
                 DbActivity,

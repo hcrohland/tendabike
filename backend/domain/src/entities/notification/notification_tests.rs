@@ -268,7 +268,7 @@ async fn get_summary_includes_notifications() -> crate::TbResult<()> {
             onboarding_status: crate::OnboardingStatus::Completed,
         })
     });
-    store.expect_get_all().returning(|_| Ok(vec![]));
+    store.expect_activity_get_all().returning(|_| Ok(vec![]));
     store
         .expect_shops_get_all_for_user()
         .returning(|_| Ok(vec![]));
@@ -292,6 +292,52 @@ async fn get_summary_includes_notifications() -> crate::TbResult<()> {
     let summary = user.get_summary(None, None, &mut store).await?;
     assert_eq!(summary.notifications.len(), 2);
     assert!(summary.notifications.get(&test_notification_id()).is_some());
+    Ok(())
+}
+
+#[tokio::test]
+async fn notification_create_delegates_to_store() -> crate::TbResult<()> {
+    let mut store = MockStore::new();
+    let created = persistent_notification();
+    let created_for_assert = created.clone();
+    store
+        .expect_notification_create()
+        .withf(move |recipient, lifecycle, kind, subject, message| {
+            *recipient == test_user()
+                && *lifecycle == NotificationLifecycle::Persistent
+                && *kind == NotificationKind::SubRequest
+                && *subject == NotificationSubject::Subscription(SubscriptionId::from(1))
+                && message.as_deref() == Some("Please approve")
+        })
+        .times(1)
+        .returning(move |_, _, _, _, _| Ok(created.clone()));
+
+    let result = Notification::create(
+        test_user(),
+        NotificationLifecycle::Persistent,
+        NotificationKind::SubRequest,
+        NotificationSubject::Subscription(SubscriptionId::from(1)),
+        Some("Please approve".to_string()),
+        &mut store,
+    )
+    .await?;
+    assert_eq!(result, created_for_assert);
+    Ok(())
+}
+
+#[tokio::test]
+async fn notification_all_for_user_delegates_to_store() -> crate::TbResult<()> {
+    let mut store = MockStore::new();
+    let n = persistent_notification();
+    let n_for_assert = n.clone();
+    store
+        .expect_notification_all_for_user()
+        .withf(move |uid| *uid == test_user())
+        .times(1)
+        .returning(move |_| Ok(vec![n.clone()]));
+
+    let result = Notification::all_for_user(test_user(), &mut store).await?;
+    assert_eq!(result, vec![n_for_assert]);
     Ok(())
 }
 

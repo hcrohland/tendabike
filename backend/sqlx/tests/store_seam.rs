@@ -325,7 +325,7 @@ async fn fixture_roundtrip() -> tb_domain::TbResult<()> {
         }
 
         // activities
-        let acts = store.get_all(&UserId::from(1)).await?;
+        let acts = store.activity_get_all(&UserId::from(1)).await?;
         assert_eq!(acts.len(), snap.activities.len());
         for expected in &snap.activities {
             assert!(
@@ -715,7 +715,7 @@ async fn activity_get_all_orders_by_start() -> tb_domain::TbResult<()> {
         // The three fixture rides (May 2023) precede the two created rides
         // (November 2023), and the created rides come back in start order,
         // not creation order.
-        let acts = store.get_all(&UserId::from(1)).await?;
+        let acts = store.activity_get_all(&UserId::from(1)).await?;
         let names: Vec<&str> = acts.iter().map(|a| a.name.as_str()).collect();
         assert_eq!(
             names,

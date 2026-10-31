@@ -543,7 +543,9 @@ async fn activity_categories_returns_unique_gear_types() -> TbResult<()> {
             ..sample_activity()
         },
     ];
-    store.expect_get_all().returning(move |_| Ok(acts.clone()));
+    store
+        .expect_activity_get_all()
+        .returning(move |_| Ok(acts.clone()));
 
     let categories = Activity::categories(&test_session(), &mut store).await?;
     assert_eq!(categories, HashSet::from([BIKE]));
@@ -554,7 +556,7 @@ async fn activity_categories_returns_unique_gear_types() -> TbResult<()> {
 #[tokio::test]
 async fn activity_categories_empty_for_no_activities() -> TbResult<()> {
     let mut store = MockStore::new();
-    store.expect_get_all().returning(|_| Ok(vec![]));
+    store.expect_activity_get_all().returning(|_| Ok(vec![]));
 
     let categories = Activity::categories(&mock_session(UserId::from(99)), &mut store).await?;
     assert!(categories.is_empty());
