@@ -6,16 +6,11 @@
 //! This module also defines the `RUser` struct, which represents a user in the system and is used throughout the module.
 //! Additionally, it defines the `AxumAdmin` struct, which is used as a marker type for routes that require admin privileges.
 
-use axum::{
-    Json, Router,
-    extract::{Query, State},
-    http::StatusCode,
-    routing::get,
-};
+use axum::{Json, Router, extract::State, http::StatusCode, routing::get};
 use serde::Serialize;
 
 use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, domain::result_mismatch};
-use tb_domain::{ApiRead, ReadOutcome, ShopId, UserState};
+use tb_domain::{ApiRead, ReadOutcome, UserState};
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
@@ -31,14 +26,7 @@ pub(super) fn router() -> Router<AppState> {
 /// bare-user and summary-only routes. The handler runs `hydrate_gear`
 /// (the hydration write) before the read, so a read can change state —
 /// the committed hydration is visible to the pure-FIFO snapshot.
-async fn getuser(
-    mut session: RequestSession,
-    State(state): State<AppState>,
-    Query(ShopQuery { shop }): Query<ShopQuery>,
-) -> ApiResult<UserState> {
-    // `set_shop`'s tower-session persistence stays in axum (spec #558
-    // §3.5 — session plumbing, not domain state).
-    session.set_shop(shop)?;
+async fn getuser(session: RequestSession, State(state): State<AppState>) -> ApiResult<UserState> {
     // The hydration write (spec #558 §4), then the unified user read (spec
     // #558 §3.5): two FIFO-ordered messages on the user's executor — the
     // loop runs `update_gear` in its own transaction, and the read's
@@ -56,11 +44,6 @@ async fn getuser(
 /// no executor work — the `RequestSession` extractor is the entire check.
 async fn ping(_user: RequestSession) -> StatusCode {
     StatusCode::NO_CONTENT
-}
-
-#[derive(serde::Deserialize)]
-struct ShopQuery {
-    shop: Option<ShopId>,
 }
 
 #[derive(Clone, Serialize, Debug)]

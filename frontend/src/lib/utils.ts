@@ -1,5 +1,6 @@
 import { router } from "svelte-spa-router";
 import { getUser, setUser } from "./user";
+import { getShop } from "./shop.svelte";
 import { message } from "./message.svelte";
 
 export { message };
@@ -43,6 +44,13 @@ export function fmtNumber(number: number | undefined) {
 }
 
 export function myfetch(url: string, method?: any, data?: any) {
+  // The per-request active shop (ADR-0009): the tab's shop rides every fetch
+  // as the `X-Active-Shop` header — the fetch-side projection of `getShop()`,
+  // alongside the stream's `?shop=`, injected centrally so the two cannot
+  // diverge.
+  const headers: Record<string, string> = {};
+  const shop = getShop();
+  if (shop) headers["X-Active-Shop"] = String(shop.id);
   let option: RequestInit | undefined;
   if (method) {
     option = {
@@ -50,9 +58,12 @@ export function myfetch(url: string, method?: any, data?: any) {
       credentials: "include", // include, *same-origin, omit
       headers: {
         "Content-Type": "application/json",
+        ...headers,
       },
       body: JSON.stringify(data), // body data type must match "Content-Type" header
     };
+  } else if (Object.keys(headers).length > 0) {
+    option = { headers };
   }
   return fetch(url, option).then(checkStatus);
 }

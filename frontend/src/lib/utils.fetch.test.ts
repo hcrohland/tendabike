@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { myfetch, checkStatus, handleError, message } from "./utils";
 import { getUser, setUser } from "./user";
+import { Shop, setShop } from "./shop";
 import { resp } from "../test/helpers";
 
 function resetMessage() {
@@ -60,6 +61,45 @@ describe("myfetch", () => {
     fetchMock.mockResolvedValue(resp(null, 204, true, ""));
     const res = await myfetch("/api/test");
     expect(res).toBeNull();
+  });
+});
+
+describe("myfetch X-Active-Shop header (ADR-0009)", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    setShop(undefined);
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  it("attaches the header from the tab's active shop on a GET", async () => {
+    fetchMock.mockResolvedValue(resp({ ok: true }));
+    setShop(new Shop({ id: 10 }));
+    await myfetch("/api/user");
+    const [url, option] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/user");
+    expect(option.headers).toEqual({ "X-Active-Shop": "10" });
+  });
+
+  it("attaches the header alongside the method's headers on a POST", async () => {
+    fetchMock.mockResolvedValue(resp({ ok: true }));
+    setShop(new Shop({ id: 10 }));
+    await myfetch("/api/part", "POST", { name: "test" });
+    const [url, option] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/part");
+    expect(option.headers).toEqual({
+      "Content-Type": "application/json",
+      "X-Active-Shop": "10",
+    });
+  });
+
+  it("omits the header when the tab has no active shop", async () => {
+    fetchMock.mockResolvedValue(resp({ ok: true }));
+    await myfetch("/api/user");
+    const [url, option] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/user");
+    expect(option).toBeUndefined();
   });
 });
 

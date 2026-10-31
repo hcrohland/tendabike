@@ -49,9 +49,9 @@ pub trait Store:
 /// A trait that represents a session.
 ///
 /// All methods are `&self`: the acting session is immutable to the domain.
-/// The web layer's cookie persistence for the active shop is not a domain
-/// concern — it stays on the concrete request session as an inherent method
-/// (spec #517, ticket #588).
+/// The session splits an identity half (per-browser) from a context half
+/// (per-request: the active shop, ADR-0009) — how the context is carried
+/// (the web layer's `X-Active-Shop` header) is not a domain concern.
 ///
 /// `#[automock]` under the `test-support` feature generates a
 /// [`MockSession`]: one mockall double replaces every test's hand-rolled

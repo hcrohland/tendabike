@@ -123,7 +123,7 @@ class UserStream {
   /// the snapshot). Retried on failure (spec §7) — upserts keep flowing on
   /// the live stream meanwhile, deletions wait for it.
   private snapshot(): Promise<void> {
-    return this.snapshotAttempt(refresh(getShop()?.id), 0);
+    return this.snapshotAttempt(refresh(), 0);
   }
 
   /// One bounded snapshot attempt: on failure, wait out the retry spacing
@@ -138,8 +138,7 @@ class UserStream {
       if (attempt >= snapshotRetries) throw e;
       return new Promise<void>((resolve) =>
         setTimeout(
-          () =>
-            resolve(this.snapshotAttempt(refresh(getShop()?.id), attempt + 1)),
+          () => resolve(this.snapshotAttempt(refresh(), attempt + 1)),
           snapshotRetryDelay,
         ),
       );
