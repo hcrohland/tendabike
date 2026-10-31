@@ -2992,6 +2992,7 @@ dependencies = [
  "tb_strava",
  "time",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

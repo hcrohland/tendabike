@@ -165,14 +165,10 @@ fn limited_until_both_exhausted_returns_later() {
         ..Default::default()
     };
     let until = limited_until_inner(&state).unwrap();
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64;
-    // The longest limit wins: the daily boundary (midnight) is later than
-    // the 15-min boundary, so we sleep until midnight.
-    assert!(until - now > 900, "the daily boundary wins (it's later)");
-    assert_eq!(until % 86400, 0, "the boundary is midnight UTC");
+    // The midnight boundary is always ≥ the 15-min boundary (which expires at
+    // the next :00/:15/:30/:45 mark), so the max is midnight.
+    let expected = next_15min_boundary().max(next_midnight_utc());
+    assert_eq!(until, expected, "the latest boundary wins");
 }
 
 #[test]

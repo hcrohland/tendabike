@@ -175,6 +175,9 @@ async fn user_read_returns_user_state() -> TbResult<()> {
     store
         .expect_partnote_all_by_part()
         .returning(|_| Ok(vec![]));
+    store
+        .expect_notification_all_for_user()
+        .returning(|_| Ok(vec![]));
 
     let outcome = read(ApiRead::User, &test_session(), &mut store).await?;
     let ReadOutcome::User(state) = outcome else {
@@ -239,6 +242,9 @@ async fn user_read_shop_filter_limits_parts() -> TbResult<()> {
     store.expect_by_part().returning(|_| Ok(vec![]));
     store
         .expect_partnote_all_by_part()
+        .returning(|_| Ok(vec![]));
+    store
+        .expect_notification_all_for_user()
         .returning(|_| Ok(vec![]));
 
     // The acting session carries the shop (spec #517, ticket #588): the read

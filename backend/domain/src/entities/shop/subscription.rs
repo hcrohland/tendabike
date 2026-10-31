@@ -66,13 +66,16 @@ impl std::fmt::Display for SubscriptionStatus {
 pub struct SubscriptionId(i32);
 
 impl SubscriptionId {
-    /// Create a new subscription request
+    /// Create a new subscription request.
+    ///
+    /// Returns the created subscription's id. Notification side effects are
+    /// coordinated by the parent [`Shop`] entity.
     pub async fn create(
         shop_id: ShopId,
         message: Option<String>,
         user: UserId,
         store: &mut impl ShopStore,
-    ) -> TbResult<ShopSubscription> {
+    ) -> TbResult<SubscriptionId> {
         // Verify the shop exists (don't check ownership - users can subscribe to any shop)
         let shop = store.shop_get(shop_id).await?;
 
@@ -93,18 +96,14 @@ impl SubscriptionId {
         }
 
         let subscription = store.subscription_create(shop_id, user, message).await?;
+
         if shop.auto_approve {
-            // Update subscription status to active with response message
+            let welcome = format!("Welcome to {}", shop.name);
             store
-                .subscription_approve(
-                    subscription.id,
-                    SubscriptionStatus::Active,
-                    Some(format!("Welcome to {}", shop.name)),
-                )
-                .await
-        } else {
-            Ok(subscription)
+                .subscription_approve(subscription.id, SubscriptionStatus::Active, Some(welcome))
+                .await?;
         }
+        Ok(subscription.id)
     }
 
     /// Get a subscription by ID
@@ -146,13 +145,13 @@ impl SubscriptionId {
         Ok(self)
     }
 
-    /// Approve a subscription (shop owner only)
+    /// Approve a subscription (shop owner only).
     pub async fn approve(
         self,
         response_message: Option<String>,
         user: UserId,
         store: &mut impl ShopStore,
-    ) -> TbResult<ShopSubscription> {
+    ) -> TbResult<()> {
         let subscription = store.subscription_get(self).await?;
 
         // Verify user owns the shop
@@ -166,16 +165,17 @@ impl SubscriptionId {
         // Update subscription status to active with response message
         store
             .subscription_approve(self, SubscriptionStatus::Active, response_message)
-            .await
+            .await?;
+        Ok(())
     }
 
-    /// Reject a subscription (shop owner only)
+    /// Reject a subscription (shop owner only).
     pub async fn reject(
         self,
         response_message: Option<String>,
         user: UserId,
         store: &mut impl ShopStore,
-    ) -> TbResult<ShopSubscription> {
+    ) -> TbResult<()> {
         let subscription = store.subscription_get(self).await?;
 
         // Verify user owns the shop
@@ -188,11 +188,12 @@ impl SubscriptionId {
 
         store
             .subscription_approve(self, SubscriptionStatus::Rejected, response_message)
-            .await
+            .await?;
+        Ok(())
     }
 
-    /// Cancel a subscription (subscriber only)
-    /// Allows deletion of pending, active, and rejected subscriptions
+    /// Cancel a subscription (subscriber only).
+    /// Allows deletion of pending, active, and rejected subscriptions.
     pub async fn cancel(
         self,
         user: UserId,
@@ -224,7 +225,8 @@ impl SubscriptionId {
             return Err(Error::Conflict("You have still parts in the shop".into()));
         }
 
-        store.subscription_delete(self).await
+        store.subscription_delete(self).await?;
+        Ok(())
     }
 }
 

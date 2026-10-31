@@ -20,6 +20,21 @@ An entry in a Summary that carries its entity's data; the opposite of a tombston
 The in-memory signal the webhook fires after queueing a Strava event, making a running executor check the queue at once, even mid-idle-wait. It never spawns an executor — a queued event waits for the next spawn (an SSE connect or API write).
 _Avoid_: ping, notification, kick
 
+### Notifications
+
+**notification**:
+A message addressed to a single recipient, created as a side effect of a domain operation — never directly by the user. It has a kind and a lifecycle.
+_Avoid_: wake (the executor's signal), alert (a plan's due-ness severity), message
+
+**ephemeral**:
+A notification's lifecycle: it appears as a toast and is gone when dismissed — never in the history, never in the unread count.
+
+**transient**:
+A notification's lifecycle: it appears in the history while unread and is deleted when read.
+
+**persistent**:
+A notification's lifecycle: it remains in the history after being read; its read state is recorded.
+
 ### Bike model
 
 **type**:

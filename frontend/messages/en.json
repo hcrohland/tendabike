@@ -349,5 +349,22 @@
   "sync_start_label": "Start",
   "sync_migration_label": "Migration",
   "sync_processed": "Processing ...",
-  "sync_process_queue": "Process Event Queue"
+  "sync_process_queue": "Process Event Queue",
+  "notif_title_sub_request": "Shop subscription request",
+  "notif_body_sub_request": "A user requested to subscribe to your shop. Review their request and respond.",
+  "notif_title_sub_response": "Shop subscription response",
+  "notif_body_sub_response": "A shop responded to your subscription request.",
+  "notif_title_sub_cancelled": "Subscription cancelled",
+  "notif_body_sub_cancelled": "A shop subscription was cancelled.",
+  "notif_title_part_registered": "Part registered",
+  "notif_body_part_registered": "A part you follow was registered.",
+  "notif_title_part_unregistered": "Part unregistered",
+  "notif_body_part_unregistered": "A part you follow was unregistered.",
+  "notif_title_error": "Request failed",
+  "notif_body_error": "Something went wrong while talking to the server.",
+  "notif_panel_title": "Notifications",
+  "notif_panel_empty": "No notifications",
+  "notif_panel_read_all": "Mark all as read",
+  "notif_dismiss": "Dismiss",
+  "notif_fallback": "Notification"
 }

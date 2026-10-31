@@ -24,7 +24,6 @@
   import About from "./About/About.svelte";
   import Admin from "./Admin/Admin.svelte";
   import Header from "./Header.svelte";
-  import Message from "./Message.svelte";
   import Gear from "./Part/Gear.svelte";
   import PlanList from "./ServicePlan/PlanList.svelte";
   import Spares from "./Spares/Spares.svelte";
@@ -63,6 +62,7 @@
   import { CardPlaceholder, ThemeProvider } from "flowbite-svelte";
   import Actions from "./Widgets/Actions.svelte";
   import InitialSyncDialog from "./Widgets/InitialSyncDialog.svelte";
+  import NotificationToasts from "./Widgets/NotificationToasts.svelte";
   import ShopFrame from "./Shop/ShopFrame.svelte";
   import wrap from "svelte-spa-router/wrap";
 
@@ -75,7 +75,7 @@
 <div class="max-w-4xl">
   <Header {promise} />
 
-  <Message />
+  <NotificationToasts />
   <InitialSyncDialog />
   <ThemeProvider {theme}>
     <div class="m-1 md:m-8">

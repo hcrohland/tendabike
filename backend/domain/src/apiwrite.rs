@@ -222,6 +222,14 @@ pub enum ApiWrite {
     /// `DELETE /api/shop/subscriptions/{subscription}`
     ShopSubscriptionCancel { id: SubscriptionId },
 
+    // --- notification (`/api/notification`) ---
+    /// `POST /api/notification/{id}/read` — read a single notification
+    /// (lifecycle-aware: persistent → mark seen, transient → delete).
+    NotificationRead { id: NotificationId },
+    /// `POST /api/notification/read-all` — read all of the user's
+    /// notifications (lifecycle-aware for each).
+    NotificationReadAll,
+
     // --- user (onboarding, `/strava`) ---
     /// Trigger the initial Strava sync (the query's `time`, 0 = "now"). The
     /// domain part runs in [`exec`]; the variant carries `time` for the
@@ -500,28 +508,47 @@ pub async fn exec(
             shop.unregister_part(part, session, store).await?,
         )),
 
-        // A `ShopSubscription` is not a kind of the `Summary`, so these
-        // writes report an empty Summary: the stream carries nothing for
-        // them, and the HTTP response is their delivery.
-        ApiWrite::ShopSubscriptionCreate { shop, message } => {
-            SubscriptionId::create(shop, message, session.user_id(), store).await?;
-            Ok(WriteOutcome::Summary(Summary::default()))
-        }
+        // A `ShopSubscription` is not a kind of the `Summary`, so the
+        // subscription itself is not in the summary. The notifications it
+        // creates (side effects) ride the summary.
+        ApiWrite::ShopSubscriptionCreate { shop, message } => Ok(WriteOutcome::Summary(
+            shop.subscribe(message, session.user_id(), store).await?,
+        )),
         ApiWrite::ShopSubscriptionApprove { id, message } => {
-            let id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
-            id.approve(message, session.user_id(), store).await?;
-            Ok(WriteOutcome::Summary(Summary::default()))
+            let sub_id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
+            let shop_id = store.subscription_get(sub_id).await?.shop_id;
+            Ok(WriteOutcome::Summary(
+                shop_id
+                    .approve_subscription(sub_id, message, session.user_id(), store)
+                    .await?,
+            ))
         }
         ApiWrite::ShopSubscriptionReject { id, message } => {
-            let id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
-            id.reject(message, session.user_id(), store).await?;
-            Ok(WriteOutcome::Summary(Summary::default()))
+            let sub_id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
+            let shop_id = store.subscription_get(sub_id).await?.shop_id;
+            Ok(WriteOutcome::Summary(
+                shop_id
+                    .reject_subscription(sub_id, message, session.user_id(), store)
+                    .await?,
+            ))
         }
         ApiWrite::ShopSubscriptionCancel { id } => {
-            let id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
-            id.cancel(session.user_id(), store).await?;
-            Ok(WriteOutcome::Summary(Summary::default()))
+            let sub_id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
+            let shop_id = store.subscription_get(sub_id).await?.shop_id;
+            Ok(WriteOutcome::Summary(
+                shop_id
+                    .cancel_subscription(sub_id, session.user_id(), store)
+                    .await?,
+            ))
         }
+
+        // --- notification ---
+        ApiWrite::NotificationRead { id } => Ok(WriteOutcome::Summary(
+            id.read(session.user_id(), store).await?,
+        )),
+        ApiWrite::NotificationReadAll => Ok(WriteOutcome::Summary(
+            Notification::read_all(session.user_id(), store).await?,
+        )),
 
         // --- user (onboarding) ---
 

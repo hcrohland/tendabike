@@ -1,19 +1,19 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { myfetch, checkStatus, handleError, message } from "./utils";
+import { myfetch, checkStatus, handleError } from "./utils";
 import { getUser, setUser } from "./user";
+import { toastsDoor, clearToasts } from "./notification.svelte";
 import { Shop, setShop } from "./shop";
 import { resp } from "../test/helpers";
 
-function resetMessage() {
-  message.active = false;
-  message.message = "No message";
-  message.status = "";
-}
+beforeEach(() => {
+  clearToasts();
+});
 
 describe("myfetch", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    clearToasts();
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
   });
@@ -122,20 +122,26 @@ describe("checkStatus", () => {
     ).rejects.toBe(text);
   });
 
-  it("sets the message store on error", async () => {
-    resetMessage();
+  it("does not queue a toast on error (handleError is the sole toast creator)", async () => {
     const text = "Something failed";
     await checkStatus(resp(text, 500, false, "Bad Gateway"))!.catch(() => {});
-    expect(message).toEqual({
-      active: true,
-      status: "Bad Gateway",
-      message: text,
-    });
+    const toasts = toastsDoor();
+    expect(toasts).toHaveLength(0);
+  });
+
+  it("handleError queues a toast with the server detail text", async () => {
+    const text = "Something failed";
+    await checkStatus(resp(text, 500, false, "Bad Gateway"))!.catch(
+      handleError,
+    );
+    const toasts = toastsDoor();
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0].message).toBe(text);
   });
 });
 
 describe("checkStatus 401", () => {
-  it("clears user, sets message, and rejects when user was set", async () => {
+  it("clears user and rejects when user was set", async () => {
     setUser({
       id: 1,
       firstname: "A",
@@ -144,37 +150,33 @@ describe("checkStatus 401", () => {
       is_admin: false,
       onboarding_status: "pending",
     });
-    resetMessage();
     await expect(
       checkStatus(resp("Unauthorized", 401, false, "")),
     ).rejects.toBe("Unauthorized");
     expect(getUser()).toBeUndefined();
-    expect(message.active).toBe(true);
   });
 
-  it("resolves undefined and does not set message when user was undefined", async () => {
+  it("resolves undefined when user was undefined", async () => {
     setUser(undefined);
-    resetMessage();
     const result = await checkStatus(resp("Unauthorized", 401, false, ""));
     expect(result).toBeUndefined();
-    expect(message.active).toBe(false);
   });
 });
 
 describe("handleError", () => {
-  it("activates the message store", () => {
-    resetMessage();
+  it("queues an ephemeral toast", () => {
     handleError(new Error("boom"));
-    expect(message.active).toBe(true);
-    expect(message.message).toBe("boom");
+    const toasts = toastsDoor();
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0].message).toBe("boom");
   });
 
-  it("does not overwrite an already active message", () => {
-    resetMessage();
-    message.active = true;
-    message.message = "first";
+  it("queues multiple concurrent errors", () => {
+    handleError(new Error("first"));
     handleError(new Error("second"));
-    expect(message.active).toBe(true);
-    expect(message.message).toBe("first");
+    const toasts = toastsDoor();
+    expect(toasts).toHaveLength(2);
+    expect(toasts[0].message).toBe("second");
+    expect(toasts[1].message).toBe("first");
   });
 });

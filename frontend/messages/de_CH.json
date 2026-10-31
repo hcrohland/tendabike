@@ -349,5 +349,22 @@
   "sync_start_label": "Start",
   "sync_migration_label": "Migration",
   "sync_processed": "Verarbeite ...",
-  "sync_process_queue": "Warteschlange abarbeite"
+  "sync_process_queue": "Warteschlange abarbeite",
+  "notif_title_sub_request": "Werkstatt-Aameldig",
+  "notif_body_sub_request": "E Person wott sich bi diner Werkstatt aamälde. Prüef d'Aafrag und antworte.",
+  "notif_title_sub_response": "Antwort uf Aameldig",
+  "notif_body_sub_response": "E Werkstaat het uf dini Aafrag antworte.",
+  "notif_title_sub_cancelled": "Mitgliedschaftabe broche",
+  "notif_body_sub_cancelled": "E Werkstatt-Mitgliedschaft isch abbroche worde.",
+  "notif_title_part_registered": "Teil registriert",
+  "notif_body_part_registered": "Es Teil, wo du nachhalte, isch registriert worde.",
+  "notif_title_part_unregistered": "Teil abgmäldet",
+  "notif_body_part_unregistered": "Es Teil, wo du nachhalte, isch abgmäldet worde.",
+  "notif_title_error": "Aafrag fähle",
+  "notif_body_error": "Bi dr Kommunikation mit em Server isch es schiefglofe.",
+  "notif_panel_title": "Benachrichtigunge",
+  "notif_panel_empty": "Kei Benachrichtigunge",
+  "notif_panel_read_all": "Alli als gläse markiere",
+  "notif_dismiss": "Schliesse",
+  "notif_fallback": "Benachrichtig"
 }
