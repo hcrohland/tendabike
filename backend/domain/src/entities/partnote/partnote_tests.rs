@@ -81,6 +81,32 @@ fn file_args() -> (String, String, Option<String>, i64, Vec<u8>) {
     )
 }
 
+// === Session-less summary read (ADR-0010) ===
+
+/// `PartNote::all_for_part` reads a part's notes via the store, with no
+/// ownership check (the summary assembly already owns the part).
+#[tokio::test]
+async fn partnote_all_for_part_delegates_to_store() -> TbResult<()> {
+    let mut store = MockStore::new();
+    let part = PartId::from(1);
+    let note = note_row(
+        PartNoteId::from(1),
+        part,
+        "a note".to_string(),
+        None,
+        None,
+        None,
+    );
+    let note_for_assert = note.clone();
+    store
+        .expect_partnote_all_by_part()
+        .times(1)
+        .returning(move |_| Ok(vec![note.clone()]));
+    let notes = PartNote::all_for_part(part, &mut store).await?;
+    assert_eq!(notes, vec![note_for_assert]);
+    Ok(())
+}
+
 // === Blank-name validation (returns before any store call) ===
 
 /// note_create_text rejects a blank name before touching the store.

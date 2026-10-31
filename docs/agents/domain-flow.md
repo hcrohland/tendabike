@@ -35,6 +35,8 @@ The domain layer is storage-agnostic: every operation goes through the store tra
 
 The `Store` trait is a marker naming a complete store (all nine sub-traits); it carries no methods. The transaction lifecycle — `begin`, `commit`, `rollback` — is inherent on the concrete store (`SqlxConn`) and is driven only by the web layer, the executor loop, and the tests — never by the domain.
 
+**The entity owns its store (ADR-0010).** Only the entity that owns a store may access it: a store method (`<entity>_<op>`) is called only from its owning entity's code. A cross-entity need is served by the callee exposing the operation it owns and the caller invoking that entity method — never the callee's store. This applies to every store, including `StravaDataStore`. Exempted: the sqlx store files (they *are* the store), the `MockStore` double, the test and seam suites, and `build_snapshot.rs`. The rule is machine-checked by `.githooks/check-store-access.py`.
+
 The contract: a domain operation must pass on the `mock!` double (the DB-free suites) and on the Postgres store (the sqlx seam), and where they disagree the **Postgres behavior is the source of truth** — the database is what production runs. Where a rule was unified, the trait docs name it (the attachment path rules in #407, the activity path rules in #408, and the 30-minute offset rounding in #409).
 
 The contract is enforced in CI: the required `rust` job runs both suites (the seam suite against a real Postgres service); a red seam blocks the PR. See [`backend/docs/tests/sqlx.md`](../../backend/docs/tests/sqlx.md) for the seam suite's mechanics.

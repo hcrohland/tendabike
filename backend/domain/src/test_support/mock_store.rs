@@ -55,7 +55,7 @@ mockall::mock! {
             part_id: Vec<PartId>,
         ) -> TbResult<Vec<Part>>;
         async fn parts_unregister_shop(&mut self, part_ids: Vec<PartId>) -> TbResult<Vec<Part>>;
-        async fn shop_get_parts(&mut self, shop_id: ShopId) -> TbResult<Vec<Part>>;
+        async fn part_get_for_shop(&mut self, shop_id: ShopId) -> TbResult<Vec<Part>>;
     }
 
     #[async_trait::async_trait]
@@ -142,7 +142,7 @@ mockall::mock! {
         async fn activity_update(&mut self, act: Activity) -> TbResult<Activity>;
         async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize>;
         async fn activities_delete(&mut self, activities: &[Activity]) -> TbResult<usize>;
-        async fn get_all(&mut self, uid: &UserId) -> TbResult<Vec<Activity>>;
+        async fn activity_get_all(&mut self, uid: &UserId) -> TbResult<Vec<Activity>>;
         async fn activities_find_by_gear_and_time(
             &mut self,
             part: PartId,
@@ -255,7 +255,7 @@ mockall::mock! {
         async fn usages_update(&mut self, usage: &[Usage]) -> TbResult<usize>;
         async fn usage_delete(&mut self, usage: UsageId) -> TbResult<Usage>;
         async fn usages_delete(&mut self, usages: &[Usage]) -> TbResult<usize>;
-        async fn delete_all(&mut self) -> TbResult<usize>;
+        async fn usage_delete_all(&mut self) -> TbResult<usize>;
     }
 
     #[async_trait::async_trait]

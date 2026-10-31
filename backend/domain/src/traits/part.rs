@@ -131,5 +131,5 @@ pub trait PartStore {
     /// # Returns
     ///
     /// A vector of PartIds registered to the shop.
-    async fn shop_get_parts(&mut self, shop_id: ShopId) -> TbResult<Vec<Part>>;
+    async fn part_get_for_shop(&mut self, shop_id: ShopId) -> TbResult<Vec<Part>>;
 }

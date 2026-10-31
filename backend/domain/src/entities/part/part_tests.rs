@@ -68,6 +68,79 @@ async fn partid_is_not_main_for_wheel() -> TbResult<()> {
     Ok(())
 }
 
+/// `PartId::owner` returns the part's owner without an ownership check.
+#[tokio::test]
+async fn partid_owner_returns_owner() -> TbResult<()> {
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(PartId::from(1), test_user(), BIKE)));
+    let owner = PartId::from(1).owner(&mut store).await?;
+    assert_eq!(owner, test_user());
+    Ok(())
+}
+
+// === Part: shop registration / bulk delete (ADR-0010) ===
+
+/// `Part::for_shop` reads the shop's parts via the store.
+#[tokio::test]
+async fn part_for_shop_delegates_to_store() -> TbResult<()> {
+    let mut store = MockStore::new();
+    let bike = part_row(PartId::from(1), test_user(), BIKE);
+    let bike_for_assert = bike.clone();
+    store
+        .expect_part_get_for_shop()
+        .times(1)
+        .returning(move |_| Ok(vec![bike.clone()]));
+    let parts = Part::for_shop(ShopId::from(7), &mut store).await?;
+    assert_eq!(parts, vec![bike_for_assert]);
+    Ok(())
+}
+
+/// `Part::register_to_shop` delegates to the store.
+#[tokio::test]
+async fn part_register_to_shop_delegates_to_store() -> TbResult<()> {
+    let mut store = MockStore::new();
+    let bike = part_row(PartId::from(1), test_user(), BIKE);
+    let bike_for_assert = bike.clone();
+    store
+        .expect_parts_register_shop()
+        .times(1)
+        .returning(move |_, _| Ok(vec![bike.clone()]));
+    let parts = Part::register_to_shop(ShopId::from(7), vec![PartId::from(1)], &mut store).await?;
+    assert_eq!(parts, vec![bike_for_assert]);
+    Ok(())
+}
+
+/// `Part::unregister_from_shop` delegates to the store.
+#[tokio::test]
+async fn part_unregister_from_shop_delegates_to_store() -> TbResult<()> {
+    let mut store = MockStore::new();
+    let bike = part_row(PartId::from(1), test_user(), BIKE);
+    let bike_for_assert = bike.clone();
+    store
+        .expect_parts_unregister_shop()
+        .times(1)
+        .returning(move |_| Ok(vec![bike.clone()]));
+    let parts = Part::unregister_from_shop(vec![PartId::from(1)], &mut store).await?;
+    assert_eq!(parts, vec![bike_for_assert]);
+    Ok(())
+}
+
+/// `Part::delete_many` delegates to the store.
+#[tokio::test]
+async fn part_delete_many_delegates_to_store() -> TbResult<()> {
+    let mut store = MockStore::new();
+    let bike = part_row(PartId::from(1), test_user(), BIKE);
+    store
+        .expect_parts_delete()
+        .times(1)
+        .returning(move |_| Ok(1));
+    let n = Part::delete_many(&[bike], &mut store).await?;
+    assert_eq!(n, 1);
+    Ok(())
+}
+
 // === PartId: update_timestamps ===
 
 /// `PartId::update_timestamps` bumps last_used when start is later.

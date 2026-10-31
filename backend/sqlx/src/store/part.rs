@@ -240,7 +240,7 @@ impl<'c> tb_domain::PartStore for SqlxConn<'c> {
         .map(vec_into)
     }
 
-    async fn shop_get_parts(&mut self, shop_id: ShopId) -> TbResult<Vec<Part>> {
+    async fn part_get_for_shop(&mut self, shop_id: ShopId) -> TbResult<Vec<Part>> {
         sqlx::query_as!(
             DbPart,
             "SELECT * FROM parts WHERE shop = $1 ORDER BY last_used",

@@ -623,7 +623,7 @@ async fn subscription_cancel_subscriber_only() -> TbResult<()> {
             _ => Err(Error::NotFound("subscription".into())),
         }
     });
-    store.expect_shop_get_parts().returning(|_| Ok(vec![]));
+    store.expect_part_get_for_shop().returning(|_| Ok(vec![]));
     store.expect_subscription_delete().returning(|_| Ok(()));
     store
         .expect_shop_get()
@@ -685,7 +685,7 @@ async fn subscription_cancel_active_ok() -> TbResult<()> {
     store
         .expect_subscription_get()
         .returning(move |_| Ok(sub_owned.clone()));
-    store.expect_shop_get_parts().returning(|_| Ok(vec![]));
+    store.expect_part_get_for_shop().returning(|_| Ok(vec![]));
     store.expect_subscription_delete().returning(|_| Ok(()));
     store
         .expect_shop_get()
@@ -729,7 +729,7 @@ async fn subscription_cancel_conflict_parts_in_shop() -> TbResult<()> {
         .expect_subscription_get()
         .returning(move |_| Ok(sub_owned.clone()));
     store
-        .expect_shop_get_parts()
+        .expect_part_get_for_shop()
         .returning(move |_| Ok(vec![bike.clone()]));
 
     let result = shop

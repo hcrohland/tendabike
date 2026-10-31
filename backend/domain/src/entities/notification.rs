@@ -241,6 +241,33 @@ impl Notification {
         }
         Ok(summary)
     }
+
+    /// Creates a notification: the store assigns the id and timestamps it.
+    /// This is the single door every side-effecting operation uses to create
+    /// a notification (ADR-0010) — notification creation lives here, not in
+    /// the calling entity.
+    pub(crate) async fn create(
+        recipient: UserId,
+        lifecycle: NotificationLifecycle,
+        kind: NotificationKind,
+        subject: NotificationSubject,
+        message: Option<String>,
+        store: &mut impl NotificationStore,
+    ) -> TbResult<Notification> {
+        store
+            .notification_create(recipient, lifecycle, kind, subject, message)
+            .await
+    }
+
+    /// All of a user's notifications as a plain list (no lifecycle applied).
+    /// The session-less read used by the summary assembly (ADR-0010): the
+    /// caller already owns the recipient's data, so no ownership check.
+    pub(crate) async fn all_for_user(
+        recipient: UserId,
+        store: &mut impl NotificationStore,
+    ) -> TbResult<Vec<Notification>> {
+        store.notification_all_for_user(recipient).await
+    }
 }
 
 #[cfg(test)]

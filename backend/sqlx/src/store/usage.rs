@@ -126,7 +126,7 @@ impl<'c> UsageStore for SqlxConn<'c> {
             .map(Into::into)
     }
 
-    async fn delete_all(&mut self) -> TbResult<usize> {
+    async fn usage_delete_all(&mut self) -> TbResult<usize> {
         debug!("resetting all usages");
         let result = sqlx::query!("DELETE FROM usages")
             .execute(&mut **self.inner())

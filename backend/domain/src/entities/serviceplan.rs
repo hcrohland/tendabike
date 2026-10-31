@@ -80,6 +80,15 @@ impl IdKeyed for ServicePlan {
 }
 
 impl ServicePlan {
+    /// Deletes a specific set of service plans. The user-deletion cascade
+    /// (ADR-0010) uses this: the caller already owns these plans.
+    pub(crate) async fn delete_many(
+        plans: &[ServicePlan],
+        store: &mut impl ServicePlanStore,
+    ) -> TbResult<usize> {
+        store.serviceplans_delete(plans).await
+    }
+
     async fn checkuser(
         &self,
         user: &dyn Session,
