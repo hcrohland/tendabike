@@ -52,9 +52,11 @@ export class Shop {
   }
 
   static async unregisterPart(part: Part) {
-    return await myfetch(`/api/shop/0/parts/${part.id}`, "DELETE").catch(
-      handleError,
-    );
+    if (part.shop == null) return;
+    return await myfetch(
+      `/api/shop/${part.shop}/parts/${part.id}`,
+      "DELETE",
+    ).catch(handleError);
   }
 
   async getParts(): Promise<number[]> {

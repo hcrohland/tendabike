@@ -124,13 +124,20 @@ describe("Shop CRUD", () => {
   });
 
   describe("unregisterPart", () => {
-    it("DELETEs /api/shop/0/parts/{part_id}", async () => {
+    it("DELETEs /api/shop/{part.shop}/parts/{part_id}", async () => {
       fetchMock.mockResolvedValue(resp(summary()));
-      const p = new Part(partData({ id: 5 }));
+      const p = new Part(partData({ id: 5, shop: 10 }));
       await Shop.unregisterPart(p);
       const [url, option] = fetchMock.mock.calls[0];
-      expect(url).toBe("/api/shop/0/parts/5");
+      expect(url).toBe("/api/shop/10/parts/5");
       expect(option.method).toBe("DELETE");
+    });
+
+    it("no-ops when the part has no shop", async () => {
+      fetchMock.mockResolvedValue(resp(summary()));
+      const p = new Part(partData({ id: 5, shop: null }));
+      await Shop.unregisterPart(p);
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 
