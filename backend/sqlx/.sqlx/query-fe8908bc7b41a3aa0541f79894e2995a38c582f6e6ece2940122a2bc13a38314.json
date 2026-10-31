@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT * FROM notifications WHERE id = $1",
+  "query": "SELECT * FROM notifications WHERE id = $1 AND recipient = $2",
   "describe": {
     "columns": [
       {
@@ -51,7 +51,8 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Int4"
       ]
     },
     "nullable": [
@@ -66,5 +67,5 @@
       false
     ]
   },
-  "hash": "47b3211344c71c951ab4bb8e71bacd47fc54001e7d3a60796039454404011fa1"
+  "hash": "fe8908bc7b41a3aa0541f79894e2995a38c582f6e6ece2940122a2bc13a38314"
 }

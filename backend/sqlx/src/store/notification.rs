@@ -102,17 +102,29 @@ impl<'c> NotificationStore for SqlxConn<'c> {
         .map(Into::into)
     }
 
-    async fn notification_read(&mut self, id: NotificationId) -> TbResult<Notification> {
-        // Read the notification first to determine its lifecycle.
+    async fn notification_read(
+        &mut self,
+        id: NotificationId,
+        recipient: UserId,
+    ) -> TbResult<Option<Notification>> {
+        // Read the notification first to determine its lifecycle. The
+        // recipient guard: filter by recipient so a non-recipient gets None
+        // (no existence leak).
         let id_uuid: Uuid = id.into();
-        let notif: DbNotification = sqlx::query_as!(
+        let rows: Vec<DbNotification> = sqlx::query_as!(
             DbNotification,
-            "SELECT * FROM notifications WHERE id = $1",
-            id_uuid
+            "SELECT * FROM notifications WHERE id = $1 AND recipient = $2",
+            id_uuid,
+            i32::from(recipient)
         )
-        .fetch_one(&mut **self.inner())
+        .fetch_all(&mut **self.inner())
         .await
         .map_err(into_domain)?;
+
+        let notif = match rows.into_iter().next() {
+            Some(n) => n,
+            None => return Ok(None),
+        };
 
         let domain: Notification = notif.clone().into();
 
@@ -129,14 +141,14 @@ impl<'c> NotificationStore for SqlxConn<'c> {
                 // Return the updated notification (state = seen).
                 let mut updated = domain;
                 updated.state = NotificationState::Seen;
-                Ok(updated)
+                Ok(Some(updated))
             }
             NotificationLifecycle::Transient => {
                 sqlx::query!("DELETE FROM notifications WHERE id = $1", id_uuid)
                     .execute(&mut **self.inner())
                     .await
                     .map_err(into_domain)?;
-                Ok(domain)
+                Ok(Some(domain))
             }
         }
     }

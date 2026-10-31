@@ -534,7 +534,9 @@ pub async fn exec(
         }
 
         // --- notification ---
-        ApiWrite::NotificationRead { id } => Ok(WriteOutcome::Summary(id.read(store).await?)),
+        ApiWrite::NotificationRead { id } => Ok(WriteOutcome::Summary(
+            id.read(session.user_id(), store).await?,
+        )),
         ApiWrite::NotificationReadAll => Ok(WriteOutcome::Summary(
             Notification::read_all(session.user_id(), store).await?,
         )),

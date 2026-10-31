@@ -365,5 +365,6 @@
   "notif_panel_title": "Notifications",
   "notif_panel_empty": "No notifications",
   "notif_panel_read_all": "Mark all as read",
+  "notif_dismiss": "Dismiss",
   "notif_fallback": "Notification"
 }

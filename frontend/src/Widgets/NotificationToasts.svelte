@@ -21,7 +21,7 @@
       <button
         class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200"
         onclick={() => dismiss(toast.id)}
-        aria-label="Dismiss"
+        aria-label={m.notif_dismiss()}
       >
         <svg
           class="h-4 w-4"

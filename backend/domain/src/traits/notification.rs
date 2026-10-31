@@ -19,13 +19,20 @@ pub trait NotificationStore {
         message: Option<String>,
     ) -> TbResult<Notification>;
 
-    /// Reads a notification by id, applying its lifecycle:
+    /// Reads a notification by id for the given recipient, applying its
+    /// lifecycle:
     /// - **Persistent**: marks it `seen` and returns the updated row.
     /// - **Transient**: deletes the row and returns the notification as it
     ///   was before deletion.
     ///
-    /// Returns a `NotFound` error when no notification with that id exists.
-    async fn notification_read(&mut self, id: NotificationId) -> TbResult<Notification>;
+    /// Returns `None` when no notification with that id exists for the
+    /// recipient (the recipient guard: a non-recipient gets `None`, not an
+    /// existence leak).
+    async fn notification_read(
+        &mut self,
+        id: NotificationId,
+        recipient: UserId,
+    ) -> TbResult<Option<Notification>>;
 
     /// Reads all of a user's notifications, applying each one's lifecycle:
     /// - **Persistent**: marks them `seen` and returns the updated rows.

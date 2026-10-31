@@ -8,7 +8,6 @@
   } from "../lib/notification.svelte";
   import type { Notification } from "../lib/notification.svelte";
   import { parts } from "../lib/part";
-  import { shops } from "../lib/shop";
   import * as m from "../../paraglide/messages";
 
   function title(n: Notification): string {
@@ -29,14 +28,15 @@
   }
 
   function body(n: Notification): string {
-    // Try to resolve the subject reference for context
-    const subject = n.subject as any;
+    // Use the subject's type discriminator to look up the right collection.
+    const subject = n.subject as { type: string; id: number } | null;
     if (subject) {
-      if (subject.id != null) {
+      if (subject.type === "part" && subject.id != null) {
         const part = parts[String(subject.id)];
         if (part?.name) return part.name;
-        const shop = shops[String(subject.id)];
-        if (shop?.name) return shop.name;
+      } else if (subject.type === "subscription" && subject.id != null) {
+        // Subscriptions don't have a name collection; fall through to the
+        // kind-based body.
       }
     }
     // Fall back to the kind-based body
@@ -129,7 +129,7 @@
               <button
                 class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0"
                 onclick={() => dismiss(n.id)}
-                aria-label="Dismiss"
+                aria-label={m.notif_dismiss()}
               >
                 <svg
                   class="h-4 w-4"

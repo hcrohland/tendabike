@@ -5,13 +5,14 @@
     setPanelOpen,
   } from "../lib/notification.svelte";
   import NotificationPanel from "./NotificationPanel.svelte";
+  import * as m from "../../paraglide/messages";
 </script>
 
 <div class="relative">
   <button
     class="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
     onclick={() => setPanelOpen(!isPanelOpen())}
-    aria-label="Notifications"
+    aria-label={m.notif_panel_title()}
   >
     <svg
       class="h-6 w-6"

@@ -13,6 +13,8 @@
  * `error()` door.
  */
 import { mapableState, stateValues } from "./mapable.svelte";
+import { getUser } from "./user.svelte";
+import { read as apiRead, readAll as apiReadAll } from "./notification";
 
 /// The wire shape of a server notification.
 export type Notification = {
@@ -68,20 +70,27 @@ export function toastsDoor(): Toast[] {
 }
 
 /// The server notifications (transient + persistent), newest first.
+/// Filtered to the current user's notifications only (recipient guard).
 export function history(): Notification[] {
-  return stateValues(notifications).sort(
-    (a, b) =>
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-  );
+  const uid = getUser()?.id;
+  return stateValues(notifications)
+    .filter((n) => n.recipient === uid)
+    .sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
 }
 
 /// The badge count: unread persistent + all transient (transient are always
-/// "unread" until the tombstone removes them).
+/// "unread" until the tombstone removes them). Filtered to the current
+/// user's notifications only (recipient guard).
 export function unread(): number {
+  const uid = getUser()?.id;
   return stateValues(notifications).filter(
     (n) =>
-      n.lifecycle === "transient" ||
-      (n.lifecycle === "persistent" && n.state === "new"),
+      n.recipient === uid &&
+      (n.lifecycle === "transient" ||
+        (n.lifecycle === "persistent" && n.state === "new")),
   ).length;
 }
 
@@ -99,18 +108,12 @@ export function dismiss(id: string) {
   // Server notification: call the read API.
   const n = notifications[id];
   if (!n) return;
-  fetch("/api/notification/" + id + "/read", {
-    method: "POST",
-    credentials: "include",
-  }).catch(() => {});
+  apiRead(id);
 }
 
 /// Mark all server notifications as read.
 export function readAll() {
-  fetch("/api/notification/read-all", {
-    method: "POST",
-    credentials: "include",
-  }).catch(() => {});
+  apiReadAll();
 }
 
 /// The ephemeral door: create a local error toast.

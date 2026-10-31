@@ -365,5 +365,6 @@
   "notif_panel_title": "Benachrichtigungen",
   "notif_panel_empty": "Keine Benachrichtigungen",
   "notif_panel_read_all": "Alle als gelesen markieren",
+  "notif_dismiss": "Schließen",
   "notif_fallback": "Benachrichtigung"
 }

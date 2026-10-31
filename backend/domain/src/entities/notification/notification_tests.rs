@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::test_support::{MockStore, fixtures::test_user};
 use crate::{
     Notification, NotificationId, NotificationKind, NotificationLifecycle, NotificationState,
-    NotificationSubject, PartId, SubscriptionId, Summary,
+    NotificationSubject, PartId, SubscriptionId, Summary, UserId,
 };
 
 /// A fixed v7-style UUID for test notifications.
@@ -109,11 +109,11 @@ async fn notification_read_persistent_marks_seen_and_upserts() -> crate::TbResul
     notification.state = NotificationState::Seen;
     store
         .expect_notification_read()
-        .withf(move |id| *id == test_notification_id())
+        .withf(move |id, recipient| *id == test_notification_id() && *recipient == test_user())
         .times(1)
-        .returning(move |_| Ok(notification.clone()));
+        .returning(move |_, _| Ok(Some(notification.clone())));
 
-    let summary = test_notification_id().read(&mut store).await?;
+    let summary = test_notification_id().read(test_user(), &mut store).await?;
     let read = summary.notifications.get(&test_notification_id());
     assert!(read.is_some(), "persistent notification should be upserted");
     let read = read.unwrap();
@@ -129,11 +129,11 @@ async fn notification_read_transient_tombstones() -> crate::TbResult<()> {
     let notification = transient_notification();
     store
         .expect_notification_read()
-        .withf(move |id| *id == test_notification_id())
+        .withf(move |id, recipient| *id == test_notification_id() && *recipient == test_user())
         .times(1)
-        .returning(move |_| Ok(notification.clone()));
+        .returning(move |_, _| Ok(Some(notification.clone())));
 
-    let summary = test_notification_id().read(&mut store).await?;
+    let summary = test_notification_id().read(test_user(), &mut store).await?;
     assert!(
         summary.notifications.is_tombstoned(&test_notification_id()),
         "transient notification should be tombstoned"
@@ -141,6 +141,26 @@ async fn notification_read_transient_tombstones() -> crate::TbResult<()> {
     assert!(
         summary.notifications.get(&test_notification_id()).is_none(),
         "transient notification should not be live"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn notification_read_non_recipient_returns_not_found() -> crate::TbResult<()> {
+    let mut store = MockStore::new();
+    // The store returns None for a non-recipient (the guard is in the DB query).
+    store
+        .expect_notification_read()
+        .withf(|_id, recipient| *recipient != test_user())
+        .times(1)
+        .returning(|_, _| Ok(None));
+
+    let result = test_notification_id()
+        .read(UserId::from(999), &mut store)
+        .await;
+    assert!(
+        matches!(result, Err(crate::Error::NotFound(_))),
+        "non-recipient should get NotFound, got {result:?}"
     );
     Ok(())
 }

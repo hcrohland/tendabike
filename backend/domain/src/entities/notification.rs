@@ -95,10 +95,20 @@ impl NotificationId {
     /// Read a notification: applies its lifecycle (persistent → mark seen,
     /// transient → delete) and returns the [`Summary`] carrying the result.
     ///
+    /// The recipient guard (ADR-0008): the store filters by recipient, so a
+    /// non-recipient gets `None` → `NotFound` (no existence leak).
+    ///
     /// A persistent notification is upserted into the summary (now `seen`);
     /// a transient notification is deleted and its id tombstoned.
-    pub async fn read(self, store: &mut impl NotificationStore) -> TbResult<Summary> {
-        let notification = store.notification_read(self).await?;
+    pub async fn read(
+        self,
+        recipient: UserId,
+        store: &mut impl NotificationStore,
+    ) -> TbResult<Summary> {
+        let notification = store
+            .notification_read(self, recipient)
+            .await?
+            .ok_or_else(|| Error::NotFound(self.to_string()))?;
         let mut summary = Summary::default();
         match notification.lifecycle {
             NotificationLifecycle::Persistent => {

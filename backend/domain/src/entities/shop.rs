@@ -218,8 +218,11 @@ impl ShopId {
         let parts = parts_for_register(part_id, session, store).await?;
 
         let parts = store.parts_unregister_shop(parts).await?;
+        // The top-level part is last in the list (parts_for_register pushes
+        // subparts first, then the top-level part). Its owner is the correct
+        // notification recipient.
         let part_owner = parts
-            .first()
+            .last()
             .map(|p| p.owner)
             .ok_or_else(|| Error::AnyFailure(anyhow::anyhow!("no parts to unregister")))?;
 

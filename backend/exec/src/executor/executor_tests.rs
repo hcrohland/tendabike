@@ -354,7 +354,11 @@ mockall::mock! {
             subject: NotificationSubject,
             message: Option<String>,
         ) -> TbResult<Notification>;
-        async fn notification_read(&mut self, id: NotificationId) -> TbResult<Notification>;
+        async fn notification_read(
+            &mut self,
+            id: NotificationId,
+            recipient: UserId,
+        ) -> TbResult<Option<Notification>>;
         async fn notification_read_all(&mut self, recipient: UserId) -> TbResult<Vec<Notification>>;
         async fn notification_all_for_user(&mut self, recipient: UserId) -> TbResult<Vec<Notification>>;
     }

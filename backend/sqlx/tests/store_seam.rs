@@ -788,7 +788,8 @@ async fn notification_read_persistent_marks_seen() -> tb_domain::TbResult<()> {
             )
             .await?;
 
-        let read = store.notification_read(notif.id).await?;
+        let read = store.notification_read(notif.id, recipient).await?;
+        let read = read.expect("notification should be found for recipient");
         assert_eq!(read.id, notif.id);
         assert_eq!(read.state, tb_domain::NotificationState::Seen);
         assert_eq!(read.lifecycle, tb_domain::NotificationLifecycle::Persistent);
@@ -821,7 +822,8 @@ async fn notification_read_transient_deletes_row() -> tb_domain::TbResult<()> {
             )
             .await?;
 
-        let read = store.notification_read(notif.id).await?;
+        let read = store.notification_read(notif.id, recipient).await?;
+        let read = read.expect("notification should be found for recipient");
         assert_eq!(read.id, notif.id);
         assert_eq!(read.lifecycle, tb_domain::NotificationLifecycle::Transient);
 
@@ -937,16 +939,17 @@ async fn notification_all_for_user_is_pure_read() -> tb_domain::TbResult<()> {
     .await
 }
 
-/// `notification_read` on a non-existent id returns a `NotFound` error.
+/// `notification_read` on a non-existent id returns `Ok(None)`.
 #[tokio::test]
 #[ignore]
 async fn notification_read_not_found() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
+        let recipient = UserId::from(1);
         let nonexistent = tb_domain::NotificationId::from(uuid::Uuid::now_v7());
-        let result = store.notification_read(nonexistent).await;
+        let result = store.notification_read(nonexistent, recipient).await?;
         assert!(
-            matches!(result, Err(tb_domain::Error::NotFound(_))),
-            "expected NotFound, got {:?}",
+            result.is_none(),
+            "expected None for non-existent notification, got {:?}",
             result
         );
         Ok(())

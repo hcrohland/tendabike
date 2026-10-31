@@ -365,5 +365,6 @@
   "notif_panel_title": "Benachrichtigunge",
   "notif_panel_empty": "Kei Benachrichtigunge",
   "notif_panel_read_all": "Alli als gläse markiere",
+  "notif_dismiss": "Schliesse",
   "notif_fallback": "Benachrichtig"
 }
