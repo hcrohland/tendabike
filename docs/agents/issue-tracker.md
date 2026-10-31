@@ -16,6 +16,7 @@ Repo-specific policies and API gotchas — for which tool takes which params, se
 - **Close from a PR**: a squash merge collects each commit's `Closes #N` line, so each ticket closes via the `Closes #N` in its **own commit** (one issue per line — a line with several space-separated numbers closes only the first). The PR body carries `Closes` for the **umbrella spec only**; do not duplicate the per-ticket `Closes` lines into the PR body.
 - **Sync**: merge `main` into the feature branch (`git merge origin/main`); the `.githooks/pre-push` hook rejects force-pushes (non-fast-forward).
 - **Merge**: squash-merge (`merge_method: "squash"`); the squashed commit takes the PR title, so write the PR title as the commit title you want on `main`. Only merge when required checks are green on the current head — the ruleset voids check runs from a head behind `main`, so if `main` moved, sync and let the checks re-run first.
+- **Post-merge**: the worktree is left on the merged branch — detach HEAD (`git checkout --detach`) and delete the local branch; `main` may be checked out in a sibling worktree, so don't check it out here. `git fetch --prune` refreshes the tracking refs.
 
 ## Pull requests as a triage surface
 
