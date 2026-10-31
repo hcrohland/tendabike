@@ -46,16 +46,18 @@ use tb_domain::test_support::{
 };
 use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, ApiRead, ApiWrite, Attachment, AttachmentStore,
-    Error, OnboardingStatus, Part, PartId, PartNote, PartNoteId, PartNoteStore, PartStore,
-    PartTypeId, ReadOutcome, Service, ServiceId, ServicePlan, ServicePlanId, ServicePlanStore,
-    ServiceStore, Shop, ShopId, ShopStore, ShopSubscription, Store, SubscriptionId,
-    SubscriptionStatus, Summary, TbResult, Usage, UsageId, UsageStore, User, UserId, UserStore,
-    WriteOutcome,
+    Error, Notification, NotificationId, NotificationKind, NotificationLifecycle,
+    NotificationState, NotificationStore, NotificationSubject, OnboardingStatus, Part, PartId,
+    PartNote, PartNoteId, PartNoteStore, PartStore, PartTypeId, ReadOutcome, Service, ServiceId,
+    ServicePlan, ServicePlanId, ServicePlanStore, ServiceStore, Shop, ShopId, ShopStore,
+    ShopSubscription, Store, SubscriptionId, SubscriptionStatus, Summary, TbResult, Usage, UsageId,
+    UsageStore, User, UserId, UserStore, WriteOutcome,
 };
 use tb_strava::event::Event;
 use tb_strava::{StravaDataStore, StravaId, StravaStore, StravaUser};
 use time::OffsetDateTime;
 use tokio::sync::{broadcast, oneshot};
+use uuid::Uuid;
 
 use super::{
     DbBackoff, LoopContext, Probe, Select, deliver_frame, next_action, run_request, select_message,
@@ -340,6 +342,25 @@ mockall::mock! {
         async fn serviceplans_delete(&mut self, serviceplans: &[ServicePlan]) -> TbResult<usize>;
         async fn by_part(&mut self, part: PartId) -> TbResult<Vec<ServicePlan>>;
         async fn by_user(&mut self, uid: UserId) -> TbResult<Vec<ServicePlan>>;
+    }
+
+    #[async_trait::async_trait]
+    impl NotificationStore for Conn {
+        async fn notification_create(
+            &mut self,
+            recipient: UserId,
+            lifecycle: NotificationLifecycle,
+            kind: NotificationKind,
+            subject: NotificationSubject,
+            message: Option<String>,
+        ) -> TbResult<Notification>;
+        async fn notification_read(
+            &mut self,
+            id: NotificationId,
+            recipient: UserId,
+        ) -> TbResult<Option<Notification>>;
+        async fn notification_read_all(&mut self, recipient: UserId) -> TbResult<Vec<Notification>>;
+        async fn notification_all_for_user(&mut self, recipient: UserId) -> TbResult<Vec<Notification>>;
     }
 
     impl Store for Conn {}
@@ -1123,6 +1144,8 @@ async fn cleanly_committed_read_resets_the_backoff() {
     conn.expect_part_get_all_for_userid()
         .returning(|_uid| Ok(Vec::new()));
     conn.expect_by_user().returning(|_uid| Ok(Vec::new()));
+    conn.expect_notification_all_for_user()
+        .returning(|_uid| Ok(Vec::new()));
     conn.expect_commit().returning(|| Ok(()));
     let source = FakeSource::with(conn);
     let (frames, _frame_rx) = broadcast::channel(4);
@@ -1580,7 +1603,7 @@ async fn deliver_user_context_to_personal_stream() {
     let (frames, mut frame_rx) = broadcast::channel(4);
     let summary = summary_owned_by(UserId::from(1));
 
-    deliver_frame(&pusher, &frames, None, None, &summary).await;
+    deliver_frame(&pusher, &frames, UserId::from(1), None, None, &summary).await;
 
     let got = frame_rx
         .try_recv()
@@ -1604,6 +1627,7 @@ async fn deliver_shop_context_to_shop_stream() {
     deliver_frame(
         &pusher,
         &frames,
+        UserId::from(1),
         Some(shop_id),
         Some(UserId::from(2)),
         &summary,
@@ -1630,7 +1654,15 @@ async fn deliver_shop_context_to_part_owner() {
     let part_owner = UserId::from(2);
     let summary = summary_owned_by(part_owner);
 
-    deliver_frame(&pusher, &frames, Some(shop_id), Some(part_owner), &summary).await;
+    deliver_frame(
+        &pusher,
+        &frames,
+        UserId::from(1),
+        Some(shop_id),
+        Some(part_owner),
+        &summary,
+    )
+    .await;
 
     assert!(
         pusher.calls().iter().any(
@@ -1656,6 +1688,7 @@ async fn deliver_shop_context_not_to_shop_owner() {
     deliver_frame(
         &pusher,
         &frames,
+        UserId::from(1),
         Some(shop_id),
         Some(UserId::from(2)),
         &summary,
@@ -1694,7 +1727,15 @@ async fn deliver_shop_context_to_shop_owner_when_part_owner() {
     let shop_owner = UserId::from(2);
     let summary = summary_owned_by(shop_owner); // part owner == shop owner
 
-    deliver_frame(&pusher, &frames, Some(shop_id), Some(shop_owner), &summary).await;
+    deliver_frame(
+        &pusher,
+        &frames,
+        UserId::from(1),
+        Some(shop_id),
+        Some(shop_owner),
+        &summary,
+    )
+    .await;
 
     assert!(
         pusher.calls().iter().any(
@@ -1725,7 +1766,15 @@ async fn deliver_shop_context_service_summary_to_part_owner() {
         "the service's part_id is the referenced part"
     );
 
-    deliver_frame(&pusher, &frames, Some(shop_id), Some(part_owner), &summary).await;
+    deliver_frame(
+        &pusher,
+        &frames,
+        UserId::from(1),
+        Some(shop_id),
+        Some(part_owner),
+        &summary,
+    )
+    .await;
 
     assert!(
         pusher.calls().iter().any(
@@ -1741,5 +1790,168 @@ async fn deliver_shop_context_service_summary_to_part_owner() {
             .any(|call| matches!(call, PushCall::Shop(sid, s) if *sid == shop_id && *s == summary)),
         "the shop stream also receives the frame, got {:?}",
         pusher.calls()
+    );
+}
+
+// --- Cross-recipient notification routing (issue #677) ---
+
+/// A `Summary` carrying a notification for `recipient`.
+fn summary_with_notification(recipient: UserId) -> Summary {
+    let notification = Notification {
+        id: NotificationId::from(Uuid::now_v7()),
+        recipient,
+        lifecycle: NotificationLifecycle::Persistent,
+        kind: NotificationKind::SubRequest,
+        subject: NotificationSubject::Subscription(SubscriptionId::from(1)),
+        message: None,
+        state: NotificationState::New,
+        created_at: sample_purchase_date(),
+    };
+    let mut summary = Summary::default();
+    summary.notifications.upsert(notification);
+    summary
+}
+
+/// A user-context write that produces a notification for a different user
+/// pushes it to that user's personal stream via `push_to_user` (the acting
+/// user's own notifications ride the normal frame).
+#[tokio::test]
+async fn deliver_cross_recipient_notification_to_user_stream() {
+    let pusher = RecordingPusher::new();
+    let (frames, mut frame_rx) = broadcast::channel(4);
+    let acting_user = UserId::from(1);
+    let recipient = UserId::from(3);
+    let summary = summary_with_notification(recipient);
+
+    deliver_frame(&pusher, &frames, acting_user, None, None, &summary).await;
+
+    // The acting user's normal frame carries the full summary.
+    let got = frame_rx.try_recv().expect("the acting user gets the frame");
+    assert_eq!(got, summary);
+    // The cross-recipient notification is pushed to the recipient's stream.
+    let calls = pusher.calls();
+    assert!(
+        calls.iter().any(
+            |call| matches!(call, PushCall::User(uid, s) if *uid == recipient && *s == summary)
+        ),
+        "the recipient's personal stream receives the notification, got {:?}",
+        calls
+    );
+}
+
+/// A user-context write that produces a notification for the acting user
+/// does NOT push it again via `push_to_user` (it already rides the normal
+/// frame).
+#[tokio::test]
+async fn deliver_no_cross_recipient_for_acting_user() {
+    let pusher = RecordingPusher::new();
+    let (frames, mut frame_rx) = broadcast::channel(4);
+    let acting_user = UserId::from(1);
+    let summary = summary_with_notification(acting_user);
+
+    deliver_frame(&pusher, &frames, acting_user, None, None, &summary).await;
+
+    // The acting user's normal frame carries the notification.
+    let got = frame_rx.try_recv().expect("the acting user gets the frame");
+    assert_eq!(got, summary);
+    // No `push_to_user` call for the acting user (no duplicate).
+    assert!(
+        pusher.calls().is_empty(),
+        "no push_to_user for the acting user's own notification, got {:?}",
+        pusher.calls()
+    );
+}
+
+/// A shop-context write that produces a notification for the part owner does
+/// NOT push it again via `push_to_user` (it already rides the normal frame
+/// which is pushed to the part owner's personal stream).
+#[tokio::test]
+async fn deliver_no_cross_recipient_for_part_owner_in_shop_context() {
+    let pusher = RecordingPusher::new();
+    let (frames, _frame_rx) = broadcast::channel(4);
+    let acting_user = UserId::from(1);
+    let part_owner = UserId::from(2);
+    let shop_id = ShopId::from(7);
+    let summary = summary_with_notification(part_owner);
+
+    deliver_frame(
+        &pusher,
+        &frames,
+        acting_user,
+        Some(shop_id),
+        Some(part_owner),
+        &summary,
+    )
+    .await;
+
+    let calls = pusher.calls();
+    // The shop stream gets the frame.
+    assert!(
+        calls
+            .iter()
+            .any(|call| matches!(call, PushCall::Shop(sid, s) if *sid == shop_id && *s == summary)),
+        "the shop stream receives the frame, got {:?}",
+        calls
+    );
+    // The part owner gets the frame via the normal shop-context routing.
+    assert!(
+        calls.iter().any(
+            |call| matches!(call, PushCall::User(uid, s) if *uid == part_owner && *s == summary)
+        ),
+        "the part owner receives the frame, got {:?}",
+        calls
+    );
+    // Exactly one `push_to_user` call (the part owner), no duplicate.
+    let user_pushes: Vec<_> = calls
+        .iter()
+        .filter(|call| matches!(call, PushCall::User(_, _)))
+        .collect();
+    assert_eq!(
+        user_pushes.len(),
+        1,
+        "exactly one push_to_user (the part owner), got {:?}",
+        calls
+    );
+}
+
+/// A shop-context write that produces a notification for a third party (neither
+/// the acting user nor the part owner) pushes it to that user's personal stream
+/// and to the shop stream (so a recipient "in" the shop receives it).
+#[tokio::test]
+async fn deliver_cross_recipient_third_party_in_shop_context() {
+    let pusher = RecordingPusher::new();
+    let (frames, _frame_rx) = broadcast::channel(4);
+    let acting_user = UserId::from(1);
+    let part_owner = UserId::from(2);
+    let third_party = UserId::from(5);
+    let shop_id = ShopId::from(7);
+    let summary = summary_with_notification(third_party);
+
+    deliver_frame(
+        &pusher,
+        &frames,
+        acting_user,
+        Some(shop_id),
+        Some(part_owner),
+        &summary,
+    )
+    .await;
+
+    let calls = pusher.calls();
+    // The third party gets the notification via `push_to_user`.
+    assert!(
+        calls.iter().any(
+            |call| matches!(call, PushCall::User(uid, s) if *uid == third_party && *s == summary)
+        ),
+        "the third party's personal stream receives the notification, got {:?}",
+        calls
+    );
+    // The shop stream also receives the notification (for recipients "in" the shop).
+    assert!(
+        calls
+            .iter()
+            .any(|call| matches!(call, PushCall::Shop(sid, s) if *sid == shop_id && *s == summary)),
+        "the shop stream receives the cross-recipient notification, got {:?}",
+        calls
     );
 }

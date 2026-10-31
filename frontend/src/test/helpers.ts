@@ -38,6 +38,7 @@ export function summary(overrides: Partial<any> = {}): any {
     plans: {},
     shops: {},
     users: {},
+    notifications: {},
     ...overrides,
   };
 }

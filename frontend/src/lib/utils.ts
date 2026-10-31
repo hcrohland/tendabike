@@ -1,9 +1,7 @@
 import { router } from "svelte-spa-router";
 import { getUser, setUser } from "./user";
+import { error } from "./notification.svelte";
 import { getShop } from "./shop.svelte";
-import { message } from "./message.svelte";
-
-export { message };
 
 export const DAY = 24 * 60 * 60 * 1000;
 export const maxDate = new Date("2999-12-31");
@@ -84,18 +82,12 @@ export function checkStatus(response: Response) {
   }
 
   return response.text().then((text) => {
-    message.active = true;
-    message.status = response.statusText;
-    message.message = text;
     return Promise.reject(text);
   });
 }
 
-export function handleError(e: Error) {
-  if (message.active == false) {
-    message.message = e.message;
-    message.active = true;
-  }
+export function handleError(e: unknown) {
+  error(e instanceof Error ? e.message : String(e));
 }
 
 export const icons = new Map([

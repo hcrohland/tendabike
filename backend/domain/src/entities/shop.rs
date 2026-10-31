@@ -160,11 +160,15 @@ impl ShopId {
     /// Can be done by shop owner or any user with an active subscription
     /// Automatically registers all currently attached parts (cascading registration)
     /// Returns a Summary with the registered part and its attachments
+    ///
+    /// Side effect: a `part_registered` (transient) notification to the shop
+    /// owner, naming the top-level part (a cascade of attached subparts does
+    /// not fan out).
     pub async fn register_part(
         self,
         part_id: PartId,
         session: &dyn Session,
-        store: &mut (impl AttachmentStore + PartStore + ShopStore),
+        store: &mut (impl AttachmentStore + PartStore + ShopStore + NotificationStore),
     ) -> TbResult<Summary> {
         ShopSubscription::check(self, session.user_id(), store).await?;
         let parts = parts_for_register(part_id, session, store).await?;
@@ -174,6 +178,20 @@ impl ShopId {
 
         let mut summary = Summary::default();
         summary.parts.upsert_all(parts);
+
+        // Notify the shop owner (not the actor) — one notification for the
+        // top-level part
+        let shop = store.shop_get(self).await?;
+        let notification = store
+            .notification_create(
+                shop.owner,
+                NotificationLifecycle::Transient,
+                NotificationKind::PartRegistered,
+                NotificationSubject::Part(part_id),
+                None,
+            )
+            .await?;
+        summary.notifications.upsert(notification);
         Ok(summary)
     }
 
@@ -187,19 +205,183 @@ impl ShopId {
 
     /// Unregister a part (bike) from this shop
     /// Can be done by shop owner OR part owner
-    /// Returns an empty Summary (for consistency with other endpoints)
+    /// Returns a Summary with the unregistered part and its attachments
+    ///
+    /// Side effect: a `part_unregistered` (transient) notification to the
+    /// other party (never the actor): the shop owner when the part owner (or
+    /// a subscribed user) acts, the part owner when the shop owner acts. No
+    /// notification when the actor is both the shop owner and the part owner.
     pub async fn unregister_part(
         self,
         part_id: PartId,
         session: &dyn Session,
-        store: &mut (impl AttachmentStore + PartStore + ShopStore),
+        store: &mut (impl AttachmentStore + PartStore + ShopStore + NotificationStore),
     ) -> TbResult<Summary> {
+        let actor = session.user_id();
         let parts = parts_for_register(part_id, session, store).await?;
 
         let parts = store.parts_unregister_shop(parts).await?;
+        // The top-level part is last in the list (parts_for_register pushes
+        // subparts first, then the top-level part). Its owner is the part
+        // owner.
+        let part_owner = parts
+            .last()
+            .map(|p| p.owner)
+            .ok_or_else(|| Error::AnyFailure(anyhow::anyhow!("no parts to unregister")))?;
 
         let mut summary = Summary::default();
         summary.parts.upsert_all(parts);
+
+        // Notify the other party (never the actor).
+        let shop = store.shop_get(self).await?;
+        let recipient = if actor == shop.owner {
+            // Shop owner acts: notify the part owner (if different).
+            (actor != part_owner).then_some(part_owner)
+        } else {
+            // Part owner (or subscribed user) acts: notify the shop owner.
+            Some(shop.owner)
+        };
+        if let Some(recipient) = recipient {
+            let notification = store
+                .notification_create(
+                    recipient,
+                    NotificationLifecycle::Transient,
+                    NotificationKind::PartUnregistered,
+                    NotificationSubject::Part(part_id),
+                    None,
+                )
+                .await?;
+            summary.notifications.upsert(notification);
+        }
+        Ok(summary)
+    }
+
+    /// Subscribe a user to this shop.
+    ///
+    /// Side effects (never notifies the actor of their own action):
+    /// - **pending**: a `sub_request` (persistent) notification to the shop owner.
+    /// - **auto-approve**: a `sub_response` (persistent) notification to the
+    ///   requester, carrying the welcome message.
+    pub async fn subscribe(
+        self,
+        message: Option<String>,
+        user: UserId,
+        store: &mut (impl ShopStore + NotificationStore),
+    ) -> TbResult<Summary> {
+        let shop = store.shop_get(self).await?;
+        let sub_id = SubscriptionId::create(self, message, user, store).await?;
+
+        let notification = if shop.auto_approve {
+            let welcome = format!("Welcome to {}", shop.name);
+            store
+                .notification_create(
+                    user,
+                    NotificationLifecycle::Persistent,
+                    NotificationKind::SubResponse,
+                    NotificationSubject::Subscription(sub_id),
+                    Some(welcome),
+                )
+                .await?
+        } else {
+            store
+                .notification_create(
+                    shop.owner,
+                    NotificationLifecycle::Persistent,
+                    NotificationKind::SubRequest,
+                    NotificationSubject::Subscription(sub_id),
+                    None,
+                )
+                .await?
+        };
+
+        let mut summary = Summary::default();
+        summary.notifications.upsert(notification);
+        Ok(summary)
+    }
+
+    /// Approve a pending subscription for this shop (shop owner only).
+    ///
+    /// Side effect: a `sub_response` (persistent) notification to the
+    /// requester, carrying the `response_message`.
+    pub async fn approve_subscription(
+        self,
+        sub_id: SubscriptionId,
+        message: Option<String>,
+        user: UserId,
+        store: &mut (impl ShopStore + NotificationStore),
+    ) -> TbResult<Summary> {
+        sub_id.approve(message.clone(), user, store).await?;
+
+        let subscription = store.subscription_get(sub_id).await?;
+        let notification = store
+            .notification_create(
+                subscription.user_id,
+                NotificationLifecycle::Persistent,
+                NotificationKind::SubResponse,
+                NotificationSubject::Subscription(sub_id),
+                message,
+            )
+            .await?;
+
+        let mut summary = Summary::default();
+        summary.notifications.upsert(notification);
+        Ok(summary)
+    }
+
+    /// Reject a pending subscription for this shop (shop owner only).
+    ///
+    /// Side effect: a `sub_response` (persistent) notification to the
+    /// requester, carrying the `response_message`.
+    pub async fn reject_subscription(
+        self,
+        sub_id: SubscriptionId,
+        message: Option<String>,
+        user: UserId,
+        store: &mut (impl ShopStore + NotificationStore),
+    ) -> TbResult<Summary> {
+        sub_id.reject(message.clone(), user, store).await?;
+
+        let subscription = store.subscription_get(sub_id).await?;
+        let notification = store
+            .notification_create(
+                subscription.user_id,
+                NotificationLifecycle::Persistent,
+                NotificationKind::SubResponse,
+                NotificationSubject::Subscription(sub_id),
+                message,
+            )
+            .await?;
+
+        let mut summary = Summary::default();
+        summary.notifications.upsert(notification);
+        Ok(summary)
+    }
+
+    /// Cancel a subscription for this shop (subscriber only).
+    ///
+    /// Side effect: a `sub_cancelled` (persistent) notification to the shop
+    /// owner.
+    pub async fn cancel_subscription(
+        self,
+        sub_id: SubscriptionId,
+        user: UserId,
+        store: &mut (impl PartStore + ShopStore + NotificationStore),
+    ) -> TbResult<Summary> {
+        sub_id.cancel(user, store).await?;
+
+        let shop = store.shop_get(self).await?;
+        let notification = store
+            .notification_create(
+                shop.owner,
+                NotificationLifecycle::Persistent,
+                NotificationKind::SubCancelled,
+                NotificationSubject::Subscription(sub_id),
+                None,
+            )
+            .await?;
+
+        let mut summary = Summary::default();
+        summary.notifications.upsert(notification);
         Ok(summary)
     }
 
