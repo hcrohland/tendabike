@@ -29,6 +29,7 @@
   import * as m from "../paraglide/messages";
   import { getLocale, setLocale, locales } from "../paraglide/runtime";
   import { onDestroy } from "svelte";
+  import NotificationBell from "./Widgets/NotificationBell.svelte";
 
   let { promise } = $props();
 
@@ -112,6 +113,7 @@
           {m.header_import_activities()}
         </button>
       {/if}
+      <NotificationBell />
       <div id="user">
         {#await hook_promise}
           <Spinner size="10" />

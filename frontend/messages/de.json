@@ -349,5 +349,21 @@
   "sync_start_label": "Start",
   "sync_migration_label": "Migration",
   "sync_processed": "Verarbeite ...",
-  "sync_process_queue": "Warteschlange abarbeiten"
+  "sync_process_queue": "Warteschlange abarbeiten",
+  "notif_title_sub_request": "Werkstatt-Anmeldung",
+  "notif_body_sub_request": "Eine Werkstatt möchte sich bei dir anmelden. Prüfe die Anfrage und antworte.",
+  "notif_title_sub_response": "Antwort auf Werkstatt-Anmeldung",
+  "notif_body_sub_response": "Eine Werkstatt hat auf deine Anfrage geantwortet.",
+  "notif_title_sub_cancelled": "Mitgliedschaft beendet",
+  "notif_body_sub_cancelled": "Eine Werkstatt-Mitgliedschaft wurde beendet.",
+  "notif_title_part_registered": "Teil registriert",
+  "notif_body_part_registered": "Ein Teil, dem du folgst, wurde registriert.",
+  "notif_title_part_unregistered": "Teil abgemeldet",
+  "notif_body_part_unregistered": "Ein Teil, dem du folgst, wurde abgemeldet.",
+  "notif_title_error": "Anfrage fehlgeschlagen",
+  "notif_body_error": "Beim Kontakt zum Server ist etwas schiefgelaufen.",
+  "notif_panel_title": "Benachrichtigungen",
+  "notif_panel_empty": "Keine Benachrichtigungen",
+  "notif_panel_read_all": "Alle als gelesen markieren",
+  "notif_fallback": "Benachrichtigung"
 }

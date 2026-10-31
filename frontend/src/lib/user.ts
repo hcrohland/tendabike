@@ -6,6 +6,7 @@ import { partNotes, type PartNote } from "./partnote";
 import { Attachment, attachments } from "./attachment";
 import { plans, type ServicePlan } from "./serviceplan";
 import { Shop, shops } from "./shop";
+import { notifications, type Notification } from "./notification.svelte";
 import { myfetch } from "./utils";
 import { mapableState, type StateMap } from "./mapable.svelte";
 import { getUser, setUser } from "./user.svelte";
@@ -79,6 +80,7 @@ export type Summary = {
   plans: Record<string, ServicePlan | null>;
   shops: Record<string, Shop | null>;
   users: Record<string, UserPublic | null>;
+  notifications: Record<string, Notification | null>;
 };
 
 export const users = mapableState<UserPublic>("id");
@@ -119,6 +121,7 @@ function summaryRows(): AnySummaryRow[] {
     { key: "plans", collection: plans },
     { key: "shops", collection: shops },
     { key: "users", collection: users },
+    { key: "notifications", collection: notifications },
   ];
 }
 

@@ -5,7 +5,6 @@ import { markHydrated, startStream, stopStream } from "./stream";
 import { parts } from "./part";
 import { stateValues } from "./mapable.svelte";
 import { setUser, getUser } from "./user";
-import { message } from "./utils";
 import { setShop, Shop } from "./shop";
 import { resp, summary, summaryContent } from "../test/helpers";
 import StreamHarness from "../test/StreamHarness.svelte";
@@ -50,7 +49,6 @@ describe("stream", () => {
     parts.setMap([]);
     setUser(undefined);
     setShop(undefined);
-    message.active = false;
     fetchMock = vi.fn();
     fetchMock.mockResolvedValue(resp({ user: {}, summary: summary() }));
     vi.stubGlobal("fetch", fetchMock);
@@ -210,7 +208,7 @@ describe("stream", () => {
     expect(fetchMock).not.toHaveBeenCalledWith("/api/user/ping", undefined);
   });
 
-  it("a 401 probe clears the user and raises the banner", async () => {
+  it("a 401 probe clears the user and raises a toast", async () => {
     setUser({
       id: 1,
       firstname: "Max",
@@ -223,7 +221,6 @@ describe("stream", () => {
     startStream(() => {}, factory);
     for (let i = 0; i < 5; i++) theStream().fireError();
     await vi.waitFor(() => expect(getUser()).toBeUndefined());
-    expect(message.active).toBe(true);
   });
 
   it("stopStream closes the source and ignores later events", () => {
@@ -271,7 +268,6 @@ describe("stream: reactive to shop state", () => {
     parts.setMap([]);
     setUser(undefined);
     setShop(undefined);
-    message.active = false;
     fetchMock = vi.fn();
     fetchMock.mockResolvedValue(resp({ user: {}, summary: summary() }));
     vi.stubGlobal("fetch", fetchMock);
