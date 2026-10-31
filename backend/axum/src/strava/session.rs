@@ -11,14 +11,28 @@ use tower_sessions::Session as TowerSession;
 
 use tb_domain::{Session as TbSession, ShopId, TbResult, UserId};
 
+/// The acting session (ADR-0009): an identity half and a context half. The
+/// identity (`id`, `is_admin`) is per-browser — it lives in the tower-session
+/// cookie, shared by every tab. The context (`shop`) is per-request: it rides
+/// each request's `X-Active-Shop` header (the SSE stream's `?shop=` is the
+/// same value on the stream route) and is never persisted in the cookie, so
+/// the server is stateless with respect to it and tabs cannot interfere.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct RequestSession {
     id: UserId,
     is_admin: bool,
+    /// The per-request active shop (the context half, ADR-0009): read from
+    /// the `X-Active-Shop` header at extraction, never written to the cookie.
+    #[serde(skip)]
     shop: Option<ShopId>,
     #[serde(skip)]
     session: Option<TowerSession>,
 }
+
+/// The fetch requests' per-request active-shop header (ADR-0009). The SSE
+/// stream keeps its `?shop=` query parameter — the native `EventSource`
+/// client cannot send custom headers.
+pub(crate) const ACTIVE_SHOP_HEADER: &str = "X-Active-Shop";
 
 const SESSION_KEY: &str = "session";
 const SESSION_NEXT_UPDATE: &str = "update";
@@ -108,15 +122,6 @@ impl RequestSession {
         };
         Ok(fresh)
     }
-
-    /// Set the active shop and persist it to the tower session (spec #517,
-    /// ticket #588): the web layer's cookie-persistence concern, kept out of
-    /// the domain `Session` trait (which is all `&self` — the acting session
-    /// is immutable to the domain).
-    pub(crate) fn set_shop(&mut self, shop: Option<ShopId>) -> TbResult<()> {
-        self.shop = shop;
-        tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(self.update()))
-    }
 }
 
 impl TbSession for RequestSession {
@@ -155,7 +160,19 @@ where
             .check_update()
             .await
             .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Update Session"))?;
-        Ok(session.set_session(towersession))
+        // The context half (ADR-0009): the per-request active shop rides the
+        // `X-Active-Shop` header (a malformed value is no shop).
+        let mut session = session.set_session(towersession);
+        if let Some(shop) = parts
+            .headers
+            .get(ACTIVE_SHOP_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.parse::<i32>().ok())
+            .map(ShopId::from)
+        {
+            session.shop = Some(shop);
+        }
+        Ok(session)
     }
 }
 

@@ -15,7 +15,7 @@ import { activities } from "./activity";
 import { services } from "./service";
 import { usages } from "./usage";
 import { plans } from "./serviceplan";
-import { shops, setShop } from "./shop";
+import { shops, setShop, Shop } from "./shop";
 import { stateValues } from "./mapable.svelte";
 import { resp, summary, summaryContent } from "../test/helpers";
 
@@ -97,6 +97,7 @@ describe("refresh", () => {
     shops.setMap([]);
     users.setMap([]);
     attachments.setMap([]);
+    setShop(undefined);
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
   });
@@ -108,10 +109,13 @@ describe("refresh", () => {
     expect(parts[1]).toBeDefined();
   });
 
-  it("appends shop query parameter", async () => {
+  it("carries the shop scope via the header, not a query parameter", async () => {
     fetchMock.mockResolvedValue(resp({ user: {}, summary: summaryContent() }));
-    await refresh(42);
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/user?shop=42");
+    setShop(new Shop({ id: 42 }));
+    await refresh();
+    const [url, option] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/user");
+    expect(option.headers).toEqual({ "X-Active-Shop": "42" });
   });
 });
 

@@ -240,8 +240,12 @@ describe("stream", () => {
     theStream().fireOpen();
     theStream().fireError();
     theStream().fireOpen();
+    // The shop scope rides the `X-Active-Shop` header (ADR-0009), not a
+    // `?shop=` query.
     await vi.waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith("/api/user?shop=10", undefined),
+      expect(fetchMock).toHaveBeenCalledWith("/api/user", {
+        headers: { "X-Active-Shop": "10" },
+      }),
     );
   });
 });

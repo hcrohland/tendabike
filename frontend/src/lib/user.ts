@@ -27,9 +27,8 @@ export async function initData() {
   // flight, and no stream is opened for an unauthenticated session.
 }
 
-export async function refresh(shop?: number) {
-  let query = shop ? "?shop=" + shop : "";
-  let state = await myfetch("/api/user" + query);
+export async function refresh() {
+  let state = await myfetch("/api/user");
   if (state) {
     // The user is set once by initData(); refresh only updates the summary
     // (the shop-scoped data). Calling setUser() here would replace the user

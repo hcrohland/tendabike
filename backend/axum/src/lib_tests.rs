@@ -28,10 +28,11 @@ use http_body_util::BodyExt;
 use tower_sessions::{MemoryStore, Session, SessionManagerLayer};
 
 use tb_domain::{
-    ActTypeId, Activity, ActivityId, DescendReport, OnboardingStatus, Part, PartId, PartNote,
-    PartNoteId, PartTypeId, ReadOutcome, Service, ServicePlan, Shop, ShopId, ShopSubscription,
-    ShopSubscriptionWithDetails, SubscriptionId, SubscriptionStatus, Summary, UsageId, User,
-    UserId, UserPublic, UserState, WriteOutcome,
+    ActTypeId, Activity, ActivityId, ApiRead, DescendReport, OnboardingStatus, Part, PartId,
+    PartNote, PartNoteId, PartTypeId, ReadOutcome, Service, ServicePlan, Session as TbSession,
+    Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails, SubscriptionId,
+    SubscriptionStatus, Summary, TbResult, UsageId, User, UserId, UserPublic, UserState,
+    WriteOutcome,
 };
 use tb_exec::{ExecutorStatus, MockServiceApi, ServiceApi};
 use time::macros::datetime;
@@ -122,22 +123,25 @@ async fn run_with_body(
                 method,
                 uri,
                 cookie,
+                &[],
                 json.as_bytes(),
                 "application/json",
             )
             .await
         }
-        None => run_raw(app, method, uri, cookie, &[], "").await,
+        None => run_raw(app, method, uri, cookie, &[], &[], "").await,
     }
 }
 
-/// Runs a single request with a raw body and an explicit content type
-/// (the multipart uploads' shape — `run_json` cannot carry one).
+/// Runs a single request with a raw body, an explicit content type, and
+/// extra request headers (the multipart uploads' shape — `run_json` cannot
+/// carry one).
 async fn run_raw(
     app: Router,
     method: Method,
     uri: &str,
     cookie: Option<&str>,
+    headers: &[(&str, &str)],
     body: &[u8],
     content_type: &str,
 ) -> (StatusCode, HeaderMap, Vec<u8>) {
@@ -147,6 +151,9 @@ async fn run_raw(
         .header(header::HOST, "localhost");
     if !content_type.is_empty() {
         builder = builder.header(header::CONTENT_TYPE, content_type);
+    }
+    for (name, value) in headers {
+        builder = builder.header(*name, *value);
     }
     let mut req = builder
         .body(axum::body::Body::from(body.to_vec()))
@@ -163,6 +170,34 @@ async fn run_raw(
     let headers = res.headers().clone();
     let body = res.into_body().collect().await.expect("body").to_bytes();
     (status, headers, body.to_vec())
+}
+
+/// Runs a single request with extra request headers and an optional JSON
+/// body (the `X-Active-Shop` contract's shape — `run`/`run_json` cannot
+/// carry headers).
+async fn run_headers(
+    app: Router,
+    method: Method,
+    uri: &str,
+    cookie: Option<&str>,
+    headers: &[(&str, &str)],
+    json: Option<&str>,
+) -> (StatusCode, HeaderMap, Vec<u8>) {
+    match json {
+        Some(json) => {
+            run_raw(
+                app,
+                method,
+                uri,
+                cookie,
+                headers,
+                json.as_bytes(),
+                "application/json",
+            )
+            .await
+        }
+        None => run_raw(app, method, uri, cookie, headers, &[], "").await,
+    }
 }
 
 /// Runs a GET request and returns the SSE body (can read it frame by frame;
@@ -398,6 +433,16 @@ fn summary_with_plan() -> Summary {
 }
 
 // ─── The fixture ──────────────────────────────────────────────────────────
+
+/// The canned `User` read reply: the suite's user with an empty `Summary`.
+fn user_state_reply() -> impl Fn(Box<dyn TbSession>, ApiRead) -> TbResult<ReadOutcome> + 'static {
+    |_session, _read| {
+        Ok(ReadOutcome::User(Box::new(UserState {
+            user: user(),
+            summary: Summary::default(),
+        })))
+    }
+}
 
 /// One contract test's fixture: the session store and the mock. The test
 /// sets up expectations on the mock, then calls [`build_app`] to get the
@@ -746,23 +791,87 @@ async fn summary_returns_200_and_summary_body() {
     );
 }
 
-/// `GET /api/user?shop=1` rides the same two messages, with the
-/// `?shop=` filter on the read (spec #558 §3.4).
+/// `GET /api/user` with the `X-Active-Shop` header rides the same two
+/// messages, with the header's shop on both acting sessions (ADR-0009): the
+/// read is shop-scoped by the per-request context, not the cookie.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn summary_shop_filter_rides_the_read() {
+async fn active_shop_header_scopes_the_read_session() {
     let (store, mut mock) = mock_ctx();
     mock.expect_hydrate_gear()
         .times(1)
+        .withf(|session| session.shop() == Some(ShopId::from(1)))
         .returning(|_session| Ok(Summary::default()));
-    mock.expect_read().times(1).returning(|_session, _read| {
-        Ok(ReadOutcome::User(Box::new(UserState {
-            user: user(),
-            summary: Summary::default(),
-        })))
-    });
+    mock.expect_read()
+        .times(1)
+        .withf(|session, _read| session.shop() == Some(ShopId::from(1)))
+        .returning(user_state_reply());
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
-    let (status, _headers, _body) = run(app, Method::GET, "/api/user?shop=1", Some(&cookie)).await;
+    let (status, _headers, _body) = run_headers(
+        app,
+        Method::GET,
+        "/api/user",
+        Some(&cookie),
+        &[("X-Active-Shop", "1")],
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+/// `GET /api/user` without the `X-Active-Shop` header rides the same two
+/// messages with no shop on the acting sessions: the full, unfiltered read.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn read_without_active_shop_header_has_no_shop() {
+    let (store, mut mock) = mock_ctx();
+    mock.expect_hydrate_gear()
+        .times(1)
+        .withf(|session| session.shop().is_none())
+        .returning(|_session| Ok(Summary::default()));
+    mock.expect_read()
+        .times(1)
+        .withf(|session, _read| session.shop().is_none())
+        .returning(user_state_reply());
+    let app = build_app(&store, mock);
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, _body) = run(app, Method::GET, "/api/user", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+/// The active shop is per-request, not per-browser (ADR-0009): a request
+/// carrying the `X-Active-Shop` header does not change a subsequent
+/// request's shop — the server is stateless with respect to it, so the
+/// cross-tab leak is gone.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn active_shop_header_does_not_leak_across_requests() {
+    let (store, mut mock) = mock_ctx();
+    mock.expect_hydrate_gear()
+        .times(2)
+        .returning(|_session| Ok(Summary::default()));
+    // Ordered expectations: the first read (the headered request) must be
+    // shop-scoped, the second (headerless) must not — the first request
+    // persisted nothing.
+    mock.expect_read()
+        .times(1)
+        .withf(|session, _read| session.shop() == Some(ShopId::from(1)))
+        .returning(user_state_reply());
+    mock.expect_read()
+        .times(1)
+        .withf(|session, _read| session.shop().is_none())
+        .returning(user_state_reply());
+    let app = build_app(&store, mock);
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, _body) = run_headers(
+        app.clone(),
+        Method::GET,
+        "/api/user",
+        Some(&cookie),
+        &[("X-Active-Shop", "1")],
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _headers, _body) = run(app, Method::GET, "/api/user", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
 }
 
@@ -1101,6 +1210,53 @@ async fn update_part_returns_204() {
     assert_eq!(status, StatusCode::NO_CONTENT);
 }
 
+/// A write carrying the `X-Active-Shop` header enqueues its `ApiWrite` on
+/// the shop-scoped acting session (ADR-0009): the executor routes the
+/// write's frame to the shop stream from that session's shop.
+#[tokio::test]
+async fn write_with_active_shop_header_rides_the_shop_session() {
+    let (store, mut mock) = mock_ctx();
+    mock.expect_write()
+        .times(1)
+        .withf(|session, _write| session.shop() == Some(ShopId::from(1)))
+        .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
+    let app = build_app(&store, mock);
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, _body) = run_headers(
+        app,
+        Method::PUT,
+        "/api/part/1",
+        Some(&cookie),
+        &[("X-Active-Shop", "1")],
+        Some(&part_body("Drainage")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+/// A write without the `X-Active-Shop` header enqueues its `ApiWrite` on
+/// the shop-less acting session: the executor routes its frame to the main
+/// stream only.
+#[tokio::test]
+async fn write_without_active_shop_header_rides_the_personal_session() {
+    let (store, mut mock) = mock_ctx();
+    mock.expect_write()
+        .times(1)
+        .withf(|session, _write| session.shop().is_none())
+        .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
+    let app = build_app(&store, mock);
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, _body) = run_json(
+        app,
+        Method::PUT,
+        "/api/part/1",
+        Some(&cookie),
+        &part_body("Drainage"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
 /// `DELETE /api/part/{part}` enqueues the `PartDelete` write and answers
 /// `204`.
 #[tokio::test]
@@ -1173,6 +1329,7 @@ async fn create_file_note_returns_201_and_entity() {
         Method::POST,
         "/api/part/1/notes/file",
         Some(&cookie),
+        &[],
         multipart.as_bytes(),
         "multipart/form-data; boundary=tbnote",
     )
@@ -1227,6 +1384,7 @@ async fn update_file_note_returns_204() {
         Method::PUT,
         "/api/part/notes/1/file",
         Some(&cookie),
+        &[],
         multipart.as_bytes(),
         "multipart/form-data; boundary=tbnote",
     )

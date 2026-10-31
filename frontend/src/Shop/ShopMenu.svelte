@@ -9,10 +9,12 @@
 
   let myshops = $derived(stateValues(shops));
 
-  // Enter shop mode: replaces stores with shop-specific data
+  // Enter shop mode: replaces stores with shop-specific data. The refresh's
+  // shop scope rides the `X-Active-Shop` header the fetch layer injects from
+  // the tab's shop (ADR-0009).
   async function enterShop(myshop: Shop) {
     setShop(myshop);
-    if (myshop.owner == getUser()?.id) await refresh(myshop.id);
+    if (myshop.owner == getUser()?.id) await refresh();
 
     // Navigate to main page
     window.location.hash = "#/cat";

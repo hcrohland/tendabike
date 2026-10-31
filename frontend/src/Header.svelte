@@ -61,7 +61,7 @@
   onDestroy(() => stopStream());
 
   function fullrefresh() {
-    hook_promise = refresh(getShop()?.id);
+    hook_promise = refresh();
   }
 
   async function triggerHistoricSync() {
