@@ -35,7 +35,7 @@ pub trait IdKeyed {
 /// [`is_tombstoned`](IdKeyedMap::is_tombstoned) — each written once, applying to all nine
 /// [`Summary`] kinds. A `Some(entity)` value is a live entity; a `None` value is a tombstone
 /// marking the entity as deleted (ADR-0005, executable spec #446 §2; "tombstone" and "live" in
-/// `CONTEXT.md`). The inner `HashMap` is private and unreachable: every read and write goes
+/// `GLOSSARY.md`). The inner `HashMap` is private and unreachable: every read and write goes
 /// through the nine named ops.
 #[derive(Clone, Debug, Serialize)]
 #[serde(bound(serialize = "K: Display, E: Serialize"))]
@@ -85,7 +85,7 @@ where
 {
     /// Record an id as deleted: insert a `None` tombstone under the key — the deletion
     /// representation (ADR-0005, executable spec #446 §2). The tombstone entry carries no
-    /// entity data ("tombstone" in `CONTEXT.md`), so the key is the whole input.
+    /// entity data ("tombstone" in `GLOSSARY.md`), so the key is the whole input.
     pub fn tombstone(&mut self, k: K) {
         self.0.insert(k, None);
     }
