@@ -76,6 +76,18 @@ RUN groupmod -n laios vscode \
     && chown laios:laios /workspaces \
     && chmod -R a+rwX /usr/local/cargo /usr/local/rustup
 
+# One-time workspace setup: the repo lives on the external
+# agentcontainer_workspaces volume (mounted at /workspaces), so node_modules
+# cannot be baked into the image. Run once after the volume is mounted:
+#   setup-workspace
+RUN printf '%s\n' \
+    '#!/bin/sh' \
+    'set -e' \
+    'cd /workspaces/tendabike' \
+    'npm install' \
+    > /usr/local/bin/setup-workspace \
+    && chmod +x /usr/local/bin/setup-workspace
+
 USER laios
 LABEL devcontainer.metadata='[{"remoteUser":"laios"}]'
 
