@@ -76,18 +76,6 @@ RUN groupmod -n laios vscode \
     && chown laios:laios /workspaces \
     && chmod -R a+rwX /usr/local/cargo /usr/local/rustup
 
-# One-time workspace setup: the repo lives on the external
-# agentcontainer_workspaces volume (mounted at /workspaces), so node_modules
-# cannot be baked into the image. Worktrees get a fresh empty node_modules
-# too. Run once per worktree, from its root:
-#   setup-workspace
-RUN printf '%s\n' \
-    '#!/bin/sh' \
-    'set -e' \
-    'npm install' \
-    > /usr/local/bin/setup-workspace \
-    && chmod +x /usr/local/bin/setup-workspace
-
 USER laios
 LABEL devcontainer.metadata='[{"remoteUser":"laios"}]'
 
