@@ -1217,4 +1217,4 @@ where
 }
 
 #[cfg(test)]
-mod executor_tests;
+pub(crate) mod executor_tests;

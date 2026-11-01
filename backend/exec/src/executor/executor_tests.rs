@@ -407,7 +407,7 @@ mockall::mock! {
 /// per `run_request` (one loop-owned transaction), so the mock is taken out
 /// of the `Mutex` on that call.
 #[derive(Clone)]
-struct FakeSource {
+pub(crate) struct FakeSource {
     begin_fails: bool,
     /// The conns `begin` hands out, in order (one per call): most tests
     /// install one (one loop-owned transaction per `run_request`); the
@@ -418,7 +418,7 @@ struct FakeSource {
 impl FakeSource {
     /// A source whose `begin` fails with a `DatabaseFailure` (the DB-down
     /// corner): no store is ever handed out.
-    fn failing() -> Self {
+    pub(crate) fn failing() -> Self {
         Self {
             begin_fails: true,
             conns: Arc::new(Mutex::new(VecDeque::new())),
@@ -873,7 +873,7 @@ fn frame_push_skips_empty_summaries() {
 /// shares the recording (the `Arc`), so a test keeps an observation handle
 /// after moving the pusher into the context.
 #[derive(Default, Clone)]
-struct RecordingPusher {
+pub(crate) struct RecordingPusher {
     calls: std::sync::Arc<std::sync::Mutex<Vec<PushCall>>>,
 }
 
@@ -890,7 +890,7 @@ enum PushCall {
 }
 
 impl RecordingPusher {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
@@ -1497,7 +1497,7 @@ fn shop_source(owner: UserId) -> FakeSource {
 }
 
 /// A non-empty `Summary` (a frame the shop/user streams should deliver).
-fn non_empty_summary() -> Summary {
+pub(crate) fn non_empty_summary() -> Summary {
     let mut summary = Summary::default();
     summary.usages.upsert(Usage::default());
     summary

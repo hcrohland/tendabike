@@ -455,3 +455,198 @@ impl Core {
         Ok(exec)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! The lifecycle core's own tests (spec #697, ticket #699): the core is
+    //! constructed **directly** (no `Registry` facade, no `ServiceApi` in the
+    //! way) and its lifecycle methods are driven at the single
+    //! transaction-witness seam (the `MockConn`-backed `FakeSource`) — "how
+    //! does an executor stay alive", verifiable in isolation. The core's maps
+    //! and channels are real; only the store is faked. The test double and
+    //! fixtures are the executor module's (widened to `pub(crate)`), imported
+    //! here — not copied.
+
+    use std::time::Duration;
+
+    use tb_domain::{ShopId, TbResult, UserId};
+
+    use super::{Core, ExecutorStatus};
+    use crate::executor::executor_tests::{FakeSource, RecordingPusher, non_empty_summary};
+    use crate::registry::FramePusher;
+
+    /// A canned `FramePusher` for the core's spawn (the `RecordingPusher`
+    /// double): the core is source-agnostic and takes the pusher as a
+    /// parameter, so a test double stands in for the facade.
+    fn pusher() -> Box<dyn FramePusher> {
+        Box::new(RecordingPusher::new())
+    }
+
+    /// `exec_field` spawns the user's executor on the first demand (the
+    /// "spawn on first demand" half of the lifecycle) and reports it
+    /// `Running`. The store is the canned `FakeSource` (its `begin` fails, so
+    /// the loop's queue probe backs off and the executor stays `Running`
+    /// without a real database).
+    #[tokio::test]
+    async fn exec_field_spawns_the_executor_on_first_demand() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let user_id = UserId::from(1);
+        let source = FakeSource::failing();
+
+        core.exec_field(&source, user_id, pusher(), |_| ()).await?;
+
+        assert_eq!(
+            core.status(user_id).await,
+            Some(ExecutorStatus::Running),
+            "the first demand spawns the executor (Running)"
+        );
+        Ok(())
+    }
+
+    /// `stop_all` tears every executor down (abort + clear the map) and the
+    /// next demand respawns it fresh: the "stop-all teardown" and "respawn"
+    /// halves of the lifecycle. The map entry is gone after `stop_all`
+    /// (`status` → `None`); a fresh `exec_field` brings it back `Running`.
+    #[tokio::test]
+    async fn stop_all_tears_down_and_the_next_demand_respawns() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let user_id = UserId::from(1);
+
+        core.exec_field(&FakeSource::failing(), user_id, pusher(), |_| ())
+            .await?;
+        assert_eq!(core.status(user_id).await, Some(ExecutorStatus::Running));
+
+        core.stop_all().await;
+        assert_eq!(
+            core.status(user_id).await,
+            None,
+            "stop_all clears the executor map"
+        );
+
+        // The next demand respawns fresh.
+        core.exec_field(&FakeSource::failing(), user_id, pusher(), |_| ())
+            .await?;
+        assert_eq!(
+            core.status(user_id).await,
+            Some(ExecutorStatus::Running),
+            "the next demand respawns the executor (Running)"
+        );
+        Ok(())
+    }
+
+    /// `wake` is a pure signal to a **running** executor: it never spawns one
+    /// (the DB queue is the source of truth, spec §4.4/§4.6), so a wake on a
+    /// core with no live executor leaves the map empty.
+    #[tokio::test]
+    async fn wake_never_spawns_an_executor() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let user_id = UserId::from(1);
+
+        core.wake(user_id).await;
+
+        assert_eq!(
+            core.status(user_id).await,
+            None,
+            "a wake never spawns an executor"
+        );
+        Ok(())
+    }
+
+    /// `wake` on a running executor is a no-op on the settled fate: it
+    /// interrupts the loop's idle wait (so a just-queued event is processed at
+    /// once) but never spawns a second executor nor changes the fate.
+    #[tokio::test]
+    async fn wake_on_a_running_executor_is_a_pure_signal() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let user_id = UserId::from(1);
+        let source = FakeSource::failing();
+
+        core.exec_field(&source, user_id, pusher(), |_| ()).await?;
+        core.wake(user_id).await;
+
+        assert_eq!(
+            core.status(user_id).await,
+            Some(ExecutorStatus::Running),
+            "a wake leaves a running executor running"
+        );
+        Ok(())
+    }
+
+    /// `subscribe_shop` opens the shop channel on demand and `push_to_shop`
+    /// delivers a frame to the open stream (the shop-stream lifecycle,
+    /// spec #517). No store is involved — the ownership read stays in the
+    /// facade — so the source is never `begin`-ed.
+    #[tokio::test]
+    async fn push_to_shop_delivers_to_an_open_shop_stream() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let shop_id = ShopId::from(7);
+
+        let mut rx = core.subscribe_shop(shop_id, UserId::from(1)).await;
+        let summary = non_empty_summary();
+        core.push_to_shop(shop_id, summary.clone()).await;
+
+        let got = rx
+            .recv()
+            .await
+            .expect("the open shop stream receives the frame");
+        assert_eq!(got, summary);
+        Ok(())
+    }
+
+    /// `push_to_shop` is a no-op with no subscriber (the "open shop" check is
+    /// implicit: `receiver_count() > 0`): no panic, and a bare push opens no
+    /// shop stream.
+    #[tokio::test]
+    async fn push_to_shop_is_a_noop_without_a_subscriber() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let shop_id = ShopId::from(7);
+
+        core.push_to_shop(shop_id, non_empty_summary()).await;
+
+        assert!(
+            !core.shop_open(shop_id).await,
+            "a push with no subscriber opens no shop stream"
+        );
+        Ok(())
+    }
+
+    /// `push_to_user` delivers a frame to a running executor's personal stream
+    /// (the user-stream push, spec #517): the core's synthetic-executor
+    /// installer stands in for a live executor, and no store is involved.
+    #[tokio::test]
+    async fn push_to_user_delivers_to_a_running_executor() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let user_id = UserId::from(1);
+        let mut frame_rx = core
+            .install_executor_for_test(user_id, ExecutorStatus::Running)
+            .await;
+
+        let summary = non_empty_summary();
+        core.push_to_user(user_id, summary.clone()).await;
+
+        let got = frame_rx
+            .try_recv()
+            .expect("the running executor's frame channel receives the frame");
+        assert_eq!(got, summary);
+        Ok(())
+    }
+
+    /// `push_to_user` is a no-op for a settled (reaped) executor: the frame
+    /// channel is not fed (spec #517).
+    #[tokio::test]
+    async fn push_to_user_is_a_noop_for_a_reaped_executor() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let user_id = UserId::from(1);
+        let mut frame_rx = core
+            .install_executor_for_test(user_id, ExecutorStatus::Reaped)
+            .await;
+
+        core.push_to_user(user_id, non_empty_summary()).await;
+
+        assert!(
+            frame_rx.try_recv().is_err(),
+            "a reaped executor receives no frame"
+        );
+        Ok(())
+    }
+}
