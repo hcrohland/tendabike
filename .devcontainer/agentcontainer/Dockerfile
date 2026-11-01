@@ -78,12 +78,12 @@ RUN groupmod -n laios vscode \
 
 # One-time workspace setup: the repo lives on the external
 # agentcontainer_workspaces volume (mounted at /workspaces), so node_modules
-# cannot be baked into the image. Run once after the volume is mounted:
+# cannot be baked into the image. Worktrees get a fresh empty node_modules
+# too. Run once per worktree, from its root:
 #   setup-workspace
 RUN printf '%s\n' \
     '#!/bin/sh' \
     'set -e' \
-    'cd /workspaces/tendabike' \
     'npm install' \
     > /usr/local/bin/setup-workspace \
     && chmod +x /usr/local/bin/setup-workspace
