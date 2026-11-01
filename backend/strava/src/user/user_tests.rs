@@ -325,7 +325,9 @@ async fn user_delete_removes_everything() -> TbResult<()> {
     });
     // The domain cascade reads the user's state (all empty) and deletes each
     // collection plus the user row.
-    store.expect_get_all().returning(|_uid| Ok(Vec::new()));
+    store
+        .expect_activity_get_all()
+        .returning(|_uid| Ok(Vec::new()));
     store
         .expect_shops_get_all_for_user()
         .returning(|_uid| Ok(Vec::new()));
@@ -414,7 +416,9 @@ async fn stats_include_event_counts() -> TbResult<()> {
     store
         .expect_part_get_all_for_userid()
         .returning(|_uid| Ok(Vec::new()));
-    store.expect_get_all().returning(|_uid| Ok(Vec::new()));
+    store
+        .expect_activity_get_all()
+        .returning(|_uid| Ok(Vec::new()));
     store
         .expect_strava_events_get_count_for_user()
         .returning(move |user| Ok(if *user == 42.into() { 1 } else { 0 }));

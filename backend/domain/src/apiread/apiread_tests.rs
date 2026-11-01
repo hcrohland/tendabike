@@ -148,7 +148,7 @@ async fn user_read_returns_user_state() -> TbResult<()> {
     let mut store = MockStore::new();
     let me = test_user();
     store.expect_user_get().returning(move |_| Ok(user_row(me)));
-    store.expect_get_all().returning(move |_| {
+    store.expect_activity_get_all().returning(move |_| {
         Ok(vec![
             activity_row(ActivityId::new(1), me, "Morning Ride"),
             activity_row(ActivityId::new(2), me, "Evening Ride"),
@@ -207,7 +207,7 @@ async fn user_read_shop_filter_limits_parts() -> TbResult<()> {
     let me = test_user();
     let shop = ShopId::from(9);
     store.expect_user_get().returning(move |_| Ok(user_row(me)));
-    store.expect_get_all().returning(|_| Ok(vec![]));
+    store.expect_activity_get_all().returning(|_| Ok(vec![]));
     let s = shop_row(shop, me, "Workshop", true);
     let all_shops = vec![s.clone()];
     store
@@ -229,7 +229,7 @@ async fn user_read_shop_filter_limits_parts() -> TbResult<()> {
         ..part_row(PartId::from(13), me, CHAIN)
     };
     store
-        .expect_shop_get_parts()
+        .expect_part_get_for_shop()
         .returning(move |_| Ok(vec![registered.clone()]));
     store.expect_by_user().returning(|_| Ok(vec![]));
     store

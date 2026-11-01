@@ -1,4 +1,4 @@
-use crate::{Error, PartStore, Shop, ShopStore, TbResult, UserId};
+use crate::{Error, Part, PartStore, Shop, ShopStore, TbResult, UserId};
 
 use derive_more::{Display, From, Into};
 use serde::{Deserialize, Serialize};
@@ -216,8 +216,7 @@ impl SubscriptionId {
             ));
         }
 
-        if store
-            .shop_get_parts(subscription.shop_id)
+        if Part::for_shop(subscription.shop_id, store)
             .await?
             .iter()
             .any(|p| p.owner == user)

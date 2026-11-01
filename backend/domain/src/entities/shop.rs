@@ -147,7 +147,7 @@ impl ShopId {
         self.check_owner(user, store).await?;
 
         // Check if shop has any bikes
-        let parts = store.shop_get_parts(self).await?;
+        let parts = Part::for_shop(self, store).await?;
         if !parts.is_empty() {
             return Err(Error::Conflict("Shop still has bikes assigned".into()));
         }
@@ -174,7 +174,7 @@ impl ShopId {
         let parts = parts_for_register(part_id, session, store).await?;
 
         // Register the parts to the shop
-        let parts = store.parts_register_shop(self, parts).await?;
+        let parts = Part::register_to_shop(self, parts, store).await?;
 
         let mut summary = Summary::default();
         summary.parts.upsert_all(parts);
@@ -182,15 +182,15 @@ impl ShopId {
         // Notify the shop owner (not the actor) — one notification for the
         // top-level part
         let shop = store.shop_get(self).await?;
-        let notification = store
-            .notification_create(
-                shop.owner,
-                NotificationLifecycle::Transient,
-                NotificationKind::PartRegistered,
-                NotificationSubject::Part(part_id),
-                None,
-            )
-            .await?;
+        let notification = Notification::create(
+            shop.owner,
+            NotificationLifecycle::Transient,
+            NotificationKind::PartRegistered,
+            NotificationSubject::Part(part_id),
+            None,
+            store,
+        )
+        .await?;
         summary.notifications.upsert(notification);
         // The shop is the notification's subject: carry it in the summary so
         // the executor routes the frame to the shop's stream even when the
@@ -224,7 +224,7 @@ impl ShopId {
         let actor = session.user_id();
         let parts = parts_for_register(part_id, session, store).await?;
 
-        let parts = store.parts_unregister_shop(parts).await?;
+        let parts = Part::unregister_from_shop(parts, store).await?;
         // The top-level part is last in the list (parts_for_register pushes
         // subparts first, then the top-level part). Its owner is the part
         // owner.
@@ -246,15 +246,15 @@ impl ShopId {
             Some(shop.owner)
         };
         if let Some(recipient) = recipient {
-            let notification = store
-                .notification_create(
-                    recipient,
-                    NotificationLifecycle::Transient,
-                    NotificationKind::PartUnregistered,
-                    NotificationSubject::Part(part_id),
-                    None,
-                )
-                .await?;
+            let notification = Notification::create(
+                recipient,
+                NotificationLifecycle::Transient,
+                NotificationKind::PartUnregistered,
+                NotificationSubject::Part(part_id),
+                None,
+                store,
+            )
+            .await?;
             summary.notifications.upsert(notification);
         }
         // The shop is the notification's subject: carry it in the summary so
@@ -281,25 +281,25 @@ impl ShopId {
 
         let notification = if shop.auto_approve {
             let welcome = format!("Welcome to {}", shop.name);
-            store
-                .notification_create(
-                    user,
-                    NotificationLifecycle::Persistent,
-                    NotificationKind::SubResponse,
-                    NotificationSubject::Subscription(sub_id),
-                    Some(welcome),
-                )
-                .await?
+            Notification::create(
+                user,
+                NotificationLifecycle::Persistent,
+                NotificationKind::SubResponse,
+                NotificationSubject::Subscription(sub_id),
+                Some(welcome),
+                store,
+            )
+            .await?
         } else {
-            store
-                .notification_create(
-                    shop.owner,
-                    NotificationLifecycle::Persistent,
-                    NotificationKind::SubRequest,
-                    NotificationSubject::Subscription(sub_id),
-                    None,
-                )
-                .await?
+            Notification::create(
+                shop.owner,
+                NotificationLifecycle::Persistent,
+                NotificationKind::SubRequest,
+                NotificationSubject::Subscription(sub_id),
+                None,
+                store,
+            )
+            .await?
         };
 
         let mut summary = Summary::default();
@@ -325,15 +325,15 @@ impl ShopId {
         sub_id.approve(message.clone(), user, store).await?;
 
         let subscription = store.subscription_get(sub_id).await?;
-        let notification = store
-            .notification_create(
-                subscription.user_id,
-                NotificationLifecycle::Persistent,
-                NotificationKind::SubResponse,
-                NotificationSubject::Subscription(sub_id),
-                message,
-            )
-            .await?;
+        let notification = Notification::create(
+            subscription.user_id,
+            NotificationLifecycle::Persistent,
+            NotificationKind::SubResponse,
+            NotificationSubject::Subscription(sub_id),
+            message,
+            store,
+        )
+        .await?;
 
         let mut summary = Summary::default();
         summary.notifications.upsert(notification);
@@ -354,15 +354,15 @@ impl ShopId {
         sub_id.reject(message.clone(), user, store).await?;
 
         let subscription = store.subscription_get(sub_id).await?;
-        let notification = store
-            .notification_create(
-                subscription.user_id,
-                NotificationLifecycle::Persistent,
-                NotificationKind::SubResponse,
-                NotificationSubject::Subscription(sub_id),
-                message,
-            )
-            .await?;
+        let notification = Notification::create(
+            subscription.user_id,
+            NotificationLifecycle::Persistent,
+            NotificationKind::SubResponse,
+            NotificationSubject::Subscription(sub_id),
+            message,
+            store,
+        )
+        .await?;
 
         let mut summary = Summary::default();
         summary.notifications.upsert(notification);
@@ -382,15 +382,15 @@ impl ShopId {
         sub_id.cancel(user, store).await?;
 
         let shop = store.shop_get(self).await?;
-        let notification = store
-            .notification_create(
-                shop.owner,
-                NotificationLifecycle::Persistent,
-                NotificationKind::SubCancelled,
-                NotificationSubject::Subscription(sub_id),
-                None,
-            )
-            .await?;
+        let notification = Notification::create(
+            shop.owner,
+            NotificationLifecycle::Persistent,
+            NotificationKind::SubCancelled,
+            NotificationSubject::Subscription(sub_id),
+            None,
+            store,
+        )
+        .await?;
 
         let mut summary = Summary::default();
         summary.notifications.upsert(notification);
@@ -411,7 +411,7 @@ impl ShopId {
         // Check if user is shop owner OR has active subscription
         self.check_owner(user, store).await?;
 
-        store.shop_get_parts(self).await
+        Part::for_shop(self, store).await
     }
 
     /// Read a shop from the database

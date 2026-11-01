@@ -3,7 +3,7 @@
 {
   "name": "Debian",
   "dockerComposeFile": "docker-compose.yml",
-  "shutdownAction": "none",
+  // "shutdownAction": "none",
   "service": "app",
   "workspaceFolder": "/workspaces/tendabike",
   "features": {
@@ -32,9 +32,7 @@
   "forwardPorts": [5173],
   "postCreateCommand": {
     "sqlx": "cargo install sqlx-cli --no-default-features --features rustls,postgres",
-    "uv": "curl -LsSf https://astral.sh/uv/install.sh | sh",
-    "git": "git config --global --add safe.directory /workspaces/tendabike",
-    "pi": "curl -fsSL https://pi.dev/install.sh | sh"
+    "git": "git config --global --add safe.directory /workspaces/tendabike"
   },
   // Configure tool-specific properties.
   // "customizations": {},

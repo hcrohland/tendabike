@@ -37,7 +37,7 @@ use std::time::Duration;
 
 use log::{debug, error, warn};
 use tb_domain::{
-    ApiRead, ApiWrite, Error, PartStore, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
+    ApiRead, ApiWrite, Error, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
     WriteOutcome, exec,
 };
 use tb_strava::event::{Event, QueueRead, get_event, insert_sync, process};
@@ -992,7 +992,7 @@ where
                     .ok()
                     .and_then(|o| o.summary().referenced_part())
                 {
-                    conn.partid_get_part(part_id).await.ok().map(|p| p.owner)
+                    part_id.owner(&mut conn).await.ok()
                 } else {
                     None
                 }

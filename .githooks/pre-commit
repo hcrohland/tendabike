@@ -41,6 +41,9 @@ if printf '%s\n' "$staged_files" | grep -Eq '^frontend/'; then
 fi
 
 if [ "$run_rust" -eq 1 ]; then
+    # ADR-0010: the entity owns its store — a store method is called only from
+    # its owning entity's file (plus the store impls, doubles, tests, seed tool).
+    python3 .githooks/check-store-access.py
     cargo fmt --check
     (cd backend/sqlx && cargo sqlx prepare --check)
     # --workspace --all-targets lints the #[cfg(test)]/test-support code too;

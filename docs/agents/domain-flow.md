@@ -1,6 +1,6 @@
 # Domain Flow
 
-How the Tendabike client stays in sync with the backend. Read this when adding or modifying a mutating operation — a domain operation, an endpoint that serves it, or its client handler. Terminology: `CONTEXT.md`.
+How the Tendabike client stays in sync with the backend. Read this when adding or modifying a mutating operation — a domain operation, an endpoint that serves it, or its client handler. Terminology: `GLOSSARY.md`.
 
 ## The claim
 
@@ -38,6 +38,8 @@ A `Notification` is a message addressed to a single recipient, created as a side
 The domain layer is storage-agnostic: every operation goes through the store traits in `backend/domain/src/traits/`, and the Postgres store (`SqlxConn`, `backend/sqlx/src/store/`) is the production adapter. The DB-free test suites run the domain logic over `mockall` `mock!` doubles (the `MockStore` in `backend/domain/src/test_support/`), not a second store adapter.
 
 The `Store` trait is a marker naming a complete store (all nine sub-traits); it carries no methods. The transaction lifecycle — `begin`, `commit`, `rollback` — is inherent on the concrete store (`SqlxConn`) and is driven only by the web layer, the executor loop, and the tests — never by the domain.
+
+**The entity owns its store (ADR-0010).** Only the entity that owns a store may access it: a store method (`<entity>_<op>`) is called only from its owning entity's code. A cross-entity need is served by the callee exposing the operation it owns and the caller invoking that entity method — never the callee's store. This applies to every store, including `StravaDataStore`. Exempted: the sqlx store files (they *are* the store), the `MockStore` double, the test and seam suites, and `build_snapshot.rs`. The rule is machine-checked by `.githooks/check-store-access.py`.
 
 The contract: a domain operation must pass on the `mock!` double (the DB-free suites) and on the Postgres store (the sqlx seam), and where they disagree the **Postgres behavior is the source of truth** — the database is what production runs. Where a rule was unified, the trait docs name it (the attachment path rules in #407, the activity path rules in #408, and the 30-minute offset rounding in #409).
 

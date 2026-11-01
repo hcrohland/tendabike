@@ -56,8 +56,8 @@ use oauth2::RefreshToken;
 use tokio::sync::{Mutex, Notify, broadcast, oneshot, watch};
 
 use tb_domain::{
-    Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId,
-    ShopStore, Summary, TbResult, UserId, WriteOutcome,
+    Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, Summary,
+    TbResult, UserId, WriteOutcome,
 };
 use tb_strava::{
     StravaStat, StravaUser, activity,
@@ -599,7 +599,7 @@ where
         // Verify ownership in a transaction (the web layer maps `Forbidden`
         // to a 403).
         let mut store = self.source.begin().await?;
-        let shop = store.shop_get(shop_id).await?;
+        let shop = shop_id.read(&mut store).await?;
         store.commit().await?;
         if shop.owner != user_id {
             return Err(Error::Forbidden(

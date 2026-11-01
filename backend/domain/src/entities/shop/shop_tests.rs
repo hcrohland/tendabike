@@ -604,7 +604,7 @@ async fn get_parts_returns_registered() -> TbResult<()> {
     store
         .expect_shop_get()
         .returning(move |_| Ok(shop_row(shop_id, owner, "Bike Barn", true)));
-    store.expect_shop_get_parts().returning(move |_| {
+    store.expect_part_get_for_shop().returning(move |_| {
         Ok(vec![
             part_row(PartId::from(1), customer, BIKE, Some(shop_id)),
             part_row(PartId::from(2), customer, FRONT_WHEEL, Some(shop_id)),
