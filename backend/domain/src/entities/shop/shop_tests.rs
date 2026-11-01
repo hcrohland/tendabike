@@ -318,6 +318,10 @@ async fn register_part_ok() -> TbResult<()> {
     assert_eq!(summary.parts.len(), 6);
     // The notification is in the summary.
     assert_eq!(summary.notifications.len(), 1);
+    // The shop is the notification's subject: it rides in the summary so the
+    // executor routes the frame to the shop's stream (issue #687).
+    assert_eq!(summary.shops.len(), 1);
+    assert_eq!(summary.shops.get(&shop_id).unwrap().owner, owner);
     Ok(())
 }
 
@@ -523,6 +527,10 @@ async fn unregister_part_by_owner() -> TbResult<()> {
         assert_eq!(part.shop, None, "part {} should have no shop", part.id);
     }
     assert_eq!(summary.notifications.len(), 1);
+    // The shop is the notification's subject: it rides in the summary so the
+    // executor routes the frame to the shop's stream (issue #687).
+    assert_eq!(summary.shops.len(), 1);
+    assert_eq!(summary.shops.get(&shop_id).unwrap().owner, shop_owner);
     Ok(())
 }
 

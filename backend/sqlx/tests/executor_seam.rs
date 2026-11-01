@@ -107,6 +107,8 @@ struct NoopPusher;
 impl FramePusher for NoopPusher {
     async fn push_to_shop(&self, _shop_id: ShopId, _summary: Summary) {}
     async fn push_to_user(&self, _user_id: UserId, _summary: Summary) {}
+    async fn push_to_recipient_shops(&self, _user_id: UserId, _summary: Summary, _skip: &[ShopId]) {
+    }
 }
 
 /// The bound for awaiting the loop or one of its effects in a test: long
