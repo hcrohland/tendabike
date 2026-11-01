@@ -227,6 +227,10 @@ async fn subscription_create_pending_notifies_shop_owner() -> TbResult<()> {
     assert_eq!(notification.recipient, owner);
     assert_eq!(notification.lifecycle, NotificationLifecycle::Persistent);
     assert_eq!(notification.kind, NotificationKind::SubRequest);
+    // The shop is the notification's subject: it rides in the summary so the
+    // executor routes the frame to the shop's stream (issue #687).
+    assert_eq!(summary.shops.len(), 1);
+    assert_eq!(summary.shops.get(&shop).unwrap().owner, owner);
     Ok(())
 }
 
@@ -653,6 +657,10 @@ async fn subscription_cancel_subscriber_only() -> TbResult<()> {
     let notification = sole_notification(&summary);
     assert_eq!(notification.recipient, owner);
     assert_eq!(notification.kind, NotificationKind::SubCancelled);
+    // The shop is the notification's subject: it rides in the summary so the
+    // executor routes the frame to the shop's stream (issue #687).
+    assert_eq!(summary.shops.len(), 1);
+    assert_eq!(summary.shops.get(&shop).unwrap().owner, owner);
     assert!(sub.id.read(subscriber, &mut store).await.is_err());
     Ok(())
 }

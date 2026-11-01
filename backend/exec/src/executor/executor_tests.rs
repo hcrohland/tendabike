@@ -34,6 +34,7 @@
 //! behavior. The store's behavior (and the domain logic that runs over it)
 //! is verified against real Postgres in `tb_sqlx`'s seam suites.
 
+use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
@@ -408,7 +409,10 @@ mockall::mock! {
 #[derive(Clone)]
 struct FakeSource {
     begin_fails: bool,
-    conn: Arc<Mutex<Option<MockConn>>>,
+    /// The conns `begin` hands out, in order (one per call): most tests
+    /// install one (one loop-owned transaction per `run_request`); the
+    /// `subscribe_shop` tests install one per ownership read.
+    conns: Arc<Mutex<VecDeque<MockConn>>>,
 }
 
 impl FakeSource {
@@ -417,15 +421,20 @@ impl FakeSource {
     fn failing() -> Self {
         Self {
             begin_fails: true,
-            conn: Arc::new(Mutex::new(None)),
+            conns: Arc::new(Mutex::new(VecDeque::new())),
         }
     }
 
     /// A source that hands out `conn` on its (single) `begin`.
     fn with(conn: MockConn) -> Self {
+        Self::with_conns(vec![conn])
+    }
+
+    /// A source that hands out the given conns in order (one per `begin`).
+    fn with_conns(conns: Vec<MockConn>) -> Self {
         Self {
             begin_fails: false,
-            conn: Arc::new(Mutex::new(Some(conn))),
+            conns: Arc::new(Mutex::new(conns.into_iter().collect())),
         }
     }
 }
@@ -440,7 +449,7 @@ impl TxnSource for FakeSource {
                 "the fake database is down"
             )));
         }
-        self.conn.lock().unwrap().take().ok_or_else(|| {
+        self.conns.lock().unwrap().pop_front().ok_or_else(|| {
             Error::DatabaseFailure(anyhow::anyhow!("begin was called more than once"))
         })
     }
@@ -868,14 +877,16 @@ struct RecordingPusher {
     calls: std::sync::Arc<std::sync::Mutex<Vec<PushCall>>>,
 }
 
-/// One recorded push: the target (a shop stream or a user's personal stream)
-/// and the frame it carried.
+/// One recorded push: the target (a shop stream, a user's personal stream,
+/// or the fan-out to a user's open shop streams) and the frame it carried.
 #[derive(Debug, Clone, PartialEq)]
 enum PushCall {
     /// A push to a shop stream.
     Shop(ShopId, Summary),
     /// A push to a user's personal stream.
     User(UserId, Summary),
+    /// The fan-out to a user's open shop streams (follow-up to #687).
+    RecipientShops(UserId, Summary),
 }
 
 impl RecordingPusher {
@@ -903,6 +914,13 @@ impl FramePusher for RecordingPusher {
             .lock()
             .unwrap()
             .push(PushCall::User(user_id, summary));
+    }
+
+    async fn push_to_recipient_shops(&self, user_id: UserId, summary: Summary, _skip: &[ShopId]) {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(PushCall::RecipientShops(user_id, summary));
     }
 }
 
@@ -1461,15 +1479,21 @@ async fn personal_write_routes_to_own_stream_not_pusher() {
 // `push_to_user`, `shop_open`); the store is a canned [`MockConn`] whose
 // `shop_get` reports the shop's owner (the `subscribe_shop` ownership read).
 
-/// A `TxnSource` whose `subscribe_shop` ownership read is canned: the store
-/// reports `shop_get` → a shop owned by `owner`, so an owner's subscribe
-/// succeeds and a non-owner's is `Forbidden`.
-fn shop_source(owner: UserId) -> FakeSource {
+/// The canned ownership-read conn: the store reports `shop_get` → a shop
+/// owned by `owner`, so an owner's subscribe succeeds and a non-owner's is
+/// `Forbidden`.
+fn shop_conn(owner: UserId) -> MockConn {
     let mut conn = MockConn::new();
     conn.expect_shop_get()
         .returning(move |_id| Ok(shop_owned_by(owner)));
     conn.expect_commit().returning(|| Ok(()));
-    FakeSource::with(conn)
+    conn
+}
+
+/// A `TxnSource` whose `subscribe_shop` ownership read is canned (one
+/// conn — one ownership read).
+fn shop_source(owner: UserId) -> FakeSource {
+    FakeSource::with(shop_conn(owner))
 }
 
 /// A non-empty `Summary` (a frame the shop/user streams should deliver).
@@ -1547,6 +1571,102 @@ async fn push_to_shop_is_a_noop_without_a_subscriber() {
         .expect("the owner can subscribe");
     drop(rx);
     registry.push_to_shop(shop_id, non_empty_summary()).await;
+}
+
+/// `push_to_recipient_shops` delivers the frame to every open shop stream
+/// the user owns (follow-up to issue #687): the recipient's shop views show
+/// all their notifications, like the hydration snapshot.
+#[tokio::test]
+async fn push_to_recipient_shops_reaches_the_owners_open_streams() {
+    let registry = Registry::new(
+        FakeSource::with_conns(vec![shop_conn(UserId::from(1)), shop_conn(UserId::from(1))]),
+        Duration::from_secs(60),
+    );
+    let shop_a = ShopId::from(7);
+    let shop_b = ShopId::from(8);
+
+    // Two open shop streams, both owned by user 1 (the canned store reports
+    // user 1 as the owner of every shop).
+    let mut rx_a = registry
+        .subscribe_shop(UserId::from(1), shop_a)
+        .await
+        .expect("the owner can subscribe to A");
+    let mut rx_b = registry
+        .subscribe_shop(UserId::from(1), shop_b)
+        .await
+        .expect("the owner can subscribe to B");
+
+    let summary = non_empty_summary();
+    registry
+        .push_to_recipient_shops(UserId::from(1), summary.clone(), &[])
+        .await;
+
+    assert_eq!(
+        rx_a.recv().await.expect("shop A receives the frame"),
+        summary
+    );
+    assert_eq!(
+        rx_b.recv().await.expect("shop B receives the frame"),
+        summary
+    );
+}
+
+/// `push_to_recipient_shops` skips the shops already delivered (the
+/// session's own shop, the summary's shops) — no double frame on the same
+/// channel.
+#[tokio::test]
+async fn push_to_recipient_shops_skips_the_named_shops() {
+    let registry = Registry::new(
+        FakeSource::with_conns(vec![shop_conn(UserId::from(1)), shop_conn(UserId::from(1))]),
+        Duration::from_secs(60),
+    );
+    let shop_a = ShopId::from(7);
+    let shop_b = ShopId::from(8);
+    let mut rx_a = registry
+        .subscribe_shop(UserId::from(1), shop_a)
+        .await
+        .expect("the owner can subscribe to A");
+    let mut rx_b = registry
+        .subscribe_shop(UserId::from(1), shop_b)
+        .await
+        .expect("the owner can subscribe to B");
+
+    let summary = non_empty_summary();
+    registry
+        .push_to_recipient_shops(UserId::from(1), summary.clone(), &[shop_a])
+        .await;
+
+    // Only the non-skipped shop receives the frame.
+    assert_eq!(
+        rx_b.recv().await.expect("shop B receives the frame"),
+        summary
+    );
+    assert!(
+        rx_a.try_recv().is_err(),
+        "the skipped shop A gets no double frame"
+    );
+}
+
+/// `push_to_recipient_shops` is a no-op for a user with no open shop stream
+/// (a not-yet-connected client catches up on hydration, spec §4.5), and a
+/// push for one user never reaches a shop stream owned by another.
+#[tokio::test]
+async fn push_to_recipient_shops_is_a_noop_for_a_foreign_owner() {
+    let registry = Registry::new(shop_source(UserId::from(1)), Duration::from_secs(60));
+    // Shop 7 is owned by user 1; user 2 has no open streams of their own.
+    let mut rx = registry
+        .subscribe_shop(UserId::from(1), ShopId::from(7))
+        .await
+        .expect("the owner can subscribe");
+
+    registry
+        .push_to_recipient_shops(UserId::from(2), non_empty_summary(), &[])
+        .await;
+
+    assert!(
+        rx.try_recv().is_err(),
+        "a push for a non-owner never reaches the owner's stream"
+    );
 }
 
 #[tokio::test]
@@ -1840,6 +1960,96 @@ async fn deliver_cross_recipient_notification_to_user_stream() {
     );
 }
 
+/// A user-context write (the acting session has no shop — the subscriber
+/// registers a part from their personal view) whose summary carries a part
+/// registered in a shop pushes the cross-recipient notification to that
+/// shop's stream (issue #687): the shop owner's open shop view listens on
+/// the shop stream, and the session's context is the actor's, not the
+/// shop's.
+#[tokio::test]
+async fn deliver_cross_recipient_notification_to_shop_stream_without_shop_context() {
+    let pusher = RecordingPusher::new();
+    let (frames, _frame_rx) = broadcast::channel(4);
+    let acting_user = UserId::from(1);
+    let shop_owner = UserId::from(2);
+    let shop_id = ShopId::from(7);
+    // The registered part (in the shop, owned by the acting user), the
+    // `part_registered` notification to the shop owner, and the shop itself
+    // (the domain operation carries it in the summary, issue #687).
+    let mut part = part_owned_by(acting_user);
+    part.shop = Some(shop_id);
+    let mut summary = Summary::default();
+    summary.parts.upsert(part);
+    summary.shops.upsert(shop_owned_by(shop_owner));
+    let notification = Notification {
+        id: NotificationId::from(Uuid::now_v7()),
+        recipient: shop_owner,
+        lifecycle: NotificationLifecycle::Transient,
+        kind: NotificationKind::PartRegistered,
+        subject: NotificationSubject::Part(PartId::from(1)),
+        message: None,
+        state: NotificationState::New,
+        created_at: sample_purchase_date(),
+    };
+    summary.notifications.upsert(notification.clone());
+
+    deliver_frame(&pusher, &frames, acting_user, None, None, &summary).await;
+
+    // The shop stream receives the notification (the shop owner is "in" the
+    // shop).
+    assert!(
+        calls_contain_notification(&pusher.calls(), shop_id, notification.id),
+        "the shop stream receives the cross-recipient notification, got {:?}",
+        pusher.calls()
+    );
+}
+
+/// Whether the recorded pushes contain a `push_to_shop` for `shop_id` whose
+/// summary carries the notification `id`.
+fn calls_contain_notification(calls: &[PushCall], shop_id: ShopId, id: NotificationId) -> bool {
+    calls.iter().any(|call| match call {
+        PushCall::Shop(sid, s) if *sid == shop_id => {
+            s.notifications.live().iter().any(|n| n.id == id)
+        }
+        _ => false,
+    })
+}
+
+/// A shop-context write whose summary carries the session's own shop does not
+/// push a duplicate frame to the shop stream (the session's shop is already
+/// delivered by the normal routing; the summary's shop is skipped).
+#[tokio::test]
+async fn deliver_shop_context_no_duplicate_shop_push() {
+    let pusher = RecordingPusher::new();
+    let (frames, _frame_rx) = broadcast::channel(4);
+    let shop_id = ShopId::from(7);
+    let part_owner = UserId::from(2);
+    let mut summary = summary_owned_by(part_owner);
+    summary.shops.upsert(shop_owned_by(UserId::from(1)));
+
+    deliver_frame(
+        &pusher,
+        &frames,
+        UserId::from(1),
+        Some(shop_id),
+        Some(part_owner),
+        &summary,
+    )
+    .await;
+
+    let shop_pushes = pusher
+        .calls()
+        .iter()
+        .filter(|call| matches!(call, PushCall::Shop(sid, _) if *sid == shop_id))
+        .count();
+    assert_eq!(
+        shop_pushes,
+        1,
+        "the shop stream receives the frame exactly once, got {:?}",
+        pusher.calls()
+    );
+}
+
 /// A user-context write that produces a notification for the acting user
 /// does NOT push it again via `push_to_user` (it already rides the normal
 /// frame).
@@ -1855,9 +2065,13 @@ async fn deliver_no_cross_recipient_for_acting_user() {
     // The acting user's normal frame carries the notification.
     let got = frame_rx.try_recv().expect("the acting user gets the frame");
     assert_eq!(got, summary);
-    // No `push_to_user` call for the acting user (no duplicate).
+    // No `push_to_user` call for the acting user (no duplicate) — the
+    // recipient fan-out to their shop streams is the expected call.
     assert!(
-        pusher.calls().is_empty(),
+        pusher
+            .calls()
+            .iter()
+            .all(|call| !matches!(call, PushCall::User(uid, _) if *uid == acting_user)),
         "no push_to_user for the acting user's own notification, got {:?}",
         pusher.calls()
     );
@@ -1954,5 +2168,139 @@ async fn deliver_cross_recipient_third_party_in_shop_context() {
             .any(|call| matches!(call, PushCall::Shop(sid, s) if *sid == shop_id && *s == summary)),
         "the shop stream receives the cross-recipient notification, got {:?}",
         calls
+    );
+}
+
+// --- The recipient's shop streams (follow-up to issue #687) ---
+
+/// A shop-context read of a transient notification (a dismiss: tombstone,
+/// no live entry) reaches the acting user's personal stream and fans out to
+/// their open shop streams: a dismiss in the shop tab must clear the
+/// private tab and the other shop tabs (follow-up to issue #687).
+#[tokio::test]
+async fn deliver_shop_context_transient_read_to_personal_stream() {
+    let pusher = RecordingPusher::new();
+    let (frames, mut frame_rx) = broadcast::channel(4);
+    let shop_id = ShopId::from(7);
+    let acting_user = UserId::from(1);
+    let mut summary = Summary::default();
+    summary
+        .notifications
+        .tombstone(NotificationId::from(Uuid::now_v7()));
+
+    deliver_frame(&pusher, &frames, acting_user, Some(shop_id), None, &summary).await;
+
+    // The acting user's personal stream gets the read frame.
+    let got = frame_rx
+        .try_recv()
+        .expect("the personal stream gets the read frame");
+    assert_eq!(got, summary);
+    // The fan-out reaches the acting user's open shop streams.
+    assert!(
+        pusher.calls().iter().any(|call| {
+            matches!(call, PushCall::RecipientShops(uid, s) if *uid == acting_user && *s == summary)
+        }),
+        "the fan-out reaches the acting user's shop streams, got {:?}",
+        pusher.calls()
+    );
+}
+
+/// A shop-context read of a persistent notification (a dismiss: `seen`
+/// upsert) reaches the acting user's personal stream and fans out to their
+/// open shop streams.
+#[tokio::test]
+async fn deliver_shop_context_persistent_read_to_personal_stream() {
+    let pusher = RecordingPusher::new();
+    let (frames, mut frame_rx) = broadcast::channel(4);
+    let shop_id = ShopId::from(7);
+    let acting_user = UserId::from(1);
+    let summary = summary_with_notification(acting_user);
+
+    deliver_frame(&pusher, &frames, acting_user, Some(shop_id), None, &summary).await;
+
+    let got = frame_rx
+        .try_recv()
+        .expect("the personal stream gets the read frame");
+    assert_eq!(got, summary);
+    assert!(
+        pusher.calls().iter().any(|call| {
+            matches!(call, PushCall::RecipientShops(uid, s) if *uid == acting_user && *s == summary)
+        }),
+        "the fan-out reaches the acting user's shop streams, got {:?}",
+        pusher.calls()
+    );
+}
+
+/// A user-context read (a dismiss in the private tab) fans the frame out to
+/// the acting user's open shop streams: a dismiss in the private tab must
+/// clear the shop tabs (follow-up to issue #687). The personal stream gets
+/// the frame via the normal user-context delivery.
+#[tokio::test]
+async fn deliver_user_context_read_fans_out_to_shop_streams() {
+    let pusher = RecordingPusher::new();
+    let (frames, mut frame_rx) = broadcast::channel(4);
+    let acting_user = UserId::from(1);
+    let summary = summary_with_notification(acting_user);
+
+    deliver_frame(&pusher, &frames, acting_user, None, None, &summary).await;
+
+    let got = frame_rx
+        .try_recv()
+        .expect("the personal stream gets the frame");
+    assert_eq!(got, summary);
+    assert!(
+        pusher.calls().iter().any(|call| {
+            matches!(call, PushCall::RecipientShops(uid, s) if *uid == acting_user && *s == summary)
+        }),
+        "the fan-out reaches the acting user's shop streams, got {:?}",
+        pusher.calls()
+    );
+}
+
+/// A user-context write whose summary carries a shop (issue #687) fans the
+/// frame out to the notification recipient's open shop streams (follow-up to
+/// issue #687): the recipient's shop views show all their notifications,
+/// like the hydration snapshot — a new notification must appear live in
+/// their other open shop tabs, not only on the next hydration.
+#[tokio::test]
+async fn deliver_creation_fans_out_to_recipient_shop_streams() {
+    let pusher = RecordingPusher::new();
+    let (frames, _frame_rx) = broadcast::channel(4);
+    let acting_user = UserId::from(1);
+    let shop_owner = UserId::from(2);
+    let shop_id = ShopId::from(7);
+    // The registered part (in the shop, owned by the acting user), the
+    // `part_registered` notification to the shop owner, and the shop itself
+    // (the domain operation carries it in the summary, issue #687).
+    let mut part = part_owned_by(acting_user);
+    part.shop = Some(shop_id);
+    let mut summary = Summary::default();
+    summary.parts.upsert(part);
+    summary.shops.upsert(shop_owned_by(shop_owner));
+    let notification = Notification {
+        id: NotificationId::from(Uuid::now_v7()),
+        recipient: shop_owner,
+        lifecycle: NotificationLifecycle::Transient,
+        kind: NotificationKind::PartRegistered,
+        subject: NotificationSubject::Part(PartId::from(1)),
+        message: None,
+        state: NotificationState::New,
+        created_at: sample_purchase_date(),
+    };
+    summary.notifications.upsert(notification.clone());
+    // The fan-out frame carries only the notification (the shop-scoped
+    // snapshot filters parts to the current shop, so a full summary would
+    // pollute the recipient's other tabs' parts maps).
+    let mut expected = Summary::default();
+    expected.notifications.upsert(notification);
+
+    deliver_frame(&pusher, &frames, acting_user, None, None, &summary).await;
+
+    assert!(
+        pusher.calls().iter().any(|call| {
+            matches!(call, PushCall::RecipientShops(uid, s) if *uid == shop_owner && *s == expected)
+        }),
+        "the fan-out reaches the recipient's shop streams with a notifications-only frame, got {:?}",
+        pusher.calls()
     );
 }

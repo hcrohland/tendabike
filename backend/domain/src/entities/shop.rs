@@ -192,6 +192,7 @@ impl ShopId {
         )
         .await?;
         summary.notifications.upsert(notification);
+        summary.shops.upsert(shop);
         Ok(summary)
     }
 
@@ -253,6 +254,7 @@ impl ShopId {
             .await?;
             summary.notifications.upsert(notification);
         }
+        summary.shops.upsert(shop);
         Ok(summary)
     }
 
@@ -296,6 +298,7 @@ impl ShopId {
 
         let mut summary = Summary::default();
         summary.notifications.upsert(notification);
+        summary.shops.upsert(shop);
         Ok(summary)
     }
 
@@ -382,6 +385,7 @@ impl ShopId {
 
         let mut summary = Summary::default();
         summary.notifications.upsert(notification);
+        summary.shops.upsert(shop);
         Ok(summary)
     }
 

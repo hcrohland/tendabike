@@ -23,6 +23,9 @@ then
   exit 1; # THE USER DONT WANT TO CONTINUE SO ROLLBACK
 fi
 
+# --- repeated comments: always on, scoped to the staged diff ---
+python3 .githooks/check-repeated-comments.py
+
 # --- language-scoped checks: run only what the staged files touch ---
 # Staged files (added, copied, modified, renamed). Deletions need no checks.
 staged_files=$(git diff --cached --name-only --diff-filter=ACMR)
