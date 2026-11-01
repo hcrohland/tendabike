@@ -6,9 +6,23 @@
   } from "../lib/notification.svelte";
   import NotificationPanel from "./NotificationPanel.svelte";
   import * as m from "../../paraglide/messages";
+
+  /// The bell + panel wrapper; a click landing outside it closes the panel.
+  let container = $state<HTMLElement | null>(null);
+
+  $effect(() => {
+    if (!isPanelOpen()) return;
+    function onClickOutside(e: MouseEvent) {
+      if (container && !container.contains(e.target as Node)) {
+        setPanelOpen(false);
+      }
+    }
+    document.addEventListener("click", onClickOutside);
+    return () => document.removeEventListener("click", onClickOutside);
+  });
 </script>
 
-<div class="relative">
+<div class="relative" bind:this={container}>
   <button
     class="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
     onclick={() => setPanelOpen(!isPanelOpen())}

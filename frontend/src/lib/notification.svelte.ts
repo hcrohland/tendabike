@@ -111,9 +111,10 @@ export function dismiss(id: string) {
   apiRead(id);
 }
 
-/// Mark all server notifications as read.
+/// Mark all server notifications as read and close the panel.
 export function readAll() {
   apiReadAll();
+  setPanelOpen(false);
 }
 
 /// The ephemeral door: create a local error toast.
