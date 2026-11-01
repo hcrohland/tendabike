@@ -189,8 +189,21 @@ pub struct Registry<S: TxnSource + Clone + 'static> {
     /// executor map keeps the two lock scopes tight (an ownership read never
     /// holds the shop-map lock, and a shop push never holds the executor
     /// lock).
-    shop_streams: Arc<Mutex<HashMap<ShopId, broadcast::Sender<Summary>>>>,
+    shop_streams: Arc<Mutex<HashMap<ShopId, ShopStream>>>,
     idle_timeout: Duration,
+}
+
+/// A per-shop frame channel with its owner (the shop stream is owner-only,
+/// ticket #583). The owner is the caller `subscribe_shop` just verified as
+/// the shop's owner, so the tag is never stale: a stream exists only while
+/// a receiver is attached, and every subscription re-verifies. The tag is
+/// what lets a notification frame fan out to every open shop stream of its
+/// recipient (follow-up to issue #687) — the recipient's shop views show
+/// all their notifications (the shop-scoped hydration snapshot loads them
+/// all), so a dismiss in one tab must clear the others.
+struct ShopStream {
+    sender: broadcast::Sender<Summary>,
+    owner: UserId,
 }
 
 /// The frame push surface the executor uses to route a completed `Summary`
@@ -214,6 +227,17 @@ pub trait FramePusher: Send + Sync {
     /// executor's frame channel if the executor is running; a no-op
     /// otherwise (no executor, or a settled one).
     async fn push_to_user(&self, user_id: UserId, summary: Summary);
+
+    /// Push a frame to every open shop stream `user_id` owns (follow-up to
+    /// issue #687): the recipient's shop views show all their
+    /// notifications — the shop-scoped hydration snapshot loads them all —
+    /// so a notification's frame must reach each of their open shop
+    /// streams, not only the shop the operation named. `skip` are the shops
+    /// already delivered to (the session's own shop, the summary's shops) —
+    /// a second frame on the same channel is noise. A no-op when the user
+    /// has no open shop stream (a not-yet-connected client catches up on
+    /// hydration, spec §4.5).
+    async fn push_to_recipient_shops(&self, user_id: UserId, summary: Summary, skip: &[ShopId]);
 }
 
 impl<S> Registry<S>
@@ -345,8 +369,8 @@ where
     /// shop" check is implicit: `receiver_count() > 0`). Called on every
     /// shop-map access (`subscribe_shop`, `push_to_shop`, `shop_open`) so a
     /// dead channel does not linger in the map.
-    fn reap_shop_streams(map: &mut HashMap<ShopId, broadcast::Sender<Summary>>) {
-        map.retain(|_, tx| tx.receiver_count() > 0);
+    fn reap_shop_streams(map: &mut HashMap<ShopId, ShopStream>) {
+        map.retain(|_, stream| stream.sender.receiver_count() > 0);
     }
 
     /// Lock the registry, ensure the user's executor is live (spawning it if
@@ -464,8 +488,8 @@ where
     async fn push_to_shop(&self, shop_id: ShopId, summary: Summary) {
         let mut map = self.shop_streams.lock().await;
         Self::reap_shop_streams(&mut map);
-        if let Some(tx) = map.get(&shop_id) {
-            let _ = tx.send(summary);
+        if let Some(stream) = map.get(&shop_id) {
+            let _ = stream.sender.send(summary);
         }
     }
 
@@ -478,6 +502,19 @@ where
             && *exec.status.borrow() == ExecutorStatus::Running
         {
             let _ = exec.frames.send(summary);
+        }
+    }
+
+    /// Push to every open shop stream `user_id` owns (follow-up to issue
+    /// #687): reap the dead channels, then send on each channel whose owner
+    /// tag is `user_id`, skipping the shops already delivered to.
+    async fn push_to_recipient_shops(&self, user_id: UserId, summary: Summary, skip: &[ShopId]) {
+        let mut map = self.shop_streams.lock().await;
+        Self::reap_shop_streams(&mut map);
+        for (shop_id, stream) in map.iter() {
+            if stream.owner == user_id && !skip.contains(shop_id) {
+                let _ = stream.sender.send(summary.clone());
+            }
         }
     }
 }
@@ -571,14 +608,17 @@ where
         }
 
         // Create the shop channel on demand and subscribe (the "open shop"
-        // check is implicit: `receiver_count() > 0`).
+        // check is implicit: `receiver_count() > 0`). The owner tag is the
+        // verified caller (follow-up to issue #687): it lets a
+        // notification frame fan out to every open shop stream of its
+        // recipient.
         let mut map = self.shop_streams.lock().await;
         Self::reap_shop_streams(&mut map);
-        let tx = map
-            .entry(shop_id)
-            .or_insert_with(|| broadcast::channel(BROADCAST_CAPACITY).0)
-            .clone();
-        Ok(tx.subscribe())
+        let stream = map.entry(shop_id).or_insert_with(|| ShopStream {
+            sender: broadcast::channel(BROADCAST_CAPACITY).0,
+            owner: user_id,
+        });
+        Ok(stream.sender.subscribe())
     }
 
     /// Enqueue the admin [`AllStats`] read on the user's executor and await

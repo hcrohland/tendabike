@@ -256,6 +256,21 @@ pub(crate) async fn select_message(
 /// `Summary` names the shop whose stream's subscriber (the shop owner's open
 /// shop view) must receive the shop's state, parts and notifications alike.
 ///
+/// **The recipient's shop streams** (follow-up to issue #687): a
+/// notification's frame must reach every stream its recipient listens on —
+/// their open shop streams, not only the shop the operation named. The
+/// recipient's shop views show all their notifications (the shop-scoped
+/// hydration snapshot loads them all), so a dismiss in one tab must clear
+/// the others. Live entries name their recipient; a tombstone is always the
+/// acting user's own (the recipient guard: only the recipient can read a
+/// notification, so a deleted row in the frame is theirs). In a shop
+/// context the acting user's personal stream is not the normal delivery
+/// target, so their own notification state is also pushed there — a dismiss
+/// in the shop tab clears the private tab. The recipient framing is
+/// leak-safe: a notification's frame already reaches its recipient's
+/// personal stream (the cross-recipient routing below), so the client
+/// tolerates the frame's other content.
+///
 /// **Cross-recipient notification routing** (issue #677): after the normal
 /// frame is delivered, each notification in the `Summary` whose recipient is
 /// not the acting user (and not the part owner in a shop context) is pushed
@@ -321,6 +336,43 @@ pub(crate) async fn deliver_frame(
         if let Some(shop_id) = shop {
             pusher.push_to_shop(shop_id, recipient_summary).await;
         }
+    }
+    // The recipient's shop streams (follow-up to issue #687): a
+    // notification's frame must reach every stream its recipient listens on
+    // — their open shop streams, not only the shop the operation named (the
+    // recipient's shop views show all their notifications, like the
+    // hydration snapshot). Live entries name their recipient; a tombstone is
+    // always the acting user's own (the recipient guard: only the recipient
+    // can read a notification, so a deleted row in the frame is theirs).
+    let notifications = summary.notifications.live();
+    let mut recipients: Vec<UserId> = Vec::new();
+    for notification in &notifications {
+        if !recipients.contains(&notification.recipient) {
+            recipients.push(notification.recipient);
+        }
+    }
+    if summary.notifications.len() > notifications.len() && !recipients.contains(&user_id) {
+        recipients.push(user_id);
+    }
+    // Shops already delivered: the session's own shop (above) and the
+    // summary's shops (the loop above) — no double frame on the same
+    // channel.
+    let mut skip: Vec<ShopId> = summary.shops.live().iter().map(|s| s.id).collect();
+    if let Some(shop_id) = shop {
+        skip.push(shop_id);
+    }
+    for recipient in &recipients {
+        pusher
+            .push_to_recipient_shops(*recipient, summary.clone(), &skip)
+            .await;
+    }
+    // In a shop context the acting user's personal stream is not the normal
+    // delivery target; their own notification state must still reach it — a
+    // dismiss in the shop tab clears the private tab (follow-up to issue
+    // #687). Skipped when the part owner push above already delivered the
+    // frame to it (the acting user is the part owner).
+    if shop.is_some() && recipients.contains(&user_id) && part_owner != Some(user_id) {
+        push_frame(frames, summary);
     }
 }
 
