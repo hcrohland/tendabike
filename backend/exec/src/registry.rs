@@ -19,41 +19,33 @@
 */
 
 //! The per-user executor registry (ADR-0007, executable spec #558 §6):
-//! the live executor per [`UserId`], shared across requests.
+//! the service-API facade over the per-user executor's lifecycle core.
 //!
 //! The registry **owns the [`TxnSource`]** (injected at construction — the
-//! only non-axum holder of the seam under the zero-reference bar) and
-//! spawns the per-user executor task on demand (the first SSE connect
-//! **or** the first API write), reaped when no stream is attached (spec
-//! §4.4, amended — #446: an attached stream keeps it alive; the idle
-//! window is the queue re-probe cadence). A second connect (or write)
-//! finds the running task rather than spawning a duplicate, and a reaped
-//! task is respawned on the next demand — the stream re-registers on the
-//! respawned executor's frame channel.
-//!
-//! The registry is the service API's single handle: the per-user request
-//! channel is its **ordered surface** (FIFO reads/writes, spec #558 §3),
-//! and the direct ops (rescan, sync, login upsert, webhook accept, the
-//! redirect URL reads, deauth/delete — spec #558 §5) are its **direct
-//! surface**: methods that own their own transaction(s) and any lifecycle
-//! control. Presentation layers call it through the [`crate::ServiceApi`]
+//! only non-axum holder of the seam under the zero-reference bar) and holds
+//! the lifecycle core ([`core`]) — the deep "how does an executor stays
+//! alive" machinery: the per-user executor map and the per-shop frame-channel
+//! map, the spawn-on-first-demand / reap-when-no-stream / respawn logic, the
+//! wake signal, the stop-all teardown, the shop-stream lifecycle, and the
+//! frame-pusher surface. This module is the thin **facade**: the
+//! [`crate::ServiceApi`] impl (the per-user request channel as its ordered
+//! surface, spec #558 §3, and the direct ops as its direct surface,
+//! spec #558 §5) and the construction API, delegating every lifecycle call to
+//! the core. Presentation layers call it through the [`crate::ServiceApi`]
 //! trait and never name a seam type.
 //!
-//! The executor's fate is shared through a `watch` channel (a `JoinHandle`
-//! is not `Clone`, so it cannot be handed to both the registry and the
-//! stream tasks): the spawned task records [`ExecutorStatus::Reaped`] on a
-//! clean idle exit and [`ExecutorStatus::Dead`] on a lifecycle error or
-//! panic. A clone of the frame sender is kept alive in the task until
-//! *after* that record is written, so a stream that sees the frame channel
-//! close already sees the settled status.
+//! The core is source-agnostic: the facade owns the [`TxnSource`] and the
+//! `Box<dyn FramePusher>` the loop routes committed `Summary`s through, and
+//! passes both to the core's spawn. The facade's `subscribe_shop` keeps the
+//! ownership read (a `Shop` store call, ADR-0010) and delegates only the
+//! channel creation to the core. The [`ExecutorStatus`] settled-fate enum
+//! lives in the core and is re-exported here so `crate::ExecutorStatus`
+//! resolves unchanged.
 
-use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
 
-use log::debug;
 use oauth2::RefreshToken;
-use tokio::sync::{Mutex, Notify, broadcast, oneshot, watch};
+use tokio::sync::{broadcast, oneshot, watch};
 
 use tb_domain::{
     Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, Summary,
@@ -70,8 +62,13 @@ use tb_strava::{
 };
 
 use crate::api::ServiceApi;
-use crate::message::{Request, RequestSender};
-use crate::{LoopContext, Txn, TxnSource, request_channel};
+use crate::message::Request;
+use crate::{Txn, TxnSource};
+
+mod core;
+
+pub use core::ExecutorStatus;
+use core::{Core, Executor};
 
 /// The loop's queue re-probe cadence while it is idle with streams attached
 /// (spec §4.4, amended — #446): an attached stream keeps the executor alive
@@ -83,10 +80,6 @@ pub const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 /// connection alive (and proxies) while the executor is idle (or reaped).
 /// The web layer's SSE `KeepAlive` wiring uses this constant.
 pub const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
-/// The per-user frame channel's capacity: a burst of frames for a lagged
-/// stream is dropped (the client's reconnect + full refresh covers it), so a
-/// modest bound is enough.
-const BROADCAST_CAPACITY: usize = 64;
 
 /// The executor's minimal [`Session`] (spec #602): the user's identity only.
 #[derive(Debug, Clone, Copy)]
@@ -115,65 +108,14 @@ impl Session for ExecutorSession {
     }
 }
 
-/// The executor task's settled fate, shared with its streams (a `JoinHandle`
-/// is not `Clone`, so it cannot be handed to both the registry and the
-/// stream tasks). `Running` is the initial value; the task records `Reaped`
-/// on a clean idle exit and `Dead` on a lifecycle error, and a watchdog
-/// records `Dead` if the task panics (a panic skips the task's own record).
-///
-/// The web layer names it in the stream teardown (spec #558 §6.3): the
-/// unfold must distinguish a clean reap (keep the connection, heartbeat,
-/// re-subscribe) from a dead executor (end the stream so the client
-/// reconnects and respawns) — an opaque fate cannot carry that dichotomy.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ExecutorStatus {
-    /// The loop is running (or has not yet recorded its exit).
-    Running,
-    /// The loop exited cleanly (`run` returned `Ok(())`) — always with no
-    /// stream attached (an attached stream keeps the loop alive): a stream
-    /// that met the loop in the connect-time race re-subscribes (respawning
-    /// the executor) and settles.
-    Reaped,
-    /// The loop ended with a lifecycle error, or the task panicked: the
-    /// stream closes so the client reconnects and respawns (spec §4.5).
-    Dead,
-}
-
-/// One live per-user executor: the shared fate channel, the send half of the
-/// user's request channel (the write and read handlers enqueue here,
-/// spec #558 §3.2), the SSE frame sink the stream tasks subscribe to, the
-/// consumed-Strava-event channel the admin sync awaits (spec §6.4), the
-/// in-memory wake signal the webhook fires after queueing a Strava event
-/// (spec §4.4/§4.6), and the task's abort handle (the registry's `stop_all`
-/// tears the executor down — rescan, issue #446). The `AbortHandle` (not
-/// the `JoinHandle`) is stored: the watchdog keeps the original handle to
-/// `await` and record `Dead` on a panic **or** the abort `JoinError`.
-#[derive(Clone)]
-struct Executor {
-    status: watch::Receiver<ExecutorStatus>,
-    /// The request handlers' door into this user's loop (spec #558 §3.2):
-    /// enqueue a `Request` here and await its oneshot.
-    request_sender: RequestSender,
-    frames: broadcast::Sender<Summary>,
-    /// Every Strava event the loop consumed (spec §6.4): the admin sync's
-    /// completion signal, correlated by the event's identity.
-    events: broadcast::Sender<StravaEvent>,
-    /// The in-memory wake signal (spec §4.4/§4.6): fired by `Registry::wake`
-    /// after a Strava event is queued; the running loop selects on it, so
-    /// the event is processed at once, even mid-idle-sleep.
-    wake: Arc<Notify>,
-    /// Aborts the executor task (`stop_all`): the watchdog records `Dead`
-    /// on the abort `JoinError`, like a panic.
-    task: tokio::task::AbortHandle,
-}
-
-/// The per-user executor registry (spec §4.4): the live executor per
-/// [`UserId`], shared across requests (the `AppState` is `Clone`, so an
-/// `Arc`). Spawn on the first demand (SSE connect or write), reap when no
-/// stream is attached (the loop decides — an attached stream keeps the
-/// executor alive, the idle window is the queue re-probe cadence), respawn
-/// on the next demand — the streams re-register on the respawned executor's
-/// frame channel.
+/// The per-user executor registry (spec §4.4): the service-API facade over
+/// the per-user executor's lifecycle core (the [`core`] module). The core
+/// holds the live executor per [`UserId`] (shared across requests — the
+/// `AppState` is `Clone`, so an `Arc`) and spawns it on the first demand
+/// (SSE connect or write), reaped when no stream is attached (the loop
+/// decides — an attached stream keeps the executor alive, the idle window is
+/// the queue re-probe cadence), respawned on the next demand — the streams
+/// re-register on the respawned executor's frame channel.
 ///
 /// Owns the [`TxnSource`] (generic `S`; `DbPool` in production, the seam
 /// suite's doubles in the tests) — the seam is injected at construction and
@@ -181,29 +123,11 @@ struct Executor {
 #[derive(Clone)]
 pub struct Registry<S: TxnSource + Clone + 'static> {
     source: S,
-    executors: Arc<Mutex<HashMap<UserId, Executor>>>,
-    /// The per-shop frame channels (spec #517, ticket #582): a standalone
-    /// `broadcast` channel per shop, created on demand by `subscribe_shop`
-    /// and reaped when its last receiver disconnects (the "open shop" check
-    /// is implicit: `receiver_count() > 0`). A separate mutex from the
-    /// executor map keeps the two lock scopes tight (an ownership read never
-    /// holds the shop-map lock, and a shop push never holds the executor
-    /// lock).
-    shop_streams: Arc<Mutex<HashMap<ShopId, ShopStream>>>,
-    idle_timeout: Duration,
-}
-
-/// A per-shop frame channel with its owner (the shop stream is owner-only,
-/// ticket #583). The owner is the caller `subscribe_shop` just verified as
-/// the shop's owner, so the tag is never stale: a stream exists only while
-/// a receiver is attached, and every subscription re-verifies. The tag is
-/// what lets a notification frame fan out to every open shop stream of its
-/// recipient (follow-up to issue #687) — the recipient's shop views show
-/// all their notifications (the shop-scoped hydration snapshot loads them
-/// all), so a dismiss in one tab must clear the others.
-struct ShopStream {
-    sender: broadcast::Sender<Summary>,
-    owner: UserId,
+    /// The lifecycle core: the per-user executor map, the per-shop
+    /// frame-channel map, and the spawn/reap/wake/stop-all logic. Source-
+    /// agnostic — the facade owns the [`TxnSource`] and the `Box<dyn
+    /// FramePusher>` it passes to the core's spawn.
+    core: Core,
 }
 
 /// The frame push surface the executor uses to route a completed `Summary`
@@ -251,9 +175,7 @@ where
     pub fn new(source: S, idle_timeout: Duration) -> Self {
         Self {
             source,
-            executors: Arc::new(Mutex::new(HashMap::new())),
-            shop_streams: Arc::new(Mutex::new(HashMap::new())),
-            idle_timeout,
+            core: Core::new(idle_timeout),
         }
     }
 
@@ -272,31 +194,15 @@ where
     /// a missed wake only delays the event to the next spawn, so the
     /// webhook treats it as non-critical.
     pub async fn wake(&self, user_id: UserId) {
-        let map = self.executors.lock().await;
-        if let Some(exec) = map.get(&user_id)
-            && *exec.status.borrow() == ExecutorStatus::Running
-        {
-            exec.wake.notify_one();
-        }
+        self.core.wake(user_id).await
     }
 
     /// Stop every live executor (the admin rescan's global re-hydration,
-    /// issue #446): for each executor, abort the task (the watchdog records
-    /// `Dead` on the abort `JoinError`, like a panic) — the aborted task
-    /// drops its clones of the frame and consumed-event senders, and
-    /// clearing the map drops the registry's, so both channels close and
-    /// open streams see the close and end (their clients reconnect and the
-    /// catch-up snapshot re-hydrates them; an in-flight admin sync hits its
-    /// already-handled queue-fallback path) — then clear the map. The next
-    /// `subscribe`/`write` respawns fresh (`ensure_running`'s existing
-    /// behavior). The lock is held across the loop, so no executor can be
-    /// spawned between the aborts and the clear.
+    /// issue #446): abort every task (the watchdog records `Dead` on the
+    /// abort `JoinError`, like a panic) and clear the executor map — the
+    /// core's `stop_all`. The next `subscribe`/`write` respawns fresh.
     pub async fn stop_all(&self) {
-        let mut map = self.executors.lock().await;
-        for exec in map.values() {
-            exec.task.abort();
-        }
-        map.clear();
+        self.core.stop_all().await
     }
 
     /// A subscription to the user's executor's consumed-Strava-event channel
@@ -304,23 +210,19 @@ where
     /// sync subscribes **before** it enqueues its event, so the completion
     /// signal cannot be missed.
     pub async fn events(&self, user_id: UserId) -> TbResult<broadcast::Receiver<StravaEvent>> {
-        self.exec_field(user_id, |exec| exec.events.subscribe())
-            .await
+        let pusher: Box<dyn FramePusher> = Box::new(self.clone());
+        self.core.events(&self.source, user_id, pusher).await
     }
 
     /// Push a frame to the user's SSE streams (test helper: the production
     /// path pushes frames from the loop via `tb_exec::push_frame`).
     pub async fn send_frame(&self, user_id: UserId, summary: Summary) {
-        let map = self.executors.lock().await;
-        if let Some(exec) = map.get(&user_id) {
-            let _ = exec.frames.send(summary);
-        }
+        self.core.send_frame(user_id, summary).await
     }
 
     /// The user's executor's current fate (test helper).
     pub async fn status(&self, user_id: UserId) -> Option<ExecutorStatus> {
-        let map = self.executors.lock().await;
-        map.get(&user_id).map(|exec| *exec.status.borrow())
+        self.core.status(user_id).await
     }
 
     /// Whether `shop_id`'s stream is open (test helper): the channel exists
@@ -329,193 +231,65 @@ where
     /// of "the channel is dropped when its last receiver disconnects".
     #[cfg(test)]
     pub async fn shop_open(&self, shop_id: ShopId) -> bool {
-        let mut map = self.shop_streams.lock().await;
-        Self::reap_shop_streams(&mut map);
-        map.contains_key(&shop_id)
+        self.core.shop_open(shop_id).await
     }
 
     /// Test helper: install a synthetic executor for `user_id` (bypassing
-    /// [`Self::ensure_running`], which needs a Strava session the unit fakes
-    /// don't have) and return a receiver on its frame channel. The
-    /// executor's fate is `status`. The task handle is a completed task (its
-    /// `AbortHandle` is valid; `abort` on it is a no-op), so no task leaks.
+    /// the core's `ensure_running`, which needs a Strava session the unit
+    /// fakes don't have) and return a receiver on its frame channel. The
+    /// executor's fate is `status`.
     #[cfg(test)]
     pub async fn install_executor_for_test(
         &self,
         user_id: UserId,
         status: ExecutorStatus,
     ) -> broadcast::Receiver<Summary> {
-        let (status_tx, status_rx) = watch::channel(status);
-        let (request_sender, _request_receiver) = request_channel();
-        let (frames, frame_rx) = broadcast::channel(BROADCAST_CAPACITY);
-        let (events, _events_rx) = broadcast::channel(BROADCAST_CAPACITY);
-        let wake = Arc::new(Notify::new());
-        let task = tokio::spawn(async {}).abort_handle();
-        // The stored receiver keeps the watch channel open; drop the sender.
-        drop(status_tx);
-        let exec = Executor {
-            status: status_rx,
-            request_sender,
-            frames,
-            events,
-            wake,
-            task,
-        };
-        self.executors.lock().await.insert(user_id, exec);
-        frame_rx
+        self.core.install_executor_for_test(user_id, status).await
     }
 
-    /// Reap shop channels whose last receiver has disconnected (the "open
-    /// shop" check is implicit: `receiver_count() > 0`). Called on every
-    /// shop-map access (`subscribe_shop`, `push_to_shop`, `shop_open`) so a
-    /// dead channel does not linger in the map.
-    fn reap_shop_streams(map: &mut HashMap<ShopId, ShopStream>) {
-        map.retain(|_, stream| stream.sender.receiver_count() > 0);
-    }
-
-    /// Lock the registry, ensure the user's executor is live (spawning it if
-    /// it is absent or settled), and pull one field from it: the shared shape
-    /// of `subscribe`, `wake`, `events`, and `write`. The lock is dropped
+    /// Lock the core, ensure the user's executor is live (spawning it if it
+    /// is absent or settled), and pull one field from it: the shared shape
+    /// of `subscribe`, `events`, and `write`. The facade builds the
+    /// `Box<dyn FramePusher>` (from `self.clone()`, which shares the core's
+    /// maps) and passes it with the source to the core; the lock is dropped
     /// when this returns, before the caller's next await.
     async fn exec_field<R>(&self, user_id: UserId, f: impl FnOnce(&Executor) -> R) -> TbResult<R> {
-        let mut map = self.executors.lock().await;
-        // The executor routes a committed `Summary` by context (spec #517,
-        // ticket #584) through the registry itself: `self.clone()` shares the
-        // shop-stream and executor maps (the `Arc`s), so its `push_to_shop` /
-        // `push_to_user` reach the live shop streams and executors.
         let pusher: Box<dyn FramePusher> = Box::new(self.clone());
-        let exec = Self::ensure_running(&mut map, &self.source, user_id, self.idle_timeout, pusher)
-            .await?;
-        Ok(f(&exec))
-    }
-
-    /// Return the user's live executor, spawning it if it is absent or has
-    /// settled (reaped/dead): build the loop's identity-only session (its
-    /// shop is irrelevant — the per-request shop rides on each request), open
-    /// a fresh request channel and frame channel, and spawn the `tb_exec`
-    /// loop.
-    async fn ensure_running(
-        map: &mut HashMap<UserId, Executor>,
-        source: &S,
-        user_id: UserId,
-        idle_timeout: Duration,
-        pusher: Box<dyn FramePusher>,
-    ) -> TbResult<Executor> {
-        if let Some(exec) = map.get(&user_id)
-            && *exec.status.borrow() == ExecutorStatus::Running
-        {
-            return Ok(exec.clone());
-        }
-
-        let (request_sender, reader) = request_channel();
-        let (frames, _) = broadcast::channel(BROADCAST_CAPACITY);
-        let (events, _) = broadcast::channel(BROADCAST_CAPACITY);
-        let (status_tx, status_rx) = watch::channel(ExecutorStatus::Running);
-        let wake = Arc::new(Notify::new());
-        debug!("spawning the executor for user {user_id}");
-
-        // The task keeps a clone of the frame sender alive until *after* it
-        // records its fate, so a stream that sees the frame channel close has
-        // already seen the settled status (no race between the two signals).
-        // `source`, `frames_for_run`, and `events_for_run` are owned clones:
-        // the `async move` block needs `'static` values, not the `&S`
-        // reference.
-        let owned_source = source.clone();
-        let frames_for_run = frames.clone();
-        let events_for_run = events.clone();
-        let wake_for_run = wake.clone();
-        let watchdog_status = status_tx.clone();
-        let join = tokio::spawn(async move {
-            let result = LoopContext::new(
-                owned_source,
-                user_id,
-                frames_for_run,
-                pusher,
-                events_for_run,
-                idle_timeout,
-                wake_for_run,
-            )
-            .run(reader)
-            .await;
-            let _ = status_tx.send(match result {
-                Ok(()) => ExecutorStatus::Reaped,
-                Err(_) => ExecutorStatus::Dead,
-            });
-            result
-        });
-        // A panicked task skips the `status_tx.send` above; the watchdog
-        // records the panic as `Dead` (like any other failure) so
-        // `ensure_running` respawns instead of handing out a dead executor
-        // forever (spec §4.4: the next SSE connect or API request respawns
-        // it). The watchdog lives exactly as long as the executor task.
-        //
-        // The abort handle is taken before the watchdog moves `join`: it is
-        // how `stop_all` tears the task down (rescan, issue #446) — the
-        // watchdog's `join.await` then sees the abort `JoinError` and
-        // records `Dead`, exactly like a panic.
-        let task = join.abort_handle();
-        tokio::spawn(async move {
-            if join.await.is_err() {
-                let _ = watchdog_status.send(ExecutorStatus::Dead);
-            }
-        });
-
-        let exec = Executor {
-            status: status_rx,
-            request_sender,
-            frames,
-            events,
-            wake,
-            task,
-        };
-        map.insert(user_id, exec.clone());
-        Ok(exec)
+        self.core.exec_field(&self.source, user_id, pusher, f).await
     }
 }
 
 /// The frame push surface (spec #517, ticket #582): the executor routes a
 /// completed `Summary` to a shop stream or a user's personal stream through
-/// these. Each locks its own map (the shop stream map, the executor map) —
-/// the two are independent, so a push never holds both locks.
+/// these. Each delegates to the core, which locks its own map (the shop
+/// stream map, the executor map) — the two are independent, so a push never
+/// holds both locks.
 #[async_trait::async_trait]
 impl<S> FramePusher for Registry<S>
 where
     S: TxnSource + Clone + 'static,
 {
-    /// Push to `shop_id`'s stream (spec #517): reap the dead channels, then
-    /// send on the shop channel if it exists (after the reap, an existing
-    /// entry has a receiver, so the send is not dropped).
+    /// Push to `shop_id`'s stream (spec #517): the core reaps the dead
+    /// channels, then sends on the shop channel if it exists.
     async fn push_to_shop(&self, shop_id: ShopId, summary: Summary) {
-        let mut map = self.shop_streams.lock().await;
-        Self::reap_shop_streams(&mut map);
-        if let Some(stream) = map.get(&shop_id) {
-            let _ = stream.sender.send(summary);
-        }
+        self.core.push_to_shop(shop_id, summary).await
     }
 
-    /// Push to `user_id`'s personal stream (spec #517): send on the user's
-    /// executor's frame channel if the executor is running; a no-op
-    /// otherwise (no executor, or a settled one).
+    /// Push to `user_id`'s personal stream (spec #517): the core sends on
+    /// the user's executor's frame channel if the executor is running; a
+    /// no-op otherwise.
     async fn push_to_user(&self, user_id: UserId, summary: Summary) {
-        let map = self.executors.lock().await;
-        if let Some(exec) = map.get(&user_id)
-            && *exec.status.borrow() == ExecutorStatus::Running
-        {
-            let _ = exec.frames.send(summary);
-        }
+        self.core.push_to_user(user_id, summary).await
     }
 
     /// Push to every open shop stream `user_id` owns (follow-up to issue
-    /// #687): reap the dead channels, then send on each channel whose owner
-    /// tag is `user_id`, skipping the shops already delivered to.
+    /// #687): the core reaps the dead channels, then sends on each channel
+    /// whose owner tag is `user_id`, skipping the shops already delivered
+    /// to.
     async fn push_to_recipient_shops(&self, user_id: UserId, summary: Summary, skip: &[ShopId]) {
-        let mut map = self.shop_streams.lock().await;
-        Self::reap_shop_streams(&mut map);
-        for (shop_id, stream) in map.iter() {
-            if stream.owner == user_id && !skip.contains(shop_id) {
-                let _ = stream.sender.send(summary.clone());
-            }
-        }
+        self.core
+            .push_to_recipient_shops(user_id, summary, skip)
+            .await
     }
 }
 
@@ -591,6 +365,9 @@ where
     /// channel on demand and return a subscription to it. No `ExecutorStatus`
     /// — the shop stream is a standalone channel, not tied to the executor's
     /// lifecycle.
+    ///
+    /// The ownership read is a `Shop` store call (ADR-0010), so it stays
+    /// here in the facade; the channel creation is delegated to the core.
     async fn subscribe_shop(
         &self,
         user_id: UserId,
@@ -612,21 +389,15 @@ where
         // verified caller (follow-up to issue #687): it lets a
         // notification frame fan out to every open shop stream of its
         // recipient.
-        let mut map = self.shop_streams.lock().await;
-        Self::reap_shop_streams(&mut map);
-        let stream = map.entry(shop_id).or_insert_with(|| ShopStream {
-            sender: broadcast::channel(BROADCAST_CAPACITY).0,
-            owner: user_id,
-        });
-        Ok(stream.sender.subscribe())
+        Ok(self.core.subscribe_shop(shop_id, user_id).await)
     }
 
-    /// Enqueue the admin [`AllStats`] read on the user's executor and await
-    /// its stats (spec #558 §3.3): the admin's `GET /user/all` rides the
-    /// admin user's own channel — `get_all_stats` is a `tb_strava` op, so
-    /// it is an exec-level variant, dispatched loop-side in the loop's own
-    /// transaction. The oneshot wait is unbounded, like a read's (spec
-    /// #558 §3.7).
+    /// Enqueue the admin [`AllStats`](Request::AllStats) read on the user's
+    /// executor and await its stats (spec #558 §3.3): the admin's `GET
+    /// /user/all` rides the admin user's own channel — `get_all_stats` is a
+    /// `tb_strava` op, so it is an exec-level variant, dispatched loop-side
+    /// in the loop's own transaction. The oneshot wait is unbounded, like a
+    /// read's (spec #558 §3.7).
     async fn all_stats(&self, session: Box<dyn Session>) -> TbResult<Vec<StravaStat>> {
         let user_id = session.user_id();
         let (request, reply) = Request::new_all_stats(session);
