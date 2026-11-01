@@ -266,10 +266,12 @@ pub(crate) async fn select_message(
 /// notification, so a deleted row in the frame is theirs). In a shop
 /// context the acting user's personal stream is not the normal delivery
 /// target, so their own notification state is also pushed there — a dismiss
-/// in the shop tab clears the private tab. The recipient framing is
-/// leak-safe: a notification's frame already reaches its recipient's
-/// personal stream (the cross-recipient routing below), so the client
-/// tolerates the frame's other content.
+/// in the shop tab clears the private tab. The fan-out frame carries only
+/// the notifications (live entries and tombstones): the shop-scoped
+/// hydration snapshot filters parts to the current shop, so a full summary
+/// would pollute the recipient's other tabs' parts maps — and a
+/// notifications-only frame carries no state a shop view would not already
+/// show.
 ///
 /// **Cross-recipient notification routing** (issue #677): after the normal
 /// frame is delivered, each notification in the `Summary` whose recipient is
@@ -300,24 +302,17 @@ pub(crate) async fn deliver_frame(
             }
         }
     }
-    // Shops the operation touched (issue #687): a frame for a shop the
-    // acting session is not "in" (a subscriber registering a part from
-    // their personal view) is routed by the summary's content, not by the
-    // session's context — the shop stream's subscriber (the shop owner's
-    // open shop view) receives the shop's state, parts and notifications
-    // alike. The session's own shop was already delivered above.
+    // Shops the operation touched (issue #687): routed by the summary's
+    // content, not the session's context. The session's own shop was already
+    // delivered above.
     for shop_entry in summary.shops.live() {
         if Some(shop_entry.id) != shop {
             pusher.push_to_shop(shop_entry.id, summary.clone()).await;
         }
     }
-    // Cross-recipient notification routing: push each notification to its
-    // recipient's personal stream. The acting user's own notifications ride
-    // the normal frame above; in a shop context the part owner's
-    // notifications also ride the normal frame (pushed to their personal
-    // stream). In a shop context the notification is also pushed to the shop
-    // stream so a recipient whose client is on the shop stream (because they
-    // are "in" the shop) receives it.
+    // Cross-recipient notification routing (issue #677): a notifications-only
+    // frame to each other recipient's personal stream (and the shop stream,
+    // for a recipient "in" the shop).
     for notification in summary.notifications.live() {
         let recipient = notification.recipient;
         if recipient == user_id {
@@ -337,13 +332,12 @@ pub(crate) async fn deliver_frame(
             pusher.push_to_shop(shop_id, recipient_summary).await;
         }
     }
-    // The recipient's shop streams (follow-up to issue #687): a
-    // notification's frame must reach every stream its recipient listens on
-    // — their open shop streams, not only the shop the operation named (the
-    // recipient's shop views show all their notifications, like the
-    // hydration snapshot). Live entries name their recipient; a tombstone is
+    // The recipient's shop streams (follow-up to issue #687): each
+    // recipient's open shop streams get a notifications-only frame — the
+    // shop-scoped snapshot filters parts to the current shop, so a full
+    // summary would pollute the other tabs' parts maps. A tombstone is
     // always the acting user's own (the recipient guard: only the recipient
-    // can read a notification, so a deleted row in the frame is theirs).
+    // can read a notification).
     let notifications = summary.notifications.live();
     let mut recipients: Vec<UserId> = Vec::new();
     for notification in &notifications {
@@ -351,26 +345,27 @@ pub(crate) async fn deliver_frame(
             recipients.push(notification.recipient);
         }
     }
+    let mut notification_only = Summary::default();
+    notification_only
+        .notifications
+        .merge(summary.notifications.clone());
     if summary.notifications.len() > notifications.len() && !recipients.contains(&user_id) {
         recipients.push(user_id);
     }
-    // Shops already delivered: the session's own shop (above) and the
-    // summary's shops (the loop above) — no double frame on the same
-    // channel.
+    // Shops already delivered (the session's own, the summary's): no double
+    // frame on the same channel.
     let mut skip: Vec<ShopId> = summary.shops.live().iter().map(|s| s.id).collect();
     if let Some(shop_id) = shop {
         skip.push(shop_id);
     }
     for recipient in &recipients {
         pusher
-            .push_to_recipient_shops(*recipient, summary.clone(), &skip)
+            .push_to_recipient_shops(*recipient, notification_only.clone(), &skip)
             .await;
     }
-    // In a shop context the acting user's personal stream is not the normal
-    // delivery target; their own notification state must still reach it — a
-    // dismiss in the shop tab clears the private tab (follow-up to issue
-    // #687). Skipped when the part owner push above already delivered the
-    // frame to it (the acting user is the part owner).
+    // Shop context: the acting user's own notification state also reaches
+    // their personal stream (not the normal delivery target there) — unless
+    // the part owner push above already delivered it.
     if shop.is_some() && recipients.contains(&user_id) && part_owner != Some(user_id) {
         push_frame(frames, summary);
     }

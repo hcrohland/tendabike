@@ -192,9 +192,6 @@ impl ShopId {
         )
         .await?;
         summary.notifications.upsert(notification);
-        // The shop is the notification's subject: carry it in the summary so
-        // the executor routes the frame to the shop's stream even when the
-        // acting session has no shop context (issue #687).
         summary.shops.upsert(shop);
         Ok(summary)
     }
@@ -257,9 +254,6 @@ impl ShopId {
             .await?;
             summary.notifications.upsert(notification);
         }
-        // The shop is the notification's subject: carry it in the summary so
-        // the executor routes the frame to the shop's stream even when the
-        // acting session has no shop context (issue #687).
         summary.shops.upsert(shop);
         Ok(summary)
     }
@@ -304,9 +298,6 @@ impl ShopId {
 
         let mut summary = Summary::default();
         summary.notifications.upsert(notification);
-        // The shop is the notification's subject: carry it in the summary so
-        // the executor routes the frame to the shop's stream even when the
-        // acting session has no shop context (issue #687).
         summary.shops.upsert(shop);
         Ok(summary)
     }
@@ -394,9 +385,6 @@ impl ShopId {
 
         let mut summary = Summary::default();
         summary.notifications.upsert(notification);
-        // The shop is the notification's subject: carry it in the summary so
-        // the executor routes the frame to the shop's stream even when the
-        // acting session has no shop context (issue #687).
         summary.shops.upsert(shop);
         Ok(summary)
     }

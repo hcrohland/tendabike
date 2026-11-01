@@ -2287,15 +2287,20 @@ async fn deliver_creation_fans_out_to_recipient_shop_streams() {
         state: NotificationState::New,
         created_at: sample_purchase_date(),
     };
-    summary.notifications.upsert(notification);
+    summary.notifications.upsert(notification.clone());
+    // The fan-out frame carries only the notification (the shop-scoped
+    // snapshot filters parts to the current shop, so a full summary would
+    // pollute the recipient's other tabs' parts maps).
+    let mut expected = Summary::default();
+    expected.notifications.upsert(notification);
 
     deliver_frame(&pusher, &frames, acting_user, None, None, &summary).await;
 
     assert!(
         pusher.calls().iter().any(|call| {
-            matches!(call, PushCall::RecipientShops(uid, s) if *uid == shop_owner && *s == summary)
+            matches!(call, PushCall::RecipientShops(uid, s) if *uid == shop_owner && *s == expected)
         }),
-        "the fan-out reaches the recipient's shop streams, got {:?}",
+        "the fan-out reaches the recipient's shop streams with a notifications-only frame, got {:?}",
         pusher.calls()
     );
 }
