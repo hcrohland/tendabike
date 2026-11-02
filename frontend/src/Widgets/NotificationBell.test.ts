@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { flushSync } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { notifications, setPanelOpen } from "../lib/notification.svelte";
+import { notifications } from "../lib/notification.svelte";
 import { setUser } from "../lib/user";
 import { resp } from "../test/helpers";
 import NotificationBell from "./NotificationBell.svelte";
@@ -50,7 +50,6 @@ describe("NotificationBell", () => {
     });
     setUser(user);
     seedNotification();
-    setPanelOpen(false);
     fetchMock = vi.fn().mockResolvedValue(resp(null, 204, true, ""));
     vi.stubGlobal("fetch", fetchMock);
   });

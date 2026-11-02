@@ -1,27 +1,13 @@
 <script lang="ts">
   import { Badge, Dropdown } from "flowbite-svelte";
   import { BellOutline } from "flowbite-svelte-icons";
-  import {
-    unread,
-    isPanelOpen,
-    setPanelOpen,
-  } from "../lib/notification.svelte";
+  import { unread } from "../lib/notification.svelte";
   import NotificationPanel from "./NotificationPanel.svelte";
   import * as m from "../../paraglide/messages";
 
-  /// The panel's open state, bound to the Dropdown (the Popper's trigger is
-  /// the sole toggle). The module's `panelOpen` stays in sync both ways:
-  /// Dropdown changes mirror into the module, and module writes (readAll,
-  /// tests) flow back into the Dropdown.
+  /// The panel's open state: component-local, bound to the Dropdown (the
+  /// Popper's trigger is the sole toggle).
   let open = $state(false);
-
-  $effect(() => {
-    setPanelOpen(open);
-  });
-
-  $effect(() => {
-    if (open !== isPanelOpen()) open = isPanelOpen();
-  });
 </script>
 
 <div class="relative">
@@ -38,6 +24,6 @@
     {/if}
   </button>
   <Dropdown triggeredBy="#notif-bell" bind:isOpen={open} class="w-96">
-    <NotificationPanel />
+    <NotificationPanel close={() => (open = false)} />
   </Dropdown>
 </div>

@@ -12,6 +12,9 @@
   import * as m from "../../paraglide/messages";
   import XsButton from "./XsButton.svelte";
 
+  /// Closes the panel (owned by the bell's Dropdown).
+  let { close } = $props();
+
   function title(n: Notification): string {
     switch (n.kind) {
       case "sub_request":
@@ -80,7 +83,12 @@
     {/if}
   </h3>
   {#if unread() > 0}
-    <XsButton onclick={readAll}>
+    <XsButton
+      onclick={() => {
+        readAll();
+        close();
+      }}
+    >
       {m.notif_panel_read_all()}
     </XsButton>
   {/if}
