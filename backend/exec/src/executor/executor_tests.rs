@@ -1012,6 +1012,24 @@ pub(crate) fn summary_with_notification(recipient: UserId) -> Summary {
     summary
 }
 
+/// A transient `PartRegistered` notification for `recipient` (the frame a part
+/// registration produces): the shared literal the cross-recipient and
+/// recipient-fan-out routing tests build their summaries from. It returns the
+/// `Notification` value — not a `Summary` — because those tests add it to a
+/// larger summary (parts + shops) of their own.
+pub(crate) fn notification_part_registered(recipient: UserId) -> Notification {
+    Notification {
+        id: NotificationId::from(Uuid::now_v7()),
+        recipient,
+        lifecycle: NotificationLifecycle::Transient,
+        kind: NotificationKind::PartRegistered,
+        subject: NotificationSubject::Part(PartId::from(1)),
+        message: None,
+        state: NotificationState::New,
+        created_at: sample_purchase_date(),
+    }
+}
+
 // --- `select_message` and the sleep: the read's select discipline ---
 
 #[tokio::test]

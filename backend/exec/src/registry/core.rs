@@ -576,17 +576,14 @@ mod tests {
 
     use std::time::Duration;
 
-    use tb_domain::test_support::fixtures::sample_purchase_date;
-    use tb_domain::{
-        Notification, NotificationId, NotificationKind, NotificationLifecycle, NotificationState,
-        NotificationSubject, PartId, ShopId, Summary, TbResult, UserId,
-    };
+    use tb_domain::{NotificationId, ShopId, Summary, TbResult, UserId};
     use uuid::Uuid;
 
     use super::{Core, DeliveryContext, ExecutorStatus};
     use crate::executor::executor_tests::{
-        FakeSource, RecordingPusher, non_empty_summary, part_owned_by, shop_owned_by,
-        summary_owned_by, summary_with_notification, summary_with_service,
+        FakeSource, RecordingPusher, non_empty_summary, notification_part_registered,
+        part_owned_by, shop_owned_by, summary_owned_by, summary_with_notification,
+        summary_with_service,
     };
     use crate::registry::FramePusher;
 
@@ -998,16 +995,7 @@ mod tests {
         let mut summary = Summary::default();
         summary.parts.upsert(part);
         summary.shops.upsert(shop_owned_by(shop_owner));
-        let notification = Notification {
-            id: NotificationId::from(Uuid::now_v7()),
-            recipient: shop_owner,
-            lifecycle: NotificationLifecycle::Transient,
-            kind: NotificationKind::PartRegistered,
-            subject: NotificationSubject::Part(PartId::from(1)),
-            message: None,
-            state: NotificationState::New,
-            created_at: sample_purchase_date(),
-        };
+        let notification = notification_part_registered(shop_owner);
         summary.notifications.upsert(notification.clone());
 
         core.deliver(context(acting_user, None, None), summary.clone())
@@ -1290,16 +1278,7 @@ mod tests {
         let mut summary = Summary::default();
         summary.parts.upsert(part);
         summary.shops.upsert(shop_owned_by(shop_owner));
-        let notification = Notification {
-            id: NotificationId::from(Uuid::now_v7()),
-            recipient: shop_owner,
-            lifecycle: NotificationLifecycle::Transient,
-            kind: NotificationKind::PartRegistered,
-            subject: NotificationSubject::Part(PartId::from(1)),
-            message: None,
-            state: NotificationState::New,
-            created_at: sample_purchase_date(),
-        };
+        let notification = notification_part_registered(shop_owner);
         summary.notifications.upsert(notification.clone());
         // The fan-out frame carries only the notification (the shop-scoped
         // snapshot filters parts to the current shop, so a full summary would
