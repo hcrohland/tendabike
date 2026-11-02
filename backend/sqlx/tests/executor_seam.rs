@@ -23,8 +23,8 @@
 //! What the eight seam tests verify, end to end on the live adapter:
 //!
 //! - an **API write** travels the in-memory channel, runs in one live
-//!   transaction, commits, resolves the route's oneshot, and pushes one
-//!   stream frame — and the row is visible to a fresh connection afterwards;
+//!   transaction, commits, resolves the route's oneshot — and the row is
+//!   visible to a fresh connection afterwards;
 //! - a **read as a message** travels the in-memory channel, runs in one live
 //!   loop-owned transaction (read-only within it by spec #558 §3.6),
 //!   resolves the route's oneshot with the `ReadOutcome`, and pushes **no**
@@ -80,8 +80,8 @@ use tb_domain::test_support::{
 };
 use tb_domain::{ApiRead, ApiWrite, PartId, ReadOutcome, SNAPSHOT_JSON, ShopId, Summary, UserId};
 use tb_exec::{
-    DetachedBegin, ExecutorStatus, FramePusher, LoopContext, Registry, Request, RequestReceiver,
-    ServiceApi, request_channel,
+    DeliveryContext, DetachedBegin, ExecutorStatus, FramePusher, LoopContext, Registry, Request,
+    RequestReceiver, ServiceApi, request_channel,
 };
 use tb_sqlx::DbPool;
 use tb_strava::{
@@ -99,16 +99,14 @@ use tokio::sync::{MutexGuard, Notify, broadcast};
 /// module docs).
 const DB_SUFFIX: &str = "_exec";
 
-/// A no-op `FramePusher`: the seam tests' sessions all have `shop() == None`,
-/// so the executor takes the user-context path and never calls the pusher.
+/// A no-op `FramePusher`: the seam tests assert on database state and the
+/// oneshot replies, not on the pusher's delivery — the loop's delivery
+/// intent is unit-tested with the `RecordingPusher` double (spec #706).
 struct NoopPusher;
 
 #[async_trait::async_trait]
 impl FramePusher for NoopPusher {
-    async fn push_to_shop(&self, _shop_id: ShopId, _summary: Summary) {}
-    async fn push_to_user(&self, _user_id: UserId, _summary: Summary) {}
-    async fn push_to_recipient_shops(&self, _user_id: UserId, _summary: Summary, _skip: &[ShopId]) {
-    }
+    async fn deliver(&self, _context: DeliveryContext, _summary: Summary) {}
 }
 
 /// The bound for awaiting the loop or one of its effects in a test: long
@@ -125,9 +123,10 @@ const IDLE_TIMEOUT: Duration = Duration::from_millis(300);
 
 /// One seam test's loop: the same single construction path production uses
 /// — a context over the live pool (the seam's `TxnSource`/`Txn` on the
-/// `SqlxConn`), driven by its request channel. The tests' sessions all have
-/// `shop() == None` (so the pusher is a no-op), and the wake signal is never
-/// fired (the queue is read on the loop's own cadence).
+/// `SqlxConn`), driven by its request channel. The pusher is a no-op (the
+/// suite asserts on database state and oneshot replies, not on delivery),
+/// and the wake signal is never fired (the queue is read on the loop's own
+/// cadence).
 fn loop_ctx(
     pool: DbPool,
     frames: broadcast::Sender<Summary>,
@@ -255,15 +254,14 @@ async fn database_is_reachable() {
 
 /// An API write end to end on the live adapter: the channel's request runs
 /// in one live transaction, commits, resolves the route's oneshot with the
-/// write's outcome (the `Summary`, the frame), pushes exactly one stream
-/// frame, and the row is visible to a fresh connection afterwards. The idle
-/// loop then reaps and `run` returns `Ok`.
+/// write's outcome (the `Summary`), and the row is visible to a fresh
+/// connection afterwards. The idle loop then reaps and `run` returns `Ok`.
 #[tokio::test]
 #[ignore]
 async fn api_write_end_to_end() {
     let seam = ready().await;
     let (tx, rx) = request_channel();
-    let (frames, mut frame_rx) = broadcast::channel(16);
+    let (frames, frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
     let (request, reply) = Request::new_write(
         Box::new(mock_session(UserId::from(1))),
@@ -280,7 +278,9 @@ async fn api_write_end_to_end() {
     let mut loop_task = tokio::spawn(loop_ctx(seam.pool.clone(), frames, events, rx));
 
     // The route's oneshot resolves with the write's outcome; the part
-    // write's `Summary` is the frame.
+    // write's `Summary` is the frame the loop delivers through the pusher
+    // (the suite's `NoopPusher` is a no-op: the delivery's targets are the
+    // unit tests' concern, not the seam's).
     let outcome = tokio::time::timeout(TEST_TIMEOUT, reply)
         .await
         .expect("the route's reply must resolve in time")
@@ -292,12 +292,6 @@ async fn api_write_end_to_end() {
     assert_eq!(part.name, "Seam Chain");
     assert_eq!(part.owner, test_identity().0);
 
-    // One frame carrying the same summary reaches the stream.
-    let frame = tokio::time::timeout(TEST_TIMEOUT, frame_rx.recv())
-        .await
-        .expect("the frame must arrive in time")
-        .expect("the stream must stay open");
-    assert_eq!(frame, summary);
     // No streams left attached: the no-streams rule is the only reap rule
     // (spec §4.4, amended — #446), so the loop's reap needs the receiver
     // gone.

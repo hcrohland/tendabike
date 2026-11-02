@@ -132,23 +132,21 @@ struct ShopStream {
     owner: UserId,
 }
 
-/// The routing inputs a [`Core::deliver`] needs: the acting user, the
+/// The routing inputs a [`FramePusher::deliver`] needs: the acting user, the
 /// session's shop (if any), and the resolved part owner. The loop constructs
-/// it from its existing values; the pusher consumes it. It is a smaller,
-/// delivery-specific projection — not the full acting session (the routing
-/// policy needs only these three fields).
-// `allow(dead_code)`: the loop's migration (spec #706) is the production
-// consumer; until then only the tests construct it.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy)]
-pub(super) struct DeliveryContext {
+/// it from its existing values (the part owner is resolved in the loop's
+/// transaction, pre-commit — the pusher does not resolve it); the pusher
+/// consumes it. It is a smaller, delivery-specific projection — not the full
+/// acting session (the routing policy needs only these three fields).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeliveryContext {
     /// The acting user (the caller's identity).
-    pub(super) user_id: UserId,
+    pub user_id: UserId,
     /// The session's shop (a shop context) or `None` (a personal context).
-    pub(super) shop: Option<ShopId>,
+    pub shop: Option<ShopId>,
     /// The resolved part owner (the loop resolves it in its transaction,
     /// pre-commit — the pusher does not resolve it).
-    pub(super) part_owner: Option<UserId>,
+    pub part_owner: Option<UserId>,
 }
 
 /// The registry's lifecycle core (spec #697): the per-user executor map and
@@ -239,7 +237,7 @@ impl Core {
     }
 
     /// Push a frame to the user's SSE streams (test helper: the production
-    /// path pushes frames from the loop via `tb_exec::push_frame`).
+    /// path delivers frames from the loop through the pusher).
     pub(super) async fn send_frame(&self, user_id: UserId, summary: Summary) {
         let map = self.executors.lock().await;
         if let Some(exec) = map.get(&user_id) {
@@ -319,7 +317,7 @@ impl Core {
     /// Push to `shop_id`'s stream (spec #517): reap the dead channels, then
     /// send on the shop channel if it exists (after the reap, an existing
     /// entry has a receiver, so the send is not dropped).
-    pub(super) async fn push_to_shop(&self, shop_id: ShopId, summary: Summary) {
+    async fn push_to_shop(&self, shop_id: ShopId, summary: Summary) {
         let mut map = self.shop_streams.lock().await;
         Self::reap_shop_streams(&mut map);
         if let Some(stream) = map.get(&shop_id) {
@@ -330,7 +328,7 @@ impl Core {
     /// Push to `user_id`'s personal stream (spec #517): send on the user's
     /// executor's frame channel if the executor is running; a no-op
     /// otherwise (no executor, or a settled one).
-    pub(super) async fn push_to_user(&self, user_id: UserId, summary: Summary) {
+    async fn push_to_user(&self, user_id: UserId, summary: Summary) {
         let map = self.executors.lock().await;
         if let Some(exec) = map.get(&user_id)
             && *exec.status.borrow() == ExecutorStatus::Running
@@ -342,12 +340,7 @@ impl Core {
     /// Push to every open shop stream `user_id` owns (follow-up to issue
     /// #687): reap the dead channels, then send on each channel whose owner
     /// tag is `user_id`, skipping the shops already delivered to.
-    pub(super) async fn push_to_recipient_shops(
-        &self,
-        user_id: UserId,
-        summary: Summary,
-        skip: &[ShopId],
-    ) {
+    async fn push_to_recipient_shops(&self, user_id: UserId, summary: Summary, skip: &[ShopId]) {
         let mut map = self.shop_streams.lock().await;
         Self::reap_shop_streams(&mut map);
         for (shop_id, stream) in map.iter() {
@@ -357,19 +350,15 @@ impl Core {
         }
     }
 
-    /// Route a committed [`Summary`] to its delivery targets given the acting
-    /// session's [`DeliveryContext`] (the complete frame-routing policy, moved
-    /// from the executor's `deliver_frame`, spec #705): the empty-`Summary`
-    /// guard, the personal-vs-shop context, the shops-the-operation-touched
-    /// fan-out, the cross-recipient notification routing, the recipient
-    /// shop-stream fan-out, and the shop-context personal-stream catch-up.
-    /// The channel-sending is the [`Self::push_to_shop`]/[`Self::push_to_user`]/
-    /// [`Self::push_to_recipient_shops`] helpers (unchanged — they stay
-    /// `pub(super)` so the [`super::Registry`] facade's `FramePusher` impl
-    /// keeps working; the trait collapses in a later ticket).
-    // `allow(dead_code)`: the loop's migration (spec #706) is the production
-    // consumer; until then only the tests call it.
-    #[allow(dead_code)]
+    /// The complete frame-routing policy (the [`FramePusher::deliver`]
+    /// contract, moved from the executor's `deliver_frame`, spec #705/#706):
+    /// route a [`Summary`] to its delivery targets given the acting session's
+    /// [`DeliveryContext`] — the empty-`Summary` guard, the personal-vs-shop
+    /// context, the shops-the-operation-touched fan-out, the cross-recipient
+    /// notification routing, the recipient shop-stream fan-out, and the
+    /// shop-context personal-stream catch-up. The channel-sending is the
+    /// [`Self::push_to_shop`]/[`Self::push_to_user`]/[`Self::push_to_recipient_shops`]
+    /// helpers (private — `deliver` is their only production caller).
     pub(super) async fn deliver(&self, context: DeliveryContext, summary: Summary) {
         if summary.is_empty() {
             return;
