@@ -27,7 +27,7 @@
 
 ## Tests
 
-The DB-free suites (domain, strava, axum) run against `mockall` `mock!` doubles; the `#[ignore]`d seam suites in `tb_sqlx` run against a real Postgres and are the behavioral bar — they need `--include-ignored` and `SCRATCH_DATABASE_URL`.
+The DB-free suites (domain, strava, axum) run against `mockall` `mock!` doubles; the `#[ignore]`d seam suites in `tb_sqlx` run against a real Postgres and are the behavioral bar — they need `--include-ignored` and `SCRATCH_DATABASE_URL`. If `SCRATCH_DATABASE_URL` is set in the environment, a database is available and the full suite runs locally as it does in CI.
 
 ```bash
 SQLX_OFFLINE=true cargo test -q -- --include-ignored   # complete suite (seam included)

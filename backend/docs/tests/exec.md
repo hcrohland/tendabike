@@ -27,7 +27,7 @@ All in `executor/executor_tests.rs` (the `#[cfg(test)]` module declared in `exec
 - **`MockConn`** — a `mockall` `mock!` witness (`#[cfg(test)]`) accumulating the full `Store` seam (nine sub-traits + the method-free `Store` marker) *and* the `StravaStore` surface *and* the `Txn` lifecycle — the `TxnSource::Conn` bound. `#[async_trait]` on each impl block is what makes the `async fn` methods desugar (see [`docs/research/mockall-conn-witness.md`](../../../docs/research/mockall-conn-witness.md) §1); the seam is collision-free (post-recipe: renamed methods, `usages_update(&[Usage])`, `stravauser_update_token` owning its token), so the flat `expect_<name>` API reaches every method on one type. `mockall` is a dev-dependency of `tb_exec` only.
 - **`test_context` / `LoopContext`** — the loop's wiring and state, built with a canned `MockConn`, a request channel, and a dummy frame sink; the per-request tests (`run_request`) drive one message through the real loop.
 - **`ready_probe`** — the canned queue-probe future the `select_message` / `next_action` units test against.
-- **fixtures** — `request(...)` (a `Request` bundling a write/read and its oneshot reply), `part_test_bike` / `part_owned_by` / `user_record` / `shop_owned_by` / `summary_owned_by` / `summary_with_service` / `summary_with_notification` / `non_empty_summary` / `shop_source` (canned domain values).
+- **fixtures** — `request(...)` (a `Request` bundling a write/read and its oneshot reply) and the canned domain values (`part_owned_by`, `summary_owned_by`, …). The set grows — the test module in `executor/executor_tests.rs` is the source of truth, so read it for the current fixtures.
 
 ## Writing new tests
 
