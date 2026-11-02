@@ -12,6 +12,7 @@ Repo-specific policies and API gotchas — for which tool takes which params, se
 - **Sub-issue list truncation**: `issue_read` `get_sub_issues` on a large spec returns a **truncated** inline result; the full JSON is written to a tool-output file (path in the tool result). Read and parse that file.
 - **Labels are set-based**: `issue_write` `update` `labels` *sets* the full label set, so removal re-sets the list without that label (read the current labels first).
 - **`List` fields**: request only the `fields` you need — `body` is the largest per-result data.
+- **Verify from per-call confirmations**: the issue write tools (`issue_write`, `issue_dependency_write`) return the object they created/updated and the edge they set — rely on those to confirm state. A bulk `get_sub_issues` is expensive (it returns the full repository object per issue); reach for it only when you need the hierarchy at a glance, not to re-confirm what the write calls already reported.
 - **Close an issue**: `state: "closed"` with `state_reason: "completed"`.
 - **Close from a PR**: a squash merge collects each commit's `Closes #N` line, so each ticket closes via the `Closes #N` in its **own commit** (one issue per line — a line with several space-separated numbers closes only the first). The PR body carries `Closes` for the **umbrella spec only**; do not duplicate the per-ticket `Closes` lines into the PR body.
 - **Sync**: merge `main` into the feature branch (`git merge origin/main`); the `.githooks/pre-push` hook rejects force-pushes (non-fast-forward).
