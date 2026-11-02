@@ -1,6 +1,6 @@
 # tb_exec tests
 
-All `tb_exec` tests run in-memory (no database): the executor loop's control flow is structured as pure units testable with a channel and dummy futures (no store, no database), and the transaction seam is a `mockall` `mock!` witness, [`MockConn`], not a hand-rolled store. The loop tests live in `executor/executor_tests.rs` (the `#[cfg(test)]` module declared in `executor.rs`); the `Registry` stream-lifecycle tests live in `registry.rs`'s `#[cfg(test)] mod tests`.
+All `tb_exec` tests run in-memory (no database): the executor loop's control flow is structured as pure units testable with a channel and dummy futures (no store, no database), and the transaction seam is a `mockall` `mock!` witness, [`MockConn`], not a hand-rolled store. The loop tests live in `executor/executor_tests.rs` (the `#[cfg(test)]` module declared in `executor.rs`). The `Registry` lifecycle is split (spec #697): the lifecycle-core tests (spawn, `status`, `wake`, `stop_all`, the shop/user push no-op + delivery) live in `registry/core.rs`'s `#[cfg(test)] mod tests` (the core is driven **directly**, not through the facade); the facade stream tests (the shop-stream ownership gate, the shop-stream reaping, and the `push_to_recipient_shops` fan-out) live in `executor/executor_tests.rs`.
 
 ## Behavior ownership
 
@@ -17,7 +17,8 @@ All `tb_exec` tests run in-memory (no database): the executor loop's control flo
 - **Backoff** (`DbBackoff`): doubles until the cap, resets after a success
 - **Frame routing** (`push_frame` / `deliver_frame`): non-empty and tombstone-only summaries delivered, empty summaries skipped, user context to the personal stream, shop context to the shop stream / the part owner / not the shop owner (except when the part owner)
 - **Per-request** (`run_request`): a read arriving during a sleep is taken immediately, a failed read never arms the backoff and the loop survives, a committed read resets the backoff, `all_stats` round-trips through the loop transaction, gear hydration pushes the created-parts frame, a failed gear arms the backoff like a write, gear hydration without new gear pushes no frame, a shop-context write routes via the pusher, a personal write routes to the own stream
-- **Registry / stream lifecycle** (`registry.rs`): `subscribe_shop` rejects a non-owner, the shop stream lifecycle (create / receive / drop), `push_to_shop` is a no-op without a subscriber, `push_to_user` delivers to a running executor / is a no-op without one
+- **Registry lifecycle core** (`registry/core.rs`): the executor spawns on first demand and is `Running`, `stop_all` tears it down and the next demand respawns it, `wake` is a pure signal that never spawns, `push_to_shop` delivers to an open shop stream / is a no-op without a subscriber, `push_to_user` delivers to a running executor / is a no-op for a reaped one
+- **Registry facade streams** (`executor/executor_tests.rs`): `subscribe_shop` rejects a non-owner (the ownership gate the core has no store read for), the shop stream reaps when its last receiver disconnects, `push_to_recipient_shops` reaches the owner's open streams / skips the named shops / is a no-op for a foreign owner, `push_to_user` is a no-op with no running executor
 
 ## Key infrastructure
 
