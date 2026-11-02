@@ -48,16 +48,6 @@ export const notifications = mapableState<Notification>("id");
 /// collection, never in the badge or history.
 let toasts = $state<Toast[]>([]);
 
-/// Whether the notification panel (drop-down) is open.
-let panelOpen = $state(false);
-
-export function isPanelOpen() {
-  return panelOpen;
-}
-export function setPanelOpen(v: boolean) {
-  panelOpen = v;
-}
-
 let toastSeq = 0;
 
 /**
@@ -111,10 +101,9 @@ export function dismiss(id: string) {
   apiRead(id);
 }
 
-/// Mark all server notifications as read and close the panel.
+/// Mark all server notifications as read.
 export function readAll() {
-  apiReadAll();
-  setPanelOpen(false);
+  myfetch("/api/notification/read-all", "POST").catch(handleError);
 }
 
 /// The ephemeral door: create a local error toast.
@@ -135,9 +124,4 @@ export function clearToasts() {
 /// transient → delete). The change rides the stream frame.
 async function apiRead(id: string) {
   await myfetch("/api/notification/" + id + "/read", "POST").catch(handleError);
-}
-
-/// Read all of the user's notifications (lifecycle-aware for each).
-async function apiReadAll() {
-  await myfetch("/api/notification/read-all", "POST").catch(handleError);
 }

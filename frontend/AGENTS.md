@@ -11,7 +11,7 @@
 
 ## Architecture
 
-- **UI**: Tailwind CSS v4 + Flowbite / flowbite-svelte components.
+- **UI**: Tailwind CSS v4 + flowbite-svelte (components) + flowbite-svelte-icons (icons). New UI comes from flowbite-svelte components — raw Svelte + Tailwind only where the library has no component.
 - **Modals**: each modal owns its open state in module scope and exports a start function that opens it; [`src/Widgets/Actions.svelte`](src/Widgets/Actions.svelte) mounts every modal once, globally, so any page can trigger it. Callers import the start function from the modal module directly — there is no shared actions registry.
 - **Routing**: `svelte-spa-router`; route definitions in [`src/App.svelte`](src/App.svelte).
 - **i18n**: `@inlang/paraglide-js` — edit source messages in `messages/{locale}.json`; `paraglide/` is compiled output.
@@ -23,6 +23,8 @@
 ## Code Style
 
 - **Runes mode**: `<script lang="ts">` blocks with runes (`$state`, `$derived`, `$effect`, `$props()`); module scope via the `<script module>` attribute (never the deprecated `context="module"` form).
+- **Widget wrappers**: use the shared `src/Widgets/` wrappers (e.g. `XsButton`) over raw flowbite components.
+- **UI open/close state**: component-local — a lib state module never carries it; a child that must close the UI takes a `close` callback prop.
 
 ## Key Gotchas
 
@@ -30,3 +32,4 @@
 - Collection updates must use `updateMap()` / `setMap()` / `deleteItem()` on the entity's exported collection (e.g. `parts.updateMap([data])`).
 - Paraglide messages are imported from `paraglide/messages` (relative depth varies by component); translation keys follow the `m.action_name()` pattern.
 - `src/test/setup.ts` restores all mocks in `afterEach` — `vi.stubGlobal` stubs created in `beforeAll` are gone after the first test; create stubs in `beforeEach`.
+- **flowbite-svelte Popper/Dropdown in tests**: the trigger fires on `mousedown` (not `click`); open/close is `requestAnimationFrame`-debounced, so fake timers must also fake `rAF` + `performance`; Svelte 5 transitions complete via the Web Animations API (`element.animate` → `onfinish`), which is why `setup.ts` stubs `animate`/`showPopover`. Drive these tests with `vi.advanceTimersByTimeAsync` + `flushSync` in an `async` body.
