@@ -8,7 +8,7 @@
 - The boundary holds at the package level too: a package's public API is its complete interface, even with a single consumer or implementor. Confirm the API; the implementation behind it is out of scope.
 - When more than one option is defensible, ask the user before choosing — even when you're confident in your pick.
 - Prefer the straightforward, proven action; do not spend effort optimizing process when the simple path is known to work.
-- Keep batch size one: one operation per call — one ticket per create, one file or function per edit — and confirm it landed before starting the next.
+- Keep batch size one: draft a unit, write it, confirm it landed, then draft the next — one ticket per create, one file or function per edit. Each unit's content is written after the previous one lands, not drafted in a batch up front.
 - Formatting is done by external formatters, never by hand: write the code, then run cargo fmt (Rust) or npm run format from the project root.
 
 ## Domain
