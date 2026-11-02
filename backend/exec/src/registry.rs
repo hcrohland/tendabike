@@ -67,8 +67,8 @@ use crate::{Txn, TxnSource};
 
 mod core;
 
-pub use core::ExecutorStatus;
 use core::{Core, Executor};
+pub use core::{DeliveryContext, ExecutorStatus};
 
 /// The loop's queue re-probe cadence while it is idle with streams attached
 /// (spec §4.4, amended — #446): an attached stream keeps the executor alive
@@ -130,38 +130,22 @@ pub struct Registry<S: TxnSource + Clone + 'static> {
     core: Core,
 }
 
-/// The frame push surface the executor uses to route a completed `Summary`
-/// to an arbitrary target (spec #517, ticket #582): a shop stream
-/// (`push_to_shop`) or a user's personal stream (`push_to_user`). The
-/// [`Registry`] implements it; the executor calls it in a shop context,
-/// after a write commit (ticket #584 wires the context-based routing).
+/// The frame push surface the executor loop uses to route a completed
+/// `Summary` to its delivery targets (spec #517, ticket #582; collapsed from
+/// three push methods to one `deliver`, spec #706): the implementation (the
+/// [`Registry`]'s lifecycle core) owns the complete routing policy — given
+/// the acting session's context, it inspects the `Summary`'s content and
+/// pushes to each target it names.
 ///
-/// Both methods are infallible: a push to a target with no live receiver
+/// The method is infallible: a push to a target with no live receiver
 /// (a reaped shop channel, a settled executor) is a no-op — a lost frame
 /// just means a not-yet-connected or gone client, and the client's
 /// reconnect + catch-up snapshot covers it (spec §4.5).
 #[async_trait::async_trait]
 pub trait FramePusher: Send + Sync {
-    /// Push a frame to `shop_id`'s stream: sends on the shop channel if it
-    /// exists and has a receiver (the "open shop" check is implicit:
-    /// `receiver_count() > 0`); a no-op otherwise.
-    async fn push_to_shop(&self, shop_id: ShopId, summary: Summary);
-
-    /// Push a frame to `user_id`'s personal stream: sends on the user's
-    /// executor's frame channel if the executor is running; a no-op
-    /// otherwise (no executor, or a settled one).
-    async fn push_to_user(&self, user_id: UserId, summary: Summary);
-
-    /// Push a frame to every open shop stream `user_id` owns (follow-up to
-    /// issue #687): the recipient's shop views show all their
-    /// notifications — the shop-scoped hydration snapshot loads them all —
-    /// so a notification's frame must reach each of their open shop
-    /// streams, not only the shop the operation named. `skip` are the shops
-    /// already delivered to (the session's own shop, the summary's shops) —
-    /// a second frame on the same channel is noise. A no-op when the user
-    /// has no open shop stream (a not-yet-connected client catches up on
-    /// hydration, spec §4.5).
-    async fn push_to_recipient_shops(&self, user_id: UserId, summary: Summary, skip: &[ShopId]);
+    /// Route a [`Summary`] to its delivery targets given the acting
+    /// session's context.
+    async fn deliver(&self, context: DeliveryContext, summary: Summary);
 }
 
 impl<S> Registry<S>
@@ -215,7 +199,7 @@ where
     }
 
     /// Push a frame to the user's SSE streams (test helper: the production
-    /// path pushes frames from the loop via `tb_exec::push_frame`).
+    /// path delivers frames from the loop through the pusher).
     pub async fn send_frame(&self, user_id: UserId, summary: Summary) {
         self.core.send_frame(user_id, summary).await
     }
@@ -259,9 +243,10 @@ where
     }
 }
 
-/// The frame push surface (spec #517, ticket #582): the executor routes a
-/// completed `Summary` to a shop stream or a user's personal stream through
-/// these. Each delegates to the core, which locks its own map (the shop
+/// The frame push surface (spec #517, ticket #582): the executor loop
+/// routes a completed `Summary` through this, and the implementation
+/// delegates the routing to the core — the deep "where does a frame go?"
+/// policy lives there (spec #705/#706), locking its own maps (the shop
 /// stream map, the executor map) — the two are independent, so a push never
 /// holds both locks.
 #[async_trait::async_trait]
@@ -269,27 +254,9 @@ impl<S> FramePusher for Registry<S>
 where
     S: TxnSource + Clone + 'static,
 {
-    /// Push to `shop_id`'s stream (spec #517): the core reaps the dead
-    /// channels, then sends on the shop channel if it exists.
-    async fn push_to_shop(&self, shop_id: ShopId, summary: Summary) {
-        self.core.push_to_shop(shop_id, summary).await
-    }
-
-    /// Push to `user_id`'s personal stream (spec #517): the core sends on
-    /// the user's executor's frame channel if the executor is running; a
-    /// no-op otherwise.
-    async fn push_to_user(&self, user_id: UserId, summary: Summary) {
-        self.core.push_to_user(user_id, summary).await
-    }
-
-    /// Push to every open shop stream `user_id` owns (follow-up to issue
-    /// #687): the core reaps the dead channels, then sends on each channel
-    /// whose owner tag is `user_id`, skipping the shops already delivered
-    /// to.
-    async fn push_to_recipient_shops(&self, user_id: UserId, summary: Summary, skip: &[ShopId]) {
-        self.core
-            .push_to_recipient_shops(user_id, summary, skip)
-            .await
+    /// Delegate the routing to the core (the complete frame-routing policy).
+    async fn deliver(&self, context: DeliveryContext, summary: Summary) {
+        self.core.deliver(context, summary).await
     }
 }
 

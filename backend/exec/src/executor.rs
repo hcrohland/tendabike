@@ -44,8 +44,8 @@ use tb_strava::event::{Event, QueueRead, get_event, insert_sync, process};
 use tb_strava::{StravaStat, StravaUser, get_all_stats};
 use tokio::sync::{broadcast, oneshot};
 
-use crate::message::{Request, RequestReceiver, push_frame};
-use crate::{FramePusher, Txn, TxnSource};
+use crate::message::{Request, RequestReceiver};
+use crate::{DeliveryContext, FramePusher, Txn, TxnSource};
 
 /// The per-executor in-memory backoff for database failures (spec #446
 /// §4.6): exponential, capped at 30s, no `Stop` row (that is the Strava
@@ -237,140 +237,6 @@ pub(crate) async fn select_message(
     }
 }
 
-/// Route a completed `Summary` to its delivery target(s) by the session's
-/// context (spec #517, ticket #584):
-///
-/// - **user context** (`shop == None`): the executor's own personal stream —
-///   the existing [`push_frame`] behavior, unchanged.
-/// - **shop context** (`shop == Some(shop_id)`): the shop stream
-///   ([`FramePusher::push_to_shop`]) **and** the part owner's personal stream
-///   ([`FramePusher::push_to_user`]) — never the executor's own stream (a
-///   foreign part must not leak into the shop owner's personal view; the part
-///   owner, who may be the shop owner, receives the frame via `push_to_user`).
-///
-/// **Shops the operation touched** (issue #687): each `Shop` in the
-/// `Summary` (not the session's own) also receives the frame via
-/// [`FramePusher::push_to_shop`]. The session's context is the actor's — a
-/// subscriber registering a part in a shop acts from their personal view
-/// (no shop context) — while the `Shop` the domain operation carried in the
-/// `Summary` names the shop whose stream's subscriber (the shop owner's open
-/// shop view) must receive the shop's state, parts and notifications alike.
-///
-/// **The recipient's shop streams** (follow-up to issue #687): a
-/// notification's frame must reach every stream its recipient listens on —
-/// their open shop streams, not only the shop the operation named. The
-/// recipient's shop views show all their notifications (the shop-scoped
-/// hydration snapshot loads them all), so a dismiss in one tab must clear
-/// the others. Live entries name their recipient; a tombstone is always the
-/// acting user's own (the recipient guard: only the recipient can read a
-/// notification, so a deleted row in the frame is theirs). In a shop
-/// context the acting user's personal stream is not the normal delivery
-/// target, so their own notification state is also pushed there — a dismiss
-/// in the shop tab clears the private tab. The fan-out frame carries only
-/// the notifications (live entries and tombstones): the shop-scoped
-/// hydration snapshot filters parts to the current shop, so a full summary
-/// would pollute the recipient's other tabs' parts maps — and a
-/// notifications-only frame carries no state a shop view would not already
-/// show.
-///
-/// **Cross-recipient notification routing** (issue #677): after the normal
-/// frame is delivered, each notification in the `Summary` whose recipient is
-/// not the acting user (and not the part owner in a shop context) is pushed
-/// to that recipient's personal stream via [`FramePusher::push_to_user`]. A
-/// recipient whose executor is not running gets nothing live — the row is in
-/// the DB and reaches them on the next hydration.
-///
-/// An empty `Summary` pushes nothing, to any stream (spec §4.5).
-pub(crate) async fn deliver_frame(
-    pusher: &dyn FramePusher,
-    frames: &broadcast::Sender<Summary>,
-    user_id: UserId,
-    shop: Option<ShopId>,
-    part_owner: Option<UserId>,
-    summary: &Summary,
-) {
-    if summary.is_empty() {
-        return;
-    }
-    // Push the normal frame to the acting user's delivery target(s).
-    match shop {
-        None => push_frame(frames, summary),
-        Some(shop_id) => {
-            pusher.push_to_shop(shop_id, summary.clone()).await;
-            if let Some(owner) = part_owner {
-                pusher.push_to_user(owner, summary.clone()).await;
-            }
-        }
-    }
-    // Shops the operation touched (issue #687): routed by the summary's
-    // content, not the session's context. The session's own shop was already
-    // delivered above.
-    for shop_entry in summary.shops.live() {
-        if Some(shop_entry.id) != shop {
-            pusher.push_to_shop(shop_entry.id, summary.clone()).await;
-        }
-    }
-    // Cross-recipient notification routing (issue #677): a notifications-only
-    // frame to each other recipient's personal stream (and the shop stream,
-    // for a recipient "in" the shop).
-    for notification in summary.notifications.live() {
-        let recipient = notification.recipient;
-        if recipient == user_id {
-            continue;
-        }
-        if let Some(owner) = part_owner
-            && recipient == owner
-        {
-            continue;
-        }
-        let mut recipient_summary = Summary::default();
-        recipient_summary.notifications.upsert(notification);
-        pusher
-            .push_to_user(recipient, recipient_summary.clone())
-            .await;
-        if let Some(shop_id) = shop {
-            pusher.push_to_shop(shop_id, recipient_summary).await;
-        }
-    }
-    // The recipient's shop streams (follow-up to issue #687): each
-    // recipient's open shop streams get a notifications-only frame — the
-    // shop-scoped snapshot filters parts to the current shop, so a full
-    // summary would pollute the other tabs' parts maps. A tombstone is
-    // always the acting user's own (the recipient guard: only the recipient
-    // can read a notification).
-    let notifications = summary.notifications.live();
-    let mut recipients: Vec<UserId> = Vec::new();
-    for notification in &notifications {
-        if !recipients.contains(&notification.recipient) {
-            recipients.push(notification.recipient);
-        }
-    }
-    let mut notification_only = Summary::default();
-    notification_only
-        .notifications
-        .merge(summary.notifications.clone());
-    if summary.notifications.len() > notifications.len() && !recipients.contains(&user_id) {
-        recipients.push(user_id);
-    }
-    // Shops already delivered (the session's own, the summary's): no double
-    // frame on the same channel.
-    let mut skip: Vec<ShopId> = summary.shops.live().iter().map(|s| s.id).collect();
-    if let Some(shop_id) = shop {
-        skip.push(shop_id);
-    }
-    for recipient in &recipients {
-        pusher
-            .push_to_recipient_shops(*recipient, notification_only.clone(), &skip)
-            .await;
-    }
-    // Shop context: the acting user's own notification state also reaches
-    // their personal stream (not the normal delivery target there) — unless
-    // the part owner push above already delivered it.
-    if shop.is_some() && recipients.contains(&user_id) && part_owner != Some(user_id) {
-        push_frame(frames, summary);
-    }
-}
-
 /// The per-user executor loop's context (issue #661): the loop's wiring and
 /// its mutable state in one type, so the loop's full set of dependencies is
 /// readable from one struct definition and its stateful behavior has a
@@ -385,13 +251,15 @@ pub(crate) async fn deliver_frame(
 ///   by it, and the event lane builds an identity-only [`ExecutorSession`]
 ///   from it (at the last moment) to drive the domain event processing.
 /// - `frames` — the user's SSE frame sink (`broadcast`); the web layer's
-///   stream tasks subscribe to it. In a **user context** (`shop() == None`)
-///   a committed `Summary` is pushed here (the existing behavior).
+///   stream tasks subscribe to it. The loop reads its receiver count for the
+///   reclaim policy (an attached stream keeps the loop alive); frames reach
+///   it through the pusher (the pusher's `push_to_user` sends on the
+///   executor's frame channel — this channel).
 /// - `pusher` — the frame push surface (the [`Registry`] in production) the
-///   loop uses to route a committed `Summary` in a **shop context**
-///   (`shop() == Some`): the shop stream plus the part owner's personal
-///   stream (spec #517, ticket #584). In a user context the loop uses its
-///   own `frames` channel and never the pusher.
+///   loop delivers every committed `Summary` through, in a personal or a
+///   shop context alike (spec #517, spec #706): the implementation owns the
+///   complete routing policy (the `DeliveryContext` carries the routing
+///   inputs — the session's shop and the resolved part owner).
 /// - `events` — the user's completed-Strava-event channel (`broadcast`):
 ///   every event the loop consumed (its processing transaction committed)
 ///   is sent on it, even with an empty summary. The web layer's admin sync
@@ -498,8 +366,9 @@ where
     /// One transaction per message (spec §4.3): `begin` → dispatch (`exec` for
     /// an API write, `process` for a Strava event) → `commit` on success,
     /// `rollback` on any failure (this is the caller the `Txn` seam exists for).
-    /// After a successful commit, a non-empty `Summary` pushes one frame to the
-    /// user's SSE streams ([`push_frame`]).
+    /// After a successful commit, the `Summary` is delivered through the
+    /// pusher ([`FramePusher::deliver`]) — the pusher's empty-`Summary` guard
+    /// pushes nothing for an empty one.
     ///
     /// API writes fail fast: the oneshot resolves with the error and the message
     /// is consumed (spec §6.2 — the client is the retry layer); the loop never
@@ -560,8 +429,8 @@ where
     ///   deterministic poison event is a visible alarm (the persistent
     ///   reconnect/refresh cycle) that the log names via `Processing {event}`.
     ///
-    /// On a successful commit a non-empty `Summary` pushes one frame to
-    /// [`frames`]; an empty `Summary` pushes nothing.
+    /// On a successful commit the `Summary` is delivered through the pusher
+    /// (an empty `Summary` pushes nothing — the pusher's guard).
     pub async fn run(mut self, mut rx: RequestReceiver) -> TbResult<()> {
         loop {
             // One wake permit per cycle, created before any select (the permit
@@ -825,9 +694,9 @@ where
 ///   Either way, a transaction that completes cleanly (committed, or
 ///   rolled back after a domain error) resets the backoff, and only a
 ///   failed `rollback` ends the loop (the `Err` return).
-/// - `frame` — a committed outcome the closure maps to a `Summary` pushes
-///   one SSE frame to the user's streams before the oneshot reply; a
-///   `None` pushes nothing (a read produces no `Summary`, spec #558 §3.6).
+/// - `frame` — a committed outcome the closure maps to a `Summary` is
+///   delivered through the pusher before the oneshot reply; a `None`
+///   delivers nothing (a read produces no `Summary`, spec #558 §3.6).
 ///
 /// `noun` names the variant in the transaction log lines ("write", "read",
 /// "hydration", "stats read"); `what` names it in the final failure line
@@ -901,19 +770,21 @@ where
         }
     };
     if let Ok(outcome) = &outcome {
-        // The frame (if the variant has one) is published on commit, before
-        // the oneshot reply, routed by the session's context (spec #517,
-        // ticket #584).
+        // The frame (if the variant has one) is delivered on commit, before
+        // the oneshot reply: the loop hands the pusher the summary and the
+        // session's delivery context (the routing is the pusher's, spec
+        // #706).
         if let Some(frame) = frame(outcome) {
-            deliver_frame(
-                &*ctx.pusher,
-                &ctx.frames,
-                ctx.user_id,
-                shop,
-                part_owner,
-                frame,
-            )
-            .await;
+            ctx.pusher
+                .deliver(
+                    DeliveryContext {
+                        user_id: ctx.user_id,
+                        shop,
+                        part_owner,
+                    },
+                    frame.clone(),
+                )
+                .await;
         }
     }
     if let Err(err) = &outcome {
@@ -925,8 +796,8 @@ where
 
 /// One `ApiWrite` in one transaction (spec §4.3): `begin` → [`exec`] →
 /// `commit`, or `rollback` on failure; the oneshot resolves with the
-/// outcome either way, and a successful, non-empty `Summary` pushes one
-/// frame to the user's SSE streams.
+/// outcome either way, and a successful `Summary` is delivered through the
+/// pusher (an empty one pushes nothing — the pusher's guard).
 ///
 /// The onboarding cutover's Strava side (spec #558 §5.1): one message = one
 /// loop-owned transaction containing the message's entire work — the
@@ -977,10 +848,10 @@ where
                 Ok(outcome)
             }
             .await;
-            // In a shop context, resolve the part owner for the `push_to_user`
-            // target (the rare case: only shop operations need it). The lookup
-            // runs in the same transaction (before commit), so it sees the
-            // operation's effects.
+            // In a shop context, resolve the part owner for the delivery
+            // context (the rare case: only shop operations need it). The
+            // lookup runs in the same transaction (before commit), so it
+            // sees the operation's effects.
             let part_owner = if shop.is_some() {
                 if let Some(part_id) = outcome
                     .as_ref()
@@ -1050,9 +921,10 @@ where
 ///
 /// The frame is uniform (like every other write): the hydrate's `Summary`
 /// is the **union of the parts it created** — one entry per part, empty
-/// when nothing is new (the common case: `push_frame` sends nothing) — and
-/// it is published on commit, before the oneshot reply (the client already
-/// buffers frames that race the snapshot). The backoff discipline is the
+/// when nothing is new (the common case: the delivered summary is empty and
+/// the pusher's guard sends nothing) — and it is delivered on commit,
+/// before the oneshot reply (the client already buffers frames that race the
+/// snapshot). The backoff discipline is the
 /// write's: a `begin`/`commit` failure records it, a completed transaction
 /// (committed, or rolled back after an error) resets it, and only a failed
 /// `rollback` ends the loop.
@@ -1181,11 +1053,20 @@ where
     match process(&mut session, &mut conn).await {
         Ok(summary) => match conn.commit().await {
             Ok(()) => {
-                // Route the event's `Summary`: a Strava event is the user's
-                // own parts, so no shop context (spec #517, ticket #584) —
-                // the executor's own personal stream. Then announce the
-                // consumed event (spec §6.4) for good, empty summary or not.
-                deliver_frame(&*ctx.pusher, &ctx.frames, ctx.user_id, None, None, &summary).await;
+                // Deliver the event's `Summary`: a Strava event is the
+                // user's own parts, so a personal delivery context (no shop,
+                // no part owner — ADR-0009). Then announce the consumed
+                // event (spec §6.4) for good, empty summary or not.
+                ctx.pusher
+                    .deliver(
+                        DeliveryContext {
+                            user_id: ctx.user_id,
+                            shop: None,
+                            part_owner: None,
+                        },
+                        summary.clone(),
+                    )
+                    .await;
                 let _ = ctx.events.send(event.clone());
                 ctx.backoff.reset();
                 Ok(())

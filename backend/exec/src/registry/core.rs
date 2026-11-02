@@ -132,6 +132,23 @@ struct ShopStream {
     owner: UserId,
 }
 
+/// The routing inputs a [`FramePusher::deliver`] needs: the acting user, the
+/// session's shop (if any), and the resolved part owner. The loop constructs
+/// it from its existing values (the part owner is resolved in the loop's
+/// transaction, pre-commit — the pusher does not resolve it); the pusher
+/// consumes it. It is a smaller, delivery-specific projection — not the full
+/// acting session (the routing policy needs only these three fields).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeliveryContext {
+    /// The acting user (the caller's identity).
+    pub user_id: UserId,
+    /// The session's shop (a shop context) or `None` (a personal context).
+    pub shop: Option<ShopId>,
+    /// The resolved part owner (the loop resolves it in its transaction,
+    /// pre-commit — the pusher does not resolve it).
+    pub part_owner: Option<UserId>,
+}
+
 /// The registry's lifecycle core (spec #697): the per-user executor map and
 /// the per-shop frame-channel map, the spawn-on-first-demand /
 /// reap-when-no-stream / respawn policy, the wake signal, the stop-all
@@ -220,7 +237,7 @@ impl Core {
     }
 
     /// Push a frame to the user's SSE streams (test helper: the production
-    /// path pushes frames from the loop via `tb_exec::push_frame`).
+    /// path delivers frames from the loop through the pusher).
     pub(super) async fn send_frame(&self, user_id: UserId, summary: Summary) {
         let map = self.executors.lock().await;
         if let Some(exec) = map.get(&user_id) {
@@ -300,7 +317,7 @@ impl Core {
     /// Push to `shop_id`'s stream (spec #517): reap the dead channels, then
     /// send on the shop channel if it exists (after the reap, an existing
     /// entry has a receiver, so the send is not dropped).
-    pub(super) async fn push_to_shop(&self, shop_id: ShopId, summary: Summary) {
+    async fn push_to_shop(&self, shop_id: ShopId, summary: Summary) {
         let mut map = self.shop_streams.lock().await;
         Self::reap_shop_streams(&mut map);
         if let Some(stream) = map.get(&shop_id) {
@@ -311,7 +328,7 @@ impl Core {
     /// Push to `user_id`'s personal stream (spec #517): send on the user's
     /// executor's frame channel if the executor is running; a no-op
     /// otherwise (no executor, or a settled one).
-    pub(super) async fn push_to_user(&self, user_id: UserId, summary: Summary) {
+    async fn push_to_user(&self, user_id: UserId, summary: Summary) {
         let map = self.executors.lock().await;
         if let Some(exec) = map.get(&user_id)
             && *exec.status.borrow() == ExecutorStatus::Running
@@ -323,18 +340,108 @@ impl Core {
     /// Push to every open shop stream `user_id` owns (follow-up to issue
     /// #687): reap the dead channels, then send on each channel whose owner
     /// tag is `user_id`, skipping the shops already delivered to.
-    pub(super) async fn push_to_recipient_shops(
-        &self,
-        user_id: UserId,
-        summary: Summary,
-        skip: &[ShopId],
-    ) {
+    async fn push_to_recipient_shops(&self, user_id: UserId, summary: Summary, skip: &[ShopId]) {
         let mut map = self.shop_streams.lock().await;
         Self::reap_shop_streams(&mut map);
         for (shop_id, stream) in map.iter() {
             if stream.owner == user_id && !skip.contains(shop_id) {
                 let _ = stream.sender.send(summary.clone());
             }
+        }
+    }
+
+    /// The complete frame-routing policy (the [`FramePusher::deliver`]
+    /// contract, moved from the executor's `deliver_frame`, spec #705/#706):
+    /// route a [`Summary`] to its delivery targets given the acting session's
+    /// [`DeliveryContext`] — the empty-`Summary` guard, the personal-vs-shop
+    /// context, the shops-the-operation-touched fan-out, the cross-recipient
+    /// notification routing, the recipient shop-stream fan-out, and the
+    /// shop-context personal-stream catch-up. The channel-sending is the
+    /// [`Self::push_to_shop`]/[`Self::push_to_user`]/[`Self::push_to_recipient_shops`]
+    /// helpers (private — `deliver` is their only production caller).
+    pub(super) async fn deliver(&self, context: DeliveryContext, summary: Summary) {
+        if summary.is_empty() {
+            return;
+        }
+        let DeliveryContext {
+            user_id,
+            shop,
+            part_owner,
+        } = context;
+        // Push the normal frame to the acting user's delivery target(s).
+        match shop {
+            None => self.push_to_user(user_id, summary.clone()).await,
+            Some(shop_id) => {
+                self.push_to_shop(shop_id, summary.clone()).await;
+                if let Some(owner) = part_owner {
+                    self.push_to_user(owner, summary.clone()).await;
+                }
+            }
+        }
+        // Shops the operation touched (issue #687): routed by the summary's
+        // content, not the session's context. The session's own shop was
+        // already delivered above.
+        for shop_entry in summary.shops.live() {
+            if Some(shop_entry.id) != shop {
+                self.push_to_shop(shop_entry.id, summary.clone()).await;
+            }
+        }
+        // Cross-recipient notification routing (issue #677): a
+        // notifications-only frame to each other recipient's personal stream
+        // (and the shop stream, for a recipient "in" the shop).
+        for notification in summary.notifications.live() {
+            let recipient = notification.recipient;
+            if recipient == user_id {
+                continue;
+            }
+            if let Some(owner) = part_owner
+                && recipient == owner
+            {
+                continue;
+            }
+            let mut recipient_summary = Summary::default();
+            recipient_summary.notifications.upsert(notification);
+            self.push_to_user(recipient, recipient_summary.clone())
+                .await;
+            if let Some(shop_id) = shop {
+                self.push_to_shop(shop_id, recipient_summary).await;
+            }
+        }
+        // The recipient's shop streams (follow-up to issue #687): each
+        // recipient's open shop streams get a notifications-only frame — the
+        // shop-scoped snapshot filters parts to the current shop, so a full
+        // summary would pollute the other tabs' parts maps. A tombstone is
+        // always the acting user's own (the recipient guard: only the
+        // recipient can read a notification).
+        let notifications = summary.notifications.live();
+        let mut recipients: Vec<UserId> = Vec::new();
+        for notification in &notifications {
+            if !recipients.contains(&notification.recipient) {
+                recipients.push(notification.recipient);
+            }
+        }
+        let mut notification_only = Summary::default();
+        notification_only
+            .notifications
+            .merge(summary.notifications.clone());
+        if summary.notifications.len() > notifications.len() && !recipients.contains(&user_id) {
+            recipients.push(user_id);
+        }
+        // Shops already delivered (the session's own, the summary's): no
+        // double frame on the same channel.
+        let mut skip: Vec<ShopId> = summary.shops.live().iter().map(|s| s.id).collect();
+        if let Some(shop_id) = shop {
+            skip.push(shop_id);
+        }
+        for recipient in &recipients {
+            self.push_to_recipient_shops(*recipient, notification_only.clone(), &skip)
+                .await;
+        }
+        // Shop context: the acting user's own notification state also reaches
+        // their personal stream (not the normal delivery target there) —
+        // unless the part owner push above already delivered it.
+        if shop.is_some() && recipients.contains(&user_id) && part_owner != Some(user_id) {
+            self.push_to_user(user_id, summary).await;
         }
     }
 
@@ -469,10 +576,15 @@ mod tests {
 
     use std::time::Duration;
 
-    use tb_domain::{ShopId, TbResult, UserId};
+    use tb_domain::{NotificationId, ShopId, Summary, TbResult, UserId};
+    use uuid::Uuid;
 
-    use super::{Core, ExecutorStatus};
-    use crate::executor::executor_tests::{FakeSource, RecordingPusher, non_empty_summary};
+    use super::{Core, DeliveryContext, ExecutorStatus};
+    use crate::executor::executor_tests::{
+        FakeSource, RecordingPusher, non_empty_summary, notification_part_registered,
+        part_owned_by, shop_owned_by, summary_owned_by, summary_with_notification,
+        summary_with_service,
+    };
     use crate::registry::FramePusher;
 
     /// A canned `FramePusher` for the core's spawn (the `RecordingPusher`
@@ -646,6 +758,561 @@ mod tests {
         assert!(
             frame_rx.try_recv().is_err(),
             "a reaped executor receives no frame"
+        );
+        Ok(())
+    }
+
+    // --- The routing policy: `Core::deliver` (spec #705) ---
+    //
+    // The routing behavior now drives `Core::deliver` directly: a `Core` is
+    // constructed, its maps are populated with test channels (the executor's
+    // frame channel via `install_executor_for_test`, the shop streams via
+    // `subscribe_shop`), `deliver` is called with a [`DeliveryContext`] and a
+    // `Summary`, and the assertions check which channels received which
+    // frames — external behavior, not which internal helper was called. The
+    // fixtures are the executor module's (widened to `pub(crate)`), imported
+    // here — not copied.
+
+    /// A [`DeliveryContext`] for the routing tests.
+    fn context(
+        user_id: UserId,
+        shop: Option<ShopId>,
+        part_owner: Option<UserId>,
+    ) -> DeliveryContext {
+        DeliveryContext {
+            user_id,
+            shop,
+            part_owner,
+        }
+    }
+
+    /// A user context (`shop == None`) delivers to the acting user's personal
+    /// stream — and nothing else.
+    #[tokio::test]
+    async fn deliver_user_context_to_personal_stream() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let user_id = UserId::from(1);
+        let mut acting_rx = core
+            .install_executor_for_test(user_id, ExecutorStatus::Running)
+            .await;
+        let summary = summary_owned_by(user_id);
+
+        core.deliver(context(user_id, None, None), summary.clone())
+            .await;
+
+        let got = acting_rx
+            .try_recv()
+            .expect("the acting user's personal stream gets the frame");
+        assert_eq!(got, summary);
+        Ok(())
+    }
+
+    /// A shop context delivers to the shop stream.
+    #[tokio::test]
+    async fn deliver_shop_context_to_shop_stream() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let shop_id = ShopId::from(7);
+        let mut shop_rx = core.subscribe_shop(shop_id, UserId::from(1)).await;
+        let summary = summary_owned_by(UserId::from(2));
+
+        core.deliver(
+            context(UserId::from(1), Some(shop_id), Some(UserId::from(2))),
+            summary.clone(),
+        )
+        .await;
+
+        let got = shop_rx
+            .try_recv()
+            .expect("the shop stream receives the frame");
+        assert_eq!(got, summary);
+        Ok(())
+    }
+
+    /// A shop context delivers to the part owner's personal stream.
+    #[tokio::test]
+    async fn deliver_shop_context_to_part_owner() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let shop_id = ShopId::from(7);
+        let part_owner = UserId::from(2);
+        let mut owner_rx = core
+            .install_executor_for_test(part_owner, ExecutorStatus::Running)
+            .await;
+        let summary = summary_owned_by(part_owner);
+
+        core.deliver(
+            context(UserId::from(1), Some(shop_id), Some(part_owner)),
+            summary.clone(),
+        )
+        .await;
+
+        let got = owner_rx
+            .try_recv()
+            .expect("the part owner's personal stream receives the frame");
+        assert_eq!(got, summary);
+        Ok(())
+    }
+
+    /// A shop context does NOT deliver to the shop owner's personal stream
+    /// when the shop owner is not the part owner — the frame goes only to the
+    /// shop stream and the part owner. Here the acting user (1) is the shop
+    /// owner, and the part owner is (2).
+    #[tokio::test]
+    async fn deliver_shop_context_not_to_shop_owner() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let shop_id = ShopId::from(7);
+        let shop_owner = UserId::from(1);
+        let part_owner = UserId::from(2);
+        let mut shop_owner_rx = core
+            .install_executor_for_test(shop_owner, ExecutorStatus::Running)
+            .await;
+        let mut part_owner_rx = core
+            .install_executor_for_test(part_owner, ExecutorStatus::Running)
+            .await;
+        let summary = summary_owned_by(part_owner);
+
+        core.deliver(
+            context(shop_owner, Some(shop_id), Some(part_owner)),
+            summary.clone(),
+        )
+        .await;
+
+        // The shop owner's personal stream gets nothing.
+        assert!(
+            shop_owner_rx.try_recv().is_err(),
+            "the shop owner's personal stream must not receive the frame"
+        );
+        // The part owner's personal stream gets the frame.
+        let got = part_owner_rx
+            .try_recv()
+            .expect("the part owner's personal stream receives the frame");
+        assert_eq!(got, summary);
+        Ok(())
+    }
+
+    /// A shop context delivers to the shop owner's personal stream when the
+    /// shop owner IS the part owner.
+    #[tokio::test]
+    async fn deliver_shop_context_to_shop_owner_when_part_owner() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let shop_id = ShopId::from(7);
+        let shop_owner = UserId::from(2);
+        let mut shop_owner_rx = core
+            .install_executor_for_test(shop_owner, ExecutorStatus::Running)
+            .await;
+        let summary = summary_owned_by(shop_owner); // part owner == shop owner
+
+        core.deliver(
+            context(UserId::from(1), Some(shop_id), Some(shop_owner)),
+            summary.clone(),
+        )
+        .await;
+
+        let got = shop_owner_rx
+            .try_recv()
+            .expect("the shop owner (the part owner) receives the frame");
+        assert_eq!(got, summary);
+        Ok(())
+    }
+
+    /// The common shop-context shape: a service operation produces a summary
+    /// with a service (referencing a part) but no `Part` entity. The part
+    /// owner is resolved by the loop and carried in the context — the summary
+    /// alone does not carry it.
+    #[tokio::test]
+    async fn deliver_shop_context_service_summary_to_part_owner() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let shop_id = ShopId::from(7);
+        let part_owner = UserId::from(2);
+        let mut shop_rx = core.subscribe_shop(shop_id, UserId::from(1)).await;
+        let mut owner_rx = core
+            .install_executor_for_test(part_owner, ExecutorStatus::Running)
+            .await;
+        let summary = summary_with_service();
+
+        core.deliver(
+            context(UserId::from(1), Some(shop_id), Some(part_owner)),
+            summary.clone(),
+        )
+        .await;
+
+        let got_owner = owner_rx
+            .try_recv()
+            .expect("the part owner's personal stream receives the frame");
+        assert_eq!(got_owner, summary);
+        let got_shop = shop_rx
+            .try_recv()
+            .expect("the shop stream receives the frame");
+        assert_eq!(got_shop, summary);
+        Ok(())
+    }
+
+    /// A user-context write that produces a notification for a different user
+    /// pushes it to that user's personal stream (the acting user's own
+    /// notifications ride the normal frame).
+    #[tokio::test]
+    async fn deliver_cross_recipient_notification_to_user_stream() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let acting_user = UserId::from(1);
+        let recipient = UserId::from(3);
+        let mut acting_rx = core
+            .install_executor_for_test(acting_user, ExecutorStatus::Running)
+            .await;
+        let mut recipient_rx = core
+            .install_executor_for_test(recipient, ExecutorStatus::Running)
+            .await;
+        let summary = summary_with_notification(recipient);
+
+        core.deliver(context(acting_user, None, None), summary.clone())
+            .await;
+
+        // The acting user's normal frame carries the full summary.
+        let got = acting_rx
+            .try_recv()
+            .expect("the acting user gets the frame");
+        assert_eq!(got, summary);
+        // The cross-recipient notification reaches the recipient's stream.
+        let got_recipient = recipient_rx
+            .try_recv()
+            .expect("the recipient's personal stream receives the notification");
+        assert_eq!(got_recipient, summary);
+        Ok(())
+    }
+
+    /// A user-context write (the acting session has no shop) whose summary
+    /// carries a part registered in a shop pushes the frame to that shop's
+    /// stream (issue #687): the shop owner's open shop view listens on the
+    /// shop stream, and the session's context is the actor's, not the shop's.
+    #[tokio::test]
+    async fn deliver_cross_recipient_notification_to_shop_stream_without_shop_context()
+    -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let acting_user = UserId::from(1);
+        let shop_owner = UserId::from(2);
+        let shop_id = ShopId::from(7);
+        let mut shop_rx = core.subscribe_shop(shop_id, shop_owner).await;
+        let mut part = part_owned_by(acting_user);
+        part.shop = Some(shop_id);
+        let mut summary = Summary::default();
+        summary.parts.upsert(part);
+        summary.shops.upsert(shop_owned_by(shop_owner));
+        let notification = notification_part_registered(shop_owner);
+        summary.notifications.upsert(notification.clone());
+
+        core.deliver(context(acting_user, None, None), summary.clone())
+            .await;
+
+        // The shop stream receives a frame carrying the notification (the shop
+        // the operation touched is routed by the summary's content).
+        let got = shop_rx
+            .try_recv()
+            .expect("the shop stream receives the frame");
+        assert!(
+            got.notifications
+                .live()
+                .iter()
+                .any(|n| n.id == notification.id),
+            "the shop stream's frame carries the cross-recipient notification, got {got:?}"
+        );
+        Ok(())
+    }
+
+    /// A shop-context write whose summary carries the session's own shop does
+    /// not push a duplicate frame to the shop stream (the session's shop is
+    /// already delivered by the normal routing; the summary's shop is
+    /// skipped).
+    #[tokio::test]
+    async fn deliver_shop_context_no_duplicate_shop_push() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let shop_id = ShopId::from(7);
+        let part_owner = UserId::from(2);
+        let mut shop_rx = core.subscribe_shop(shop_id, UserId::from(1)).await;
+        let mut summary = summary_owned_by(part_owner);
+        summary.shops.upsert(shop_owned_by(UserId::from(1)));
+
+        core.deliver(
+            context(UserId::from(1), Some(shop_id), Some(part_owner)),
+            summary.clone(),
+        )
+        .await;
+
+        let got = shop_rx
+            .try_recv()
+            .expect("the shop stream receives the frame once");
+        assert_eq!(got, summary);
+        assert!(
+            shop_rx.try_recv().is_err(),
+            "the shop stream receives the frame exactly once, no duplicate"
+        );
+        Ok(())
+    }
+
+    /// A user-context write that produces a notification for the acting user
+    /// does NOT push it again to the acting user's personal stream (it already
+    /// rides the normal frame).
+    #[tokio::test]
+    async fn deliver_no_cross_recipient_for_acting_user() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let acting_user = UserId::from(1);
+        let mut acting_rx = core
+            .install_executor_for_test(acting_user, ExecutorStatus::Running)
+            .await;
+        let summary = summary_with_notification(acting_user);
+
+        core.deliver(context(acting_user, None, None), summary.clone())
+            .await;
+
+        // The acting user's personal stream gets exactly one frame (the normal
+        // frame), no duplicate cross-recipient push.
+        let got = acting_rx
+            .try_recv()
+            .expect("the acting user gets the frame");
+        assert_eq!(got, summary);
+        assert!(
+            acting_rx.try_recv().is_err(),
+            "no duplicate push to the acting user's own notification"
+        );
+        Ok(())
+    }
+
+    /// A shop-context write that produces a notification for the part owner
+    /// does NOT push it again to the part owner's personal stream (it already
+    /// rides the normal frame which is pushed to the part owner's personal
+    /// stream).
+    #[tokio::test]
+    async fn deliver_no_cross_recipient_for_part_owner_in_shop_context() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let acting_user = UserId::from(1);
+        let part_owner = UserId::from(2);
+        let shop_id = ShopId::from(7);
+        let mut shop_rx = core.subscribe_shop(shop_id, acting_user).await;
+        let mut owner_rx = core
+            .install_executor_for_test(part_owner, ExecutorStatus::Running)
+            .await;
+        let summary = summary_with_notification(part_owner);
+
+        core.deliver(
+            context(acting_user, Some(shop_id), Some(part_owner)),
+            summary.clone(),
+        )
+        .await;
+
+        // The part owner's personal stream gets exactly one frame (the normal
+        // shop-context push), no duplicate cross-recipient push.
+        let got_owner = owner_rx
+            .try_recv()
+            .expect("the part owner receives the frame");
+        assert_eq!(got_owner, summary);
+        assert!(
+            owner_rx.try_recv().is_err(),
+            "exactly one push to the part owner, no duplicate"
+        );
+        // The shop stream gets the frame.
+        let got_shop = shop_rx
+            .try_recv()
+            .expect("the shop stream receives the frame");
+        assert_eq!(got_shop, summary);
+        Ok(())
+    }
+
+    /// A shop-context write that produces a notification for a third party
+    /// (neither the acting user nor the part owner) pushes it to that user's
+    /// personal stream and to the shop stream (so a recipient "in" the shop
+    /// receives it).
+    #[tokio::test]
+    async fn deliver_cross_recipient_third_party_in_shop_context() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let acting_user = UserId::from(1);
+        let part_owner = UserId::from(2);
+        let third_party = UserId::from(5);
+        let shop_id = ShopId::from(7);
+        let mut shop_rx = core.subscribe_shop(shop_id, acting_user).await;
+        let mut third_rx = core
+            .install_executor_for_test(third_party, ExecutorStatus::Running)
+            .await;
+        let summary = summary_with_notification(third_party);
+
+        core.deliver(
+            context(acting_user, Some(shop_id), Some(part_owner)),
+            summary.clone(),
+        )
+        .await;
+
+        // The third party's personal stream receives the notification.
+        let got_third = third_rx
+            .try_recv()
+            .expect("the third party's personal stream receives the notification");
+        assert_eq!(got_third, summary);
+        // The shop stream receives a frame carrying the notification.
+        let got_shop = shop_rx
+            .try_recv()
+            .expect("the shop stream receives the frame");
+        assert!(
+            got_shop
+                .notifications
+                .live()
+                .iter()
+                .any(|n| n.recipient == third_party),
+            "the shop stream's frame carries the cross-recipient notification, got {got_shop:?}"
+        );
+        Ok(())
+    }
+
+    /// A shop-context read of a transient notification (a dismiss: tombstone,
+    /// no live entry) reaches the acting user's personal stream and fans out
+    /// to their open shop streams (the ones other than the session's shop): a
+    /// dismiss in the shop tab must clear the private tab and the other shop
+    /// tabs (follow-up to issue #687).
+    #[tokio::test]
+    async fn deliver_shop_context_transient_read_to_personal_stream() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let acting_user = UserId::from(1);
+        let session_shop = ShopId::from(7);
+        let other_shop = ShopId::from(8);
+        let mut acting_rx = core
+            .install_executor_for_test(acting_user, ExecutorStatus::Running)
+            .await;
+        let mut other_shop_rx = core.subscribe_shop(other_shop, acting_user).await;
+        let mut summary = Summary::default();
+        summary
+            .notifications
+            .tombstone(NotificationId::from(Uuid::now_v7()));
+
+        core.deliver(
+            context(acting_user, Some(session_shop), None),
+            summary.clone(),
+        )
+        .await;
+
+        // The acting user's personal stream gets the read frame (the
+        // shop-context catch-up).
+        let got = acting_rx
+            .try_recv()
+            .expect("the personal stream gets the read frame");
+        assert_eq!(got, summary);
+        // The fan-out reaches the acting user's OTHER shop stream (the
+        // session's shop is skipped — it already got the frame).
+        let got_other = other_shop_rx
+            .try_recv()
+            .expect("the fan-out reaches the acting user's other shop stream");
+        assert_eq!(got_other, summary);
+        Ok(())
+    }
+
+    /// A shop-context read of a persistent notification (a dismiss: `seen`
+    /// upsert) reaches the acting user's personal stream and fans out to their
+    /// open shop streams (the ones other than the session's shop).
+    #[tokio::test]
+    async fn deliver_shop_context_persistent_read_to_personal_stream() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let acting_user = UserId::from(1);
+        let session_shop = ShopId::from(7);
+        let other_shop = ShopId::from(8);
+        let mut acting_rx = core
+            .install_executor_for_test(acting_user, ExecutorStatus::Running)
+            .await;
+        let mut other_shop_rx = core.subscribe_shop(other_shop, acting_user).await;
+        let summary = summary_with_notification(acting_user);
+
+        core.deliver(
+            context(acting_user, Some(session_shop), None),
+            summary.clone(),
+        )
+        .await;
+
+        let got = acting_rx
+            .try_recv()
+            .expect("the personal stream gets the read frame");
+        assert_eq!(got, summary);
+        let got_other = other_shop_rx
+            .try_recv()
+            .expect("the fan-out reaches the acting user's other shop stream");
+        assert_eq!(got_other, summary);
+        Ok(())
+    }
+
+    /// A user-context read (a dismiss in the private tab) fans the frame out
+    /// to the acting user's open shop streams: a dismiss in the private tab
+    /// must clear the shop tabs (follow-up to issue #687). The personal stream
+    /// gets the frame via the normal user-context delivery.
+    #[tokio::test]
+    async fn deliver_user_context_read_fans_out_to_shop_streams() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let acting_user = UserId::from(1);
+        let shop_id = ShopId::from(8);
+        let mut acting_rx = core
+            .install_executor_for_test(acting_user, ExecutorStatus::Running)
+            .await;
+        let mut shop_rx = core.subscribe_shop(shop_id, acting_user).await;
+        let summary = summary_with_notification(acting_user);
+
+        core.deliver(context(acting_user, None, None), summary.clone())
+            .await;
+
+        let got = acting_rx
+            .try_recv()
+            .expect("the personal stream gets the frame");
+        assert_eq!(got, summary);
+        let got_shop = shop_rx
+            .try_recv()
+            .expect("the fan-out reaches the acting user's shop stream");
+        assert_eq!(got_shop, summary);
+        Ok(())
+    }
+
+    /// A user-context write whose summary carries a shop (issue #687) fans the
+    /// frame out to the notification recipient's open shop streams (follow-up
+    /// to issue #687): the recipient's shop views show all their
+    /// notifications, like the hydration snapshot — a new notification must
+    /// appear live in their other open shop tabs, not only on the next
+    /// hydration. The fan-out frame carries only the notifications.
+    #[tokio::test]
+    async fn deliver_creation_fans_out_to_recipient_shop_streams() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let acting_user = UserId::from(1);
+        let shop_owner = UserId::from(2);
+        let registered_shop = ShopId::from(7);
+        let other_shop = ShopId::from(8);
+        let mut shop_owner_stream_rx = core.subscribe_shop(other_shop, shop_owner).await;
+        let mut part = part_owned_by(acting_user);
+        part.shop = Some(registered_shop);
+        let mut summary = Summary::default();
+        summary.parts.upsert(part);
+        summary.shops.upsert(shop_owned_by(shop_owner));
+        let notification = notification_part_registered(shop_owner);
+        summary.notifications.upsert(notification.clone());
+        // The fan-out frame carries only the notification (the shop-scoped
+        // snapshot filters parts to the current shop, so a full summary would
+        // pollute the recipient's other tabs' parts maps).
+        let mut expected = Summary::default();
+        expected.notifications.upsert(notification);
+
+        core.deliver(context(acting_user, None, None), summary.clone())
+            .await;
+
+        // The fan-out reaches the recipient's other shop stream with a
+        // notifications-only frame.
+        let got = shop_owner_stream_rx
+            .try_recv()
+            .expect("the fan-out reaches the recipient's shop stream");
+        assert_eq!(got, expected);
+        Ok(())
+    }
+
+    /// An empty `Summary` pushes nothing, to any stream (spec §4.5).
+    #[tokio::test]
+    async fn deliver_empty_summary_is_a_noop() -> TbResult<()> {
+        let core = Core::new(Duration::from_secs(60));
+        let user_id = UserId::from(1);
+        let mut acting_rx = core
+            .install_executor_for_test(user_id, ExecutorStatus::Running)
+            .await;
+
+        core.deliver(context(user_id, None, None), Summary::default())
+            .await;
+
+        assert!(
+            acting_rx.try_recv().is_err(),
+            "an empty summary pushes nothing"
         );
         Ok(())
     }
