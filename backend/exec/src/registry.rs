@@ -23,7 +23,7 @@
 //!
 //! The registry **owns the [`TxnSource`]** (injected at construction — the
 //! only non-axum holder of the seam under the zero-reference bar) and holds
-//! the lifecycle core ([`core`]) — the deep "how does an executor stays
+//! the lifecycle core ([`core`]) — the deep "how does an executor stay
 //! alive" machinery: the per-user executor map and the per-shop frame-channel
 //! map, the spawn-on-first-demand / reap-when-no-stream / respawn logic, the
 //! wake signal, the stop-all teardown, the shop-stream lifecycle, and the

@@ -348,7 +348,7 @@ impl Core {
 
     /// Lock the core, ensure the user's executor is live (spawning it if it
     /// is absent or settled), and pull one field from it: the shared shape
-    /// of `subscribe`, `wake`, `events`, and `write`. The lock is dropped
+    /// of `subscribe`, `events`, and `write`. The lock is dropped
     /// when this returns, before the caller's next await. The source and the
     /// `Box<dyn FramePusher>` the loop routes committed `Summary`s through
     /// are the facade's (the core is source-agnostic and does not own a
