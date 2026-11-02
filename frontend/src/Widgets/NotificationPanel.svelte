@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Badge, Button } from "flowbite-svelte";
+  import { Badge } from "flowbite-svelte";
   import { CloseOutline } from "flowbite-svelte-icons";
   import {
     history,
@@ -10,6 +10,7 @@
   import type { Notification } from "../lib/notification.svelte";
   import { parts } from "../lib/part";
   import * as m from "../../paraglide/messages";
+  import XsButton from "./XsButton.svelte";
 
   function title(n: Notification): string {
     switch (n.kind) {
@@ -79,9 +80,9 @@
     {/if}
   </h3>
   {#if unread() > 0}
-    <Button size="xs" color="blue" onclick={readAll}>
+    <XsButton onclick={readAll}>
       {m.notif_panel_read_all()}
-    </Button>
+    </XsButton>
   {/if}
 </div>
 <div class="max-h-96 overflow-y-auto">
