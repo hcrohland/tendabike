@@ -34,13 +34,50 @@ if (!HTMLDialogElement.prototype.close) {
   };
 }
 
+if (!HTMLElement.prototype.showPopover) {
+  HTMLElement.prototype.showPopover = function () {
+    this.dispatchEvent(
+      Object.assign(new Event("toggle", { bubbles: true }), {
+        newState: "open",
+      }),
+    );
+  };
+}
+if (!HTMLElement.prototype.hidePopover) {
+  HTMLElement.prototype.hidePopover = function () {
+    this.dispatchEvent(
+      Object.assign(new Event("toggle", { bubbles: true }), {
+        newState: "closed",
+      }),
+    );
+  };
+}
+
 if (!Element.prototype.animate) {
-  Element.prototype.animate = function () {
-    return {
-      finished: Promise.resolve(),
+  // Svelte 5 transitions run on the Web Animations API and complete via
+  // `animation.onfinish`, so the stub must invoke it (on a timer, so fake
+  // timers can drive it) instead of leaving it dangling.
+  Element.prototype.animate = function (
+    _keyframes?: Keyframe[] | PropertyIndexedKeyframes | null,
+    options?: number | KeyframeAnimationOptions,
+  ) {
+    const duration =
+      typeof options === "number"
+        ? options
+        : typeof options?.duration === "number"
+          ? options.duration
+          : 0;
+    const animation = {
+      finished: new Promise((resolve) => {
+        setTimeout(resolve, duration);
+      }),
       cancel: () => {},
-      onfinish: null,
-    } as unknown as Animation;
+      onfinish: null as null | (() => void),
+    };
+    setTimeout(() => {
+      animation.onfinish?.();
+    }, duration);
+    return animation as unknown as Animation;
   };
 }
 
