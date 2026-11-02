@@ -407,7 +407,7 @@ mockall::mock! {
 /// per `run_request` (one loop-owned transaction), so the mock is taken out
 /// of the `Mutex` on that call.
 #[derive(Clone)]
-struct FakeSource {
+pub(crate) struct FakeSource {
     begin_fails: bool,
     /// The conns `begin` hands out, in order (one per call): most tests
     /// install one (one loop-owned transaction per `run_request`); the
@@ -418,7 +418,7 @@ struct FakeSource {
 impl FakeSource {
     /// A source whose `begin` fails with a `DatabaseFailure` (the DB-down
     /// corner): no store is ever handed out.
-    fn failing() -> Self {
+    pub(crate) fn failing() -> Self {
         Self {
             begin_fails: true,
             conns: Arc::new(Mutex::new(VecDeque::new())),
@@ -873,7 +873,7 @@ fn frame_push_skips_empty_summaries() {
 /// shares the recording (the `Arc`), so a test keeps an observation handle
 /// after moving the pusher into the context.
 #[derive(Default, Clone)]
-struct RecordingPusher {
+pub(crate) struct RecordingPusher {
     calls: std::sync::Arc<std::sync::Mutex<Vec<PushCall>>>,
 }
 
@@ -890,7 +890,7 @@ enum PushCall {
 }
 
 impl RecordingPusher {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
@@ -1497,7 +1497,7 @@ fn shop_source(owner: UserId) -> FakeSource {
 }
 
 /// A non-empty `Summary` (a frame the shop/user streams should deliver).
-fn non_empty_summary() -> Summary {
+pub(crate) fn non_empty_summary() -> Summary {
     let mut summary = Summary::default();
     summary.usages.upsert(Usage::default());
     summary
@@ -1553,24 +1553,6 @@ async fn shop_stream_lifecycle_create_receive_drop() {
         !registry.shop_open(shop_id).await,
         "the channel is dropped when the last receiver disconnects"
     );
-}
-
-#[tokio::test]
-async fn push_to_shop_is_a_noop_without_a_subscriber() {
-    let registry = Registry::new(shop_source(UserId::from(1)), Duration::from_secs(60));
-    let shop_id = ShopId::from(7);
-
-    // No subscriber: the push is dropped (no panic, no receiver to send to).
-    registry.push_to_shop(shop_id, non_empty_summary()).await;
-
-    // And after a subscriber disconnects, the push is dropped too (the
-    // reaped channel has no receiver, so the send is a no-op).
-    let rx = registry
-        .subscribe_shop(UserId::from(1), shop_id)
-        .await
-        .expect("the owner can subscribe");
-    drop(rx);
-    registry.push_to_shop(shop_id, non_empty_summary()).await;
 }
 
 /// `push_to_recipient_shops` delivers the frame to every open shop stream
@@ -1667,26 +1649,6 @@ async fn push_to_recipient_shops_is_a_noop_for_a_foreign_owner() {
         rx.try_recv().is_err(),
         "a push for a non-owner never reaches the owner's stream"
     );
-}
-
-#[tokio::test]
-async fn push_to_user_delivers_to_a_running_executor() {
-    // No store is involved: `push_to_user` feeds the user's executor frame
-    // channel, so the source's mock is never `begin`-ed.
-    let registry = Registry::new(FakeSource::failing(), Duration::from_secs(60));
-    let mut frame_rx = registry
-        .install_executor_for_test(UserId::from(1), ExecutorStatus::Running)
-        .await;
-
-    let summary = non_empty_summary();
-    registry
-        .push_to_user(UserId::from(1), summary.clone())
-        .await;
-
-    let got = frame_rx
-        .try_recv()
-        .expect("the running executor's frame channel receives the frame");
-    assert_eq!(got, summary);
 }
 
 #[tokio::test]
