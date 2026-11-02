@@ -11,7 +11,7 @@
 
 ## Architecture
 
-- **UI**: Tailwind CSS v4 + Flowbite / flowbite-svelte components.
+- **UI**: Tailwind CSS v4 + flowbite-svelte (components) + flowbite-svelte-icons (icons). New UI comes from flowbite-svelte components — raw Svelte + Tailwind only where the library has no component.
 - **Modals**: each modal owns its open state in module scope and exports a start function that opens it; [`src/Widgets/Actions.svelte`](src/Widgets/Actions.svelte) mounts every modal once, globally, so any page can trigger it. Callers import the start function from the modal module directly — there is no shared actions registry.
 - **Routing**: `svelte-spa-router`; route definitions in [`src/App.svelte`](src/App.svelte).
 - **i18n**: `@inlang/paraglide-js` — edit source messages in `messages/{locale}.json`; `paraglide/` is compiled output.
