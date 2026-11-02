@@ -925,7 +925,7 @@ impl FramePusher for RecordingPusher {
 }
 
 /// A part owned by `owner` (the routing's `push_to_user` target).
-fn part_owned_by(owner: UserId) -> Part {
+pub(crate) fn part_owned_by(owner: UserId) -> Part {
     Part {
         id: PartId::from(1),
         owner,
@@ -974,7 +974,7 @@ fn user_record(id: UserId) -> User {
 }
 
 /// A canned `Shop` owned by `owner` (the `subscribe_shop` ownership read).
-fn shop_owned_by(owner: UserId) -> Shop {
+pub(crate) fn shop_owned_by(owner: UserId) -> Shop {
     Shop {
         id: ShopId::from(7),
         owner,
@@ -987,7 +987,7 @@ fn shop_owned_by(owner: UserId) -> Shop {
 
 /// A non-empty `Summary` with a single part owned by `owner`: the frame a
 /// shop-context write would deliver.
-fn summary_owned_by(owner: UserId) -> Summary {
+pub(crate) fn summary_owned_by(owner: UserId) -> Summary {
     let mut summary = Summary::default();
     summary.parts.upsert(part_owned_by(owner));
     summary
@@ -997,7 +997,7 @@ fn summary_owned_by(owner: UserId) -> Summary {
 /// summary — the common shape for service operations): the frame a
 /// shop-context service write would deliver. The part owner is not derivable
 /// from this summary; the executor resolves it via the store.
-fn summary_with_service() -> Summary {
+pub(crate) fn summary_with_service() -> Summary {
     let service = Service {
         id: ServiceId::default(),
         part_id: PartId::from(1),
@@ -1879,7 +1879,7 @@ async fn deliver_shop_context_service_summary_to_part_owner() {
 // --- Cross-recipient notification routing (issue #677) ---
 
 /// A `Summary` carrying a notification for `recipient`.
-fn summary_with_notification(recipient: UserId) -> Summary {
+pub(crate) fn summary_with_notification(recipient: UserId) -> Summary {
     let notification = Notification {
         id: NotificationId::from(Uuid::now_v7()),
         recipient,
