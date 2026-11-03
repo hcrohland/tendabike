@@ -14,7 +14,6 @@
 ## Domain
 
 - Each entity lives in both halves: `backend/domain/src/entities/<name>.rs` and `frontend/src/lib/<name>.ts`.
-- ADRs record what is true now. Live ADRs live at `docs/adr/` (indexed by `docs/adr/README.md`); superseded and rejected ones move to `docs/adr/archive/` with a status header. When a change supersedes or rejects a decision, move its ADR to `docs/adr/archive/` in the same commit; when a refactor changes a concept named in a live ADR or a domain doc, update that doc in the same commit.
 
 ## Commit rules
 
