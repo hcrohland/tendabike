@@ -6,6 +6,8 @@ Issues and specs for this repo live as GitHub issues. Use the GitHub MCP server 
 
 Repo-specific policies and API gotchas — for which tool takes which params, see the MCP tool schemas.
 
+- **Param naming**: most MCP params are camelCase (`pullNumber`), but `issue_number` and `merge_method` are snake_case. A wrong-name call fails silently (the param is ignored), producing a misleading downstream error.
+
 - **Feature label**: one `feature:<slug>` label per feature.
 - **Non-feature issues** (bugs, flaky tests, chores): apply the triage label only — no `feature:` label.
 - **Sub-issue id**: `sub_issue_write` (`add`) takes the child's numeric **database id** (the `id` field, not its `#number` or `node_id`), which full `search_issues` / `get_sub_issues` entries carry.
