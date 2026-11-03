@@ -10,7 +10,23 @@
   import { stateValues } from "../lib/mapable.svelte";
   import ShopSubscriptions from "./ShopSubscriptions.svelte";
 
+  /// The /shops page accepts a tab selector in the route (a notification can
+  /// deep-link to the correct tab); it defaults to the subscriptions tab when
+  /// none is supplied (or the selector is not a known tab).
+  let { query }: { query?: { tab?: string } } = $props();
+
+  const VALID_TABS = ["my-subscriptions", "my-shops"];
+
   let activeTab = $state<string>("my-subscriptions");
+
+  // Always set the tab (the valid selector, else the default): the Tabs
+  // component applies its selection on a reactive write, and this also
+  // re-syncs when the route's tab selector changes (e.g. a notification
+  // navigates to /shops?tab=... while the page is already mounted).
+  $effect(() => {
+    const tab = query?.tab;
+    activeTab = tab && VALID_TABS.includes(tab) ? tab : "my-subscriptions";
+  });
 
   // Get all user's shops from the store (owned + subscribed)
   let myShops = $derived(

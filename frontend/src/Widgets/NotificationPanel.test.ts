@@ -1,9 +1,27 @@
-import { render, screen } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { notifications } from "../lib/notification.svelte";
 import { Part, parts } from "../lib/part";
+import { shops, setShop, Shop } from "../lib/shop";
+import { getShop } from "../lib/shop.svelte";
 import { setUser } from "../lib/user";
+import { resp } from "../test/helpers";
 import NotificationPanel from "./NotificationPanel.svelte";
+
+let fetchMock: ReturnType<typeof vi.fn>;
+
+beforeEach(() => {
+  fetchMock = vi
+    .fn()
+    .mockImplementation(() => Promise.resolve(resp(null, 204, true)));
+  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("location", { hash: "" });
+  setUser(user);
+  notifications.setMap([]);
+  parts.setMap([]);
+  shops.setMap([]);
+  setShop(undefined);
+});
 
 const user = {
   id: 1,
@@ -29,7 +47,7 @@ function seedNotification(overrides: Partial<any> = {}) {
   ]);
 }
 
-function seedPart(id: number, name: string) {
+function seedPart(id: number, name: string, shop: number | null = null) {
   parts.setMap([
     new Part({
       id,
@@ -42,17 +60,25 @@ function seedPart(id: number, name: string) {
       last_used: "2024-01-01T00:00:00Z",
       disposed_at: null,
       usage: "u1",
-      shop: null,
+      shop,
+    }),
+  ]);
+}
+
+function seedShop(id: number, owner: number = 1) {
+  shops.setMap([
+    new Shop({
+      id,
+      owner,
+      name: "Shop " + id,
+      description: "",
+      auto_approve: false,
+      created_at: "2023-01-01T00:00:00Z",
     }),
   ]);
 }
 
 describe("NotificationPanel body precedence", () => {
-  beforeEach(() => {
-    setUser(user);
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(undefined));
-  });
-
   it("shows the notification's message in the body when one is present", () => {
     seedNotification({ message: "Please let me subscribe to your shop!" });
     render(NotificationPanel, { close: () => {} });
@@ -91,5 +117,94 @@ describe("NotificationPanel body precedence", () => {
       screen.getByText("Your wheel was registered to a shop"),
     ).toBeTruthy();
     expect(screen.queryByText("Wheel")).toBeNull();
+  });
+});
+
+describe("NotificationPanel navigation", () => {
+  it("a subscription request navigates to the shops page on the shop-owner tab and marks it read", async () => {
+    seedNotification({ kind: "sub_request" });
+    render(NotificationPanel, { close: () => {} });
+    fireEvent.click(screen.getByText("Shop subscription request"));
+    expect(globalThis.location.hash).toBe("#/shops?tab=my-shops");
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/notification/n1/read",
+        expect.anything(),
+      );
+    });
+  });
+
+  it("a subscription response navigates to the shops page on the my-subscriptions tab", () => {
+    seedNotification({ kind: "sub_response" });
+    render(NotificationPanel, { close: () => {} });
+    fireEvent.click(screen.getByText("Shop subscription response"));
+    expect(globalThis.location.hash).toBe("#/shops?tab=my-subscriptions");
+  });
+
+  it("a subscription cancelled entry navigates to the shops page on the shop-owner tab", () => {
+    seedNotification({ kind: "sub_cancelled" });
+    render(NotificationPanel, { close: () => {} });
+    fireEvent.click(screen.getByText("Subscription cancelled"));
+    expect(globalThis.location.hash).toBe("#/shops?tab=my-shops");
+  });
+
+  it("a part registered entry opens the part in its shop (activates the shop, then the part route)", () => {
+    seedShop(10);
+    seedPart(5, "Wheel", 10);
+    seedNotification({
+      kind: "part_registered",
+      subject: { type: "part", id: 5 },
+    });
+    render(NotificationPanel, { close: () => {} });
+    fireEvent.click(screen.getByText("Part registered"));
+    expect(globalThis.location.hash).toBe("#/part/5");
+    expect(getShop()?.id).toBe(10);
+  });
+
+  it("a part registered entry does not navigate when the part is not in local state", () => {
+    seedNotification({
+      kind: "part_registered",
+      subject: { type: "part", id: 99 },
+    });
+    render(NotificationPanel, { close: () => {} });
+    fireEvent.click(screen.getByText("Part registered"));
+    expect(globalThis.location.hash).toBe("");
+  });
+
+  it("a part registered entry does not navigate when its shop is not in local state", () => {
+    // The part exists and points at a shop, but that shop is not in the
+    // client's local state.
+    seedPart(5, "Wheel", 10);
+    seedNotification({
+      kind: "part_registered",
+      subject: { type: "part", id: 5 },
+    });
+    render(NotificationPanel, { close: () => {} });
+    fireEvent.click(screen.getByText("Part registered"));
+    expect(globalThis.location.hash).toBe("");
+  });
+
+  it("a part unregistered entry does not navigate (informational)", () => {
+    seedPart(5, "Wheel", null);
+    seedNotification({
+      kind: "part_unregistered",
+      subject: { type: "part", id: 5 },
+    });
+    render(NotificationPanel, { close: () => {} });
+    fireEvent.click(screen.getByText("Part unregistered"));
+    expect(globalThis.location.hash).toBe("");
+  });
+
+  it("the dismiss control dismisses without triggering navigation", async () => {
+    seedNotification({ kind: "sub_request" });
+    render(NotificationPanel, { close: () => {} });
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(globalThis.location.hash).toBe("");
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/notification/n1/read",
+        expect.anything(),
+      );
+    });
   });
 });

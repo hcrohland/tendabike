@@ -9,6 +9,7 @@
   } from "../lib/notification.svelte";
   import type { Notification } from "../lib/notification.svelte";
   import { parts } from "../lib/part";
+  import { shops, setShop, type Shop } from "../lib/shop";
   import * as m from "../../paraglide/messages";
   import XsButton from "./XsButton.svelte";
 
@@ -77,6 +78,47 @@
     const days = Math.floor(hours / 24);
     return days + "d";
   }
+
+  /// The navigation target of a notification, derived from its kind:
+  /// subscription kinds land on /shops (the shop-owner tab for the
+  /// shop-owner kinds, the requester tab for a response); a registered part
+  /// opens that part in its shop; an unregistered part is informational (no
+  /// target). A registered part is navigable only if both the part and its
+  /// shop are in the client's local state.
+  function targetFor(n: Notification): { route: string; shop?: Shop } | null {
+    switch (n.kind) {
+      case "sub_request":
+      case "sub_cancelled":
+        return { route: "/shops?tab=my-shops" };
+      case "sub_response":
+        return { route: "/shops?tab=my-subscriptions" };
+      case "part_registered": {
+        const subject = n.subject as { type: string; id: number } | null;
+        if (!subject || subject.type !== "part" || subject.id == null)
+          return null;
+        const part = parts[String(subject.id)];
+        if (!part) return null;
+        if (part.shop == null) return null;
+        const shop = shops[String(part.shop)];
+        if (!shop) return null;
+        return { route: "/part/" + subject.id, shop };
+      }
+      case "part_unregistered":
+      default:
+        return null;
+    }
+  }
+
+  /// Whole-row click: navigate to the subject and mark the notification read
+  /// (the same lifecycle-aware read as dismiss). A non-navigable entry does
+  /// nothing.
+  function navigate(n: Notification) {
+    const target = targetFor(n);
+    if (!target) return;
+    if (target.shop) setShop(target.shop);
+    window.location.hash = "#" + target.route;
+    dismiss(n.id);
+  }
 </script>
 
 <div class="flex items-center justify-between px-4 py-3">
@@ -104,9 +146,22 @@
     </p>
   {:else}
     {#each history() as n (n.id)}
+      {@const navigable = targetFor(n) != null}
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <div
         class="flex items-start gap-3 px-4 py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-700/50"
         class:opacity-60={n.state === "seen" && n.lifecycle === "persistent"}
+        class:cursor-pointer={navigable}
+        role={navigable ? "button" : undefined}
+        tabindex={navigable ? 0 : undefined}
+        onclick={() => navigate(n)}
+        onkeydown={(e) => {
+          if (!navigable) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            navigate(n);
+          }
+        }}
       >
         <div class="flex-1 min-w-0">
           <p
@@ -127,7 +182,10 @@
         {#if n.state === "new"}
           <button
             class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0"
-            onclick={() => dismiss(n.id)}
+            onclick={(e) => {
+              e.stopPropagation();
+              dismiss(n.id);
+            }}
             aria-label={m.notif_dismiss()}
           >
             <CloseOutline class="h-4 w-4" />
