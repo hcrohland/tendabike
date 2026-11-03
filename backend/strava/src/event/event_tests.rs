@@ -312,19 +312,19 @@ async fn get_event_not_rate_limited_returns_event() -> TbResult<()> {
 
 #[tokio::test]
 async fn process_no_events() -> TbResult<()> {
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     // An empty queue: nothing to process.
     store
         .expect_strava_event_get_next_for_user()
         .returning(|_user| Ok(None));
-    let summary = process(&mut session, &mut store).await?;
+    let summary = process(UserId::from(1), &mut store).await?;
     assert_eq!(summary, Summary::default());
     Ok(())
 }
 
 #[tokio::test]
 async fn process_activity_create_imports() -> TbResult<()> {
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Activity, 10, AspectType::Create, 100),
@@ -343,7 +343,7 @@ async fn process_activity_create_imports() -> TbResult<()> {
         deleted_rec.lock().unwrap().replace(id);
         Ok(())
     });
-    let summary = process(&mut session, &mut store).await?;
+    let summary = process(UserId::from(1), &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
     assert!(summary.activities.get(&ActivityId::new(10)).is_some());
     assert_eq!(
@@ -356,7 +356,7 @@ async fn process_activity_create_imports() -> TbResult<()> {
 
 #[tokio::test]
 async fn process_activity_delete_missing_ignores() -> TbResult<()> {
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Activity, 10, AspectType::Delete, 100),
@@ -366,7 +366,7 @@ async fn process_activity_delete_missing_ignores() -> TbResult<()> {
         .expect_activity_read_by_id()
         .returning(|_aid| Ok(None));
     store.expect_strava_event_delete().returning(|_id| Ok(()));
-    let summary = process(&mut session, &mut store).await?;
+    let summary = process(UserId::from(1), &mut store).await?;
     assert_eq!(summary, Summary::default());
     Ok(())
 }
@@ -377,7 +377,7 @@ async fn process_try_again_keeps_event_queued() -> TbResult<()> {
     // updated from the response headers (in production), and the next
     // get_event probe will report Limited. No Stop event is created.
     reset_rate_limiter();
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Activity, 10, AspectType::Create, 100),
@@ -385,7 +385,7 @@ async fn process_try_again_keeps_event_queued() -> TbResult<()> {
     // The 429 keeps the event queued: it is NOT deleted.
     store.expect_strava_event_delete().times(0);
     queue_error("/activities/10", Error::TryAgain("rate limit"));
-    let summary = process(&mut session, &mut store).await?;
+    let summary = process(UserId::from(1), &mut store).await?;
     assert_eq!(summary, Summary::default());
     Ok(())
 }
@@ -395,7 +395,7 @@ async fn process_activity_nontransient_drops_event() -> TbResult<()> {
     // A permanently bad activity (parse error, a 404's domain shape) is
     // dropped from the queue and logged — it is committed, so the event
     // is gone and the queue cannot wedge on it (spec #446 §4.6).
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Activity, 10, AspectType::Create, 100),
@@ -410,7 +410,7 @@ async fn process_activity_nontransient_drops_event() -> TbResult<()> {
         "/activities/10",
         Error::AnyFailure(anyhow::anyhow!("parse boom")),
     );
-    let summary = process(&mut session, &mut store).await?;
+    let summary = process(UserId::from(1), &mut store).await?;
     assert_eq!(summary, Summary::default());
     assert_eq!(
         deleted.lock().unwrap().take(),
@@ -425,7 +425,7 @@ async fn process_activity_not_auth_disables_user() -> TbResult<()> {
     // A 401 after a token refresh disables the user's Strava integration
     // and drops all their queued events (spec #446 §4.6): the data freezes
     // stale-but-consistent; no event-by-event 401s follow.
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Activity, 10, AspectType::Create, 100),
@@ -442,7 +442,7 @@ async fn process_activity_not_auth_disables_user() -> TbResult<()> {
             Ok(strava_user(UserId::from(1), 42, false))
         });
     queue_error("/activities/10", Error::NotAuth(String::from("token dead")));
-    let summary = process(&mut session, &mut store).await?;
+    let summary = process(UserId::from(1), &mut store).await?;
     assert_eq!(summary, Summary::default());
     assert_eq!(
         token_refresh.lock().unwrap().as_slice(),
@@ -454,7 +454,7 @@ async fn process_activity_not_auth_disables_user() -> TbResult<()> {
 
 #[tokio::test]
 async fn process_sync_not_auth_disables_user() -> TbResult<()> {
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Sync, 0, AspectType::Create, 0),
@@ -474,7 +474,7 @@ async fn process_sync_not_auth_disables_user() -> TbResult<()> {
         "/activities?after=0&per_page=25",
         Error::NotAuth(String::from("token dead")),
     );
-    let summary = process(&mut session, &mut store).await?;
+    let summary = process(UserId::from(1), &mut store).await?;
     assert_eq!(summary, Summary::default());
     assert_eq!(
         token_refresh.lock().unwrap().as_slice(),
@@ -486,7 +486,7 @@ async fn process_sync_not_auth_disables_user() -> TbResult<()> {
 
 #[tokio::test]
 async fn process_sync_empty_list_removes_event() -> TbResult<()> {
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Sync, 0, AspectType::Create, 0),
@@ -499,7 +499,7 @@ async fn process_sync_empty_list_removes_event() -> TbResult<()> {
         Ok(())
     });
     queue("/activities?after=0&per_page=25", "[]");
-    let summary = process(&mut session, &mut store).await?;
+    let summary = process(UserId::from(1), &mut store).await?;
     assert_eq!(summary, Summary::default());
     assert_eq!(
         deleted.lock().unwrap().take(),
@@ -511,7 +511,7 @@ async fn process_sync_empty_list_removes_event() -> TbResult<()> {
 
 #[tokio::test]
 async fn process_sync_imports_activities() -> TbResult<()> {
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Sync, 0, AspectType::Create, 0),
@@ -537,7 +537,7 @@ async fn process_sync_imports_activities() -> TbResult<()> {
             *cursor_rec.lock().unwrap() = e_time;
             Ok(())
         });
-    let summary = process(&mut session, &mut store).await?;
+    let summary = process(UserId::from(1), &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
     assert_eq!(
         *cursor.lock().unwrap(),
@@ -554,7 +554,7 @@ async fn process_sync_bad_activity_skips_and_advances_cursor() -> TbResult<()> {
     // activity must not wedge the queue in an infinite retry loop. The
     // event stays queued at the advanced cursor (one page per wake); the
     // admin sync endpoint re-covers the gap if the user cares.
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Sync, 0, AspectType::Create, 0),
@@ -590,7 +590,7 @@ async fn process_sync_bad_activity_skips_and_advances_cursor() -> TbResult<()> {
         "/gear/g11",
         Error::AnyFailure(anyhow::anyhow!("parse boom")),
     );
-    let summary = process(&mut session, &mut store).await?;
+    let summary = process(UserId::from(1), &mut store).await?;
     assert_eq!(summary.activities.len(), 1, "the good activity imports");
     assert_eq!(
         *cursor.lock().unwrap(),
@@ -603,7 +603,7 @@ async fn process_sync_bad_activity_skips_and_advances_cursor() -> TbResult<()> {
 #[tokio::test]
 async fn process_sync_try_again_keeps_event_queued() -> TbResult<()> {
     reset_rate_limiter();
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Sync, 0, AspectType::Create, 0),
@@ -611,21 +611,21 @@ async fn process_sync_try_again_keeps_event_queued() -> TbResult<()> {
     // The 429 keeps the sync event queued: it is NOT deleted.
     store.expect_strava_event_delete().times(0);
     queue_error("/activities?after=0&per_page=25", Error::TryAgain("nope"));
-    let summary = process(&mut session, &mut store).await?;
+    let summary = process(UserId::from(1), &mut store).await?;
     assert_eq!(summary, Summary::default());
     Ok(())
 }
 
 #[tokio::test]
 async fn process_skips_athlete_event() -> TbResult<()> {
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Athlete, 42, AspectType::Update, 100),
     );
     // An athlete event is not processed: it is dropped (consumed).
     store.expect_strava_event_delete().returning(|_id| Ok(()));
-    let summary = process(&mut session, &mut store).await?;
+    let summary = process(UserId::from(1), &mut store).await?;
     assert_eq!(summary, Summary::default());
     Ok(())
 }

@@ -40,9 +40,9 @@ fn get_type_rejects_unknown() {
 async fn into_activity_maps_fields() -> TbResult<()> {
     // No gear: `into_activity` is a pure field mapping (no store read), so the
     // canned store is unused.
-    let (mut _store, mut session) = setup();
+    let (mut _store, _) = setup();
     let act = strava_activity(None)
-        .into_activity(&mut session, &mut _store)
+        .into_activity(UserId::from(1), &mut _store)
         .await?;
     assert_eq!(act.id, ActivityId::new(10));
     assert_eq!(act.what, 1.into());
@@ -63,7 +63,7 @@ async fn into_activity_maps_fields() -> TbResult<()> {
 
 #[tokio::test]
 async fn into_activity_creates_missing_gear() -> TbResult<()> {
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     queue("/gear/b1", &gear_json("b1", Some(0)));
     // The gear is not imported: the Strava gear fetch runs and the part is
     // created. The canned store records the create's arguments and returns a
@@ -81,7 +81,7 @@ async fn into_activity_creates_missing_gear() -> TbResult<()> {
         },
     );
     let act = strava_activity(Some("b1"))
-        .into_activity(&mut session, &mut store)
+        .into_activity(UserId::from(1), &mut store)
         .await?;
     assert_eq!(act.gear, Some(PartId::from(1)));
     let (what, name, vendor, model, source) = created
@@ -100,7 +100,7 @@ async fn into_activity_creates_missing_gear() -> TbResult<()> {
 
 #[tokio::test]
 async fn into_activity_reuses_existing_gear() -> TbResult<()> {
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     queue("/gear/b1", &gear_json("b1", Some(0)));
     // First activity: no part yet (the fetch runs, the create fires). Second
     // activity: the part exists, so `by_source` returns it and no second
@@ -131,10 +131,10 @@ async fn into_activity_reuses_existing_gear() -> TbResult<()> {
         .expect_partid_get_part()
         .returning(move |_pid| Ok(bike_get.clone()));
     let first = strava_activity(Some("b1"))
-        .into_activity(&mut session, &mut store)
+        .into_activity(UserId::from(1), &mut store)
         .await?;
     let second = strava_activity(Some("b1"))
-        .into_activity(&mut session, &mut store)
+        .into_activity(UserId::from(1), &mut store)
         .await?;
     assert_eq!(first.gear, second.gear);
     let requests = requests()
@@ -147,7 +147,7 @@ async fn into_activity_reuses_existing_gear() -> TbResult<()> {
 
 #[tokio::test]
 async fn upsert_activity_stores_new() -> TbResult<()> {
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     queue("/activities/10", &activity_json(10, "Ride", None));
     // A new activity: the read is `None`, so the create fires (gear `None`
     // keeps the register's usage/attachment reads out of the picture).
@@ -157,7 +157,7 @@ async fn upsert_activity_stores_new() -> TbResult<()> {
     store
         .expect_activity_create()
         .returning(move |act| Ok(activity(act.id, act.user_id)));
-    let summary = upsert_activity(10, &mut session, &mut store).await?;
+    let summary = upsert_activity(10, UserId::from(1), &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
     assert!(summary.activities.get(&ActivityId::new(10)).is_some());
     Ok(())
@@ -165,7 +165,7 @@ async fn upsert_activity_stores_new() -> TbResult<()> {
 
 #[tokio::test]
 async fn upsert_activity_updates_existing() -> TbResult<()> {
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     queue("/activities/10", &activity_json(10, "Ride", None));
     // The read is `None` for the first upsert (create) and `Some` for the
     // second (update): one canned read with a call counter drives both.
@@ -186,10 +186,10 @@ async fn upsert_activity_updates_existing() -> TbResult<()> {
         .expect_activity_update()
         .times(1)
         .returning(|_act| Ok(activity(ActivityId::new(10), UserId::from(1))));
-    upsert_activity(10, &mut session, &mut store).await?;
+    upsert_activity(10, UserId::from(1), &mut store).await?;
     let json = activity_json(10, "Ride", None).replace("25000.0", "30000.0");
     queue("/activities/10", &json);
-    let summary = upsert_activity(10, &mut session, &mut store).await?;
+    let summary = upsert_activity(10, UserId::from(1), &mut store).await?;
     assert!(
         summary.activities.get(&ActivityId::new(10)).is_some(),
         "the updated activity is in the summary"
@@ -199,16 +199,16 @@ async fn upsert_activity_updates_existing() -> TbResult<()> {
 
 #[tokio::test]
 async fn upsert_activity_propagates_try_again() {
-    let (mut _store, mut session) = setup();
+    let (mut _store, _) = setup();
     // The Strava fetch 429s: the `TryAgain` is surfaced (no store read fires).
     queue_error("/activities/10", Error::TryAgain("rate limited"));
-    let res = upsert_activity(10, &mut session, &mut _store).await;
+    let res = upsert_activity(10, UserId::from(1), &mut _store).await;
     assert!(matches!(res, Err(Error::TryAgain(_))));
 }
 
 #[tokio::test]
 async fn activity_strava_url() -> TbResult<()> {
-    let (mut store, mut session) = setup();
+    let (mut store, session) = setup();
     queue("/activities/10", &activity_json(10, "Ride", None));
     // The upsert creates the activity (read `None`, create), then `strava_url`
     // reads it back (read `Some`).
@@ -225,7 +225,7 @@ async fn activity_strava_url() -> TbResult<()> {
     store
         .expect_activity_create()
         .returning(move |act| Ok(activity(act.id, act.user_id)));
-    upsert_activity(10, &mut session, &mut store).await?;
+    upsert_activity(10, UserId::from(1), &mut store).await?;
     let url = strava_url(10, &session, &mut store).await?;
     assert_eq!(url, "https://strava.com/activities/10");
     Ok(())
@@ -245,7 +245,7 @@ async fn activity_strava_url_missing() {
 
 #[tokio::test]
 async fn delete_activity_removes() -> TbResult<()> {
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     queue("/activities/10", &activity_json(10, "Ride", None));
     // The upsert creates the activity (read `None`, create); the delete reads
     // it back (read `Some`), then deletes it. The delete reports the activity
@@ -264,8 +264,8 @@ async fn delete_activity_removes() -> TbResult<()> {
         .expect_activity_create()
         .returning(move |act| Ok(activity(act.id, act.user_id)));
     store.expect_activity_delete().returning(|_aid| Ok(1));
-    upsert_activity(10, &mut session, &mut store).await?;
-    let summary = delete_activity(10, &session, &mut store).await?;
+    upsert_activity(10, UserId::from(1), &mut store).await?;
+    let summary = delete_activity(10, UserId::from(1), &mut store).await?;
     assert!(
         summary.activities.is_tombstoned(&ActivityId::new(10)),
         "the deleted activity is reported as a tombstone"
@@ -275,19 +275,19 @@ async fn delete_activity_removes() -> TbResult<()> {
 
 #[tokio::test]
 async fn delete_activity_missing() {
-    let (mut store, session) = setup();
+    let (mut store, _) = setup();
     // The activity does not exist: the read is `None`, so the delete is
     // `NotFound`.
     store
         .expect_activity_read_by_id()
         .returning(|_aid| Ok(None));
-    let res = delete_activity(42, &session, &mut store).await;
+    let res = delete_activity(42, UserId::from(1), &mut store).await;
     assert!(matches!(res, Err(Error::NotFound(_))));
 }
 
 #[tokio::test]
 async fn delete_activity_forbidden_for_other_user() -> TbResult<()> {
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     queue("/activities/10", &activity_json(10, "Ride", None));
     // The upsert creates the activity (owned by user 1); the delete from user
     // 2 is `Forbidden` by the ownership check on the read.
@@ -304,9 +304,8 @@ async fn delete_activity_forbidden_for_other_user() -> TbResult<()> {
     store
         .expect_activity_create()
         .returning(move |act| Ok(activity(act.id, act.user_id)));
-    let _ = upsert_activity(10, &mut session, &mut store).await?;
-    let other = strava_session(UserId::from(2), 43.into());
-    let res = delete_activity(10, &other, &mut store).await;
+    let _ = upsert_activity(10, UserId::from(1), &mut store).await?;
+    let res = delete_activity(10, UserId::from(2), &mut store).await;
     assert!(matches!(res, Err(Error::Forbidden(_))));
     Ok(())
 }
