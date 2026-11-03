@@ -2,11 +2,7 @@
 
 ## Status
 
-Rejected (2026-10-21). The generic-over-domain mechanism was abandoned:
-ADR-0007 (the executor owns the transaction seam) plus `mockall` solved the
-axum test case with a small `ServiceApi` seam and a generated `MockServiceApi`,
-making the large `Domain` trait unnecessary. The implementation (PR #533,
-spec #525) was never merged; the verdict map #534 and its tickets are closed.
+**Rejected (2026-10-21).** The generic-over-domain mechanism was abandoned: the executor-owns-the-seam decision (now [ADR-0012](../0012-the-executor-drives-the-domain-through-a-service-api.md)) plus `mockall` solved the axum test case with a small `ServiceApi` seam and a generated `MockServiceApi`, making the large `Domain` trait unnecessary. The implementation was never merged.
 
 ## Context
 
