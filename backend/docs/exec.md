@@ -11,21 +11,6 @@ The crate computes no domain state of its own: it drives the existing
 `tb_domain` operations and `tb_strava` event processing inside transactions
 it owns.
 
-## Why it exists
-
-Two ADRs shaped it:
-
-- **[ADR-0005](../../docs/adr/0005-message-based-executor-loop-and-sse-push.md)**
-  replaced the client's 60-second Strava poll with a server-side,
-  message-based loop that pushes `Summary` frames over SSE. The loop is the
-  only driver of the per-user transaction lifecycle.
-- **[ADR-0007](../../docs/adr/0007-exec-owns-the-transaction-seam.md)**
-  moved the transaction seam out of the web layer: `tb_axum` became a dumb
-  interface that holds `Arc<dyn ServiceApi>` and names no seam type
-  (`TxnSource`/`Txn`/`DbPool` appear nowhere in its source — a
-  grep-verifiable bar). A second presentation layer can now be written
-  without re-learning the storage.
-
 The design assumes a **single node**: one process owns a user's executor and
 their streams. Multi-node delivery is out of scope.
 
@@ -158,6 +143,21 @@ because managing the pool's lifecycle is an executor-level concern.
 
 Dependency direction: `tb_exec → tb_domain + tb_strava`; `tb_sqlx →
 tb_exec`; `tb_axum → tb_exec`.
+
+## History
+
+Two ADRs shaped it:
+
+- **[ADR-0005](../../docs/adr/0005-message-based-executor-loop-and-sse-push.md)**
+  replaced the client's 60-second Strava poll with a server-side,
+  message-based loop that pushes `Summary` frames over SSE. The loop is the
+  only driver of the per-user transaction lifecycle.
+- **[ADR-0007](../../docs/adr/0007-exec-owns-the-transaction-seam.md)**
+  moved the transaction seam out of the web layer: `tb_axum` became a dumb
+  interface that holds `Arc<dyn ServiceApi>` and names no seam type
+  (`TxnSource`/`Txn`/`DbPool` appear nowhere in its source — a
+  grep-verifiable bar). A second presentation layer can now be written
+  without re-learning the storage.
 
 ## Going deeper
 
