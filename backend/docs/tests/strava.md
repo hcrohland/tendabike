@@ -17,7 +17,6 @@ All tests run in-memory (no database, no network); one `<name>_tests.rs` module 
   - `queue_error(uri, error)` — script an error for an exact URI; unscripted URIs yield `Error::BadRequest`
   - `requests() -> Vec<String>` — every requested URI, in order (assert on these to verify API calls)
   - `deauthorizes() -> Vec<StravaId>` — records `deauthorize()` calls
-- **Event-lane functions take `UserId`** (ADR-0011): `process`, `upsert_activity`, `delete_activity`, and their private chain take a bare `UserId`, not a session. Tests drive them with `UserId::from(1)` (matching the `strava_session`'s user id). The session-typed paths (`gear::into_partid`, `user::update_gear`, `strava_url`, `sync_users`) still take a `MockSession`.
 - **JSON helpers**: `activity_json(id, type, gear)` (fixed timestamp `2026-01-02T10:00:00Z` = `1767348000`, distance `25000.0`, elevation `300.0`), `gear_json(id, frame_type)` (`None` = shoes), `strava_user(tbid, stravaid, enabled)`.
 
 ## Writing new tests
