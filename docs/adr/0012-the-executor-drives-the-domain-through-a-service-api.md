@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. This ADR is the current-state record of the write path and its seams. It consolidates and supersedes four earlier ADRs, now in [`archive/`](archive/): ADR-0005 (the message-based executor loop and SSE push), ADR-0007 (the executor owns the transaction seam), ADR-0010 (the entity owns its store), and ADR-0011 (the Strava seam takes a session only where it receives one). Read those for the history of how this shape was reached; read this for what is true now. The human-readable tour of the crate lives in [`backend/docs/exec.md`](../../backend/docs/exec.md).
+Accepted. The current-state record of the write path and its seams. It consolidates four earlier ADRs (0005, 0007, 0010, 0011), now in [`archive/`](archive/). The human-readable tour of the crate lives in [`backend/docs/exec.md`](../../backend/docs/exec.md).
 
 ## Context
 
