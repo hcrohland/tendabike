@@ -33,7 +33,11 @@
   }
 
   function body(n: Notification): string {
-    // Use the subject's type discriminator to look up the right collection.
+    // Show the notification's message when one is present: the request for a
+    // request notification, the shop's reply for a response.
+    if (n.message) return n.message;
+    // Otherwise, for part kinds, the part's name (the subject's type
+    // discriminator tells us which collection to look up).
     const subject = n.subject as { type: string; id: number } | null;
     if (subject) {
       if (subject.type === "part" && subject.id != null) {
