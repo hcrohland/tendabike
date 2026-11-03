@@ -956,3 +956,133 @@ async fn notification_read_not_found() -> tb_domain::TbResult<()> {
     })
     .await
 }
+
+// ---------------------------------------------------------------------------
+// Migration: subscription message move (issue #717)
+// ---------------------------------------------------------------------------
+
+/// The migration moves each subscription's request message onto its
+/// `sub_request` notification and its response message onto its `sub_response`
+/// notification (matched via the notification's subscription subject), then
+/// drops the two columns from the subscription table.
+///
+/// The suite's one-time setup runs the migration against an empty table, so
+/// this test recreates the pre-migration columns, seeds a subscription
+/// carrying both messages with its two (still empty) notifications, applies
+/// the migration file, and verifies the data moved and the columns are gone.
+/// All of it runs in the test's transaction, which rolls back.
+#[tokio::test]
+#[ignore]
+async fn subscription_message_migration_moves_data_and_drops_columns() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let exec: &mut sqlx::PgConnection = &mut store;
+
+        // Recreate the pre-migration columns.
+        sqlx::query(
+            "ALTER TABLE shop_subscriptions
+             ADD COLUMN message TEXT,
+             ADD COLUMN response_message TEXT",
+        )
+        .execute(&mut *exec)
+        .await
+        .map_err(db_err)?;
+
+        // Seed a shop, a subscription carrying both messages, and the two
+        // matching notifications (their messages are still empty).
+        sqlx::query(
+            "INSERT INTO shops (id, owner, name, description, auto_approve)
+             VALUES (1, 1, 'Bike Barn', NULL, false)",
+        )
+        .execute(&mut *exec)
+        .await
+        .map_err(db_err)?;
+        sqlx::query(
+            "INSERT INTO shop_subscriptions
+             (id, shop_id, user_id, status, message, response_message)
+             VALUES (1, 1, 1, 'active',
+                     'I would like to register my bike',
+                     'Welcome aboard!')",
+        )
+        .execute(&mut *exec)
+        .await
+        .map_err(db_err)?;
+        let request_id: Uuid = "018f0000-0000-7000-8000-000000000001".parse().unwrap();
+        let response_id: Uuid = "018f0000-0000-7000-8000-000000000002".parse().unwrap();
+        for (id, kind) in [(request_id, "sub_request"), (response_id, "sub_response")] {
+            sqlx::query(
+                "INSERT INTO notifications
+                 (id, recipient, lifecycle, kind, subscription_id, message)
+                 VALUES ($1, 1, 'persistent', $2, 1, NULL)",
+            )
+            .bind(id)
+            .bind(kind)
+            .execute(&mut *exec)
+            .await
+            .map_err(db_err)?;
+        }
+
+        // Apply the migration file (the two data copies + the column drop),
+        // statement by statement. Comment lines are stripped first: one of
+        // them contains a semicolon that would otherwise split the SQL.
+        let migration = include_str!(
+            "../migrations/20261103000000_move_subscription_message_to_notifications.up.sql"
+        );
+        let sql_only = migration
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("--"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let statements: Vec<&str> = sql_only
+            .split(';')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+        for stmt in statements {
+            sqlx::query(stmt)
+                .execute(&mut *exec)
+                .await
+                .map_err(db_err)?;
+        }
+
+        // The request message moved onto the sub_request notification.
+        let request_msg: Option<String> =
+            sqlx::query_scalar("SELECT message FROM notifications WHERE id = $1")
+                .bind(request_id)
+                .fetch_one(&mut *exec)
+                .await
+                .map_err(db_err)?;
+        assert_eq!(
+            request_msg,
+            Some("I would like to register my bike".to_string())
+        );
+
+        // The response message moved onto the sub_response notification.
+        let response_msg: Option<String> =
+            sqlx::query_scalar("SELECT message FROM notifications WHERE id = $1")
+                .bind(response_id)
+                .fetch_one(&mut *exec)
+                .await
+                .map_err(db_err)?;
+        assert_eq!(response_msg, Some("Welcome aboard!".to_string()));
+
+        // The two columns are gone from the subscription table.
+        let columns: Vec<String> = sqlx::query_scalar(
+            "SELECT column_name FROM information_schema.columns
+             WHERE table_schema = 'public' AND table_name = 'shop_subscriptions'",
+        )
+        .fetch_all(&mut *exec)
+        .await
+        .map_err(db_err)?;
+        assert!(
+            !columns.contains(&"message".to_string()),
+            "the message column should be dropped"
+        );
+        assert!(
+            !columns.contains(&"response_message".to_string()),
+            "the response_message column should be dropped"
+        );
+
+        Ok(())
+    })
+    .await
+}

@@ -92,7 +92,6 @@ pub trait ShopStore {
         &mut self,
         shop_id: ShopId,
         user_id: UserId,
-        message: Option<String>,
     ) -> TbResult<ShopSubscription>;
 
     /// Gets a subscription by ID.
@@ -119,12 +118,11 @@ pub trait ShopStore {
         status: SubscriptionStatus,
     ) -> TbResult<ShopSubscription>;
 
-    /// Approves or rejects a subscription with an optional response message.
+    /// Approves or rejects a subscription (the reply rides the notification).
     async fn subscription_approve(
         &mut self,
         id: SubscriptionId,
         status: SubscriptionStatus,
-        response_message: Option<String>,
     ) -> TbResult<ShopSubscription>;
 
     /// Deletes a subscription.

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO shop_subscriptions (shop_id, user_id, message, status)\n             VALUES ($1, $2, $3, 'pending')\n             RETURNING id, shop_id, user_id, status, message, response_message, created_at, updated_at",
+  "query": "INSERT INTO shop_subscriptions (shop_id, user_id, status)\n             VALUES ($1, $2, 'pending')\n             RETURNING id, shop_id, user_id, status, created_at, updated_at",
   "describe": {
     "columns": [
       {
@@ -25,21 +25,11 @@
       },
       {
         "ordinal": 4,
-        "name": "message",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 5,
-        "name": "response_message",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 6,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 5,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -47,8 +37,7 @@
     "parameters": {
       "Left": [
         "Int4",
-        "Int4",
-        "Text"
+        "Int4"
       ]
     },
     "nullable": [
@@ -56,11 +45,9 @@
       false,
       false,
       false,
-      true,
-      true,
       false,
       false
     ]
   },
-  "hash": "0a14eb4b5745cd3eee510f23b11a5dd276aa622d3004eb575a1dda4dccd9c584"
+  "hash": "67e58c1843cf0608d96f43c8ae613da0af2ed5c1b1fd02fa233c195e805bb7c6"
 }

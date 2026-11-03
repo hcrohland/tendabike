@@ -304,8 +304,6 @@ fn subscription() -> ShopSubscription {
         shop_id: ShopId::from(1),
         user_id: UserId::from(1),
         status: SubscriptionStatus::Pending,
-        message: Some("hi".to_string()),
-        response_message: None,
         created_at: datetime!(2024-01-01 00:00:00 UTC),
         updated_at: datetime!(2024-01-01 00:00:00 UTC),
     }
@@ -318,8 +316,6 @@ fn subscription_with_details() -> ShopSubscriptionWithDetails {
         shop_id: subscription().shop_id,
         user_id: subscription().user_id,
         status: subscription().status,
-        message: subscription().message,
-        response_message: subscription().response_message,
         created_at: subscription().created_at,
         updated_at: subscription().updated_at,
         shop: shop(),
@@ -1110,7 +1106,6 @@ async fn get_my_subscriptions_returns_200_and_subs() {
     assert_eq!(subs[0]["shop_id"], serde_json::json!(1));
     assert_eq!(subs[0]["user_id"], serde_json::json!(1));
     assert_eq!(subs[0]["status"], serde_json::json!("pending"));
-    assert_eq!(subs[0]["message"], serde_json::json!("hi"));
     assert_eq!(subs[0]["shop"]["name"], serde_json::json!("Bike Barn"));
 }
 
@@ -1152,7 +1147,7 @@ async fn get_subscription_returns_200_and_subscription() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"id":1,"shop_id":1,"user_id":1,"status":"pending","message":"hi","response_message":null,"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"}"#
+        r#"{"id":1,"shop_id":1,"user_id":1,"status":"pending","created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"}"#
     );
 }
 
@@ -1546,7 +1541,7 @@ async fn create_subscription_returns_201_and_entity() {
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"id":1,"shop_id":1,"user_id":1,"status":"pending","message":"hi","response_message":null,"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"}"#
+        r#"{"id":1,"shop_id":1,"user_id":1,"status":"pending","created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"}"#
     );
 }
 
