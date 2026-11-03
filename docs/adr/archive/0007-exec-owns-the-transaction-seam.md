@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted.
+**Superseded by [ADR-0012](../0012-the-executor-drives-the-domain-through-a-service-api.md).** This ADR's decision (the executor owns the transaction seam; `ServiceApi` is the presentation-agnostic surface) is folded into ADR-0012. Retained here for history.
 
 ## Context
 

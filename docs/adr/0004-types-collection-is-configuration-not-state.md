@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Records a wont-do from the 2026-09-29 architecture review, which had proposed unifying the `types` collection into `mapableState` ("make types a first-class collection").
+Accepted. Records a wont-do: unifying the `types` collection into `mapableState` ("make types a first-class collection") is out of scope while this ADR stands.
 
 ## Context
 
