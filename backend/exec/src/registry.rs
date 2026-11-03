@@ -21,8 +21,9 @@
 //! The per-user executor registry (ADR-0007, executable spec #558 §6):
 //! the service-API facade over the per-user executor's lifecycle core.
 //!
-//! The registry **owns the [`TxnSource`]** (injected at construction — the
-//! only non-axum holder of the seam under the zero-reference bar) and holds
+//! The registry **owns the [`TxnSource`]** (injected at construction; the
+//! loop's `source` is a clone of it, and the web layer names the
+//! [`crate::ServiceApi`] trait, never a seam type) and holds
 //! the lifecycle core ([`core`]) — the deep "how does an executor stay
 //! alive" machinery: the per-user executor map and the per-shop frame-channel
 //! map, the spawn-on-first-demand / reap-when-no-stream / respawn logic, the
