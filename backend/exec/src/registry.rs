@@ -81,33 +81,6 @@ pub const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 /// The web layer's SSE `KeepAlive` wiring uses this constant.
 pub const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 
-/// The executor's minimal [`Session`] (spec #602): the user's identity only.
-#[derive(Debug, Clone, Copy)]
-pub struct ExecutorSession {
-    id: UserId,
-}
-
-impl ExecutorSession {
-    /// Build the executor's session for `id`.
-    pub fn new(id: UserId) -> Self {
-        Self { id }
-    }
-}
-
-impl Session for ExecutorSession {
-    fn user_id(&self) -> UserId {
-        self.id
-    }
-
-    fn is_admin(&self) -> bool {
-        false
-    }
-
-    fn shop(&self) -> Option<ShopId> {
-        None
-    }
-}
-
 /// The per-user executor registry (spec §4.4): the service-API facade over
 /// the per-user executor's lifecycle core (the [`core`] module). The core
 /// holds the live executor per [`UserId`] (shared across requests — the

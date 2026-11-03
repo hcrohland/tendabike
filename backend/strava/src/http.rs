@@ -35,7 +35,7 @@ use serde::de::DeserializeOwned;
 
 use crate::client::{HTTP_CLIENT, STRAVACLIENT};
 use crate::{StravaDataStore, StravaId, get_token};
-use tb_domain::{Error, Session, TbResult, UserId};
+use tb_domain::{Error, TbResult, UserId};
 
 const API: &str = "https://www.strava.com/api/v3";
 
@@ -61,11 +61,11 @@ async fn access_token(
 /// there, hence the targeted allow.
 #[cfg_attr(feature = "test-support", allow(unused_variables, unreachable_code))]
 pub(crate) async fn request_json<T: DeserializeOwned>(
-    user: &mut dyn Session,
+    user_id: UserId,
     uri: &str,
     store: &mut impl StravaDataStore,
 ) -> TbResult<T> {
-    let (_strava_id, access) = access_token(user.user_id(), store).await?;
+    let (_strava_id, access) = access_token(user_id, store).await?;
 
     // The offline seams (test-only): first the thread-local canned response
     // (per-test isolation: each test runs on its own thread), then the

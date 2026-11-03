@@ -46,3 +46,22 @@ pub mod test_support;
 fn get_time() -> i64 {
     time::OffsetDateTime::now_utc().unix_timestamp()
 }
+
+/// A minimal, identity-only [`Session`] for the event lane (ADR-0011): the
+/// event lane has no acting session, so where it crosses into a session-typed
+/// domain call it constructs this adapter. Personal, non-admin, no shop —
+/// the event lane's actual context (ADR-0009).
+#[derive(Debug, Clone, Copy)]
+struct OnBehalf(UserId);
+
+impl Session for OnBehalf {
+    fn user_id(&self) -> UserId {
+        self.0
+    }
+    fn shop(&self) -> Option<ShopId> {
+        None
+    }
+    fn is_admin(&self) -> bool {
+        false
+    }
+}

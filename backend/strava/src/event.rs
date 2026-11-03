@@ -203,10 +203,10 @@ impl Event {
 
     async fn process_activity(
         self,
-        user: &mut dyn Session,
+        user_id: UserId,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
-        match self.process_hook(user, store).await {
+        match self.process_hook(user_id, store).await {
             Ok(summary) => Ok(summary),
             Err(err) => self.fail_event(err, store).await,
         }
@@ -216,7 +216,7 @@ impl Event {
     ///
     /// # Arguments
     ///
-    /// * `user` - A reference to the Strava user associated with the webhook event.
+    /// * `user_id` - The ID of the user associated with the webhook event.
     /// * `store` - A mutable reference to the database connection.
     ///
     /// # Returns
@@ -228,15 +228,15 @@ impl Event {
     ///
     async fn process_hook(
         &self,
-        user: &mut dyn Session,
+        user_id: UserId,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
         let res = match self.aspect_type {
             AspectType::Create | AspectType::Update => {
-                activity::upsert_activity(self.object_id, user, store).await?
+                activity::upsert_activity(self.object_id, user_id, store).await?
             }
             AspectType::Delete => {
-                match activity::delete_activity(self.object_id, user, store).await {
+                match activity::delete_activity(self.object_id, user_id, store).await {
                     Err(Error::NotFound(_)) => {
                         warn!("Activity {} did not exist (yet)", self.object_id);
                         Summary::default()
@@ -249,18 +249,14 @@ impl Event {
         Ok(res)
     }
 
-    async fn sync(
-        &mut self,
-        user: &mut dyn Session,
-        store: &mut impl StravaStore,
-    ) -> TbResult<Summary> {
+    async fn sync(&mut self, user_id: UserId, store: &mut impl StravaStore) -> TbResult<Summary> {
         // let mut len = batch;
         let mut start = self.event_time;
         let mut summary = Summary::default();
 
         // while len == batch
         {
-            let acts = next_activities(user, store, 25, start).await?;
+            let acts = next_activities(user_id, store, 25, start).await?;
             if acts.is_empty() {
                 self.delete(store).await?;
             } else {
@@ -268,7 +264,7 @@ impl Event {
                 for a in acts {
                     let act_id = a.id;
                     start = std::cmp::max(start, a.start_date.unix_timestamp());
-                    match a.send_to_tb(user, store).await {
+                    match a.send_to_tb(user_id, store).await {
                         Ok(ps) => summary += ps,
                         // Rate limit, dead auth, or DB failure: bubble up to
                         // the classifier (`fail_event`) — the Stop keeps the
@@ -300,10 +296,10 @@ impl Event {
 
     async fn process_sync(
         mut self,
-        user: &mut dyn Session,
+        user_id: UserId,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
-        match self.sync(user, store).await {
+        match self.sync(user_id, store).await {
             Ok(summary) => Ok(summary),
             Err(err) => self.fail_event(err, store).await,
         }
@@ -505,21 +501,21 @@ pub async fn get_event(user_id: UserId, store: &mut impl StravaDataStore) -> TbR
 }
 
 async fn next_activities(
-    user: &mut dyn Session,
+    user_id: UserId,
     store: &mut impl StravaDataStore,
     per_page: usize,
     start: i64,
 ) -> TbResult<Vec<StravaActivity>> {
     request_json(
-        user,
+        user_id,
         &format!("/activities?after={start}&per_page={per_page}"),
         store,
     )
     .await
 }
 
-pub async fn process(user: &mut dyn Session, store: &mut impl StravaStore) -> TbResult<Summary> {
-    let read = get_event(user.user_id(), store).await?;
+pub async fn process(user_id: UserId, store: &mut impl StravaStore) -> TbResult<Summary> {
+    let read = get_event(user_id, store).await?;
     let event = match read {
         QueueRead::Event(event) => event,
         // The queue is empty, or paused by a global rate-limit `Stop` (the
@@ -529,8 +525,8 @@ pub async fn process(user: &mut dyn Session, store: &mut impl StravaStore) -> Tb
     info!("Processing {event}");
 
     match event.object_type {
-        ObjectType::Activity => event.process_activity(user, store).await,
-        ObjectType::Sync => event.process_sync(user, store).await,
+        ObjectType::Activity => event.process_activity(user_id, store).await,
+        ObjectType::Sync => event.process_sync(user_id, store).await,
         _ => {
             warn!("skipping {event}");
             event.delete(store).await?;

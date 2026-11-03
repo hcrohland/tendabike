@@ -8,9 +8,7 @@
 
 use super::*;
 use crate::StravaId;
-use crate::test_support::{
-    MockStravaConn, begin_test, deauthorizes, queue, seed_token_cache, strava_session,
-};
+use crate::test_support::{MockStravaConn, begin_test, deauthorizes, queue, seed_token_cache};
 use tb_domain::UserId;
 
 /// `request_json` uses the `TokenCache`'s warm token and persists nothing
@@ -19,9 +17,10 @@ use tb_domain::UserId;
 #[tokio::test]
 async fn request_json_uses_the_token_cache_warm_token() -> TbResult<()> {
     let mut store = MockStravaConn::new();
-    let mut session = strava_session(UserId::from(1), StravaId::from(42));
+    begin_test();
+    seed_token_cache(UserId::from(1), StravaId::from(42), "test-access-token");
     queue("/athlete", r#"{"bikes":[],"shoes":[]}"#);
-    let ath: serde_json::Value = request_json(&mut session, "/athlete", &mut store).await?;
+    let ath: serde_json::Value = request_json(UserId::from(1), "/athlete", &mut store).await?;
     assert_eq!(ath["bikes"].as_array().unwrap().len(), 0);
     Ok(())
 }

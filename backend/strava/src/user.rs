@@ -171,7 +171,7 @@ impl StravaUser {
             shoes: Vec<Gear>,
         }
 
-        let ath: Athlete = request_json(user, "/athlete", store).await?;
+        let ath: Athlete = request_json(user.user_id(), "/athlete", store).await?;
 
         let mut parts = Vec::new();
         for gear in ath.bikes.into_iter().chain(ath.shoes) {

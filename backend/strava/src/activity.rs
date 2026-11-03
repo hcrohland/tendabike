@@ -58,7 +58,7 @@ impl StravaActivity {
     /// A Result containing a Activity struct if the conversion was successful, or an error if it failed.
     async fn into_activity(
         self,
-        user: &mut dyn Session,
+        user_id: UserId,
         store: &mut impl StravaStore,
     ) -> TbResult<Activity> {
         let StravaActivity {
@@ -81,14 +81,17 @@ impl StravaActivity {
         let what = Self::get_type(&type_)?;
         let gear = match gear_id {
             // cannot use map due to async closure
-            Some(x) => Some(gear::into_partid(x, user, store).await?),
+            Some(x) => {
+                let mut session = OnBehalf(user_id);
+                Some(gear::into_partid(x, &mut session, store).await?)
+            }
             None => None,
         };
         Ok(Activity {
             id: id.into(),
             what,
             gear,
-            user_id: user.user_id(),
+            user_id,
             name,
             start: start_date.to_offset(offset),
             duration: elapsed_time,
@@ -169,11 +172,12 @@ impl StravaActivity {
     /// A Result containing a `Summary` map if the sending was successful, or an error if it failed.
     pub(crate) async fn send_to_tb(
         self,
-        user: &mut dyn Session,
+        user_id: UserId,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
-        let activity = self.into_activity(user, store).await?;
-        activity.upsert(user, store).await
+        let activity = self.into_activity(user_id, store).await?;
+        let session = OnBehalf(user_id);
+        activity.upsert(&session, store).await
     }
 }
 
@@ -188,19 +192,20 @@ pub async fn strava_url(
 
 pub async fn upsert_activity(
     id: i64,
-    user: &mut dyn Session,
+    user_id: UserId,
     store: &mut impl StravaStore,
 ) -> TbResult<Summary> {
-    let act: StravaActivity = request_json(user, &format!("/activities/{id}"), store).await?;
-    act.send_to_tb(user, store).await
+    let act: StravaActivity = request_json(user_id, &format!("/activities/{id}"), store).await?;
+    act.send_to_tb(user_id, store).await
 }
 
 pub(crate) async fn delete_activity(
     act: i64,
-    user: &dyn Session,
+    user_id: UserId,
     store: &mut impl StravaStore,
 ) -> TbResult<Summary> {
-    ActivityId::new(act).delete(user, store).await
+    let session = OnBehalf(user_id);
+    ActivityId::new(act).delete(&session, store).await
 }
 
 #[cfg(test)]

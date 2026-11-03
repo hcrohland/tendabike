@@ -248,8 +248,8 @@ pub(crate) async fn select_message(
 ///   the loop's life; `Clone` (which `DbPool` is) lets the caller keep a
 ///   handle — no `Arc` is needed.
 /// - `user_id` — the user the loop serves: the queue probe reads the queue
-///   by it, and the event lane builds an identity-only [`ExecutorSession`]
-///   from it (at the last moment) to drive the domain event processing.
+///   by it, and the event lane passes it to `process` (ADR-0011: the event
+///   lane takes a `UserId`, not a session).
 /// - `frames` — the user's SSE frame sink (`broadcast`); the web layer's
 ///   stream tasks subscribe to it. The loop reads its receiver count for the
 ///   reclaim policy (an attached stream keeps the loop alive); frames reach
@@ -1046,11 +1046,9 @@ where
         }
     };
 
-    // The identity-only session the domain event processing needs, built at
-    // the last moment (the event is the user's own, so the owner is
-    // `user_id` and no shop context applies).
-    let mut session = crate::registry::ExecutorSession::new(ctx.user_id);
-    match process(&mut session, &mut conn).await {
+    // The event is the user's own, so the owner is `user_id` and no shop
+    // context applies (ADR-0011: the event lane passes the id directly).
+    match process(ctx.user_id, &mut conn).await {
         Ok(summary) => match conn.commit().await {
             Ok(()) => {
                 // Deliver the event's `Summary`: a Strava event is the
