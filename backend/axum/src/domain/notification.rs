@@ -5,6 +5,7 @@
 //! - `POST /{id}/read` — read a single notification (lifecycle-aware:
 //!   persistent → mark seen, transient → delete)
 //! - `POST /read-all` — read all of the user's notifications
+//! - `DELETE /{id}` — delete a notification (any of the recipient's)
 //!
 //! The handlers are transport-only: each extracts the path and session,
 //! enqueues the `ApiWrite` on the user's executor, and answers `204`.
@@ -15,7 +16,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::post,
+    routing::{delete, post},
 };
 use tb_domain::{ApiWrite, NotificationId};
 
@@ -25,6 +26,7 @@ pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route("/{id}/read", post(read_notification))
         .route("/read-all", post(read_all_notifications))
+        .route("/{id}", delete(delete_notification))
 }
 
 async fn read_notification(
@@ -46,6 +48,18 @@ async fn read_all_notifications(
     state
         .api
         .write(Box::new(user), ApiWrite::NotificationReadAll)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn delete_notification(
+    Path(id): Path<NotificationId>,
+    user: RequestSession,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    state
+        .api
+        .write(Box::new(user), ApiWrite::NotificationDelete { id })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

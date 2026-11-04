@@ -956,3 +956,66 @@ async fn notification_read_not_found() -> tb_domain::TbResult<()> {
     })
     .await
 }
+
+/// `notification_delete` removes the row for its recipient and returns
+/// `Some(id)`.
+#[tokio::test]
+#[ignore]
+async fn notification_delete_removes_row() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let recipient = UserId::from(1);
+        let notif = store
+            .notification_create(
+                recipient,
+                tb_domain::NotificationLifecycle::Persistent,
+                tb_domain::NotificationKind::SubRequest,
+                tb_domain::NotificationSubject::Subscription(tb_domain::SubscriptionId::from(1)),
+                None,
+            )
+            .await?;
+
+        let deleted = store.notification_delete(notif.id, recipient).await?;
+        assert_eq!(deleted, Some(notif.id));
+
+        // The row is gone.
+        let all = store.notification_all_for_user(recipient).await?;
+        assert!(all.is_empty(), "deleted notification should be gone");
+
+        Ok(())
+    })
+    .await
+}
+
+/// `notification_delete` is recipient-guarded: a non-recipient deletes nothing
+/// and gets `None` (no existence leak); the row stays for its owner.
+#[tokio::test]
+#[ignore]
+async fn notification_delete_non_recipient_returns_none() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let owner = UserId::from(1);
+        let other = UserId::from(2);
+        let notif = store
+            .notification_create(
+                owner,
+                tb_domain::NotificationLifecycle::Persistent,
+                tb_domain::NotificationKind::SubRequest,
+                tb_domain::NotificationSubject::Subscription(tb_domain::SubscriptionId::from(1)),
+                None,
+            )
+            .await?;
+
+        let deleted = store.notification_delete(notif.id, other).await?;
+        assert!(
+            deleted.is_none(),
+            "a non-recipient should not delete the notification"
+        );
+
+        // The row is still there for the owner.
+        let all = store.notification_all_for_user(owner).await?;
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].id, notif.id);
+
+        Ok(())
+    })
+    .await
+}

@@ -169,3 +169,38 @@ describe("NotificationPanel navigation", () => {
     });
   });
 });
+
+describe("NotificationPanel delete", () => {
+  it("a persistent notification shows a delete button that fires the delete API without navigating", async () => {
+    seedNotification({ kind: "sub_request", lifecycle: "persistent" });
+    render(NotificationPanel, { close: () => {} });
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(globalThis.location.hash).toBe("");
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/notification/n1",
+        expect.anything(),
+      );
+    });
+  });
+
+  it("a seen persistent notification still shows a delete button", () => {
+    seedNotification({
+      kind: "sub_request",
+      lifecycle: "persistent",
+      state: "seen",
+    });
+    render(NotificationPanel, { close: () => {} });
+    expect(screen.getByRole("button", { name: "Delete" })).toBeTruthy();
+  });
+
+  it("a transient notification has no delete button", () => {
+    seedNotification({
+      kind: "part_registered",
+      lifecycle: "transient",
+      subject: { type: "part", id: 5 },
+    });
+    render(NotificationPanel, { close: () => {} });
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+  });
+});

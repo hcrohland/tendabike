@@ -166,6 +166,49 @@ async fn notification_read_non_recipient_returns_not_found() -> crate::TbResult<
 }
 
 #[tokio::test]
+async fn notification_delete_tombstones() -> crate::TbResult<()> {
+    let mut store = MockStore::new();
+    store
+        .expect_notification_delete()
+        .withf(move |id, recipient| *id == test_notification_id() && *recipient == test_user())
+        .times(1)
+        .returning(move |_, _| Ok(Some(test_notification_id())));
+
+    let summary = test_notification_id()
+        .delete(test_user(), &mut store)
+        .await?;
+    assert!(
+        summary.notifications.is_tombstoned(&test_notification_id()),
+        "deleted notification should be tombstoned"
+    );
+    assert!(
+        summary.notifications.get(&test_notification_id()).is_none(),
+        "deleted notification should not be live"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn notification_delete_non_recipient_returns_not_found() -> crate::TbResult<()> {
+    let mut store = MockStore::new();
+    // The store returns None for a non-recipient (the guard is in the DB query).
+    store
+        .expect_notification_delete()
+        .withf(|_id, recipient| *recipient != test_user())
+        .times(1)
+        .returning(|_, _| Ok(None));
+
+    let result = test_notification_id()
+        .delete(UserId::from(999), &mut store)
+        .await;
+    assert!(
+        matches!(result, Err(crate::Error::NotFound(_))),
+        "non-recipient should get NotFound, got {result:?}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn notification_read_all_mixed_lifecycles() -> crate::TbResult<()> {
     let mut store = MockStore::new();
     let persistent = {

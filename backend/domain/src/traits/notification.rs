@@ -44,4 +44,15 @@ pub trait NotificationStore {
     /// (pure read, for hydration).
     async fn notification_all_for_user(&mut self, recipient: UserId)
     -> TbResult<Vec<Notification>>;
+
+    /// Deletes a notification by id for the given recipient.
+    ///
+    /// Returns `Some(id)` when a notification with that id existed for the
+    /// recipient and was deleted, `None` when it did not (the recipient guard:
+    /// a non-recipient gets `None`, not an existence leak).
+    async fn notification_delete(
+        &mut self,
+        id: NotificationId,
+        recipient: UserId,
+    ) -> TbResult<Option<NotificationId>>;
 }

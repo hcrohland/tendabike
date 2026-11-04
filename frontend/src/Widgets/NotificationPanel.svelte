@@ -1,11 +1,12 @@
 <script lang="ts">
   import { Badge } from "flowbite-svelte";
-  import { CloseOutline } from "flowbite-svelte-icons";
+  import { CloseOutline, TrashBinOutline } from "flowbite-svelte-icons";
   import {
     history,
     unread,
     dismiss,
     readAll,
+    deleteNotification,
   } from "../lib/notification.svelte";
   import type { Notification } from "../lib/notification.svelte";
   import { parts } from "../lib/part";
@@ -191,6 +192,18 @@
             aria-label={m.notif_dismiss()}
           >
             <CloseOutline class="h-4 w-4" />
+          </button>
+        {/if}
+        {#if n.lifecycle === "persistent"}
+          <button
+            class="text-gray-400 hover:text-red-500 dark:hover:text-red-400 shrink-0"
+            onclick={(e) => {
+              e.stopPropagation();
+              deleteNotification(n.id);
+            }}
+            aria-label={m.action_delete()}
+          >
+            <TrashBinOutline class="h-4 w-4" />
           </button>
         {/if}
       </div>

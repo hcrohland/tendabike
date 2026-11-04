@@ -229,6 +229,9 @@ pub enum ApiWrite {
     /// `POST /api/notification/read-all` — read all of the user's
     /// notifications (lifecycle-aware for each).
     NotificationReadAll,
+    /// `DELETE /api/notification/{id}` — delete a notification (any of the
+    /// recipient's; the recipient guard applies).
+    NotificationDelete { id: NotificationId },
 
     // --- user (onboarding, `/strava`) ---
     /// Trigger the initial Strava sync (the query's `time`, 0 = "now"). The
@@ -548,6 +551,9 @@ pub async fn exec(
         )),
         ApiWrite::NotificationReadAll => Ok(WriteOutcome::Summary(
             Notification::read_all(session.user_id(), store).await?,
+        )),
+        ApiWrite::NotificationDelete { id } => Ok(WriteOutcome::Summary(
+            id.delete(session.user_id(), store).await?,
         )),
 
         // --- user (onboarding) ---
