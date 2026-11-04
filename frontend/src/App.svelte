@@ -73,7 +73,7 @@
 </script>
 
 <div class="max-w-4xl">
-  <Header {promise} />
+  <Header />
 
   <NotificationToasts />
   <InitialSyncDialog />
