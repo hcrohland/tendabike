@@ -120,6 +120,27 @@ impl NotificationId {
         }
         Ok(summary)
     }
+
+    /// Delete a notification: removes the row and returns the [`Summary`]
+    /// carrying its tombstone.
+    ///
+    /// The recipient guard (ADR-0008): the store filters by recipient, so a
+    /// non-recipient gets `None` → `NotFound` (no existence leak). Applies to
+    /// any of the recipient's notifications, transient or persistent —
+    /// `read` is the lifecycle-aware path, `delete` is the removal.
+    pub async fn delete(
+        self,
+        recipient: UserId,
+        store: &mut impl NotificationStore,
+    ) -> TbResult<Summary> {
+        let deleted = store
+            .notification_delete(self, recipient)
+            .await?
+            .ok_or_else(|| Error::NotFound(self.to_string()))?;
+        let mut summary = Summary::default();
+        summary.notifications.tombstone(deleted);
+        Ok(summary)
+    }
 }
 
 /// The notification's lifecycle: decides what a read does.

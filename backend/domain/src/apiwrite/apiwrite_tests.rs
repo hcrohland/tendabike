@@ -22,9 +22,9 @@ use crate::test_support::{
 };
 use crate::traits::{ActivityStore, PartNoteStore, PartStore};
 use crate::{
-    ActTypeId, Activity, ActivityId, Error, MAX_TIME, Part, PartId, PartNote, PartNoteId, Service,
-    ServiceId, ServicePlan, ServicePlanId, Shop, ShopId, ShopSubscription, SubscriptionId,
-    SubscriptionStatus, Summary, Usage, UsageId, UserId,
+    ActTypeId, Activity, ActivityId, Error, MAX_TIME, NotificationId, Part, PartId, PartNote,
+    PartNoteId, Service, ServiceId, ServicePlan, ServicePlanId, Shop, ShopId, ShopSubscription,
+    SubscriptionId, SubscriptionStatus, Summary, Usage, UsageId, UserId,
 };
 use time::macros::datetime;
 
@@ -773,5 +773,49 @@ async fn shop_register_and_unregister_part_dispatch() -> TbResult<()> {
         .await?,
     );
     assert_eq!(summary.parts.get(&part).unwrap().shop, None);
+    Ok(())
+}
+
+// --- Notification ---
+
+#[tokio::test]
+async fn notification_delete_reports_tombstone() -> TbResult<()> {
+    let id = NotificationId::from(uuid::Uuid::now_v7());
+    let mut store = MockStore::new();
+    store
+        .expect_notification_delete()
+        .withf(move |nid, recipient| *nid == id && *recipient == test_user())
+        .times(1)
+        .returning(move |_, _| Ok(Some(id)));
+
+    let summary = outcome_summary(
+        exec(
+            ApiWrite::NotificationDelete { id },
+            &test_session(),
+            &mut store,
+        )
+        .await?,
+    );
+    assert_eq!(summary.notifications, only_tombstone(id));
+    Ok(())
+}
+
+#[tokio::test]
+async fn notification_delete_missing_is_not_found() -> TbResult<()> {
+    let mut store = MockStore::new();
+    store
+        .expect_notification_delete()
+        .returning(|_, _| Ok(None));
+
+    let err = exec(
+        ApiWrite::NotificationDelete {
+            id: NotificationId::from(uuid::Uuid::now_v7()),
+        },
+        &test_session(),
+        &mut store,
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err, Error::NotFound(_)));
     Ok(())
 }
