@@ -75,9 +75,11 @@ export function checkStatus(response: Response) {
   }
 
   if (response.status === 401) {
-    window.location.href =
-      "/about?path=" +
-      encodeURIComponent(window.location.pathname + window.location.search);
+    if (window.location.pathname !== "/about") {
+      window.location.href =
+        "/about?path=" +
+        encodeURIComponent(window.location.pathname + window.location.search);
+    }
     if (getUser() == undefined) return;
     setUser(undefined);
   }
