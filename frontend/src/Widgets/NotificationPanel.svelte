@@ -201,7 +201,7 @@
               e.stopPropagation();
               deleteNotification(n.id);
             }}
-            aria-label={m.notif_delete()}
+            aria-label={m.action_delete()}
           >
             <TrashBinOutline class="h-4 w-4" />
           </button>
