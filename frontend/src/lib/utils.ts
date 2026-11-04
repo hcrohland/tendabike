@@ -1,4 +1,3 @@
-import { router } from "svelte-spa-router";
 import { getUser, setUser } from "./user";
 import { error } from "./notification.svelte";
 import { getShop } from "./shop.svelte";
@@ -76,7 +75,9 @@ export function checkStatus(response: Response) {
   }
 
   if (response.status === 401) {
-    window.location.href = "/#/about?path=/#" + router.location;
+    window.location.href =
+      "/about?path=" +
+      encodeURIComponent(window.location.pathname + window.location.search);
     if (getUser() == undefined) return;
     setUser(undefined);
   }

@@ -21,7 +21,7 @@
   import { stateValues } from "./lib/mapable.svelte";
   import Sport from "./Widgets/Sport.svelte";
   import { getCategory } from "./lib/types";
-  import { router } from "svelte-spa-router";
+  import { page } from "$app/state";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
   import Garmin from "./Activity/Garmin.svelte";
   import ShopMenu from "./Shop/ShopMenu.svelte";
@@ -65,7 +65,7 @@
     }
   }
 
-  let activeUrl = $derived("/#" + router.location);
+  let activeUrl = $derived(page.url.pathname);
 
   const isDev = import.meta.env.DEV;
 
@@ -84,7 +84,7 @@
 </script>
 
 <Navbar class="text-text-1">
-  <NavBrand href="/#/cat">
+  <NavBrand href="/cat">
     <img
       src="favicon.png"
       alt="TendaBike"
@@ -143,14 +143,14 @@
         <ShopMenu />
         {#if getUser()?.is_admin}
           <DropdownDivider />
-          <DropdownItem href="/#/admin">{m.header_admin()}</DropdownItem>
+          <DropdownItem href="/admin">{m.header_admin()}</DropdownItem>
         {/if}
         <DropdownDivider />
         <DropdownItem href="/api/user/export" download="tendabike.json">
           {m.header_export()}
         </DropdownItem>
 
-        <DropdownItem href="/#/about">{m.header_about()}</DropdownItem>
+        <DropdownItem href="/about">{m.header_about()}</DropdownItem>
         <DropdownItem href="/strava/logout">{m.header_logout()}</DropdownItem>
         <DropdownItem>
           <!-- Language switcher -->
@@ -182,19 +182,19 @@
           "text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400",
       }}
     >
-      <NavLi class="justify-start" href="/#/cat">
+      <NavLi class="justify-start" href="/cat">
         {getCategory()!.localizedName()}s
       </NavLi>
-      <NavLi href="/#/plans">{m.nav_services()}</NavLi>
-      <NavLi href="/#/spares">{m.nav_parts()}</NavLi>
+      <NavLi href="/plans">{m.nav_services()}</NavLi>
+      <NavLi href="/spares">{m.nav_parts()}</NavLi>
       {#if !getShop()}
-        <NavLi href="/#/activities">{m.nav_activities()}</NavLi>
-        <NavLi href="/#/stats">{m.nav_statistics()}</NavLi>
+        <NavLi href="/activities">{m.nav_activities()}</NavLi>
+        <NavLi href="/stats">{m.nav_statistics()}</NavLi>
       {/if}
     </NavUl>
   {:else}
     <div class="flex items-center md:order-2">
-      <a href={"/strava/login?" + router.querystring}>
+      <a href={"/strava/login" + page.url.search}>
         <img src="connect_with_strava.png" alt="Login with Strava" />
       </a>
     </div>
