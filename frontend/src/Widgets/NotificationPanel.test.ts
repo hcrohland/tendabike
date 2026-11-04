@@ -2,8 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { notifications } from "../lib/notification.svelte";
 import { Part, parts } from "../lib/part";
-import { shops, setShop, Shop } from "../lib/shop";
-import { getShop } from "../lib/shop.svelte";
+import { shops, setShop } from "../lib/shop";
 import { setUser } from "../lib/user";
 import { resp } from "../test/helpers";
 import NotificationPanel from "./NotificationPanel.svelte";
@@ -61,19 +60,6 @@ function seedPart(id: number, name: string, shop: number | null = null) {
       disposed_at: null,
       usage: "u1",
       shop,
-    }),
-  ]);
-}
-
-function seedShop(id: number, owner: number = 1) {
-  shops.setMap([
-    new Shop({
-      id,
-      owner,
-      name: "Shop " + id,
-      description: "",
-      auto_approve: false,
-      created_at: "2023-01-01T00:00:00Z",
     }),
   ]);
 }
@@ -148,32 +134,7 @@ describe("NotificationPanel navigation", () => {
     expect(globalThis.location.hash).toBe("#/shops?tab=my-shops");
   });
 
-  it("a part registered entry opens the part in its shop (activates the shop, then the part route)", () => {
-    seedShop(10);
-    seedPart(5, "Wheel", 10);
-    seedNotification({
-      kind: "part_registered",
-      subject: { type: "part", id: 5 },
-    });
-    render(NotificationPanel, { close: () => {} });
-    fireEvent.click(screen.getByText("Part registered"));
-    expect(globalThis.location.hash).toBe("#/part/5");
-    expect(getShop()?.id).toBe(10);
-  });
-
-  it("a part registered entry does not navigate when the part is not in local state", () => {
-    seedNotification({
-      kind: "part_registered",
-      subject: { type: "part", id: 99 },
-    });
-    render(NotificationPanel, { close: () => {} });
-    fireEvent.click(screen.getByText("Part registered"));
-    expect(globalThis.location.hash).toBe("");
-  });
-
-  it("a part registered entry does not navigate when its shop is not in local state", () => {
-    // The part exists and points at a shop, but that shop is not in the
-    // client's local state.
+  it("a part registered entry does not navigate (informational)", () => {
     seedPart(5, "Wheel", 10);
     seedNotification({
       kind: "part_registered",

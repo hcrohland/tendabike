@@ -9,7 +9,6 @@
   } from "../lib/notification.svelte";
   import type { Notification } from "../lib/notification.svelte";
   import { parts } from "../lib/part";
-  import { shops, setShop, type Shop } from "../lib/shop";
   import { subscriptions } from "../lib/subscription";
   import * as m from "../../paraglide/messages";
   import XsButton from "./XsButton.svelte";
@@ -96,28 +95,16 @@
 
   /// The navigation target of a notification, derived from its kind:
   /// subscription kinds land on /shops (the shop-owner tab for the
-  /// shop-owner kinds, the requester tab for a response); a registered part
-  /// opens that part in its shop; an unregistered part is informational (no
-  /// target). A registered part is navigable only if both the part and its
-  /// shop are in the client's local state.
-  function targetFor(n: Notification): { route: string; shop?: Shop } | null {
+  /// shop-owner kinds, the requester tab for a response); part notifications
+  /// are informational (no target).
+  function targetFor(n: Notification): { route: string } | null {
     switch (n.kind) {
       case "sub_request":
       case "sub_cancelled":
         return { route: "/shops?tab=my-shops" };
       case "sub_response":
         return { route: "/shops?tab=my-subscriptions" };
-      case "part_registered": {
-        const subject = n.subject as { type: string; id: number } | null;
-        if (!subject || subject.type !== "part" || subject.id == null)
-          return null;
-        const part = parts[String(subject.id)];
-        if (!part) return null;
-        if (part.shop == null) return null;
-        const shop = shops[String(part.shop)];
-        if (!shop) return null;
-        return { route: "/part/" + subject.id, shop };
-      }
+      case "part_registered":
       case "part_unregistered":
       default:
         return null;
@@ -130,7 +117,6 @@
   function navigate(n: Notification) {
     const target = targetFor(n);
     if (!target) return;
-    if (target.shop) setShop(target.shop);
     window.location.hash = "#" + target.route;
     dismiss(n.id);
     close();
