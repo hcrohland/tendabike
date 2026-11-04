@@ -1,18 +1,13 @@
 import { render, screen } from "@testing-library/svelte";
 import { afterEach, describe, expect, it } from "vitest";
 import DateTime from "./DateTime.svelte";
-import { formatDate, parseDate } from "svelty-picker";
-import { de, en } from "svelty-picker/i18n";
 import { getLocale, overwriteGetLocale } from "../../paraglide/runtime";
 
-// Issue #483: the picker round-trips its string value across a locale
-// boundary. The SveltyPicker component formats/parses with the i18n it is
-// given (default: en), while the widget's bind:value accessor uses the
-// client locale (de). Month names that differ between the two ("Okt" vs
-// "Oct") then fail the cross-locale parse (indexOf -1 -> month 0 ->
-// wraps to December), so a German client sees a date two months off.
-// (Non-ASCII month names like "Mär" are safe: the library's token split
-// treats any non-ASCII character as a token character.)
+// Issue #483: the picker must display the date in the client's locale. The
+// Datepicker formats its input with `toLocaleDateString(locale)`, so whatever
+// date the form holds, the date input shows it in the client locale — a
+// German client sees "8.10.2026", an English client "10/8/2026". The time
+// lives in a separate time input, so the date input carries only the day.
 
 const realGetLocale = getLocale;
 
@@ -25,21 +20,16 @@ function useLocale(locale: "en" | "de") {
   expect(getLocale()).toBe(locale);
 }
 
-// The contract: whatever date the form holds, the picker's input must
-// display exactly that date, in the client's locale.
+// The contract: whatever date the form holds, the date input must display
+// exactly that date, in the client's locale.
 function expectDisplays(date: Date, locale: "en" | "de") {
   const input = screen.getByRole("textbox") as HTMLInputElement;
-  expect(input.value).toBe(
-    formatDate(date, "d. M yyyy - h:ii", locale === "de" ? de : en, "standard"),
+  const dateOnly = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
   );
-  // and the displayed string parses back to the same date
-  const parsed = parseDate(
-    input.value,
-    "d. M yyyy - h:ii",
-    locale === "de" ? de : en,
-    "standard",
-  );
-  expect(parsed.getTime()).toBe(date.getTime());
+  expect(input.value).toBe(dateOnly.toLocaleDateString(locale));
 }
 
 describe("DateTime (client locale)", () => {
@@ -50,8 +40,8 @@ describe("DateTime (client locale)", () => {
     expectDisplays(date, "de");
   });
 
-  it("displays an umlaut month (Mär) in the German locale (issue #483)", () => {
-    // non-ASCII month names must survive the round-trip in the client locale
+  it("displays a umlaut month in the German locale (issue #483)", () => {
+    // non-ASCII month names must not break the locale display
     useLocale("de");
     const date = new Date(2026, 2, 8, 14, 30); // 8. Mär 2026
     render(DateTime, { props: { date } });

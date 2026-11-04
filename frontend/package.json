@@ -38,8 +38,5 @@
     "typescript": "6",
     "vite": "8",
     "vitest": "^5.0.0"
-  },
-  "dependencies": {
-    "svelty-picker": "^6.1.6"
   }
 }

@@ -1,15 +1,13 @@
 <script lang="ts">
   import { preventDefault } from "svelte/legacy";
 
-  import SveltyPicker, { formatDate, parseDate } from "svelty-picker";
   import { roundTime } from "../lib/utils";
-  import { Button, ButtonGroup } from "flowbite-svelte";
+  import { Button, ButtonGroup, Datepicker, Timepicker } from "flowbite-svelte";
   import {
     AngleLeftOutline,
     AngleRightOutline,
     ClockOutline,
   } from "flowbite-svelte-icons";
-  import { en, de } from "svelty-picker/i18n";
   import { getLocale } from "../../paraglide/runtime";
 
   type Props = {
@@ -32,7 +30,9 @@
     rounded = false,
   }: Props = $props();
 
-  const pickerLocale = getLocale() === "de" ? de : en;
+  // the client locale drives the Datepicker's display (issue #483: the date
+  // must show in the client's locale, so a German client sees "8.10.2026")
+  const locale = getLocale();
   const min = () => (mindate ? roundTime(mindate) : undefined);
   const max = () => (maxdate ? roundTime(maxdate) : undefined);
   let now = roundTime(new Date());
@@ -41,47 +41,63 @@
     "bg-surface-3 " + (rounded ? "rounded-l-md" : "rounded-none"),
   );
 
-  const options = {
-    // time_24hr: true,
-    minuteIncrement: 15,
-    format: "d. M yyyy - h:ii",
-    startDate: min(),
-    endDate: max(),
-    // the picker must format with the same locale the bind:value accessor
-    // parses with, or month names fail the round-trip across the locale
-    // boundary (issue #483: German client, English default)
-    i18n: pickerLocale,
-    displayFormat: "d. M yyyy - h:ii",
-    displayFormatType: "standard",
-    todayBtn: false,
-    clearBtn: false,
-    autocommit: false,
-    // manualInput: true,
-  };
+  // `date` is split across the two pickers: the Datepicker owns the day, the
+  // Timepicker owns the HH:mm. Each binds through an accessor that merges its
+  // half back into `date`, preserving the other half.
+  const datePart = $derived(
+    date
+      ? new Date(date.getFullYear(), date.getMonth(), date.getDate())
+      : undefined,
+  );
+  const timePart = $derived(
+    date
+      ? `${String(date.getHours()).padStart(2, "0")}:${String(
+          date.getMinutes(),
+        ).padStart(2, "0")}`
+      : "00:00",
+  );
+
+  function setDatePart(day: Date | undefined) {
+    if (!day) return;
+    const h = date ? date.getHours() : 0;
+    const m = date ? date.getMinutes() : 0;
+    date = new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m);
+  }
+  function setTimePart(hhmm: string) {
+    if (!hhmm) return;
+    const [h, m] = hhmm.split(":").map(Number);
+    const base = date ?? new Date();
+    date = new Date(base.getFullYear(), base.getMonth(), base.getDate(), h, m);
+  }
 </script>
 
 <ButtonGroup>
-  <SveltyPicker
+  <Datepicker
     bind:value={
       () => {
-        return formatDate(
-          roundTime(date),
-          options.format,
-          pickerLocale,
-          "standard",
-        );
+        return datePart;
       },
       (v) => {
-        date = v
-          ? parseDate(v, options.format, pickerLocale, "standard")
-          : null;
+        setDatePart(v);
       }
     }
-    placeholder={formatDate(date, options.format, pickerLocale, "standard")}
-    mode="datetime"
-    {required}
-    {inputClasses}
-    {...options}
+    {locale}
+    availableFrom={min()}
+    availableTo={max()}
+    inputClass={inputClasses}
+    required={required ?? false}
+  />
+  <Timepicker
+    bind:value={
+      () => {
+        return timePart;
+      },
+      (v) => {
+        setTimePart(v);
+      }
+    }
+    inputClass={inputClasses}
+    required={required ?? false}
   />
 
   {#if prevdate}
@@ -108,65 +124,3 @@
     </Button>
   {/if}
 </ButtonGroup>
-
-<style>
-  :root {
-    :global(.dark) {
-      --sdt-bg-main: #585858;
-      --sdt-shadow-color: #777;
-      --sdt-color: #eee;
-      --sdt-clock-color: var(--sdt-color);
-      --sdt-clock-color-hover: var(--sdt-color);
-      --sdt-clock-time-bg: transparent;
-      --sdt-clock-time-bg-hover: transparent;
-      --sdt-clock-disabled: #b22222;
-      --sdt-clock-disabled-bg: var(--sdt-bg-main);
-      --sdt-clock-selected-bg: var(--sdt-bg-selected);
-      --sdt-header-color: #eee;
-      --sdt-bg-selected: #e1ac4a;
-      --sdt-table-disabled-date: #b22222;
-      --sdt-table-disabled-date-bg: var(--sdt-bg-main);
-      --sdt-table-data-bg-hover: #777;
-      --sdt-table-selected-bg: var(--sdt-bg-selected);
-      --sdt-header-btn-bg-hover: #777;
-      --sdt-color-selected: #fff;
-      --sdt-table-today-indicator: #ccc;
-      --sdt-clock-bg: #999;
-      /* custom buttons */
-      --sdt-today-bg: #e4a124;
-      --sdt-today-color: #fff;
-      --sdt-clear-color: #666;
-      --sdt-clear-bg: #ddd;
-      --sdt-clear-hover-color: #fff;
-      --sdt-clear-hover-bg: #dc3545;
-    }
-    :global(.light) {
-      --sdt-bg-main: #fff;
-      --sdt-shadow-color: #ccc;
-      --sdt-color: inherit;
-      --sdt-clock-color: var(--sdt-color);
-      --sdt-clock-color-hover: var(--sdt-color);
-      --sdt-clock-time-bg: transparent;
-      --sdt-clock-time-bg-hover: transparent;
-      --sdt-clock-disabled: #b22222;
-      --sdt-clock-disabled-bg: var(--sdt-bg-main);
-      --sdt-clock-selected-bg: var(--sdt-bg-selected);
-      --sdt-bg-selected: #286090;
-      --sdt-table-disabled-date: #b22222;
-      --sdt-table-disabled-date-bg: var(--sdt-bg-main);
-      --sdt-table-data-bg-hover: #eee;
-      --sdt-table-selected-bg: var(--sdt-bg-selected);
-      --sdt-header-btn-bg-hover: #dfdfdf;
-      --sdt-color-selected: #fff;
-      --sdt-table-today-indicator: #ccc;
-      --sdt-clock-bg: #eeeded;
-      /* custom buttons */
-      --sdt-today-bg: #1e486d;
-      --sdt-today-color: #fff;
-      --sdt-clear-color: #dc3545;
-      --sdt-clear-bg: #fff;
-      --sdt-clear-hover-color: #fff;
-      --sdt-clear-hover-bg: #dc3545;
-    }
-  }
-</style>
