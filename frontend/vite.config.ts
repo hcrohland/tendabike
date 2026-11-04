@@ -1,7 +1,9 @@
+import adapter from "@sveltejs/adapter-static";
 import { paraglideVitePlugin } from "@inlang/paraglide-js";
+import { sveltekit } from "@sveltejs/kit/vite";
+import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vitest/config";
-import { svelte } from "@sveltejs/vite-plugin-svelte";
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -12,7 +14,10 @@ export default defineConfig({
       strategy: ["cookie", "preferredLanguage", "baseLocale"],
     }),
     tailwindcss(),
-    svelte(),
+    sveltekit({
+      adapter: adapter({ fallback: "200.html" }),
+      preprocess: vitePreprocess(),
+    }),
   ],
 
   resolve: {

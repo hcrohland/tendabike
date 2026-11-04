@@ -3,7 +3,7 @@
   import * as m from "../../paraglide/messages";
   import { exitShop, getShop } from "../lib/shop";
 
-  let { children } = $props();
+  let { children = () => {} } = $props();
 </script>
 
 <div class={getShop() != undefined ? "border border-gray p-4 rounded-xl" : ""}>

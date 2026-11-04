@@ -16,7 +16,7 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or_else(|_| "postgres://localhost/tendabike".to_string());
 
     let path = std::env::var("STATIC_WWW").unwrap_or_else(|_| {
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../../frontend/dist").to_string()
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../../frontend/build").to_string()
     });
     let path = Path::new(&path)
         .canonicalize()

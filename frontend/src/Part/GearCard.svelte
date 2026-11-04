@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Card, Badge } from "flowbite-svelte";
-  import { link, push } from "svelte-spa-router";
+  import { goto } from "$app/navigation";
   import { Part } from "../lib/part";
   import { fmtDate } from "../lib/utils";
   import { types } from "../lib/types";
@@ -41,11 +41,11 @@
       (summary
         ? " hover:bg-gray-300 dark:hover:bg-gray-500 cursor-pointer"
         : "")}
-    onclick={() => summary && push("/part/" + part.id)}
+    onclick={() => summary && goto("/part/" + part.id)}
   >
     {#if part.owner == getUser()!.id}
       {#if summary}
-        <a href="/part/{part.id}" use:link class="text-decoration-none">
+        <a href="/part/{part.id}" class="text-decoration-none">
           {part.name}
         </a>
       {:else}

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Dropdown, DropdownDivider, DropdownItem } from "flowbite-svelte";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
+  import { goto } from "$app/navigation";
   import * as m from "../../paraglide/messages";
 
   import { Shop, shops, getShop, setShop } from "../lib/shop";
@@ -17,7 +18,7 @@
     if (myshop.owner == getUser()?.id) await refresh();
 
     // Navigate to main page
-    window.location.hash = "#/cat";
+    goto("/cat");
   }
 </script>
 

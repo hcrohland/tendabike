@@ -21,7 +21,7 @@
   import { stateValues } from "./lib/mapable.svelte";
   import Sport from "./Widgets/Sport.svelte";
   import { getCategory } from "./lib/types";
-  import { router } from "svelte-spa-router";
+  import { page } from "$app/state";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
   import Garmin from "./Activity/Garmin.svelte";
   import ShopMenu from "./Shop/ShopMenu.svelte";
@@ -31,28 +31,19 @@
   import { onDestroy } from "svelte";
   import NotificationBell from "./Widgets/NotificationBell.svelte";
 
-  let { promise } = $props();
-
   let openGarmin = $state(false);
 
-  /// The avatar spinner tracks the initial catch-up snapshot (part of
-  /// initData's promise) and every reconnect snapshot.
-  // svelte-ignore state_referenced_locally — `promise` is the initData
-  // promise created once in App's module scope; its identity is stable, so
-  // capturing it at init is the intent (it is the initial snapshot).
-  let hook_promise = $state(promise);
+  /// The avatar spinner tracks every reconnect snapshot and manual refresh.
+  /// Initialized to a resolved promise so the avatar shows immediately on
+  /// mount (the initial snapshot already completed in the layout's load()).
+  let hook_promise = $state<Promise<void>>(Promise.resolve());
 
-  /// The stream opens only once the user is known: an anonymous session
-  /// gets the About page (the 401 redirect), never a stream. The initial
-  /// snapshot (initData's refresh) is the single hydration; the stream
-  /// buffers the frames that race it until it settles — a failed hydration
-  /// flushes too: the frames are the newest state, and the buffer must not
-  /// grow unbounded.
+  /// The stream opens on mount: by the time the layout renders, the user is
+  /// known (the layout's load() redirected anonymous sessions). The initial
+  /// snapshot (initData) already landed, so markHydrated flushes any frames
+  /// that raced it, then the stream delivers live updates.
   $effect(() => {
-    promise.then(
-      () => markHydrated(),
-      () => markHydrated(),
-    );
+    markHydrated();
     if (getUser()) {
       startStream((p) => (hook_promise = p));
     }
@@ -74,7 +65,7 @@
     }
   }
 
-  let activeUrl = $derived("/#" + router.location);
+  let activeUrl = $derived(page.url.pathname);
 
   const isDev = import.meta.env.DEV;
 
@@ -93,7 +84,7 @@
 </script>
 
 <Navbar class="text-text-1">
-  <NavBrand href="/#/cat">
+  <NavBrand href="/cat">
     <img
       src="favicon.png"
       alt="TendaBike"
@@ -131,38 +122,35 @@
         </DropdownHeader>
         <DropdownDivider />
         <Sport />
-        {#await promise then}
-          <DropdownItem class="cursor-pointer flex-end">
-            {m.header_sync()}
-            <ChevronDownOutline class="inline" />
+        <DropdownItem class="cursor-pointer flex-end">
+          {m.header_sync()}
+          <ChevronDownOutline class="inline" />
+        </DropdownItem>
+        <Dropdown simple>
+          <DropdownItem onclick={fullrefresh}>{m.header_refresh()}</DropdownItem
+          >
+          <DropdownItem onclick={() => (openGarmin = true)}>
+            {m.header_csv()}
           </DropdownItem>
-          <Dropdown simple>
-            <DropdownItem onclick={fullrefresh}
-              >{m.header_refresh()}</DropdownItem
-            >
-            <DropdownItem onclick={() => (openGarmin = true)}>
-              {m.header_csv()}
+          {#if getUser()?.onboarding_status === "initial_sync_postponed"}
+            <DropdownDivider />
+            <DropdownItem onclick={triggerHistoricSync}>
+              {m.header_import_historic()}
             </DropdownItem>
-            {#if getUser()?.onboarding_status === "initial_sync_postponed"}
-              <DropdownDivider />
-              <DropdownItem onclick={triggerHistoricSync}>
-                {m.header_import_historic()}
-              </DropdownItem>
-            {/if}
-          </Dropdown>
-          <Garmin bind:open={openGarmin} />
-        {/await}
+          {/if}
+        </Dropdown>
+        <Garmin bind:open={openGarmin} />
         <ShopMenu />
         {#if getUser()?.is_admin}
           <DropdownDivider />
-          <DropdownItem href="/#/admin">{m.header_admin()}</DropdownItem>
+          <DropdownItem href="/admin">{m.header_admin()}</DropdownItem>
         {/if}
         <DropdownDivider />
         <DropdownItem href="/api/user/export" download="tendabike.json">
           {m.header_export()}
         </DropdownItem>
 
-        <DropdownItem href="/#/about">{m.header_about()}</DropdownItem>
+        <DropdownItem href="/about">{m.header_about()}</DropdownItem>
         <DropdownItem href="/strava/logout">{m.header_logout()}</DropdownItem>
         <DropdownItem>
           <!-- Language switcher -->
@@ -194,19 +182,19 @@
           "text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400",
       }}
     >
-      <NavLi class="justify-start" href="/#/cat">
+      <NavLi class="justify-start" href="/cat">
         {getCategory()!.localizedName()}s
       </NavLi>
-      <NavLi href="/#/plans">{m.nav_services()}</NavLi>
-      <NavLi href="/#/spares">{m.nav_parts()}</NavLi>
+      <NavLi href="/plans">{m.nav_services()}</NavLi>
+      <NavLi href="/spares">{m.nav_parts()}</NavLi>
       {#if !getShop()}
-        <NavLi href="/#/activities">{m.nav_activities()}</NavLi>
-        <NavLi href="/#/stats">{m.nav_statistics()}</NavLi>
+        <NavLi href="/activities">{m.nav_activities()}</NavLi>
+        <NavLi href="/stats">{m.nav_statistics()}</NavLi>
       {/if}
     </NavUl>
   {:else}
     <div class="flex items-center md:order-2">
-      <a href={"/strava/login?" + router.querystring}>
+      <a href={"/strava/login" + page.url.search}>
         <img src="connect_with_strava.png" alt="Login with Strava" />
       </a>
     </div>

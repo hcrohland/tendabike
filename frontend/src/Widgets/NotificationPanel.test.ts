@@ -1,11 +1,16 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { goto } from "$app/navigation";
 import { notifications } from "../lib/notification.svelte";
 import { Part, parts } from "../lib/part";
 import { shops, setShop } from "../lib/shop";
 import { setUser } from "../lib/user";
 import { resp } from "../test/helpers";
 import NotificationPanel from "./NotificationPanel.svelte";
+
+vi.mock("$app/navigation", () => ({
+  goto: vi.fn(),
+}));
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -14,7 +19,7 @@ beforeEach(() => {
     .fn()
     .mockImplementation(() => Promise.resolve(resp(null, 204, true)));
   vi.stubGlobal("fetch", fetchMock);
-  vi.stubGlobal("location", { hash: "" });
+  vi.mocked(goto).mockClear();
   setUser(user);
   notifications.setMap([]);
   parts.setMap([]);
@@ -111,7 +116,7 @@ describe("NotificationPanel navigation", () => {
     seedNotification({ kind: "sub_request" });
     render(NotificationPanel, { close: () => {} });
     fireEvent.click(screen.getByText("Shop subscription request"));
-    expect(globalThis.location.hash).toBe("#/shops?tab=my-shops");
+    expect(goto).toHaveBeenCalledWith("/shops?tab=my-shops");
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/notification/n1/read",
@@ -124,14 +129,14 @@ describe("NotificationPanel navigation", () => {
     seedNotification({ kind: "sub_response" });
     render(NotificationPanel, { close: () => {} });
     fireEvent.click(screen.getByText("Shop subscription response"));
-    expect(globalThis.location.hash).toBe("#/shops?tab=my-subscriptions");
+    expect(goto).toHaveBeenCalledWith("/shops?tab=my-subscriptions");
   });
 
   it("a subscription cancelled entry navigates to the shops page on the shop-owner tab", () => {
     seedNotification({ kind: "sub_cancelled" });
     render(NotificationPanel, { close: () => {} });
     fireEvent.click(screen.getByText("Subscription cancelled"));
-    expect(globalThis.location.hash).toBe("#/shops?tab=my-shops");
+    expect(goto).toHaveBeenCalledWith("/shops?tab=my-shops");
   });
 
   it("a part registered entry does not navigate (informational)", () => {
@@ -142,7 +147,7 @@ describe("NotificationPanel navigation", () => {
     });
     render(NotificationPanel, { close: () => {} });
     fireEvent.click(screen.getByText("Part registered"));
-    expect(globalThis.location.hash).toBe("");
+    expect(goto).not.toHaveBeenCalled();
   });
 
   it("a part unregistered entry does not navigate (informational)", () => {
@@ -153,14 +158,14 @@ describe("NotificationPanel navigation", () => {
     });
     render(NotificationPanel, { close: () => {} });
     fireEvent.click(screen.getByText("Part unregistered"));
-    expect(globalThis.location.hash).toBe("");
+    expect(goto).not.toHaveBeenCalled();
   });
 
   it("the dismiss control dismisses without triggering navigation", async () => {
     seedNotification({ kind: "sub_request" });
     render(NotificationPanel, { close: () => {} });
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
-    expect(globalThis.location.hash).toBe("");
+    expect(goto).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/notification/n1/read",
@@ -175,7 +180,7 @@ describe("NotificationPanel delete", () => {
     seedNotification({ kind: "sub_request", lifecycle: "persistent" });
     render(NotificationPanel, { close: () => {} });
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    expect(globalThis.location.hash).toBe("");
+    expect(goto).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/notification/n1",
