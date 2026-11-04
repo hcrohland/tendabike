@@ -30,8 +30,8 @@
     rounded = false,
   }: Props = $props();
 
-  // the client locale drives the Datepicker's display (issue #483: the date
-  // must show in the client's locale, so a German client sees "8.10.2026")
+  // the client locale drives the Datepicker's display, so the date shows in
+  // the client's locale (a German client sees "8.10.2026")
   const locale = getLocale();
   const min = () => (mindate ? roundTime(mindate) : undefined);
   const max = () => (maxdate ? roundTime(maxdate) : undefined);
