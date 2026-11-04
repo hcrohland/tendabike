@@ -58,7 +58,7 @@ fi
 
 if [ "$run_frontend" -eq 1 ]; then
     npm run fmtcheck
-    npm run check:ci
+    npm run check
 fi
 
 # Dockerfile build-deps stubs: the image compiles from the manifests alone with
