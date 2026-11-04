@@ -2623,7 +2623,7 @@ async fn shop_stream_non_owner_is_forbidden() {
 
 /// A client-side route returns the SPA entry document (`200.html`) with a 200
 /// status; a real static asset is served as itself; API and Strava routes are
-/// unaffected (ticket #736).
+/// unaffected.
 #[tokio::test]
 async fn spa_fallback_serves_entry_document() {
     let (store, mock) = mock_ctx();
