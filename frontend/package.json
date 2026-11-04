@@ -7,7 +7,7 @@
     "dev": "npx paraglide-js compile --outdir ./paraglide && vite dev",
     "build": "npx paraglide-js compile --outdir ./paraglide && vite build",
     "preview": "vite preview",
-    "check": "npx paraglide-js compile --outdir ./paraglide && svelte-check --tsconfig ./tsconfig.json",
+    "check": "npx paraglide-js compile --outdir ./paraglide && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "format": "prettier --write .",
     "fmtcheck": "prettier --check .",
     "test": "npx paraglide-js compile --outdir ./paraglide && vitest run",
