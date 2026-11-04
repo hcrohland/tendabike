@@ -290,6 +290,7 @@
   "shop_confirm_delete_request": "Delete this rejected request?",
   "shop_register_gear": "Register {category}s",
   "shop_unsubscribe": "Unsubscribe",
+  "shop_unsubscribe_disabled": "Unregister your parts from this shop first",
   "action_synchronize": "Synchronize",
   "action_ok": "Ok",
   "action_update": "Update",

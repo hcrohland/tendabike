@@ -8,6 +8,7 @@
     Dropdown,
     Checkbox,
     Li,
+    Tooltip,
   } from "flowbite-svelte";
   import * as m from "../../paraglide/messages";
   import { myfetch, handleError } from "../lib/utils";
@@ -205,17 +206,33 @@
                           {/each}
                         </Dropdown>
 
-                        <Button
-                          size="xs"
-                          color="alternative"
-                          onclick={() =>
-                            startConfirmation(subscription.id!, "unsubscribe")}
-                          disabled={stateValues(parts).some(
-                            (p) => p.shop == subscription.shop_id,
-                          )}
+                        {@const hasParts = stateValues(parts).some(
+                          (p) => p.shop == subscription.shop_id,
+                        )}
+                        <span
+                          id="unsubscribe-btn-{subscription.id}"
+                          class="inline-block"
                         >
-                          {m.shop_unsubscribe()}
-                        </Button>
+                          <Button
+                            size="xs"
+                            color="alternative"
+                            onclick={() =>
+                              startConfirmation(
+                                subscription.id!,
+                                "unsubscribe",
+                              )}
+                            disabled={hasParts}
+                          >
+                            {m.shop_unsubscribe()}
+                          </Button>
+                        </span>
+                        {#if hasParts}
+                          <Tooltip
+                            triggeredBy="#unsubscribe-btn-{subscription.id}"
+                          >
+                            {m.shop_unsubscribe_disabled()}
+                          </Tooltip>
+                        {/if}
                       </ButtonGroup>
                     {:else if subscription.status === "rejected"}
                       <Button

@@ -290,6 +290,7 @@
   "shop_confirm_delete_request": "Diese abgelehnte Anfrage löschen?",
   "shop_register_gear": "{category}s zuordnen",
   "shop_unsubscribe": "Mitgliedschaft beenden",
+  "shop_unsubscribe_disabled": "Registriere zuerst deine Teile aus dieser Werkstatt ab",
   "action_synchronize": "Synchronisieren",
   "action_ok": "Ok",
   "action_update": "Aktualisieren",
