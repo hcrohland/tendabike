@@ -30,7 +30,7 @@
 
   <Dropdown simple>
     <DropdownItem>
-      {@const value = window.location.origin + "/#/register/" + shop.id}
+      {@const value = window.location.origin + "/register/" + shop.id}
 
       <Input {value} readonly>
         {#snippet right()}

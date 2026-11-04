@@ -97,7 +97,7 @@ describe("Activity.gearLink", () => {
     const part5 = new Part(partData({ id: 5, name: "Bike A" }));
     const partsMap = { 5: part5 } as Map<Part>;
     expect(gearLink(a, partsMap)).toBe(
-      `<a href="/#/part/5" style="text-decoration:none" class="text-reset">Bike A</a>`,
+      `<a href="/part/5" style="text-decoration:none" class="text-reset">Bike A</a>`,
     );
   });
 

@@ -9,6 +9,7 @@
     deleteNotification,
   } from "../lib/notification.svelte";
   import type { Notification } from "../lib/notification.svelte";
+  import { goto } from "$app/navigation";
   import { parts } from "../lib/part";
   import { subscriptions } from "../lib/subscription";
   import * as m from "../../paraglide/messages";
@@ -118,7 +119,7 @@
   function navigate(n: Notification) {
     const target = targetFor(n);
     if (!target) return;
-    window.location.hash = "#" + target.route;
+    goto(target.route);
     dismiss(n.id);
     close();
   }

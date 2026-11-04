@@ -21,7 +21,6 @@
   import { newNote } from "./NewNote.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
   import Menu from "../Widgets/Menu.svelte";
-  import { pop } from "svelte-spa-router";
   import ShopRegistration from "../Shop/ShopRegistration.svelte";
   import { m } from "../../paraglide/messages";
 
@@ -68,7 +67,7 @@
         <DropdownItem
           onclick={() => {
             deletePart(part);
-            pop();
+            history.back();
           }}
         >
           {m.action_delete()}

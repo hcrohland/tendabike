@@ -1,3 +1,4 @@
+import { goto } from "$app/navigation";
 import { handleError, myfetch } from "./utils";
 import { refresh } from "./user";
 import { mapableState } from "./mapable.svelte";
@@ -79,7 +80,7 @@ export async function exitShop() {
   await refresh();
 
   // Navigate to main page
-  window.location.hash = "#/cat";
+  goto("/cat");
 }
 
 export const shops = mapableState("id", (data) => new Shop(data));

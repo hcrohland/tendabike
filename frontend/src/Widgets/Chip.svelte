@@ -19,7 +19,6 @@
  -->
 
 <script lang="ts">
-  import { link } from "svelte-spa-router";
   import { Spinner } from "flowbite-svelte";
   import type { Due } from "../lib/serviceplan";
   import ServiceBadge from "./ServiceBadge.svelte";
@@ -74,7 +73,6 @@
   >
     <a
       {href}
-      use:link
       class="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-2 text-reset no-underline w-full"
       onclick={(e) => e.stopPropagation()}
     >
@@ -97,7 +95,6 @@
   <div class="relative rounded-lg shrink-0 {background}">
     <a
       {href}
-      use:link
       class="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-2 text-reset no-underline"
     >
       {@render chipContent()}
