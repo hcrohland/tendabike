@@ -61,7 +61,7 @@ fn set_oauth_env_once() {
 fn test_app(store: MemoryStore, api: Arc<dyn ServiceApi>) -> Router {
     set_oauth_env_once();
     let session_layer = SessionManagerLayer::new(store);
-    routes(AppState::new(api)).layer(session_layer)
+    routes(AppState::new(api), None).layer(session_layer)
 }
 
 /// Creates a session in `store` containing `value` and returns the cookie
@@ -2617,4 +2617,53 @@ async fn shop_stream_non_owner_is_forbidden() {
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_sse(app, "/api/user/stream?shop=1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+// ─── SPA fallback (static serving in the router) ────────────────────────────
+
+/// A client-side route returns the SPA entry document (`200.html`) with a 200
+/// status; a real static asset is served as itself; API and Strava routes are
+/// unaffected (ticket #736).
+#[tokio::test]
+async fn spa_fallback_serves_entry_document() {
+    let (store, mock) = mock_ctx();
+
+    // Create a temp dir with the SPA entry document and a real static asset.
+    let temp_dir = std::env::temp_dir().join(format!("tendabike_spa_test_{}", std::process::id()));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    std::fs::write(temp_dir.join("200.html"), "<html>SPA</html>").unwrap();
+    std::fs::write(temp_dir.join("asset.txt"), "asset content").unwrap();
+
+    let api: Arc<dyn ServiceApi> = Arc::new(mock);
+    let session_layer = SessionManagerLayer::new(store);
+    let app = routes(AppState::new(api), Some(temp_dir.clone())).layer(session_layer);
+
+    // Client-side route gets the SPA entry document.
+    let (status, _headers, body) = run(app.clone(), Method::GET, "/part/123", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("SPA"),
+        "expected the SPA entry document, got: {body_str}"
+    );
+
+    // A real static asset is served as itself (not the fallback).
+    let (status, _headers, body) = run(app.clone(), Method::GET, "/asset.txt", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("asset content"),
+        "expected the real asset, got: {body_str}"
+    );
+
+    // API routes are unaffected (answered by their handlers, not the fallback).
+    let (status, _headers, _body) = run(app.clone(), Method::GET, "/api/types/part", None).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Strava routes are unaffected.
+    let (status, _headers, _body) = run(app, Method::GET, "/strava/login", None).await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+
+    // Clean up.
+    std::fs::remove_dir_all(&temp_dir).ok();
 }

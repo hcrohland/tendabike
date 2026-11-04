@@ -47,11 +47,20 @@ use error::*;
 
 mod stream;
 
-pub fn routes(app_state: AppState) -> Router {
-    Router::new()
+pub fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> Router {
+    let mut router = Router::new()
         .nest("/api", domain::router())
         .nest("/strava", strava::router())
-        .with_state(app_state)
+        .with_state(app_state);
+
+    if let Some(path) = static_path {
+        let fallback_file = path.join("200.html");
+        let static_service = tower_http::services::ServeDir::new(path)
+            .fallback(tower_http::services::ServeFile::new(fallback_file));
+        router = router.fallback_service(static_service);
+    }
+
+    router
 }
 
 pub async fn start(
@@ -94,8 +103,7 @@ pub async fn start(
         )))
         .with_secure(false);
 
-    let app = routes(app_state)
-        .fallback_service(tower_http::services::ServeDir::new(path))
+    let app = routes(app_state, Some(path))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .layer(tower_http::compression::CompressionLayer::new())
         .layer(session_layer);

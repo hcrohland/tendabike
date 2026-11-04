@@ -15,7 +15,7 @@ export default defineConfig({
     }),
     tailwindcss(),
     sveltekit({
-      adapter: adapter({ fallback: "index.html" }),
+      adapter: adapter({ fallback: "200.html" }),
       preprocess: vitePreprocess(),
     }),
   ],
