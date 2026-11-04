@@ -1,3 +1,4 @@
+import { mapableState } from "./mapable.svelte";
 import { Shop } from "./shop";
 import type { UserPublic } from "./user";
 
@@ -25,3 +26,8 @@ export class ShopSubscription {
     this.owner = data.owner;
   }
 }
+
+export const subscriptions = mapableState(
+  "id",
+  (data) => new ShopSubscription(data),
+);

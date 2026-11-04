@@ -10,6 +10,7 @@
   import type { Notification } from "../lib/notification.svelte";
   import { parts } from "../lib/part";
   import { shops, setShop, type Shop } from "../lib/shop";
+  import { subscriptions } from "../lib/subscription";
   import * as m from "../../paraglide/messages";
   import XsButton from "./XsButton.svelte";
 
@@ -20,8 +21,15 @@
     switch (n.kind) {
       case "sub_request":
         return m.notif_title_sub_request();
-      case "sub_response":
+      case "sub_response": {
+        const subject = n.subject as { type: string; id: number } | null;
+        if (subject?.type === "subscription" && subject.id != null) {
+          const sub = subscriptions[String(subject.id)];
+          if (sub?.status === "active") return m.notif_title_sub_approved();
+          if (sub?.status === "rejected") return m.notif_title_sub_rejected();
+        }
         return m.notif_title_sub_response();
+      }
       case "sub_cancelled":
         return m.notif_title_sub_cancelled();
       case "part_registered":
@@ -53,8 +61,15 @@
     switch (n.kind) {
       case "sub_request":
         return m.notif_body_sub_request();
-      case "sub_response":
+      case "sub_response": {
+        const subject = n.subject as { type: string; id: number } | null;
+        if (subject?.type === "subscription" && subject.id != null) {
+          const sub = subscriptions[String(subject.id)];
+          if (sub?.status === "active") return m.notif_body_sub_approved();
+          if (sub?.status === "rejected") return m.notif_body_sub_rejected();
+        }
         return m.notif_body_sub_response();
+      }
       case "sub_cancelled":
         return m.notif_body_sub_cancelled();
       case "part_registered":
@@ -118,6 +133,7 @@
     if (target.shop) setShop(target.shop);
     window.location.hash = "#" + target.route;
     dismiss(n.id);
+    close();
   }
 </script>
 

@@ -15,6 +15,7 @@
   import { Shop, shops } from "../lib/shop";
   import ShopSearch from "./ShopSearch.svelte";
   import type { ShopSubscription } from "../lib/subscription";
+  import { subscriptions as subscriptionsMap } from "../lib/subscription";
   import SubscriptionRow from "./SubscriptionRow.svelte";
   import { requestSubscription } from "./SubscriptionRequestModal.svelte";
   import { allGear, Part, parts } from "../lib/part";
@@ -39,6 +40,7 @@
     loading = true;
     try {
       subscriptions = await myfetch("/api/shop/subscriptions", "GET");
+      subscriptionsMap.setMap(subscriptions.map((s) => s));
       // make sure subscribed shops are visible
       shops.updateMap(
         subscriptions.filter((s) => s.status == "active").map((s) => s.shop),
