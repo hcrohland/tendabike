@@ -13,7 +13,7 @@
 
 - **UI**: Tailwind CSS v4 + flowbite-svelte (components) + flowbite-svelte-icons (icons). New UI comes from flowbite-svelte components — raw Svelte + Tailwind only where the library has no component.
 - **Modals**: each modal owns its open state in module scope and exports a start function that opens it; [`src/Widgets/Actions.svelte`](src/Widgets/Actions.svelte) mounts every modal once, globally, so any page can trigger it. Callers import the start function from the modal module directly — there is no shared actions registry.
-- **Routing**: `svelte-spa-router`; route definitions in [`src/App.svelte`](src/App.svelte).
+- **Routing**: SvelteKit file-based routing; routes in [`src/routes/`](src/routes/).
 - **i18n**: `@inlang/paraglide-js` — edit source messages in `messages/{locale}.json`; `paraglide/` is compiled output.
 - **State**: the Summary collections in `src/lib/*.ts` are Svelte 5 `$state` objects from `mapableState()` in [`src/lib/mapable.svelte.ts`](src/lib/mapable.svelte.ts) — records keyed by id with `setMap`/`updateMap`/`deleteItem` ops; enumerate them with `stateValues()`, never `Object.values` (the ops ride on the record).
 - **State objects**: when adding or touching a `.svelte.ts` state module or its readers, read [`../docs/agents/state-object.md`](../docs/agents/state-object.md) first.
