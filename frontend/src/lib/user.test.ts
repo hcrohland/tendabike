@@ -15,7 +15,8 @@ import { activities } from "./activity";
 import { services } from "./service";
 import { usages } from "./usage";
 import { plans } from "./serviceplan";
-import { shops, setShop, Shop } from "./shop";
+import { shops, Shop } from "./shop";
+import { setShop } from "./shop.svelte";
 import { stateValues } from "./mapable.svelte";
 import { resp, summary, summaryContent } from "../test/helpers";
 

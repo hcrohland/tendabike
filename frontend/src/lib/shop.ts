@@ -1,11 +1,11 @@
 import { goto } from "$app/navigation";
 import { handleError, myfetch } from "./utils";
-import { refresh } from "./user";
+import { refresh, getUser } from "./user";
 import { mapableState } from "./mapable.svelte";
 import { type Part } from "./part";
 import { getShop, setShop } from "./shop.svelte";
 
-export { getShop, setShop };
+export { getShop };
 
 export class Shop {
   id?: number;
@@ -72,6 +72,15 @@ export class Shop {
       message: message,
     }).catch(handleError);
   }
+}
+
+// Enter shop mode: replaces stores with shop-specific data. The refresh's
+// shop scope rides the `X-Active-Shop` header the fetch layer injects from
+// the tab's shop (ADR-0009).
+export async function enterShop(shop: Shop) {
+  setShop(shop);
+  if (shop.owner == getUser()?.id) await refresh();
+  goto("/cat");
 }
 
 // Exit shop mode: refresh data from backend

@@ -14,7 +14,8 @@ export function getShop(): Shop | undefined {
   return shop;
 }
 
-/** Enter shop mode with `value`; `undefined` exits it. */
+/** Internal: replace the active shop. Use `enterShop`/`exitShop` from
+ * `shop.ts` — the full workflow — in application code. */
 export function setShop(value: Shop | undefined) {
   shop = value;
 }
