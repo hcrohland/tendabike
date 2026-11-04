@@ -27,7 +27,7 @@ jobs:
       - name: Format check
         run: npm run fmtcheck
       - name: Check
-        run: npm run check:ci
+        run: npm run check
       - name: Test
         run: npm run test
 

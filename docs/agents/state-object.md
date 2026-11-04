@@ -30,4 +30,4 @@ Pick by what the value is:
 
 - **Read idiom** — a state object is a plain value, not a store: assert on the direct read — `x["id"]`, `x.prop`, or `getX()`, never `get(x)`.
 - **Component reactivity** — one per reader component: mount it with a known initial state, mutate the shared state from the plain test context, `flushSync()`, assert the DOM changed (e.g. "re-renders the owner badge when the current user changes" in `Part/GearCard.test.ts`).
-- **Verification bar** — full `npm run test`, `npm run check:ci`, `npm run build` all green; the change reverts cleanly as one commit.
+- **Verification bar** — full `npm run test`, `npm run check`, `npm run build` all green; the change reverts cleanly as one commit.
