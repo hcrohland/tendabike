@@ -1,1 +1,5 @@
-<h1>Tend a Bike</h1>
+<script lang="ts">
+  import ToyGroup from "../ToyGroup.svelte";
+</script>
+
+<ToyGroup />
