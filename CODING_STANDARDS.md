@@ -10,4 +10,4 @@ Comments describe what the code **does**, not what **changed**. The commit messa
 
 ## User-facing strings
 
-Reuse an existing `action_*` message (`action_delete`, `action_close`, `action_cancel`, …) for a UI action label rather than coining a per-feature one. A new message is for genuinely new phrasing, not a rewording of an action the app already expresses.
+Reuse an existing message that already expresses the same text rather than adding a duplicate. The shared `action_*` labels (`action_delete`, `action_close`, …) cover most buttons and are the first place to look; a new message is for genuinely new phrasing, not a rewording of a string the app already has.
