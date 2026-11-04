@@ -2024,6 +2024,53 @@ async fn notification_read_not_found_maps_to_404() {
     assert_eq!(body, "Object not found: notification 1".as_bytes());
 }
 
+/// `DELETE /api/notification/{id}` requires authentication.
+#[tokio::test]
+async fn notification_delete_requires_auth() {
+    expect_unauth(Method::DELETE, &format!("/api/notification/{NIL}")).await;
+}
+
+/// `DELETE /api/notification/{id}` enqueues the `NotificationDelete` write
+/// and answers `204`.
+#[tokio::test]
+async fn delete_notification_returns_204() {
+    let (store, mut mock) = mock_ctx();
+    mock.expect_write()
+        .times(1)
+        .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
+    let app = build_app(&store, mock);
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, _body) = run(
+        app,
+        Method::DELETE,
+        &format!("/api/notification/{NIL}"),
+        Some(&cookie),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+/// A delete's `NotFound` (the recipient guard: the notification does not
+/// belong to the acting user) maps to `404`.
+#[tokio::test]
+async fn notification_delete_not_found_maps_to_404() {
+    let (store, mut mock) = mock_ctx();
+    mock.expect_write().times(1).returning(|_session, _write| {
+        Err(tb_domain::Error::NotFound("notification 1".to_string()))
+    });
+    let app = build_app(&store, mock);
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, body) = run(
+        app,
+        Method::DELETE,
+        &format!("/api/notification/{NIL}"),
+        Some(&cookie),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body, "Object not found: notification 1".as_bytes());
+}
+
 // ─── The direct ops (the carve-out surface, spec #558 §5.2) ───────────────
 
 /// `POST /strava/onboarding/sync?time=N` enqueues the

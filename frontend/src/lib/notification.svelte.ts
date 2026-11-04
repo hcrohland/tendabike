@@ -106,6 +106,13 @@ export function readAll() {
   myfetch("/api/notification/read-all", "POST").catch(handleError);
 }
 
+/// Delete a notification: removes it from the history. The tombstone rides
+/// the stream frame and removes the row. Applies to any of the user's
+/// notifications (transient or persistent) — `dismiss` is the read path.
+export function deleteNotification(id: string) {
+  myfetch("/api/notification/" + id, "DELETE").catch(handleError);
+}
+
 /// The ephemeral door: create a local error toast.
 export function error(message: string) {
   toastSeq++;

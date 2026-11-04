@@ -197,6 +197,29 @@ impl<'c> NotificationStore for SqlxConn<'c> {
         .map_err(into_domain)?;
         Ok(vec_into(rows))
     }
+
+    async fn notification_delete(
+        &mut self,
+        id: NotificationId,
+        recipient: UserId,
+    ) -> TbResult<Option<NotificationId>> {
+        // The recipient guard: filter by recipient so a non-recipient deletes
+        // nothing (rows_affected == 0 → None, no existence leak).
+        let id_uuid: Uuid = id.into();
+        let result = sqlx::query!(
+            "DELETE FROM notifications WHERE id = $1 AND recipient = $2",
+            id_uuid,
+            i32::from(recipient)
+        )
+        .execute(&mut **self.inner())
+        .await
+        .map_err(into_domain)?;
+        Ok(if result.rows_affected() > 0 {
+            Some(id)
+        } else {
+            None
+        })
+    }
 }
 
 #[cfg(test)]

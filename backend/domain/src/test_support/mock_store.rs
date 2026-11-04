@@ -294,6 +294,11 @@ mockall::mock! {
         ) -> TbResult<Option<Notification>>;
         async fn notification_read_all(&mut self, recipient: UserId) -> TbResult<Vec<Notification>>;
         async fn notification_all_for_user(&mut self, recipient: UserId) -> TbResult<Vec<Notification>>;
+        async fn notification_delete(
+            &mut self,
+            id: NotificationId,
+            recipient: UserId,
+        ) -> TbResult<Option<NotificationId>>;
     }
 
     impl Store for Store {}
