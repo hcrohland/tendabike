@@ -118,7 +118,7 @@ pub trait ShopStore {
         status: SubscriptionStatus,
     ) -> TbResult<ShopSubscription>;
 
-    /// Approves or rejects a subscription (the reply rides the notification).
+    /// Approves or rejects a subscription.
     async fn subscription_approve(
         &mut self,
         id: SubscriptionId,

@@ -20,8 +20,6 @@ fn shop_row(id: ShopId, owner: UserId, name: &str, auto_approve: bool) -> Shop {
 }
 
 /// A canned `ShopSubscription` row: the minimal shape the domain logic needs.
-/// The subscription carries no message — the request/response text lives on
-/// the notifications (issue #717).
 fn sub_row(
     id: SubscriptionId,
     shop_id: ShopId,
@@ -92,8 +90,7 @@ fn sole_notification(summary: &Summary) -> Notification {
 // === Create ===
 
 /// Auto-approve shops create the subscription, then flip it to Active: the
-/// domain logic runs over the canned store rows. The welcome is carried by the
-/// `sub_response` notification, not the subscription.
+/// domain logic runs over the canned store rows.
 /// Side effect: a `sub_response` (persistent) notification to the requester.
 #[tokio::test]
 async fn subscription_create_auto_approve_active() -> TbResult<()> {
@@ -167,8 +164,7 @@ async fn subscription_create_auto_approve_active() -> TbResult<()> {
 }
 
 /// A pending (non-auto-approve) subscription creates a `sub_request`
-/// (persistent) notification to the shop owner — never to the actor — carrying
-/// the subscriber's request text (issue #717).
+/// (persistent) notification to the shop owner — never to the actor.
 #[tokio::test]
 async fn subscription_create_pending_notifies_shop_owner() -> TbResult<()> {
     let shop = ShopId::from(1);
@@ -225,7 +221,6 @@ async fn subscription_create_pending_notifies_shop_owner() -> TbResult<()> {
     assert_eq!(notification.recipient, owner);
     assert_eq!(notification.lifecycle, NotificationLifecycle::Persistent);
     assert_eq!(notification.kind, NotificationKind::SubRequest);
-    // The request notification carries the request text (no longer empty).
     assert_eq!(notification.message, Some(request));
     // The shop is the notification's subject: it rides in the summary so the
     // executor routes the frame to the shop's stream (issue #687).
@@ -370,8 +365,7 @@ async fn subscription_checkuser_stranger_forbidden() -> TbResult<()> {
 // === approve / reject ===
 
 /// Only the shop owner can approve: a non-owner is forbidden, the owner
-/// approves and the domain logic flips the status to Active. The reply is
-/// carried by the `sub_response` notification, not the subscription.
+/// approves and the domain logic flips the status to Active.
 /// Side effect: a `sub_response` (persistent) notification to the requester.
 #[tokio::test]
 async fn subscription_approve_owner_only() -> TbResult<()> {
@@ -470,8 +464,7 @@ async fn subscription_approve_pending_only() -> TbResult<()> {
 }
 
 /// Only the shop owner can reject; the domain logic flips the status to
-/// Rejected. The reply is carried by the `sub_response` notification, not the
-/// subscription.
+/// Rejected.
 /// Side effect: a `sub_response` (persistent) notification to the requester.
 #[tokio::test]
 async fn subscription_reject_owner_only() -> TbResult<()> {

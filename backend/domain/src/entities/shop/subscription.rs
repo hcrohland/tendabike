@@ -64,9 +64,7 @@ pub struct SubscriptionId(i32);
 impl SubscriptionId {
     /// Create a new subscription request.
     ///
-    /// Returns the created subscription's id. The request text and any
-    /// auto-approve welcome are carried by the notifications, coordinated by
-    /// the parent [`Shop`] entity — the subscription stores no message.
+    /// Returns the created subscription's id.
     pub async fn create(
         shop_id: ShopId,
         user: UserId,
@@ -152,8 +150,7 @@ impl SubscriptionId {
             return Err(Error::Conflict("Subscription is not pending".into()));
         }
 
-        // Update subscription status to active (the reply rides the
-        // notification, not the subscription)
+        // Update subscription status to active
         store
             .subscription_approve(self, SubscriptionStatus::Active)
             .await?;
