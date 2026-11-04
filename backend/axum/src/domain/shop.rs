@@ -299,8 +299,6 @@ async fn create_subscription(
             shop_id: subscription.shop_id,
             user_id: subscription.user_id,
             status: subscription.status,
-            message: subscription.message,
-            response_message: subscription.response_message,
             created_at: subscription.created_at,
             updated_at: subscription.updated_at,
         }),

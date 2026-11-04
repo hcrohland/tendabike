@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE shop_subscriptions SET status = $2, response_message = $3\n             WHERE id = $1\n             RETURNING id, shop_id, user_id, status, message, response_message, created_at, updated_at",
+  "query": "SELECT id, shop_id, user_id, status, created_at, updated_at\n             FROM shop_subscriptions\n             WHERE user_id = $1\n             ORDER BY created_at DESC",
   "describe": {
     "columns": [
       {
@@ -25,30 +25,18 @@
       },
       {
         "ordinal": 4,
-        "name": "message",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 5,
-        "name": "response_message",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 6,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 5,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Int4",
-        "Varchar",
-        "Text"
+        "Int4"
       ]
     },
     "nullable": [
@@ -56,11 +44,9 @@
       false,
       false,
       false,
-      true,
-      true,
       false,
       false
     ]
   },
-  "hash": "5df18442dffcf08ebb8d629e6936d8fcbe811c63af9ffd662c759beb13973b71"
+  "hash": "1c99eec26b9988f0bc4e9038cfd0e3c03640763828d284680b64c9000a8474d7"
 }

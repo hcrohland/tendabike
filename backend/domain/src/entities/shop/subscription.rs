@@ -16,8 +16,6 @@ pub struct ShopSubscription {
     pub shop_id: ShopId,
     pub user_id: UserId,
     pub status: SubscriptionStatus,
-    pub message: Option<String>,
-    pub response_message: Option<String>,
     #[serde_as(as = "Rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde_as(as = "Rfc3339")]
@@ -32,8 +30,6 @@ pub struct ShopSubscriptionWithDetails {
     pub shop_id: ShopId,
     pub user_id: UserId,
     pub status: SubscriptionStatus,
-    pub message: Option<String>,
-    pub response_message: Option<String>,
     #[serde_as(as = "Rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde_as(as = "Rfc3339")]
@@ -68,11 +64,9 @@ pub struct SubscriptionId(i32);
 impl SubscriptionId {
     /// Create a new subscription request.
     ///
-    /// Returns the created subscription's id. Notification side effects are
-    /// coordinated by the parent [`Shop`] entity.
+    /// Returns the created subscription's id.
     pub async fn create(
         shop_id: ShopId,
-        message: Option<String>,
         user: UserId,
         store: &mut impl ShopStore,
     ) -> TbResult<SubscriptionId> {
@@ -95,12 +89,11 @@ impl SubscriptionId {
             ));
         }
 
-        let subscription = store.subscription_create(shop_id, user, message).await?;
+        let subscription = store.subscription_create(shop_id, user).await?;
 
         if shop.auto_approve {
-            let welcome = format!("Welcome to {}", shop.name);
             store
-                .subscription_approve(subscription.id, SubscriptionStatus::Active, Some(welcome))
+                .subscription_approve(subscription.id, SubscriptionStatus::Active)
                 .await?;
         }
         Ok(subscription.id)
@@ -146,12 +139,7 @@ impl SubscriptionId {
     }
 
     /// Approve a subscription (shop owner only).
-    pub async fn approve(
-        self,
-        response_message: Option<String>,
-        user: UserId,
-        store: &mut impl ShopStore,
-    ) -> TbResult<()> {
+    pub async fn approve(self, user: UserId, store: &mut impl ShopStore) -> TbResult<()> {
         let subscription = store.subscription_get(self).await?;
 
         // Verify user owns the shop
@@ -162,20 +150,15 @@ impl SubscriptionId {
             return Err(Error::Conflict("Subscription is not pending".into()));
         }
 
-        // Update subscription status to active with response message
+        // Update subscription status to active
         store
-            .subscription_approve(self, SubscriptionStatus::Active, response_message)
+            .subscription_approve(self, SubscriptionStatus::Active)
             .await?;
         Ok(())
     }
 
     /// Reject a subscription (shop owner only).
-    pub async fn reject(
-        self,
-        response_message: Option<String>,
-        user: UserId,
-        store: &mut impl ShopStore,
-    ) -> TbResult<()> {
+    pub async fn reject(self, user: UserId, store: &mut impl ShopStore) -> TbResult<()> {
         let subscription = store.subscription_get(self).await?;
 
         // Verify user owns the shop
@@ -187,7 +170,7 @@ impl SubscriptionId {
         }
 
         store
-            .subscription_approve(self, SubscriptionStatus::Rejected, response_message)
+            .subscription_approve(self, SubscriptionStatus::Rejected)
             .await?;
         Ok(())
     }
@@ -294,8 +277,6 @@ impl ShopSubscription {
             shop_id: self.shop_id,
             user_id: self.user_id,
             status: self.status,
-            message: self.message,
-            response_message: self.response_message,
             created_at: self.created_at,
             updated_at: self.updated_at,
             shop,

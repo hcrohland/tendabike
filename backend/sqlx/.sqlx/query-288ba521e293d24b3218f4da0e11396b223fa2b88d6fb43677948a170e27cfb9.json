@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, shop_id, user_id, status, message, response_message, created_at, updated_at\n                 FROM shop_subscriptions\n                 WHERE shop_id = $1\n                 ORDER BY created_at DESC",
+  "query": "SELECT id, shop_id, user_id, status, created_at, updated_at\n                 FROM shop_subscriptions\n                 WHERE shop_id = $1\n                 ORDER BY created_at DESC",
   "describe": {
     "columns": [
       {
@@ -25,21 +25,11 @@
       },
       {
         "ordinal": 4,
-        "name": "message",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 5,
-        "name": "response_message",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 6,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 5,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -54,11 +44,9 @@
       false,
       false,
       false,
-      true,
-      true,
       false,
       false
     ]
   },
-  "hash": "5c471f59141cb2bfb80f1990869aa56b998916b35cce96a64dc6f97d882abb5f"
+  "hash": "288ba521e293d24b3218f4da0e11396b223fa2b88d6fb43677948a170e27cfb9"
 }

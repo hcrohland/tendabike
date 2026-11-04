@@ -129,8 +129,6 @@ fn sub_row(
         shop_id: shop,
         user_id: user,
         status,
-        message: None,
-        response_message: None,
         created_at: sample_purchase_date(),
         updated_at: sample_purchase_date(),
     }
@@ -671,7 +669,7 @@ async fn shop_register_and_unregister_part_dispatch() -> TbResult<()> {
     );
     store
         .expect_subscription_create()
-        .returning(move |_, _, _| Ok(pending.clone()));
+        .returning(move |_, _| Ok(pending.clone()));
     let approved = sub_row(
         SubscriptionId::from(1),
         shop_id,
@@ -680,7 +678,7 @@ async fn shop_register_and_unregister_part_dispatch() -> TbResult<()> {
     );
     store
         .expect_subscription_approve()
-        .returning(move |_, _, _| Ok(approved.clone()));
+        .returning(move |_, _| Ok(approved.clone()));
 
     // The register/unregister: the subscription is active, the part is a
     // loose spare (not attached, no subparts).

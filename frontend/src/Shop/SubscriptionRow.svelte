@@ -4,7 +4,6 @@
     TableBodyCell,
     TableBodyRow,
     TableHeadCell,
-    Tooltip,
   } from "flowbite-svelte";
   import type { Snippet } from "svelte";
   import * as m from "../../paraglide/messages";
@@ -57,56 +56,11 @@
         return status;
     }
   }
-
-  function truncateText(
-    text: string | undefined,
-    maxLength: number = 50,
-  ): string {
-    if (!text) return "-";
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + "...";
-  }
 </script>
 
 {#if subscription}
   <TableBodyRow>
     <TableBodyCell>{name}</TableBodyCell>
-
-    <TableBodyCell>
-      {#if subscription.message && subscription.message.length > 50}
-        <span
-          id="request-msg-{subscription.id}"
-          class="text-sm text-gray-600 dark:text-gray-400 cursor-help"
-        >
-          {truncateText(subscription.message)}
-        </span>
-        <Tooltip triggeredBy="#request-msg-{subscription.id}" class="max-w-xs">
-          {subscription.message}
-        </Tooltip>
-      {:else}
-        <span class="text-sm text-gray-600 dark:text-gray-400">
-          {subscription.message || "-"}
-        </span>
-      {/if}
-    </TableBodyCell>
-
-    <TableBodyCell>
-      {#if subscription.response_message && subscription.response_message.length > 50}
-        <span
-          id="response-msg-{subscription.id}"
-          class="text-sm text-gray-600 dark:text-gray-400 cursor-help"
-        >
-          {truncateText(subscription.response_message)}
-        </span>
-        <Tooltip triggeredBy="#response-msg-{subscription.id}" class="max-w-xs">
-          {subscription.response_message}
-        </Tooltip>
-      {:else}
-        <span class="text-sm text-gray-600 dark:text-gray-400">
-          {subscription.response_message || "-"}
-        </span>
-      {/if}
-    </TableBodyCell>
 
     <TableBodyCell>
       <Badge color={getStatusColor(subscription.status)}>
@@ -128,8 +82,6 @@
   </TableBodyRow>
 {:else}
   <TableHeadCell>{m.shop()}</TableHeadCell>
-  <TableHeadCell>{m.subscription_request_message()}</TableHeadCell>
-  <TableHeadCell>{m.subscription_response()}</TableHeadCell>
   <TableHeadCell>{m.subscription_status()}</TableHeadCell>
   <TableHeadCell>{m.subscription_date()}</TableHeadCell>
   <TableHeadCell>{m.subscription_actions()}</TableHeadCell>

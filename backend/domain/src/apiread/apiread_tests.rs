@@ -82,8 +82,6 @@ fn sub_row(
         shop_id: shop,
         user_id: user,
         status,
-        message: None,
-        response_message: None,
         created_at: sample_purchase_date(),
         updated_at: sample_purchase_date(),
     }

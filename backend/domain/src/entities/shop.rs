@@ -261,7 +261,8 @@ impl ShopId {
     /// Subscribe a user to this shop.
     ///
     /// Side effects (never notifies the actor of their own action):
-    /// - **pending**: a `sub_request` (persistent) notification to the shop owner.
+    /// - **pending**: a `sub_request` (persistent) notification to the shop
+    ///   owner, carrying the request text.
     /// - **auto-approve**: a `sub_response` (persistent) notification to the
     ///   requester, carrying the welcome message.
     pub async fn subscribe(
@@ -271,7 +272,7 @@ impl ShopId {
         store: &mut (impl ShopStore + NotificationStore),
     ) -> TbResult<Summary> {
         let shop = store.shop_get(self).await?;
-        let sub_id = SubscriptionId::create(self, message, user, store).await?;
+        let sub_id = SubscriptionId::create(self, user, store).await?;
 
         let notification = if shop.auto_approve {
             let welcome = format!("Welcome to {}", shop.name);
@@ -290,7 +291,7 @@ impl ShopId {
                 NotificationLifecycle::Persistent,
                 NotificationKind::SubRequest,
                 NotificationSubject::Subscription(sub_id),
-                None,
+                message,
                 store,
             )
             .await?
@@ -305,7 +306,7 @@ impl ShopId {
     /// Approve a pending subscription for this shop (shop owner only).
     ///
     /// Side effect: a `sub_response` (persistent) notification to the
-    /// requester, carrying the `response_message`.
+    /// requester, carrying the reply.
     pub async fn approve_subscription(
         self,
         sub_id: SubscriptionId,
@@ -313,7 +314,7 @@ impl ShopId {
         user: UserId,
         store: &mut (impl ShopStore + NotificationStore),
     ) -> TbResult<Summary> {
-        sub_id.approve(message.clone(), user, store).await?;
+        sub_id.approve(user, store).await?;
 
         let subscription = store.subscription_get(sub_id).await?;
         let notification = Notification::create(
@@ -334,7 +335,7 @@ impl ShopId {
     /// Reject a pending subscription for this shop (shop owner only).
     ///
     /// Side effect: a `sub_response` (persistent) notification to the
-    /// requester, carrying the `response_message`.
+    /// requester, carrying the reply.
     pub async fn reject_subscription(
         self,
         sub_id: SubscriptionId,
@@ -342,7 +343,7 @@ impl ShopId {
         user: UserId,
         store: &mut (impl ShopStore + NotificationStore),
     ) -> TbResult<Summary> {
-        sub_id.reject(message.clone(), user, store).await?;
+        sub_id.reject(user, store).await?;
 
         let subscription = store.subscription_get(sub_id).await?;
         let notification = Notification::create(

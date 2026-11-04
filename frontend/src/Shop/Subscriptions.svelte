@@ -8,12 +8,14 @@
     Dropdown,
     Checkbox,
     Li,
+    Tooltip,
   } from "flowbite-svelte";
   import * as m from "../../paraglide/messages";
   import { myfetch, handleError } from "../lib/utils";
   import { Shop, shops } from "../lib/shop";
   import ShopSearch from "./ShopSearch.svelte";
   import type { ShopSubscription } from "../lib/subscription";
+  import { subscriptions as subscriptionsMap } from "../lib/subscription";
   import SubscriptionRow from "./SubscriptionRow.svelte";
   import { requestSubscription } from "./SubscriptionRequestModal.svelte";
   import { allGear, Part, parts } from "../lib/part";
@@ -38,6 +40,7 @@
     loading = true;
     try {
       subscriptions = await myfetch("/api/shop/subscriptions", "GET");
+      subscriptionsMap.setMap(subscriptions.map((s) => s));
       // make sure subscribed shops are visible
       shops.updateMap(
         subscriptions.filter((s) => s.status == "active").map((s) => s.shop),
@@ -205,17 +208,33 @@
                           {/each}
                         </Dropdown>
 
-                        <Button
-                          size="xs"
-                          color="alternative"
-                          onclick={() =>
-                            startConfirmation(subscription.id!, "unsubscribe")}
-                          disabled={stateValues(parts).some(
-                            (p) => p.shop == subscription.shop_id,
-                          )}
+                        {@const hasParts = stateValues(parts).some(
+                          (p) => p.shop == subscription.shop_id,
+                        )}
+                        <span
+                          id="unsubscribe-btn-{subscription.id}"
+                          class="inline-block"
                         >
-                          {m.shop_unsubscribe()}
-                        </Button>
+                          <Button
+                            size="xs"
+                            color="alternative"
+                            onclick={() =>
+                              startConfirmation(
+                                subscription.id!,
+                                "unsubscribe",
+                              )}
+                            disabled={hasParts}
+                          >
+                            {m.shop_unsubscribe()}
+                          </Button>
+                        </span>
+                        {#if hasParts}
+                          <Tooltip
+                            triggeredBy="#unsubscribe-btn-{subscription.id}"
+                          >
+                            {m.shop_unsubscribe_disabled()}
+                          </Tooltip>
+                        {/if}
                       </ButtonGroup>
                     {:else if subscription.status === "rejected"}
                       <Button

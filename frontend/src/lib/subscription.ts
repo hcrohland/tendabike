@@ -1,3 +1,4 @@
+import { mapableState } from "./mapable.svelte";
 import { Shop } from "./shop";
 import type { UserPublic } from "./user";
 
@@ -9,8 +10,6 @@ export class ShopSubscription {
   shop_id: number;
   user_id: number;
   status: SubscriptionStatus;
-  message?: string;
-  response_message?: string;
   created_at: Date;
   updated_at: Date;
   shop: Shop;
@@ -21,11 +20,14 @@ export class ShopSubscription {
     this.shop_id = data.shop_id;
     this.user_id = data.user_id;
     this.status = data.status;
-    this.message = data.message;
-    this.response_message = data.response_message;
     this.created_at = new Date(data.created_at);
     this.updated_at = new Date(data.updated_at);
     this.shop = new Shop(data.shop);
     this.owner = data.owner;
   }
 }
+
+export const subscriptions = mapableState(
+  "id",
+  (data) => new ShopSubscription(data),
+);

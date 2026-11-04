@@ -62,8 +62,6 @@ pub struct DbSubscription {
     shop_id: i32,
     user_id: i32,
     status: String,
-    message: Option<String>,
-    response_message: Option<String>,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
 }
@@ -75,8 +73,6 @@ impl From<DbSubscription> for ShopSubscription {
             shop_id,
             user_id,
             status,
-            message,
-            response_message,
             created_at,
             updated_at,
         } = value;
@@ -93,8 +89,6 @@ impl From<DbSubscription> for ShopSubscription {
             shop_id: shop_id.into(),
             user_id: user_id.into(),
             status,
-            message,
-            response_message,
             created_at,
             updated_at,
         }
@@ -211,16 +205,14 @@ impl<'c> tb_domain::ShopStore for SqlxConn<'c> {
         &mut self,
         shop_id: tb_domain::ShopId,
         user_id: tb_domain::UserId,
-        message: Option<String>,
     ) -> TbResult<tb_domain::ShopSubscription> {
         sqlx::query_as!(
             DbSubscription,
-            "INSERT INTO shop_subscriptions (shop_id, user_id, message, status)
-             VALUES ($1, $2, $3, 'pending')
-             RETURNING id, shop_id, user_id, status, message, response_message, created_at, updated_at",
+            "INSERT INTO shop_subscriptions (shop_id, user_id, status)
+             VALUES ($1, $2, 'pending')
+             RETURNING id, shop_id, user_id, status, created_at, updated_at",
             i32::from(shop_id),
             i32::from(user_id),
-            message
         )
         .fetch_one(&mut **self.inner())
         .await
@@ -234,7 +226,7 @@ impl<'c> tb_domain::ShopStore for SqlxConn<'c> {
     ) -> TbResult<tb_domain::ShopSubscription> {
         sqlx::query_as!(
             DbSubscription,
-            "SELECT id, shop_id, user_id, status, message, response_message, created_at, updated_at
+            "SELECT id, shop_id, user_id, status, created_at, updated_at
              FROM shop_subscriptions WHERE id = $1",
             i32::from(id)
         )
@@ -251,7 +243,7 @@ impl<'c> tb_domain::ShopStore for SqlxConn<'c> {
     ) -> TbResult<Option<tb_domain::ShopSubscription>> {
         sqlx::query_as!(
             DbSubscription,
-            "SELECT id, shop_id, user_id, status, message, response_message, created_at, updated_at
+            "SELECT id, shop_id, user_id, status, created_at, updated_at
              FROM shop_subscriptions
              WHERE shop_id = $1 AND user_id = $2 AND status = 'active'",
             i32::from(shop_id),
@@ -270,7 +262,7 @@ impl<'c> tb_domain::ShopStore for SqlxConn<'c> {
     ) -> TbResult<Option<tb_domain::ShopSubscription>> {
         sqlx::query_as!(
             DbSubscription,
-            "SELECT id, shop_id, user_id, status, message, response_message, created_at, updated_at
+            "SELECT id, shop_id, user_id, status, created_at, updated_at
              FROM shop_subscriptions
              WHERE shop_id = $1 AND user_id = $2 AND status = 'pending'",
             i32::from(shop_id),
@@ -291,7 +283,7 @@ impl<'c> tb_domain::ShopStore for SqlxConn<'c> {
             DbSubscription,
             "UPDATE shop_subscriptions SET status = $2
              WHERE id = $1
-             RETURNING id, shop_id, user_id, status, message, response_message, created_at, updated_at",
+             RETURNING id, shop_id, user_id, status, created_at, updated_at",
             i32::from(id),
             status.to_string()
         )
@@ -305,16 +297,14 @@ impl<'c> tb_domain::ShopStore for SqlxConn<'c> {
         &mut self,
         id: tb_domain::SubscriptionId,
         status: tb_domain::SubscriptionStatus,
-        response_message: Option<String>,
     ) -> TbResult<tb_domain::ShopSubscription> {
         sqlx::query_as!(
             DbSubscription,
-            "UPDATE shop_subscriptions SET status = $2, response_message = $3
+            "UPDATE shop_subscriptions SET status = $2
              WHERE id = $1
-             RETURNING id, shop_id, user_id, status, message, response_message, created_at, updated_at",
+             RETURNING id, shop_id, user_id, status, created_at, updated_at",
             i32::from(id),
             status.to_string(),
-            response_message
         )
         .fetch_one(&mut **self.inner())
         .await
@@ -339,7 +329,7 @@ impl<'c> tb_domain::ShopStore for SqlxConn<'c> {
     ) -> TbResult<Vec<tb_domain::ShopSubscription>> {
         sqlx::query_as!(
             DbSubscription,
-            "SELECT id, shop_id, user_id, status, message, response_message, created_at, updated_at
+            "SELECT id, shop_id, user_id, status, created_at, updated_at
                  FROM shop_subscriptions
                  WHERE shop_id = $1
                  ORDER BY created_at DESC",
@@ -357,7 +347,7 @@ impl<'c> tb_domain::ShopStore for SqlxConn<'c> {
     ) -> TbResult<Vec<tb_domain::ShopSubscription>> {
         sqlx::query_as!(
             DbSubscription,
-            "SELECT id, shop_id, user_id, status, message, response_message, created_at, updated_at
+            "SELECT id, shop_id, user_id, status, created_at, updated_at
              FROM shop_subscriptions
              WHERE user_id = $1
              ORDER BY created_at DESC",
@@ -385,8 +375,6 @@ mod tests {
             shop_id: 8,
             user_id: 2,
             status: status.to_string(),
-            message: Some("hello".to_string()),
-            response_message: None,
             created_at: date(),
             updated_at: date(),
         }
@@ -416,8 +404,6 @@ mod tests {
             shop_id: ShopId::from(8),
             user_id: UserId::from(2),
             status: SubscriptionStatus::Active,
-            message: Some("hello".to_string()),
-            response_message: None,
             created_at: date(),
             updated_at: date(),
         };

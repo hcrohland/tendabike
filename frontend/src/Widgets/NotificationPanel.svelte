@@ -9,6 +9,7 @@
   } from "../lib/notification.svelte";
   import type { Notification } from "../lib/notification.svelte";
   import { parts } from "../lib/part";
+  import { subscriptions } from "../lib/subscription";
   import * as m from "../../paraglide/messages";
   import XsButton from "./XsButton.svelte";
 
@@ -19,8 +20,15 @@
     switch (n.kind) {
       case "sub_request":
         return m.notif_title_sub_request();
-      case "sub_response":
+      case "sub_response": {
+        const subject = n.subject as { type: string; id: number } | null;
+        if (subject?.type === "subscription" && subject.id != null) {
+          const sub = subscriptions[String(subject.id)];
+          if (sub?.status === "active") return m.notif_title_sub_approved();
+          if (sub?.status === "rejected") return m.notif_title_sub_rejected();
+        }
         return m.notif_title_sub_response();
+      }
       case "sub_cancelled":
         return m.notif_title_sub_cancelled();
       case "part_registered":
@@ -33,7 +41,11 @@
   }
 
   function body(n: Notification): string {
-    // Use the subject's type discriminator to look up the right collection.
+    // Show the notification's message when one is present: the request for a
+    // request notification, the shop's reply for a response.
+    if (n.message) return n.message;
+    // Otherwise, for part kinds, the part's name (the subject's type
+    // discriminator tells us which collection to look up).
     const subject = n.subject as { type: string; id: number } | null;
     if (subject) {
       if (subject.type === "part" && subject.id != null) {
@@ -48,8 +60,15 @@
     switch (n.kind) {
       case "sub_request":
         return m.notif_body_sub_request();
-      case "sub_response":
+      case "sub_response": {
+        const subject = n.subject as { type: string; id: number } | null;
+        if (subject?.type === "subscription" && subject.id != null) {
+          const sub = subscriptions[String(subject.id)];
+          if (sub?.status === "active") return m.notif_body_sub_approved();
+          if (sub?.status === "rejected") return m.notif_body_sub_rejected();
+        }
         return m.notif_body_sub_response();
+      }
       case "sub_cancelled":
         return m.notif_body_sub_cancelled();
       case "part_registered":
@@ -72,6 +91,35 @@
     if (hours < 24) return hours + "h";
     const days = Math.floor(hours / 24);
     return days + "d";
+  }
+
+  /// The navigation target of a notification, derived from its kind:
+  /// subscription kinds land on /shops (the shop-owner tab for the
+  /// shop-owner kinds, the requester tab for a response); part notifications
+  /// are informational (no target).
+  function targetFor(n: Notification): { route: string } | null {
+    switch (n.kind) {
+      case "sub_request":
+      case "sub_cancelled":
+        return { route: "/shops?tab=my-shops" };
+      case "sub_response":
+        return { route: "/shops?tab=my-subscriptions" };
+      case "part_registered":
+      case "part_unregistered":
+      default:
+        return null;
+    }
+  }
+
+  /// Whole-row click: navigate to the subject and mark the notification read
+  /// (the same lifecycle-aware read as dismiss). A non-navigable entry does
+  /// nothing.
+  function navigate(n: Notification) {
+    const target = targetFor(n);
+    if (!target) return;
+    window.location.hash = "#" + target.route;
+    dismiss(n.id);
+    close();
   }
 </script>
 
@@ -100,9 +148,22 @@
     </p>
   {:else}
     {#each history() as n (n.id)}
+      {@const navigable = targetFor(n) != null}
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <div
         class="flex items-start gap-3 px-4 py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-700/50"
         class:opacity-60={n.state === "seen" && n.lifecycle === "persistent"}
+        class:cursor-pointer={navigable}
+        role={navigable ? "button" : undefined}
+        tabindex={navigable ? 0 : undefined}
+        onclick={() => navigate(n)}
+        onkeydown={(e) => {
+          if (!navigable) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            navigate(n);
+          }
+        }}
       >
         <div class="flex-1 min-w-0">
           <p
@@ -123,7 +184,10 @@
         {#if n.state === "new"}
           <button
             class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0"
-            onclick={() => dismiss(n.id)}
+            onclick={(e) => {
+              e.stopPropagation();
+              dismiss(n.id);
+            }}
             aria-label={m.notif_dismiss()}
           >
             <CloseOutline class="h-4 w-4" />

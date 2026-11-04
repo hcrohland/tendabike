@@ -111,7 +111,6 @@ mock! {
             &mut self,
             shop_id: ShopId,
             user_id: UserId,
-            message: Option<String>,
         ) -> TbResult<ShopSubscription>;
         async fn subscription_get(&mut self, id: SubscriptionId) -> TbResult<ShopSubscription>;
         async fn subscription_find_active(
@@ -133,7 +132,6 @@ mock! {
             &mut self,
             id: SubscriptionId,
             status: SubscriptionStatus,
-            response_message: Option<String>,
         ) -> TbResult<ShopSubscription>;
         async fn subscription_delete(&mut self, id: SubscriptionId) -> TbResult<()>;
         async fn subscriptions_for_shop(&mut self, shop_id: ShopId) -> TbResult<Vec<ShopSubscription>>;
