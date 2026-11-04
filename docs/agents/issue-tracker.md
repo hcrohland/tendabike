@@ -19,8 +19,6 @@ Repo-specific policies and API gotchas — for which tool takes which params, se
 - **Creating a PR**: write the body with the `pr` skill (there is no PR template in the repo).
 - **Close from a PR**: a squash merge collects each commit's `Closes #N` line, so each ticket closes via the `Closes #N` in its **own commit** (one issue per line — a line with several space-separated numbers closes only the first). The PR body carries `Closes` for the **umbrella spec only**; do not duplicate the per-ticket `Closes` lines into the PR body.
 - **Sync**: merge `main` into the feature branch (`git merge origin/main`); the `.githooks/pre-push` hook rejects force-pushes (non-fast-forward).
-- **Merge**: squash-merge (`merge_method: "squash"`); the squashed commit takes the PR title, so write the PR title as the commit title you want on `main`. Only merge when required checks are green on the current head — the ruleset voids check runs from a head behind `main`, so if `main` moved, sync and let the checks re-run first.
-- **Post-merge**: `git fetch --prune` first — the squash commit is not local yet. Then detach HEAD (`git checkout --detach origin/main`) and delete the local branch with `git branch -D` (the squash's commits are not ancestors of `main`, so `-d` refuses). `main` may be checked out in a sibling worktree, so don't check it out here.
 
 ## Pull requests as a triage surface
 
