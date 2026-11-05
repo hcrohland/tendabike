@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { Shop, shops } from "./shop";
+import { Shop, shops } from "./shop.svelte";
 import { Part } from "./part";
 import { resp, summary } from "../test/helpers";
 

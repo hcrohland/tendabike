@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button } from "flowbite-svelte";
   import * as m from "../../paraglide/messages";
-  import { exitShop, getShop } from "../lib/shop";
+  import { exitShop, getShop } from "../lib/shop.svelte";
 
   let { children = () => {} } = $props();
 </script>
