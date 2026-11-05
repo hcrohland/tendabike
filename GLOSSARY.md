@@ -4,6 +4,12 @@ A bike maintenance tracker that syncs with Strava: users track parts, schedule s
 
 ## Language
 
+### Provider
+
+**provider**:
+The external service a user's cycling activities and gear come from — today Strava or intervals.icu. A user has exactly one provider at a time. Connecting a provider is how a user's activities start flowing in; it is what the "view on <provider>" links point at, and it determines the user's auth and sync behaviour.
+_Avoid_: source (Part.source is the opaque id a provider assigns to a piece of gear), integration, upstream
+
 ### Sync
 
 **Summary**:
