@@ -7,6 +7,7 @@
 ## Commands
 
 - `npm run check` - Frontend type checking (compiles paraglide, then runs svelte-check)
+- `npm run test` - Vitest. Never raw `npx vitest` from the repo root (no vite/Svelte config there → parse errors).
 - **Prettier**: config lives in `frontend/.prettierrc` — run it via the root npm scripts (`npm run fmtcheck` / `npm run format`), never raw `npx prettier` from the repo root (no config there → defaults → false positives).
 
 ## Architecture

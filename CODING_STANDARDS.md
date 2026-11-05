@@ -1,5 +1,9 @@
 # Coding Standards
 
+## Props
+
+Prop defaults are set in the `$props()` destructuring, not as `?? fallback`s at the use site. Declare `required = false`, then pass `{required}` — not `required={required ?? false}`.
+
 ## Comments
 
 Comments describe what the code **does**, not what **changed**. The commit message is where the change is explained; the comment is where the code is explained.
