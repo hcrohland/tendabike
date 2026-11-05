@@ -1,11 +1,24 @@
+<script module lang="ts">
+  // each instance gets a unique trigger id so the Popover's triggeredBy
+  // selector never matches a sibling widget's button
+  let seq = 0;
+</script>
+
 <script lang="ts">
   import { preventDefault } from "svelte/legacy";
 
   import { roundTime } from "../lib/utils";
-  import { Button, ButtonGroup, Datepicker, Timepicker } from "flowbite-svelte";
+  import {
+    Button,
+    ButtonGroup,
+    Datepicker,
+    Input,
+    Popover,
+  } from "flowbite-svelte";
   import {
     AngleLeftOutline,
     AngleRightOutline,
+    CalendarMonthOutline,
     ClockOutline,
   } from "flowbite-svelte-icons";
   import { getLocale } from "../../paraglide/runtime";
@@ -30,20 +43,16 @@
     rounded = false,
   }: Props = $props();
 
+  const btnId = `datetime-${seq++}`;
+
   // the client locale drives the Datepicker's display, so the date shows in
   // the client's locale (a German client sees "8.10.2026")
   const locale = getLocale();
   const min = () => (mindate ? roundTime(mindate) : undefined);
   const max = () => (maxdate ? roundTime(maxdate) : undefined);
   let now = roundTime(new Date());
+  let open = $state(false);
 
-  let inputClasses = $derived(
-    "bg-surface-3 " + (rounded ? "rounded-l-md" : "rounded-none"),
-  );
-
-  // `date` is split across the two pickers: the Datepicker owns the day, the
-  // Timepicker owns the HH:mm. Each binds through an accessor that merges its
-  // half back into `date`, preserving the other half.
   const datePart = $derived(
     date
       ? new Date(date.getFullYear(), date.getMonth(), date.getDate())
@@ -56,6 +65,11 @@
         ).padStart(2, "0")}`
       : "00:00",
   );
+  const label = $derived(
+    date
+      ? `${datePart!.toLocaleDateString(locale)} ${timePart}`
+      : "Pick date & time",
+  );
 
   function setDatePart(day: Date | undefined) {
     if (!day) return;
@@ -67,38 +81,18 @@
     if (!hhmm) return;
     const [h, m] = hhmm.split(":").map(Number);
     const base = date ?? new Date();
-    date = new Date(base.getFullYear(), base.getMonth(), base.getDate(), h, m);
+    // snap the chosen time to the 15-minute grid, as the picker always did
+    date = roundTime(
+      new Date(base.getFullYear(), base.getMonth(), base.getDate(), h, m),
+    );
   }
 </script>
 
 <ButtonGroup>
-  <Datepicker
-    bind:value={
-      () => {
-        return datePart;
-      },
-      (v) => {
-        setDatePart(v);
-      }
-    }
-    {locale}
-    availableFrom={min()}
-    availableTo={max()}
-    inputClass={inputClasses}
-    required={required ?? false}
-  />
-  <Timepicker
-    bind:value={
-      () => {
-        return timePart;
-      },
-      (v) => {
-        setTimePart(v);
-      }
-    }
-    inputClass={inputClasses}
-    required={required ?? false}
-  />
+  <Button id={btnId} color="light" class={rounded ? "rounded-l-md" : ""}>
+    <CalendarMonthOutline class="me-2 h-4 w-4" />
+    {label}
+  </Button>
 
   {#if prevdate}
     {@const next = prevdate(date)}
@@ -124,3 +118,40 @@
     </Button>
   {/if}
 </ButtonGroup>
+
+<Popover
+  triggeredBy={`#${btnId}`}
+  trigger="click"
+  placement="bottom-start"
+  bind:isOpen={open}
+  class="p-3"
+>
+  <Datepicker
+    inline
+    bind:value={
+      () => {
+        return datePart;
+      },
+      (v) => {
+        setDatePart(v);
+      }
+    }
+    {locale}
+    availableFrom={min()}
+    availableTo={max()}
+  />
+  <div class="mt-3">
+    <Input
+      type="time"
+      required={required ?? false}
+      bind:value={
+        () => {
+          return timePart;
+        },
+        (v) => {
+          setTimePart(v);
+        }
+      }
+    />
+  </div>
+</Popover>
