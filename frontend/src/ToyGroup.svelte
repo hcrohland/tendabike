@@ -3,7 +3,7 @@
   import { getCategory } from "./lib/types";
   import { parts } from "./lib/part";
   import ShowMore from "./Widgets/ShowMore.svelte";
-  import { getShop } from "./lib/shop";
+  import { getShop } from "./lib/shop.svelte";
   import * as m from "../paraglide/messages";
   import GearCard from "./Part/GearCard.svelte";
   import PlanBadge from "./ServicePlan/PlanBadge.svelte";

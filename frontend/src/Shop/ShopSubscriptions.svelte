@@ -3,7 +3,7 @@
   import * as m from "../../paraglide/messages";
   import { myfetch, handleError } from "../lib/utils";
   import type { ShopSubscription } from "../lib/subscription";
-  import { shops } from "../lib/shop";
+  import { shops } from "../lib/shop.svelte";
   import SubscriptionRow from "./SubscriptionRow.svelte";
 
   interface Props {

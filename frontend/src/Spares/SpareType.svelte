@@ -12,7 +12,7 @@
   import { attachPart } from "../Attachment/AttachPart.svelte";
   import { deletePart } from "../Part/DeletePart.svelte";
   import { disposePart } from "../Part/DisposePart.svelte";
-  import { getShop } from "../lib/shop";
+  import { getShop } from "../lib/shop.svelte";
   import * as m from "../../paraglide/messages";
 
   interface Props {

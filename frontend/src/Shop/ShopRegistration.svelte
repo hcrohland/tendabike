@@ -6,7 +6,7 @@
     Select,
   } from "flowbite-svelte";
   import * as m from "../../paraglide/messages";
-  import { Shop, getShop, shops } from "../lib/shop";
+  import { Shop, getShop, shops } from "../lib/shop.svelte";
   import { getUser } from "../lib/user";
   import { stateValues } from "../lib/mapable.svelte";
   import type { Part } from "../lib/part";

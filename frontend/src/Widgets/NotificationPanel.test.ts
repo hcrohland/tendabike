@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { goto } from "$app/navigation";
 import { notifications } from "../lib/notification.svelte";
 import { Part, parts } from "../lib/part";
-import { shops, setShop } from "../lib/shop";
+import { shops, setShop } from "../lib/shop.svelte";
 import { setUser } from "../lib/user";
 import { resp } from "../test/helpers";
 import NotificationPanel from "./NotificationPanel.svelte";

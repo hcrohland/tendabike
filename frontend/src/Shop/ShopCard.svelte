@@ -3,7 +3,7 @@
   import type { Snippet } from "svelte";
   import * as m from "../../paraglide/messages";
 
-  import type { Shop } from "../lib/shop";
+  import type { Shop } from "../lib/shop.svelte";
   import { type UserPublic } from "../lib/user";
   import { type Map } from "../lib/mapable.svelte";
 
