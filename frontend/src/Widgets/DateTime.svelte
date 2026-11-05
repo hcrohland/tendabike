@@ -39,7 +39,7 @@
     mindate = undefined,
     maxdate = undefined,
     prevdate = undefined,
-    required = undefined,
+    required = false,
     rounded = false,
   }: Props = $props();
 
@@ -151,7 +151,7 @@
   <div class="mt-3">
     <Input
       type="time"
-      required={required ?? false}
+      {required}
       bind:value={
         () => {
           return timePart;
