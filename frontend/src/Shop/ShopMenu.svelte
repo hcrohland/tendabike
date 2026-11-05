@@ -3,7 +3,7 @@
   import { ChevronDownOutline } from "flowbite-svelte-icons";
   import * as m from "../../paraglide/messages";
 
-  import { Shop, shops, getShop, enterShop } from "../lib/shop";
+  import { Shop, shops, getShop, enterShop } from "../lib/shop.svelte";
   import { stateValues } from "../lib/mapable.svelte";
 
   let myshops = $derived(stateValues(shops));

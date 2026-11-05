@@ -4,7 +4,7 @@
   import * as m from "../../paraglide/messages";
 
   import ShopCard from "./ShopCard.svelte";
-  import { type Shop } from "../lib/shop";
+  import { type Shop } from "../lib/shop.svelte";
   import { requestSubscription } from "./SubscriptionRequestModal.svelte";
   import { getUser, users as global_users, type UserPublic } from "../lib/user";
   import ShopOwnerMenu from "./ShopOwnerMenu.svelte";

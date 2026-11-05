@@ -8,7 +8,7 @@
   import type { Snippet } from "svelte";
   import * as m from "../../paraglide/messages";
   import type { ShopSubscription } from "../lib/subscription";
-  import { shops } from "../lib/shop";
+  import { shops } from "../lib/shop.svelte";
 
   interface Props {
     subscription?: ShopSubscription;

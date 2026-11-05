@@ -1,6 +1,6 @@
 import { handleError, myfetch } from "./utils";
 import { refresh, updateSummary, type Summary } from "./user";
-import { getShop } from "./shop";
+import { getShop } from "./shop.svelte";
 
 /// The native EventSource is not available in jsdom, so the suite injects a
 /// stand-in factory; the app uses the native one. The seam is the surface

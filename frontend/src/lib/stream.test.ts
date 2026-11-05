@@ -5,8 +5,7 @@ import { markHydrated, startStream, stopStream } from "./stream";
 import { parts } from "./part";
 import { stateValues } from "./mapable.svelte";
 import { setUser, getUser } from "./user";
-import { Shop } from "./shop";
-import { setShop } from "./shop.svelte";
+import { Shop, setShop } from "./shop.svelte";
 import { resp, summary, summaryContent } from "../test/helpers";
 import StreamHarness from "../test/StreamHarness.svelte";
 
