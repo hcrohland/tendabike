@@ -8,8 +8,8 @@
     "build": "npx paraglide-js compile --outdir ./paraglide && vite build",
     "preview": "vite preview",
     "check": "npx paraglide-js compile --outdir ./paraglide && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "format": "prettier --write .",
-    "fmtcheck": "prettier --check .",
+    "format": "prettier --write . --log-level warn",
+    "fmtcheck": "prettier --check . --log-level warn",
     "test": "npx paraglide-js compile --outdir ./paraglide && vitest run",
     "test:coverage": "npx paraglide-js compile --outdir ./paraglide && vitest run --coverage",
     "machine-translate": "inlang machine translate --project project.inlang"
