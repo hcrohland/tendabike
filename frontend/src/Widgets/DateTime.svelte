@@ -53,15 +53,22 @@
   let now = roundTime(new Date());
   let open = $state(false);
 
+  // the bound date's time snapped to the 15-minute grid; roundTime mutates
+  // in place, so it runs on a copy — never the bound prop
+  const gridDate = $derived(date ? roundTime(new Date(date)) : undefined);
   const datePart = $derived(
-    date
-      ? new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    gridDate
+      ? new Date(
+          gridDate.getFullYear(),
+          gridDate.getMonth(),
+          gridDate.getDate(),
+        )
       : undefined,
   );
   const timePart = $derived(
-    date
-      ? `${String(date.getHours()).padStart(2, "0")}:${String(
-          date.getMinutes(),
+    gridDate
+      ? `${String(gridDate.getHours()).padStart(2, "0")}:${String(
+          gridDate.getMinutes(),
         ).padStart(2, "0")}`
       : "00:00",
   );
@@ -73,8 +80,9 @@
 
   function setDatePart(day: Date | undefined) {
     if (!day) return;
-    const h = date ? date.getHours() : 0;
-    const m = date ? date.getMinutes() : 0;
+    // carry the rounded time over so the merged date stays on the grid
+    const h = gridDate ? gridDate.getHours() : 0;
+    const m = gridDate ? gridDate.getMinutes() : 0;
     date = new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m);
   }
   function setTimePart(hhmm: string) {

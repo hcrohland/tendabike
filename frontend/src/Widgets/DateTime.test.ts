@@ -118,4 +118,24 @@ describe("DateTime (time rounding)", () => {
       screen.getByRole("button", { name: /14:30/ }).textContent?.trim(),
     ).toBe("10/8/2026 14:30");
   });
+
+  it("rounds the initial value of an off-grid bound date", async () => {
+    useLocale("en");
+    const date = new Date(2026, 9, 8, 14, 37);
+    const { container } = render(DateTime, { props: { date } });
+
+    // the trigger shows the snapped time before the popover opens
+    expect(screen.getByRole("button", { name: /14:30/ })).toBeTruthy();
+    // ...and the bound prop is not mutated in place
+    expect(date.getMinutes()).toBe(37);
+
+    // the time input starts on the grid, too
+    const btn = screen.getByRole("button", { name: /\d{4}/ });
+    fireEvent.mouseDown(btn);
+    await settle();
+    const timeInput = container.querySelector(
+      'input[type="time"]',
+    ) as HTMLInputElement;
+    expect(timeInput.value).toBe("14:30");
+  });
 });
