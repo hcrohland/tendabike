@@ -25,7 +25,7 @@
   import { ChevronDownOutline } from "flowbite-svelte-icons";
   import Garmin from "./Activity/Garmin.svelte";
   import ShopMenu from "./Shop/ShopMenu.svelte";
-  import { getShop } from "./lib/shop";
+  import { getShop } from "./lib/shop.svelte";
   import * as m from "../paraglide/messages";
   import { getLocale, setLocale, locales } from "../paraglide/runtime";
   import { onDestroy } from "svelte";

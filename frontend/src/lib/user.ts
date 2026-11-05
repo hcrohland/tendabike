@@ -5,7 +5,7 @@ import { parts, type Part } from "./part";
 import { partNotes, type PartNote } from "./partnote";
 import { Attachment, attachments } from "./attachment";
 import { plans, type ServicePlan } from "./serviceplan";
-import { Shop, shops } from "./shop";
+import { Shop, shops } from "./shop.svelte";
 import { notifications, type Notification } from "./notification.svelte";
 import { myfetch } from "./utils";
 import { mapableState, type StateMap } from "./mapable.svelte";

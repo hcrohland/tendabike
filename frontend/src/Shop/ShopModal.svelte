@@ -1,5 +1,5 @@
 <script module lang="ts">
-  import { Shop } from "../lib/shop";
+  import { Shop } from "../lib/shop.svelte";
 
   const modal = $state<{
     open: boolean;
