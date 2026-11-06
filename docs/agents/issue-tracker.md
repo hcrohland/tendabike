@@ -1,52 +1,61 @@
 # Issue tracker: GitHub
 
-Issues and specs for this repo live as GitHub issues. Use the GitHub MCP server for all operations — the `mcp__github__*` tools, not the `gh` CLI. Every tool takes `owner`/`repo`; infer the pair from `git remote -v`.
+Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations. `gh` infers the repo from the git remote; no `owner`/`repo` params needed.
 
 ## Conventions
 
-Repo-specific policies and API gotchas — for which tool takes which params, see the MCP tool schemas.
-
-- **Param naming**: most MCP params are camelCase (`pullNumber`), but `issue_number` and `merge_method` are snake_case. A wrong-name call fails silently (the param is ignored), producing a misleading downstream error.
-
 - **Feature label**: one `feature:<slug>` label per feature.
 - **Non-feature issues** (bugs, flaky tests, chores): apply the triage label only — no `feature:` label.
-- **Sub-issue id**: `sub_issue_write` (`add`) takes the child's numeric **database id** (the `id` field, not its `#number` or `node_id`), which full `search_issues` / `get_sub_issues` entries carry.
-- **Sub-issue list truncation**: `issue_read` `get_sub_issues` on a large spec returns a **truncated** inline result; the full JSON is written to a tool-output file (path in the tool result). Read and parse that file.
-- **Labels are set-based**: `issue_write` `update` `labels` *sets* the full label set, so removal re-sets the list without that label (read the current labels first).
-- **`List` fields**: request only the `fields` you need — `body` is the largest per-result data.
-- **Verify from per-call confirmations**: the issue write tools (`issue_write`, `issue_dependency_write`) return the object they created/updated and the edge they set — rely on those to confirm state. **On an empty response, verify with a read before assuming anything — and never retry a `create` without verifying first.** A bulk `get_sub_issues` is expensive (it returns the full repository object per issue); reach for it only when you need the hierarchy at a glance, not to re-confirm what the write calls already reported.
-- **Close an issue**: `state: "closed"` with `state_reason: "completed"`.
+- **Labels are additive/removal**: `gh issue edit --add-label` / `--remove-label` modify the set; `--label` replaces it entirely.
+- **Sub-issue id**: the `gh api` sub-issue endpoint takes the child's numeric **database id** (the `id` field from `gh issue view --json id`), not its `#number`.
+- **Close an issue**: `gh issue close <n> --reason completed`.
 - **Creating a PR**: write the body with the `pr` skill (there is no PR template in the repo).
 - **Close from a PR**: a squash merge collects each commit's `Closes #N` line, so each ticket closes via the `Closes #N` in its **own commit** (one issue per line — a line with several space-separated numbers closes only the first). The PR body carries `Closes` for the **umbrella spec only**; do not duplicate the per-ticket `Closes` lines into the PR body.
 - **Sync**: merge `main` into the feature branch (`git merge origin/main`); the `.githooks/pre-push` hook rejects force-pushes (non-fast-forward).
+
+## Common operations
+
+| Operation | Command |
+|---|---|
+| List open issues | `gh issue list --state open --json number,title,assignees,labels` |
+| View an issue | `gh issue view <n> --json title,body,labels,assignees,state,comments` |
+| Create an issue | `gh issue create --title "…" --body "…" --label "…"` |
+| Edit labels | `gh issue edit <n> --add-label "…" --remove-label "…"` |
+| Assign | `gh issue edit <n> --add-assignee <login>` |
+| Comment | `gh issue comment <n> --body "…"` |
+| Close | `gh issue close <n> --reason completed` |
+| Add sub-issue | `gh api repos/{owner}/{repo}/issues/{parent}/sub_issues -X POST -f sub_issue_id={child_db_id}` |
+| Add dependency | `gh api repos/{owner}/{repo}/issue-dependencies -X POST -f source_issue_number={child} -f target_issue_number={blocker} -f type=blocked_by` |
+| Check blockers | `gh api graphql -f query='{ repository(owner:"{owner}",name:"{repo}") { issue(number:{n}) { blockingIssues(first:10) { nodes { number state } } } } }'` |
+
+`{owner}`/`{repo}` in `gh api` paths: infer from `git remote -v` (e.g. `hcrohland`/`tendabike`).
 
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
 
-When set to `yes`, PRs run through the same labels and states as issues, using the MCP PR tools:
-
-- **Read a PR**: `pull_request_read` — `get` for details, `get_comments` for comments, `get_diff` for the diff.
-- **List external PRs for triage**: `search_pull_requests` with `fields` including `author_association`, then keep only `CONTRIBUTOR`, `FIRST_TIME_CONTRIBUTOR`, or `NONE` (drop `OWNER`/`MEMBER`/`COLLABORATOR`).
-- **Comment / close**: `add_issue_comment` (pass the PR number as `issue_number`) / `update_pull_request` with `state: "closed"`.
-
-GitHub shares one number space across issues and PRs, so a bare `#42` may be either: try `pull_request_read` `get` and fall back to `issue_read` `get`.
+GitHub shares one number space across issues and PRs, so a bare `#42` may be either: try `gh pr view 42` and fall back to `gh issue view 42`.
 
 ## When a skill says "publish to the issue tracker"
 
-Create a GitHub issue with `issue_write`.
+`gh issue create`.
 
 ## When a skill says "fetch the relevant ticket"
 
-`issue_read` with `method: "get"`, plus `get_comments`.
+`gh issue view <n> --json title,body,labels,assignees,state,comments`.
 
 ## Wayfinding operations
 
 Used by `/wayfinder`. The **map** is a single issue with **child** issues as tickets.
 
-- **Map**: a single issue labelled `wayfinder:map`, holding the Notes / Decisions-so-far / Fog body. `issue_write` with `labels: ["wayfinder:map"]`.
-- **Child ticket**: an issue linked to the map as a GitHub sub-issue (see Conventions). Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`). Once claimed, the ticket is assigned to the driving dev.
-- **Blocking**: GitHub's **native issue dependencies**, the canonical, UI-visible representation. Add an edge with `issue_dependency_write` (method `add`, type `blocked_by`) — both sides take issue **numbers**, no id lookup. The live gate is `issue_dependencies_summary.blocked_by` (open blockers only), surfaced on `issue_read get_sub_issues` entries and `search_issues` results; a ticket is unblocked when every blocker is closed. The `issue_dependency_*` tools are feature-flagged in the GitHub MCP server (`issue_dependencies`) — where they're absent from the toolset, fall back to a `Blocked by: #<n>, #<n>` line at the top of the child body.
-- **Frontier query**: `issue_read` with `method: "get_sub_issues"` on the map (children in map order, each carrying `state`, `issue_dependencies_summary`, `assignees`); drop any that is closed, has an open blocker (`blocked_by > 0`, or an open issue in the `Blocked by` line), or has an assignee; first in map order wins.
-- **Claim**: `issue_write` with `method: "update"`, `assignees: [<login>]` (your login from `get_me`) — the session's first write.
-- **Resolve**: `add_issue_comment` with the answer, then close with `issue_write` (`state: "closed"`, `state_reason: "completed"`), then append to the map's Decisions-so-far (read its body, append, `issue_write` update): one-line gist + link to the closed ticket.
+- **Map**: a single issue labelled `wayfinder:map`, holding the Notes / Decisions-so-far / Fog body.
+- **Child ticket**: an issue linked to the map as a GitHub sub-issue. Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`). Once claimed, the ticket is assigned to the driving dev.
+- **Blocking**: GitHub's native issue dependencies (UI-visible). Add with the `gh api` dependency endpoint above. A ticket is unblocked when every blocker is closed.
+- **Frontier query**: list open issues with `wayfinder:` labels (excluding `wayfinder:map`), filter to unassigned, then check `blockingIssues` on the candidates. First in number order wins.
+  ```bash
+  gh issue list --state open --json number,title,assignees,labels \
+    | jq '[.[] | select(.labels | any(.name | startswith("wayfinder:") and .name != "wayfinder:map")) | select((.assignees | length) == 0)]'
+  ```
+  Then for each candidate, verify no open blockers via the GraphQL check above.
+- **Claim**: `gh issue edit <n> --add-assignee <login>` — the session's first write.
+- **Resolve**: `gh issue comment <n> --body "…"` → `gh issue close <n> --reason completed` → append to the map's Decisions-so-far (read its body with `gh issue view`, append the one-line gist + link, `gh issue edit <map> --body "…"`).
