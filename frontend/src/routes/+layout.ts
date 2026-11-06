@@ -15,6 +15,6 @@ export async function load({ url }) {
     url.pathname !== "/about" &&
     url.pathname !== "/data-protection"
   ) {
-    throw redirect(302, "/about");
+    throw redirect(302, `/about?redirect=${encodeURIComponent(url.pathname)}`);
   }
 }
