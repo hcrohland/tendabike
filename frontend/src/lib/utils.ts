@@ -75,7 +75,10 @@ export function checkStatus(response: Response) {
   }
 
   if (response.status === 401) {
-    if (window.location.pathname !== "/about") {
+    if (
+      window.location.pathname !== "/about" &&
+      window.location.pathname !== "/data-protection"
+    ) {
       window.location.href =
         "/about?path=" +
         encodeURIComponent(window.location.pathname + window.location.search);
