@@ -111,6 +111,23 @@ Relevant fields on the activity object (list + single endpoints):
 | `trainer` / `commute` / `race` | Bool | |
 | `timezone` | String | Java timezone id. |
 
+### `type` field — full enum
+
+Source: `@intervals-icu/js-data-model` v1.2.0 (`ActivityType` union, "Generated from Intervals.icu source, do not edit"). The API declares `type?: string`, but this is the definitive set of values the system recognizes.
+
+```
+AlpineSki, BackcountrySki, Badminton, Canoeing, Crossfit, Cyclocross,
+EBikeRide, EMountainBikeRide, Elliptical, Golf, GravelRide, Handcycle,
+HighIntensityIntervalTraining, Hike, Hockey, IceSkate, InlineSkate,
+Kayaking, Kitesurf, MountainBikeRide, NordicSki, OpenWaterSwim, Padel,
+Pilates, Pickleball, Racquetball, Ride, RollerSki, Rowing, Rugby,
+RockClimbing, Run, Sail, Skateboard, Snowboard, Snowshoe, Soccer,
+Squash, StairStepper, StandUpPaddling, Surfing, Swim, TableTennis,
+Tennis, TrackRide, TrailRun, Transition, Velomobile, VirtualRide,
+VirtualRow, VirtualRun, VirtualSki, Walk, WaterSport, Wheelchair,
+Windsurf, Workout, WeightTraining, Yoga, Other
+```
+
 ## Key constraints / caveats
 
 1. **No refresh tokens** — store the access token; handle 401 with re-authorization.
