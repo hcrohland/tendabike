@@ -12,8 +12,11 @@
     </nav>
     <p class="text-gray-400 dark:text-gray-500">
       © Christoph Rohland 2019-2026 -
-      <a href="https://github.com/hcrohland/tendabike" class="hover:underline"
-        >Source Code</a
+      <a
+        href="https://github.com/hcrohland/tendabike"
+        target="_blank"
+        rel="noopener"
+        class="hover:underline">Source Code</a
       >
     </p>
   </div>
