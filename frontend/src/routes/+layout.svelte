@@ -6,6 +6,7 @@
   import InitialSyncDialog from "../Widgets/InitialSyncDialog.svelte";
   import Actions from "../Widgets/Actions.svelte";
   import ShopFrame from "../Shop/ShopFrame.svelte";
+  import Footer from "../Footer.svelte";
 
   const theme = {
     tableBodyCell: "px-2 py-3",
@@ -25,4 +26,5 @@
     </div>
   </ThemeProvider>
   <Actions />
+  <Footer />
 </div>

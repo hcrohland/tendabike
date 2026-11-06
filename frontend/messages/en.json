@@ -371,5 +371,7 @@
   "notif_panel_empty": "No notifications",
   "notif_panel_read_all": "Mark all as read",
   "notif_dismiss": "Dismiss",
-  "notif_fallback": "Notification"
+  "notif_fallback": "Notification",
+  "footer_about": "About",
+  "footer_data_protection": "Data Protection"
 }

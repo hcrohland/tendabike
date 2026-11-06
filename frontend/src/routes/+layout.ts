@@ -9,8 +9,12 @@ export async function load({ url }) {
   await getTypes();
   // Step 2: load user + summary
   await initData();
-  // Anonymous / 401: redirect to about (skip if already there)
-  if (!getUser() && url.pathname !== "/about") {
+  // Anonymous / 401: redirect to about (skip if already on a public page)
+  if (
+    !getUser() &&
+    url.pathname !== "/about" &&
+    url.pathname !== "/data-protection"
+  ) {
     throw redirect(302, "/about");
   }
 }

@@ -371,5 +371,7 @@
   "notif_panel_empty": "Keine Benachrichtigungen",
   "notif_panel_read_all": "Alle als gelesen markieren",
   "notif_dismiss": "Schließen",
-  "notif_fallback": "Benachrichtigung"
+  "notif_fallback": "Benachrichtigung",
+  "footer_about": "Über",
+  "footer_data_protection": "Datenschutz"
 }

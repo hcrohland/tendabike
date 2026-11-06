@@ -1,5 +1,5 @@
 <script lang="ts">
-  import About from "../../About/About.svelte";
+  import ContentPage from "../../lib/ContentPage.svelte";
 </script>
 
-<About />
+<ContentPage page="about" />
