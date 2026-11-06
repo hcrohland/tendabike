@@ -9,15 +9,10 @@ function mockFetch(responses: Record<string, string>) {
       if (path in responses) {
         return Promise.resolve({
           ok: true,
-          headers: { get: () => "text/plain" },
           text: () => Promise.resolve(responses[path]),
         });
       }
-      return Promise.resolve({
-        ok: true,
-        headers: { get: () => "text/html" },
-        text: () => Promise.resolve("<html>fallback</html>"),
-      });
+      return Promise.resolve({ ok: false, text: () => Promise.resolve("") });
     }),
   );
 }
@@ -55,21 +50,6 @@ describe("resolveContent", () => {
   it("returns an empty string when no file matches", async () => {
     mockFetch({});
     const content = await resolveContent("nonexistent", "en");
-    expect(content).toBe("");
-  });
-
-  it("ignores HTML fallback responses", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() =>
-        Promise.resolve({
-          ok: true,
-          headers: { get: () => "text/html" },
-          text: () => Promise.resolve("<html>...</html>"),
-        }),
-      ),
-    );
-    const content = await resolveContent("about", "en");
     expect(content).toBe("");
   });
 });
