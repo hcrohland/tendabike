@@ -17,7 +17,3 @@ Das chasch du mache:
 1. Stopp d'Ufzeichnig i Lift und Shuttles. Dadurch sött Strava dr Höchegwinn vom Shuttle nüme erfasse.
 2. Lad d'Aktivitätsliste vo dr Garmin-Connect-Website mit dütsche Spracheinstellige ache. Die Datei wo drus entstaht, het dr Höcheverlust drin.
 3. Lad die Datei über Sync → CSV i TendaBike ui.
-
----
-
-© Christoph Rohland 2019-2026 - Sourcecode uf [GitHub](https://github.com/hcrohland/tendabike)

@@ -17,7 +17,3 @@ This is what you can do:
 1. Stop recording in lifts and shuttles. By that Strava should not track the elevation gain for the shuttle
 2. Download the list of activities from the Garmin Connect website with German language settings. The resulting file will include the elevation loss
 3. Upload this file to TendaBike via Sync → CSV
-
----
-
-© Christoph Rohland 2019-2026 - Source Code at [GitHub](https://github.com/hcrohland/tendabike)

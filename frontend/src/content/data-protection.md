@@ -17,7 +17,3 @@ TendaBike does not use analytics, cookies, or any tracking mechanisms.
 ## Your rights
 
 Since TendaBike is self-hosted, you have full control over your data. You can export or delete your data at any time by accessing your database directly.
-
----
-
-© Christoph Rohland 2019-2026

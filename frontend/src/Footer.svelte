@@ -9,4 +9,10 @@
       >{m.footer_data_protection()}</a
     >
   </nav>
+  <p class="mt-2 text-sm text-gray-400 dark:text-gray-500">
+    © Christoph Rohland 2019-2026 -
+    <a href="https://github.com/hcrohland/tendabike" class="hover:underline"
+      >Source Code</a
+    >
+  </p>
 </footer>

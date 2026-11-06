@@ -17,7 +17,3 @@ Das kannst du tun:
 1. Stoppe die Aufzeichnung in Liften und Shuttles. Dadurch sollte Strava den Höhengewinn des Shuttles nicht mehr erfassen.
 2. Lade die Aktivitätsliste von der Garmin-Connect-Website mit deutschen Spracheinstellungen herunter. Die resultierende Datei enthält den Höhenverlust.
 3. Lade diese Datei über Sync → CSV in TendaBike hoch.
-
----
-
-© Christoph Rohland 2019-2026 - Quellcode auf [GitHub](https://github.com/hcrohland/tendabike)
