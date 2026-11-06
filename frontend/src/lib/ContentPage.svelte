@@ -10,6 +10,6 @@
   );
 </script>
 
-<div class="prose max-w-none p-4 sm:p-6 md:p-8">
+<div class="prose dark:prose-invert max-w-none p-4 sm:p-6 md:p-8">
   {@html html}
 </div>
