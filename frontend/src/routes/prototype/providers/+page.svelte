@@ -7,20 +7,23 @@
   import VariantA from "./VariantA.svelte";
   import VariantB from "./VariantB.svelte";
   import VariantC from "./VariantC.svelte";
+  import VariantD from "./VariantD.svelte";
   import PrototypeSwitcher from "./PrototypeSwitcher.svelte";
 
-  const variants = ["A", "B", "C"];
+  const variants = ["A", "B", "C", "D"];
   const names: Record<string, string> = {
     A: "Inline choice",
     B: "Neutral + picker",
     C: "Provider identity",
+    D: "Assembled (winner)",
   };
-  let variant = $derived(page.url.searchParams.get("variant") ?? "A");
+  let variant = $derived(page.url.searchParams.get("variant") ?? "D");
 
   const taglines: Record<string, string> = {
     A: "A second peer button appears wherever Strava does; small per-provider icons; both logos in the footer.",
     B: "One neutral entry opens a picker; the connected app stays provider-quiet (monochrome dots, neutral footnote).",
     C: "The provider is a first-class identity: hero cards, branded onboarding, prominent badges, partner headline.",
+    D: "The picked combination: C's hero-card connect + branded onboarding (+ header Connect button), A's small inline view-on icons, B's neutral-footnote branding.",
   };
 </script>
 
@@ -42,8 +45,10 @@
     <VariantA />
   {:else if variant === "B"}
     <VariantB />
-  {:else}
+  {:else if variant === "C"}
     <VariantC />
+  {:else}
+    <VariantD />
   {/if}
 </div>
 

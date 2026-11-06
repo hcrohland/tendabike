@@ -21,10 +21,14 @@
 </script>
 
 {#if provider === "strava"}
-  <img src="/strava_grey.png" alt="Strava" class="{img} align-middle" />
+  <img
+    src="/strava_grey.png"
+    alt="Strava"
+    class="inline {img} ml-1 align-middle"
+  />
 {:else}
   <span
-    class="inline-flex items-center justify-center {box} rounded bg-neutral-800 dark:bg-neutral-200 dark:text-neutral-900 text-white font-bold align-middle"
+    class="inline-flex items-center justify-center {box} ml-1 rounded bg-neutral-800 dark:bg-neutral-200 dark:text-neutral-900 text-white font-bold align-middle"
     >icu</span
   >
 {/if}
