@@ -23,7 +23,7 @@
   class="rounded-lg border border-border-subtle bg-surface-1 p-3 flex items-center justify-between"
 >
   <div class="flex items-center gap-2">
-    <img src="favicon.png" alt="TendaBike" class="rounded-circle h-8" />
+    <img src="/favicon.png" alt="TendaBike" class="rounded-circle h-8" />
     <span class="font-semibold">Tend a Bike</span>
   </div>
   <span class="text-xs text-text-1">pick your source to begin</span>
@@ -39,7 +39,7 @@
       <div class="p-4 text-white" style="background:{accentBg(p)}">
         <div class="flex items-center gap-2">
           {#if p === "strava"}
-            <img src="strava.png" alt="" class="h-7 w-7" />
+            <img src="/strava.png" alt="" class="h-7 w-7" />
           {:else}
             <span
               class="inline-flex items-center justify-center h-6 min-w-6 px-1.5 rounded bg-white/20 text-white text-[11px] font-bold"
@@ -73,7 +73,7 @@
     class="p-3 text-white flex items-center gap-2"
     style="background:{providerMeta.strava.accent}"
   >
-    <img src="strava.png" alt="" class="h-6 w-6" />
+    <img src="/strava.png" alt="" class="h-6 w-6" />
     <span class="font-semibold">Import from Strava</span>
   </div>
   <div class="p-4 text-center bg-surface-1">
@@ -97,7 +97,7 @@
   <span class="text-sm text-text-1">Connected header</span>
   <div class="flex items-center gap-2">
     <Badge color="orange">
-      <img src="strava.png" alt="" class="inline h-4 w-4" /> Strava
+      <img src="/strava.png" alt="" class="inline h-4 w-4" /> Strava
     </Badge>
     <span
       class="inline-block h-7 w-7 rounded-full bg-neutral-300 dark:bg-neutral-600"
@@ -118,7 +118,7 @@
         </a>
         <Badge color={prov === "strava" ? "orange" : "gray"} class="ml-2">
           {#if prov === "strava"}
-            <img src="strava.png" alt="" class="inline h-3.5 w-3.5" />
+            <img src="/strava.png" alt="" class="inline h-3.5 w-3.5" />
           {:else}
             icu
           {/if}
@@ -151,7 +151,7 @@
 <div class="rounded-lg border border-border-subtle bg-surface-1 p-4">
   <p class="text-lg font-semibold">
     TendaBike +
-    <img src="strava.png" alt="Strava" class="inline h-5 w-5 align-middle" />
+    <img src="/strava.png" alt="Strava" class="inline h-5 w-5 align-middle" />
     Strava
   </p>
   <p class="text-sm text-text-1">

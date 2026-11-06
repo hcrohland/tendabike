@@ -18,7 +18,7 @@
 <div class="rounded-lg border border-border-subtle bg-surface-1">
   <div class="flex items-center justify-between p-3">
     <div class="flex items-center gap-2">
-      <img src="favicon.png" alt="TendaBike" class="rounded-circle h-8" />
+      <img src="/favicon.png" alt="TendaBike" class="rounded-circle h-8" />
       <span class="font-semibold">Tend a Bike</span>
     </div>
     <div class="flex items-center gap-2">
@@ -27,7 +27,7 @@
         class="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-white"
         style="background:#fc4c02"
       >
-        <img src="strava.png" alt="" class="h-5 w-5" /> Connect with Strava
+        <img src="/strava.png" alt="" class="h-5 w-5" /> Connect with Strava
       </a>
       <a
         href="#/icu/login"
@@ -46,7 +46,7 @@
     class="flex-1 flex items-center justify-center gap-3 rounded-xl border-2 p-4 font-semibold"
     style="border-color:#fc4c02; color:#fc4c02"
   >
-    <img src="strava.png" alt="" class="h-8 w-8" />
+    <img src="/strava.png" alt="" class="h-8 w-8" />
     <span>
       Connect with Strava
       <span class="block text-xs font-normal opacity-70">
@@ -126,6 +126,6 @@
 <Section n="④" title="Branding — both logos, side by side" />
 <div class="flex items-center gap-3 text-text-1 text-sm">
   Powered by
-  <img src="strava.png" alt="Strava" class="h-5 w-5" />
+  <img src="/strava.png" alt="Strava" class="h-5 w-5" />
   <ProviderMark provider="icu" size="md" />
 </div>

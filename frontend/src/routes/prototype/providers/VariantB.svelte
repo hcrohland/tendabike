@@ -18,7 +18,7 @@
 <div class="rounded-lg border border-border-subtle bg-surface-1">
   <div class="flex items-center justify-between p-3">
     <div class="flex items-center gap-2">
-      <img src="favicon.png" alt="TendaBike" class="rounded-circle h-8" />
+      <img src="/favicon.png" alt="TendaBike" class="rounded-circle h-8" />
       <span class="font-semibold">Tend a Bike</span>
     </div>
     <button
@@ -136,7 +136,11 @@
 <Section n="④" title="Branding — neutral footnote, both equal" />
 <p class="text-text-1 text-sm">
   TendaBike works with
-  <img src="strava_grey.png" alt="Strava" class="inline h-4 w-4 align-middle" />
+  <img
+    src="/strava_grey.png"
+    alt="Strava"
+    class="inline h-4 w-4 align-middle"
+  />
   Strava and
   <ProviderMark provider="icu" size="sm" /> intervals.icu.
 </p>
