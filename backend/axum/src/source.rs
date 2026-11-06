@@ -2,7 +2,7 @@
 //!
 //! `/source/activities/{id}` redirects to the activity's provider URL. The
 //! id is provider-prefixed (`strava:12345` / `icu:i55751783`), and the
-//! service API's `activity_url` op routes on that prefix (issue #761).
+//! service API's `activity_url` op routes on that prefix.
 
 use axum::{
     Router,
@@ -25,8 +25,7 @@ async fn redirect_act(
 ) -> Result<Redirect, AppError> {
     // The redirect direct op (spec #558 §5.2): the service API's
     // `activity_url` op routes on the id's provider prefix and checks
-    // ownership; the handler maps `Err` → a permanent redirect to "/"
-    // as before.
+    // ownership; the handler maps `Err` → a permanent redirect to "/".
     let uri = state
         .api
         .activity_url(Box::new(user), ActivityId::from(id))
