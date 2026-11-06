@@ -6,7 +6,7 @@ import { resp, summary } from "../test/helpers";
 
 function actData(overrides: Partial<any> = {}): any {
   return {
-    id: 100,
+    id: "strava:100",
     user_id: 1,
     what: 301,
     name: "Morning Ride",
@@ -65,29 +65,29 @@ describe("Activity.update", () => {
   });
 
   it("PUTs a copy of the activity to /api/activ/{id}", async () => {
-    const updated = actData({ id: 100, name: "Updated Ride" });
-    const sum = summary({ activities: { "100": updated } });
+    const updated = actData({ id: "strava:100", name: "Updated Ride" });
+    const sum = summary({ activities: { "strava:100": updated } });
     fetchMock.mockResolvedValue(resp(sum));
-    const a = new Activity(actData({ id: 100 }));
+    const a = new Activity(actData({ id: "strava:100" }));
     a.name = "Updated Ride";
     await a.update();
     const [url, option] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/activ/100");
+    expect(url).toBe("/api/activ/strava:100");
     expect(option.method).toBe("PUT");
     const body = JSON.parse(option.body);
     expect(body.name).toBe("Updated Ride");
-    expect(body.id).toBe(100);
+    expect(body.id).toBe("strava:100");
   });
 
   it("leaves the activities map to the stream frame", async () => {
-    const updated = actData({ id: 100, name: "New Name" });
-    const sum = summary({ activities: { "100": updated } });
+    const updated = actData({ id: "strava:100", name: "New Name" });
+    const sum = summary({ activities: { "strava:100": updated } });
     fetchMock.mockResolvedValue(resp(sum));
-    activities.setMap([actData({ id: 100, name: "Old Name" })]);
-    const a = new Activity(actData({ id: 100 }));
+    activities.setMap([actData({ id: "strava:100", name: "Old Name" })]);
+    const a = new Activity(actData({ id: "strava:100" }));
     a.name = "New Name";
     await a.update();
-    expect(activities[100].name).toBe("Old Name");
+    expect(activities["strava:100"].name).toBe("Old Name");
   });
 });
 

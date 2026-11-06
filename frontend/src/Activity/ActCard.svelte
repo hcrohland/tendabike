@@ -55,7 +55,7 @@
         <span class="sm:hidden text-text-1">&thinsp;</span>
         <!-- Title (wraps on long names) -->
         <a
-          href="/strava/activities/{activity.id}"
+          href="/source/activities/{activity.id}"
           target="_blank"
           class="text-sm font-bold wrap-break-word"
         >

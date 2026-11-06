@@ -40,22 +40,13 @@ use crate::*;
 ///
 /// Most operations for activities are done on the Id alone
 ///
+/// The id is provider-prefixed: `"strava:12345"` for a Strava activity,
+/// `"icu:i55751783"` for an intervals.icu one. The prefix is the provider
+/// discriminator the redirect route and URL builders route on.
 #[derive(
-    Clone,
-    Copy,
-    Debug,
-    Hash,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Serialize,
-    Deserialize,
-    From,
-    Into,
-    Display,
+    Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, From, Into, Display,
 )]
-pub struct ActivityId(i64);
+pub struct ActivityId(String);
 
 /// Round a UTC offset, in whole seconds, to the nearest 30 minutes.
 ///
@@ -134,7 +125,7 @@ pub struct Activity {
 impl IdKeyed for Activity {
     type Key = ActivityId;
     fn key(&self) -> Self::Key {
-        self.id
+        self.id.clone()
     }
 }
 
@@ -145,8 +136,20 @@ enum Factor {
 }
 
 impl ActivityId {
-    pub fn new(id: i64) -> Self {
-        Self(id)
+    /// A Strava activity id, rendered as `"strava:<id>"`.
+    pub fn strava(id: i64) -> Self {
+        Self(format!("strava:{id}"))
+    }
+
+    /// An intervals.icu activity id, rendered as `"icu:<id>"`.
+    pub fn icu(id: impl Into<String>) -> Self {
+        Self(format!("icu:{}", id.into()))
+    }
+
+    /// The raw numeric Strava id, if this is a Strava id (`None` for any
+    /// other provider). The redirect route and URL builder route on this.
+    pub fn strava_id(&self) -> Option<i64> {
+        self.0.strip_prefix("strava:").and_then(|s| s.parse().ok())
     }
 
     /// Read the activity with id self
@@ -157,7 +160,7 @@ impl ActivityId {
         session: &dyn Session,
         store: &mut impl ActivityStore,
     ) -> TbResult<Option<Activity>> {
-        let act = store.activity_read_by_id(self).await?;
+        let act = store.activity_read_by_id(self.clone()).await?;
         if let Some(act) = &act {
             session.check_owner(
                 act.user_id,
@@ -194,11 +197,12 @@ impl ActivityId {
     ) -> TbResult<Summary> {
         info!("Deleting {self:?}");
         let mut res = self
+            .clone()
             .read(session, store)
             .await?
             .register(Factor::Sub, store)
             .await?;
-        store.activity_delete(self).await?;
+        store.activity_delete(self.clone()).await?;
         // The deleted activity is reported as a None tombstone, so the
         // client's merge drops its row (issue #462).
         res.activities.tombstone(self);
@@ -225,7 +229,7 @@ impl Activity {
         user: &dyn Session,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<Summary> {
-        if let Some(old_activity) = self.id.read_optional(user, store).await? {
+        if let Some(old_activity) = self.id.clone().read_optional(user, store).await? {
             old_activity.replace(self, store).await
         } else {
             user.check_owner(
@@ -254,7 +258,12 @@ impl Activity {
         user: &dyn Session,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<Summary> {
-        self.id.read(user, store).await?.replace(self, store).await
+        self.id
+            .clone()
+            .read(user, store)
+            .await?
+            .replace(self, store)
+            .await
     }
 
     async fn replace(

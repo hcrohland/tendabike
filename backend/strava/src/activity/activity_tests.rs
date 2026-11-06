@@ -44,7 +44,7 @@ async fn into_activity_maps_fields() -> TbResult<()> {
     let act = strava_activity(None)
         .into_activity(UserId::from(1), &mut _store)
         .await?;
-    assert_eq!(act.id, ActivityId::new(10));
+    assert_eq!(act.id, ActivityId::strava(10));
     assert_eq!(act.what, 1.into());
     assert_eq!(act.user_id, UserId::from(1));
     assert!(act.gear.is_none());
@@ -159,7 +159,7 @@ async fn upsert_activity_stores_new() -> TbResult<()> {
         .returning(move |act| Ok(activity(act.id, act.user_id)));
     let summary = upsert_activity(10, UserId::from(1), &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
-    assert!(summary.activities.get(&ActivityId::new(10)).is_some());
+    assert!(summary.activities.get(&ActivityId::strava(10)).is_some());
     Ok(())
 }
 
@@ -176,7 +176,7 @@ async fn upsert_activity_updates_existing() -> TbResult<()> {
         if n == 0 {
             Ok(None)
         } else {
-            Ok(Some(activity(ActivityId::new(10), UserId::from(1))))
+            Ok(Some(activity(ActivityId::strava(10), UserId::from(1))))
         }
     });
     store
@@ -185,13 +185,13 @@ async fn upsert_activity_updates_existing() -> TbResult<()> {
     store
         .expect_activity_update()
         .times(1)
-        .returning(|_act| Ok(activity(ActivityId::new(10), UserId::from(1))));
+        .returning(|_act| Ok(activity(ActivityId::strava(10), UserId::from(1))));
     upsert_activity(10, UserId::from(1), &mut store).await?;
     let json = activity_json(10, "Ride", None).replace("25000.0", "30000.0");
     queue("/activities/10", &json);
     let summary = upsert_activity(10, UserId::from(1), &mut store).await?;
     assert!(
-        summary.activities.get(&ActivityId::new(10)).is_some(),
+        summary.activities.get(&ActivityId::strava(10)).is_some(),
         "the updated activity is in the summary"
     );
     Ok(())
@@ -219,14 +219,14 @@ async fn activity_strava_url() -> TbResult<()> {
         if n == 0 {
             Ok(None)
         } else {
-            Ok(Some(activity(ActivityId::new(10), UserId::from(1))))
+            Ok(Some(activity(ActivityId::strava(10), UserId::from(1))))
         }
     });
     store
         .expect_activity_create()
         .returning(move |act| Ok(activity(act.id, act.user_id)));
     upsert_activity(10, UserId::from(1), &mut store).await?;
-    let url = strava_url(10, &session, &mut store).await?;
+    let url = strava_url(ActivityId::strava(10), &session, &mut store).await?;
     assert_eq!(url, "https://strava.com/activities/10");
     Ok(())
 }
@@ -239,7 +239,7 @@ async fn activity_strava_url_missing() {
     store
         .expect_activity_read_by_id()
         .returning(|_aid| Ok(None));
-    let res = strava_url(99, &session, &mut store).await;
+    let res = strava_url(ActivityId::strava(99), &session, &mut store).await;
     assert!(matches!(res, Err(Error::NotFound(_))));
 }
 
@@ -257,7 +257,7 @@ async fn delete_activity_removes() -> TbResult<()> {
         if n == 0 {
             Ok(None)
         } else {
-            Ok(Some(activity(ActivityId::new(10), UserId::from(1))))
+            Ok(Some(activity(ActivityId::strava(10), UserId::from(1))))
         }
     });
     store
@@ -267,7 +267,7 @@ async fn delete_activity_removes() -> TbResult<()> {
     upsert_activity(10, UserId::from(1), &mut store).await?;
     let summary = delete_activity(10, UserId::from(1), &mut store).await?;
     assert!(
-        summary.activities.is_tombstoned(&ActivityId::new(10)),
+        summary.activities.is_tombstoned(&ActivityId::strava(10)),
         "the deleted activity is reported as a tombstone"
     );
     Ok(())
@@ -298,7 +298,7 @@ async fn delete_activity_forbidden_for_other_user() -> TbResult<()> {
         if n == 0 {
             Ok(None)
         } else {
-            Ok(Some(activity(ActivityId::new(10), UserId::from(1))))
+            Ok(Some(activity(ActivityId::strava(10), UserId::from(1))))
         }
     });
     store

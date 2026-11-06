@@ -130,11 +130,23 @@ describe("Attachment.activities", () => {
       gear: 100,
     });
     activities.setMap([
-      new Activity({ id: 1, gear: 100, start: "2021-06-01T00:00:00Z" }),
-      new Activity({ id: 2, gear: 100, start: "2023-06-01T00:00:00Z" }),
-      new Activity({ id: 3, gear: 999, start: "2021-06-01T00:00:00Z" }),
+      new Activity({
+        id: "strava:1",
+        gear: 100,
+        start: "2021-06-01T00:00:00Z",
+      }),
+      new Activity({
+        id: "strava:2",
+        gear: 100,
+        start: "2023-06-01T00:00:00Z",
+      }),
+      new Activity({
+        id: "strava:3",
+        gear: 999,
+        start: "2021-06-01T00:00:00Z",
+      }),
     ]);
-    expect(a.activities().map((x) => x.id)).toEqual([1]);
+    expect(a.activities().map((x) => x.id)).toEqual(["strava:1"]);
   });
 });
 

@@ -408,7 +408,7 @@ async fn build_workshop_snapshot(pool: &DbPool) -> tb_domain::TbResult<StoreSnap
     // ─── Activities on Bike A (for usage calculation) ─────────────────
     let base = sample_purchase_date() - time::Duration::days(180);
     mk_activity(
-        ActivityId::new(1),
+        ActivityId::strava(1),
         "Morning Ride",
         base,
         3600,
@@ -420,7 +420,7 @@ async fn build_workshop_snapshot(pool: &DbPool) -> tb_domain::TbResult<StoreSnap
     .upsert(&s, &mut store)
     .await?;
     mk_activity(
-        ActivityId::new(2),
+        ActivityId::strava(2),
         "Hill Repeats",
         base + time::Duration::hours(2),
         1800,
@@ -432,7 +432,7 @@ async fn build_workshop_snapshot(pool: &DbPool) -> tb_domain::TbResult<StoreSnap
     .upsert(&s, &mut store)
     .await?;
     mk_activity(
-        ActivityId::new(3),
+        ActivityId::strava(3),
         "Recovery Spin",
         base + time::Duration::days(1),
         2400,
@@ -490,7 +490,7 @@ async fn build_workshop_snapshot(pool: &DbPool) -> tb_domain::TbResult<StoreSnap
     snap.parts.sort_by_key(|p| p.id);
     snap.attachments.sort_by_key(|a| (a.part_id, a.attached));
     snap.usages.sort_by_key(|u| u.id);
-    snap.activities.sort_by_key(|a| a.id);
+    snap.activities.sort_by_key(|a| a.id.clone());
     Ok(snap)
 }
 

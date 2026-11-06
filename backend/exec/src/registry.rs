@@ -518,12 +518,20 @@ where
         Ok(uri)
     }
 
-    /// The activity redirect URL (spec #558 §5.2): one transaction — the
-    /// `tb_strava` `strava_url` op (which checks the activity's ownership),
-    /// then the Strava URL.
+    /// The activity redirect URL (spec #558 §5.2): one transaction, routed
+    /// by the id's provider prefix — the `tb_strava` `strava_url` op (which
+    /// checks the activity's ownership) for a Strava id, then the Strava
+    /// URL. Only the Strava lane is live; the intervals.icu lane lands with
+    /// the provider split (#760).
     async fn activity_url(&self, session: Box<dyn Session>, id: ActivityId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let uri = activity::strava_url(i64::from(id), &*session, &mut store).await?;
+        let uri = match id.strava_id() {
+            Some(_) => activity::strava_url(id, &*session, &mut store).await?,
+            None => {
+                store.commit().await?;
+                return Err(Error::NotFound(format!("no provider URL for {id}")));
+            }
+        };
         store.commit().await?;
         Ok(uri)
     }

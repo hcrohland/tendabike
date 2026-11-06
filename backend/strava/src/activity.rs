@@ -88,7 +88,7 @@ impl StravaActivity {
             None => None,
         };
         Ok(Activity {
-            id: id.into(),
+            id: ActivityId::strava(id),
             what,
             gear,
             user_id,
@@ -181,13 +181,16 @@ impl StravaActivity {
     }
 }
 
+/// The Strava URL for a Strava activity: the read is the ownership check,
+/// and the URL is built from the raw (unprefixed) Strava id.
 pub async fn strava_url(
-    act: i64,
+    id: ActivityId,
     user: &dyn Session,
     store: &mut impl StravaStore,
 ) -> TbResult<String> {
-    let g = ActivityId::new(act).read(user, store).await?;
-    Ok(format!("https://strava.com/activities/{}", g.id))
+    id.clone().read(user, store).await?;
+    let raw = id.strava_id().context("not a strava activity")?;
+    Ok(format!("https://strava.com/activities/{raw}"))
 }
 
 pub async fn upsert_activity(
@@ -205,7 +208,7 @@ pub(crate) async fn delete_activity(
     store: &mut impl StravaStore,
 ) -> TbResult<Summary> {
     let session = OnBehalf(user_id);
-    ActivityId::new(act).delete(&session, store).await
+    ActivityId::strava(act).delete(&session, store).await
 }
 
 #[cfg(test)]

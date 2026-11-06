@@ -345,7 +345,7 @@ async fn process_activity_create_imports() -> TbResult<()> {
     });
     let summary = process(UserId::from(1), &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
-    assert!(summary.activities.get(&ActivityId::new(10)).is_some());
+    assert!(summary.activities.get(&ActivityId::strava(10)).is_some());
     assert_eq!(
         deleted.lock().unwrap().take(),
         Some(Some(1)),
