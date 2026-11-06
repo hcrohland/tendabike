@@ -1,31 +1,55 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { resolveContent } from "./content";
 
+function mockFetch(responses: Record<string, string>) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      const path = url.replace(/^\/content\//, "").replace(/\.md$/, "");
+      if (path in responses) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(responses[path]),
+        });
+      }
+      return Promise.resolve({ ok: false, text: () => Promise.resolve("") });
+    }),
+  );
+}
+
 describe("resolveContent", () => {
-  it("returns the locale-specific file when it exists", () => {
-    const content = resolveContent("about", "de");
-    expect(content).toContain("Behalte im Blick");
+  beforeEach(() => {
+    vi.unstubAllGlobals();
   });
 
-  it("returns the locale-specific file for de_CH when it exists", () => {
-    const content = resolveContent("about", "de_CH");
-    expect(content).toContain("Behalt im Blick");
+  it("returns the locale-specific file when it exists", async () => {
+    mockFetch({
+      "about.de": "German content",
+      about: "Fallback content",
+    });
+    const content = await resolveContent("about", "de");
+    expect(content).toBe("German content");
   });
 
-  it("falls back to the base file when no locale-specific file exists", () => {
-    // data-protection only has a base file, no locale variants
-    const content = resolveContent("data-protection", "de");
-    expect(content).toContain("Data Protection");
+  it("falls back to the base file when no locale-specific file exists", async () => {
+    mockFetch({
+      "data-protection": "English fallback",
+    });
+    const content = await resolveContent("data-protection", "de");
+    expect(content).toBe("English fallback");
   });
 
-  it("returns the base file for the base locale when no locale-specific file exists", () => {
-    const content = resolveContent("about", "en");
-    // about.en.md doesn't exist, so it falls back to about.md
-    expect(content).toContain("Know how long your parts last");
+  it("returns the base file for the base locale when no locale-specific file exists", async () => {
+    mockFetch({
+      about: "English content",
+    });
+    const content = await resolveContent("about", "en");
+    expect(content).toBe("English content");
   });
 
-  it("returns an empty string when no file matches", () => {
-    const content = resolveContent("nonexistent", "en");
+  it("returns an empty string when no file matches", async () => {
+    mockFetch({});
+    const content = await resolveContent("nonexistent", "en");
     expect(content).toBe("");
   });
 });

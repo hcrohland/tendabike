@@ -5,11 +5,18 @@
 
   let { page }: { page: string } = $props();
 
-  const html = $derived(
-    marked.parse(resolveContent(page, getLocale())) as string,
-  );
+  let html = $state("");
+
+  $effect(() => {
+    const locale = getLocale();
+    resolveContent(page, locale).then((markdown) => {
+      html = marked.parse(markdown) as string;
+    });
+  });
 </script>
 
-<div class="prose dark:prose-invert max-w-none p-4 sm:p-6 md:p-8">
-  {@html html}
-</div>
+{#if html}
+  <div class="prose dark:prose-invert max-w-none p-4 sm:p-6 md:p-8">
+    {@html html}
+  </div>
+{/if}
