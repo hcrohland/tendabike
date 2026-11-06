@@ -40,9 +40,9 @@ use crate::*;
 ///
 /// Most operations for activities are done on the Id alone
 ///
-/// The id is provider-prefixed: `"strava:12345"` for a Strava activity,
-/// `"icu:i55751783"` for an intervals.icu one. The prefix is the provider
-/// discriminator the redirect route and URL builders route on.
+/// An opaque identifier. The domain treats it as an opaque string and never
+/// interprets its contents; its string form is owned by the provider that
+/// created it.
 #[derive(
     Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, From, Into, Display,
 )]
@@ -136,22 +136,6 @@ enum Factor {
 }
 
 impl ActivityId {
-    /// A Strava activity id, rendered as `"strava:<id>"`.
-    pub fn strava(id: i64) -> Self {
-        Self(format!("strava:{id}"))
-    }
-
-    /// An intervals.icu activity id, rendered as `"icu:<id>"`.
-    pub fn icu(id: impl Into<String>) -> Self {
-        Self(format!("icu:{}", id.into()))
-    }
-
-    /// The raw numeric Strava id, if this is a Strava id (`None` for any
-    /// other provider). The redirect route and URL builder route on this.
-    pub fn strava_id(&self) -> Option<i64> {
-        self.0.strip_prefix("strava:").and_then(|s| s.parse().ok())
-    }
-
     /// Read the activity with id self
     ///
     /// checks authorization

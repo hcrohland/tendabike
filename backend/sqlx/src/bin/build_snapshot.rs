@@ -408,7 +408,7 @@ async fn build_workshop_snapshot(pool: &DbPool) -> tb_domain::TbResult<StoreSnap
     // ─── Activities on Bike A (for usage calculation) ─────────────────
     let base = sample_purchase_date() - time::Duration::days(180);
     mk_activity(
-        ActivityId::strava(1),
+        ActivityId::from("strava:1".to_string()),
         "Morning Ride",
         base,
         3600,
@@ -420,7 +420,7 @@ async fn build_workshop_snapshot(pool: &DbPool) -> tb_domain::TbResult<StoreSnap
     .upsert(&s, &mut store)
     .await?;
     mk_activity(
-        ActivityId::strava(2),
+        ActivityId::from("strava:2".to_string()),
         "Hill Repeats",
         base + time::Duration::hours(2),
         1800,
@@ -432,7 +432,7 @@ async fn build_workshop_snapshot(pool: &DbPool) -> tb_domain::TbResult<StoreSnap
     .upsert(&s, &mut store)
     .await?;
     mk_activity(
-        ActivityId::strava(3),
+        ActivityId::from("strava:3".to_string()),
         "Recovery Spin",
         base + time::Duration::days(1),
         2400,

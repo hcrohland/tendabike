@@ -148,8 +148,8 @@ async fn user_read_returns_user_state() -> TbResult<()> {
     store.expect_user_get().returning(move |_| Ok(user_row(me)));
     store.expect_activity_get_all().returning(move |_| {
         Ok(vec![
-            activity_row(ActivityId::strava(1), me, "Morning Ride"),
-            activity_row(ActivityId::strava(2), me, "Evening Ride"),
+            activity_row(ActivityId::from("strava:1".to_string()), me, "Morning Ride"),
+            activity_row(ActivityId::from("strava:2".to_string()), me, "Evening Ride"),
         ])
     });
     store
@@ -286,14 +286,14 @@ async fn user_read_missing_is_not_found() -> TbResult<()> {
 async fn activity_read_dispatches() -> TbResult<()> {
     let mut store = MockStore::new();
     let me = test_user();
-    let act = activity_row(ActivityId::strava(1), me, "Morning Ride");
+    let act = activity_row(ActivityId::from("strava:1".to_string()), me, "Morning Ride");
     let act_read = act.clone();
     store
         .expect_activity_read_by_id()
         .returning(move |_| Ok(Some(act_read.clone())));
 
     let outcome = read(
-        ApiRead::Activity(ActivityId::strava(1)),
+        ApiRead::Activity(ActivityId::from("strava:1".to_string())),
         &test_session(),
         &mut store,
     )
@@ -301,7 +301,7 @@ async fn activity_read_dispatches() -> TbResult<()> {
     let ReadOutcome::Activity(got) = outcome else {
         panic!("the Activity read returns the Activity");
     };
-    assert_eq!(got.id, ActivityId::strava(1));
+    assert_eq!(got.id, ActivityId::from("strava:1".to_string()));
     assert_eq!(got.name, "Morning Ride");
     assert_eq!(got.user_id, me);
     Ok(())
@@ -313,7 +313,7 @@ async fn activity_read_missing_is_not_found() -> TbResult<()> {
     let mut store = MockStore::new();
     store.expect_activity_read_by_id().returning(|_| Ok(None));
     let err = read(
-        ApiRead::Activity(ActivityId::strava(999_999)),
+        ApiRead::Activity(ActivityId::from("strava:999_999".to_string())),
         &test_session(),
         &mut store,
     )
@@ -329,7 +329,11 @@ async fn activity_read_missing_is_not_found() -> TbResult<()> {
 async fn activity_read_foreign_is_forbidden() -> TbResult<()> {
     let mut store = MockStore::new();
     // The activity belongs to user 1; user 2 may not read it.
-    let act = activity_row(ActivityId::strava(1), test_user(), "Morning Ride");
+    let act = activity_row(
+        ActivityId::from("strava:1".to_string()),
+        test_user(),
+        "Morning Ride",
+    );
     let act_read = act.clone();
     store
         .expect_activity_read_by_id()
@@ -337,7 +341,7 @@ async fn activity_read_foreign_is_forbidden() -> TbResult<()> {
 
     let session = mock_session(UserId::from(2));
     let err = read(
-        ApiRead::Activity(ActivityId::strava(1)),
+        ApiRead::Activity(ActivityId::from("strava:1".to_string())),
         &session,
         &mut store,
     )

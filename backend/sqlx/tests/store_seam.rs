@@ -180,7 +180,7 @@ fn att(
 /// call sites vary: the id, the name, the start instant, and the gear.
 fn ride(id: i64, name: &str, start: OffsetDateTime, gear: Option<PartId>) -> Activity {
     Activity {
-        id: ActivityId::strava(id),
+        id: ActivityId::from(format!("strava:{id}")),
         user_id: UserId::from(1),
         what: ActTypeId::from(1),
         name: name.to_string(),
@@ -491,12 +491,12 @@ async fn activity_create_rejects_duplicate_id() -> tb_domain::TbResult<()> {
 
         // The first ride is stored, and a different id still succeeds.
         let stored = store
-            .activity_read_by_id(ActivityId::strava(100))
+            .activity_read_by_id(ActivityId::from("strava:100".to_string()))
             .await?
             .expect("the first ride is stored");
-        assert_eq!(stored.id, ActivityId::strava(100));
+        assert_eq!(stored.id, ActivityId::from("strava:100".to_string()));
         let mut other = ride.clone();
-        other.id = ActivityId::strava(101);
+        other.id = ActivityId::from("strava:101".to_string());
         store.activity_create(other).await?;
 
         // The duplicate create comes last: a failed statement aborts the
@@ -559,7 +559,7 @@ async fn activity_update_preserves_fields() -> tb_domain::TbResult<()> {
 
         // An update of a missing activity is a NotFound on both stores.
         let ghost = Activity {
-            id: ActivityId::strava(999),
+            id: ActivityId::from("strava:999".to_string()),
             ..act
         };
         let err = store.activity_update(ghost).await;
@@ -605,7 +605,7 @@ async fn activity_find_range_boundary() -> tb_domain::TbResult<()> {
             1,
             "a ride exactly at the range begin must be included"
         );
-        assert_eq!(found[0].id, ActivityId::strava(100));
+        assert_eq!(found[0].id, ActivityId::from("strava:100".to_string()));
 
         Ok(())
     })
@@ -630,7 +630,7 @@ async fn activity_get_by_user_and_time() -> tb_domain::TbResult<()> {
         // activity (a zero-offset ride's local minute is its UTC minute).
         let query = start + time::Duration::seconds(15);
         let found = store.get_by_user_and_time(UserId::from(1), query).await?;
-        assert_eq!(found.id, ActivityId::strava(100));
+        assert_eq!(found.id, ActivityId::from("strava:100".to_string()));
 
         // A different minute: no match.
         let other_minute = start + time::Duration::minutes(2);
@@ -648,7 +648,7 @@ async fn activity_get_by_user_and_time() -> tb_domain::TbResult<()> {
             .unwrap()
             .to_offset(time::UtcOffset::from_whole_seconds(7200).unwrap());
         let act2 = Activity {
-            id: ActivityId::strava(101),
+            id: ActivityId::from("strava:101".to_string()),
             start: local_start,
             ..act
         };
@@ -656,7 +656,7 @@ async fn activity_get_by_user_and_time() -> tb_domain::TbResult<()> {
 
         let query = OffsetDateTime::from_unix_timestamp(1706777630 + 7200 - 20).unwrap(); // 10:53:30 UTC — the ride's local minute
         let found = store.get_by_user_and_time(UserId::from(1), query).await?;
-        assert_eq!(found.id, ActivityId::strava(101));
+        assert_eq!(found.id, ActivityId::from("strava:101".to_string()));
 
         let next_minute = query + time::Duration::seconds(60); // 10:54:30 UTC
         let err = store
@@ -671,7 +671,7 @@ async fn activity_get_by_user_and_time() -> tb_domain::TbResult<()> {
         // makes the lookup ambiguous — an error, not a silent first-match, so a
         // conflicting CSV row lands in the bad list.
         let dup = Activity {
-            id: ActivityId::strava(102),
+            id: ActivityId::from("strava:102".to_string()),
             start: start + time::Duration::seconds(15), // 12:00:45 — the first ride's minute
             ..act2.clone()
         };

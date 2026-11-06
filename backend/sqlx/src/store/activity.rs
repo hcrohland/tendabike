@@ -333,7 +333,7 @@ mod tests {
 
     fn activity() -> Activity {
         Activity {
-            id: ActivityId::strava(42),
+            id: ActivityId::from("strava:42".to_string()),
             user_id: UserId::from(1),
             what: ActTypeId::from(4),
             name: "Morning Ride".to_string(),
@@ -411,7 +411,7 @@ mod tests {
     fn vec_tryinto_maps_all_rows() {
         let acts = vec_tryinto(Ok(vec![db_activity(7200), db_activity(0)])).unwrap();
         assert_eq!(acts.len(), 2);
-        assert_eq!(acts[0].id, ActivityId::strava(42));
+        assert_eq!(acts[0].id, ActivityId::from("strava:42".to_string()));
     }
 
     #[test]

@@ -10,6 +10,23 @@ use time::{OffsetDateTime, UtcOffset};
 
 use crate::*;
 
+/// The [`ActivityId`] for a Strava activity, rendered as `"strava:<n>"`.
+///
+/// The `strava:` prefix is a Strava concern: the domain's `ActivityId` is an
+/// opaque string, so the prefix lives here, in the Strava driver.
+fn activity_id(n: i64) -> ActivityId {
+    ActivityId::from(format!("strava:{n}"))
+}
+
+/// The numeric Strava id, if `id` is a Strava id (`None` otherwise).
+///
+/// The inverse of [`activity_id`]; [`strava_url`] uses it to build the
+/// external URL from the raw (unprefixed) id.
+fn numeric_id(id: &ActivityId) -> Option<i64> {
+    let s: String = id.clone().into();
+    s.strip_prefix("strava:").and_then(|n| n.parse().ok())
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 /// A struct that represents an activity from Strava API.
 /// It has fields that represent the activity's properties such as id, type, name, start date, elapsed time, moving time, distance, total elevation gain, average watts, and gear id.
@@ -88,7 +105,7 @@ impl StravaActivity {
             None => None,
         };
         Ok(Activity {
-            id: ActivityId::strava(id),
+            id: activity_id(id),
             what,
             gear,
             user_id,
@@ -189,7 +206,7 @@ pub async fn strava_url(
     store: &mut impl StravaStore,
 ) -> TbResult<String> {
     id.clone().read(user, store).await?;
-    let raw = id.strava_id().context("not a strava activity")?;
+    let raw = numeric_id(&id).context("not a strava activity")?;
     Ok(format!("https://strava.com/activities/{raw}"))
 }
 
@@ -208,7 +225,7 @@ pub(crate) async fn delete_activity(
     store: &mut impl StravaStore,
 ) -> TbResult<Summary> {
     let session = OnBehalf(user_id);
-    ActivityId::strava(act).delete(&session, store).await
+    activity_id(act).delete(&session, store).await
 }
 
 #[cfg(test)]
