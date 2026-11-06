@@ -23,6 +23,7 @@
 
 ## Agent skills
 
+- GitHub MCP tools: `<entity>_<action>` naming (`issue_read`, not `get_issue`).
 - Issue tracker: when working with issues, specs, or PRs, read [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
 - Triage labels: five-role vocabulary, each label string equal to its role name; see [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md).
 - Domain docs: single-context `GLOSSARY.md` and `docs/adr/` at the repo root; see [`docs/agents/domain.md`](docs/agents/domain.md).
