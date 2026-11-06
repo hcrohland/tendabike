@@ -33,7 +33,7 @@ fn later_start() -> OffsetDateTime {
 
 fn sample_activity() -> Activity {
     Activity {
-        id: ActivityId::from("strava:1".to_string()),
+        id: ActivityId::from("1".to_string()),
         user_id: test_user(),
         what: ActTypeId::from(1),
         name: "Morning Ride".to_string(),
@@ -228,7 +228,7 @@ async fn activityid_read_rejects_cross_user() -> TbResult<()> {
         .returning(|_| Ok(Some(sample_activity())));
 
     let other_session = mock_session(UserId::from(2));
-    let result = ActivityId::from("strava:1".to_string())
+    let result = ActivityId::from("1".to_string())
         .read(&other_session, &mut store)
         .await;
     assert!(matches!(result, Err(Error::Forbidden(_))));
@@ -256,7 +256,7 @@ async fn activity_upsert_creates_new() -> TbResult<()> {
     assert_eq!(
         summary
             .activities
-            .get(&ActivityId::from("strava:1".to_string()))
+            .get(&ActivityId::from("1".to_string()))
             .unwrap()
             .name,
         "New Activity"
@@ -357,7 +357,7 @@ async fn activity_upsert_updates_existing() -> TbResult<()> {
     assert_eq!(
         summary
             .activities
-            .get(&ActivityId::from("strava:1".to_string()))
+            .get(&ActivityId::from("1".to_string()))
             .unwrap()
             .name,
         "Updated Activity"
@@ -370,7 +370,7 @@ async fn activity_upsert_updates_existing() -> TbResult<()> {
 #[tokio::test]
 async fn activity_upsert_preserves_original_id() -> TbResult<()> {
     let mut store = MockStore::new();
-    let act_id = ActivityId::from("strava:42".to_string());
+    let act_id = ActivityId::from("42".to_string());
     let act = Activity {
         id: act_id.clone(),
         name: "Custom ID Activity".to_string(),
@@ -425,7 +425,7 @@ async fn activity_delete_reverts_bike_and_attached_part_usage() -> TbResult<()> 
         usage_row(UsageId::default(), 9025, 135000, 1200, 1200, 1700, 4),
     );
 
-    let summary = ActivityId::from("strava:1".to_string())
+    let summary = ActivityId::from("1".to_string())
         .delete(&test_session(), &mut store)
         .await?;
 
@@ -468,14 +468,14 @@ async fn activity_delete_returns_summary() -> TbResult<()> {
         .returning(move |_| Ok(Some(act.clone())));
     store.expect_activity_delete().returning(|_| Ok(1));
 
-    let summary = ActivityId::from("strava:1".to_string())
+    let summary = ActivityId::from("1".to_string())
         .delete(&test_session(), &mut store)
         .await?;
     assert_eq!(summary.activities.len(), 1);
     assert!(
         summary
             .activities
-            .is_tombstoned(&ActivityId::from("strava:1".to_string()))
+            .is_tombstoned(&ActivityId::from("1".to_string()))
     );
     Ok(())
 }
@@ -490,7 +490,7 @@ async fn activity_delete_rejects_non_owner() -> TbResult<()> {
         .returning(|_| Ok(Some(sample_activity())));
 
     let other_session = mock_session(UserId::from(99));
-    let result = ActivityId::from("strava:1".to_string())
+    let result = ActivityId::from("1".to_string())
         .delete(&other_session, &mut store)
         .await;
     assert!(matches!(result, Err(Error::Forbidden(_))));
@@ -546,7 +546,7 @@ async fn activity_categories_returns_unique_gear_types() -> TbResult<()> {
     let acts = vec![
         sample_activity(),
         Activity {
-            id: ActivityId::from("strava:2".to_string()),
+            id: ActivityId::from("2".to_string()),
             name: "Another Ride".to_string(),
             start: later_start(),
             ..sample_activity()
@@ -762,7 +762,7 @@ async fn csv2descend_reports_matched_and_skipped_rows() -> TbResult<()> {
     store.expect_get_by_user_and_time().returning(|_uid, t| {
         if t.unix_timestamp() == activity_start().unix_timestamp() {
             Ok(Activity {
-                id: ActivityId::from("strava:301".to_string()),
+                id: ActivityId::from("301".to_string()),
                 name: "Matched Ride".to_string(),
                 start: activity_start(),
                 ..sample_activity()
@@ -794,7 +794,7 @@ async fn csv2descend_reports_matched_and_skipped_rows() -> TbResult<()> {
     assert_eq!(
         summary
             .activities
-            .get(&ActivityId::from("strava:301".to_string()))
+            .get(&ActivityId::from("301".to_string()))
             .unwrap()
             .descend,
         Some(300)
@@ -853,7 +853,7 @@ async fn set_default_part_assigns_gear_to_matching_activities() -> TbResult<()> 
     assert_eq!(
         summary
             .activities
-            .get(&ActivityId::from("strava:1".to_string()))
+            .get(&ActivityId::from("1".to_string()))
             .unwrap()
             .gear,
         Some(bike)
@@ -936,7 +936,7 @@ async fn set_default_part_empty_returns_zero_usage() -> TbResult<()> {
 async fn set_default_part_accounts_usage_for_newly_assigned_activities() -> TbResult<()> {
     let bike = PartId::from(1);
     let act = Activity {
-        id: ActivityId::from("strava:101".to_string()),
+        id: ActivityId::from("101".to_string()),
         name: "Unassigned Ride".to_string(),
         start: time::macros::datetime!(2023-05-20 10:00 UTC),
         time: Some(1000),
@@ -966,7 +966,7 @@ async fn set_default_part_accounts_usage_for_newly_assigned_activities() -> TbRe
     assert_eq!(
         summary
             .activities
-            .get(&ActivityId::from("strava:101".to_string()))
+            .get(&ActivityId::from("101".to_string()))
             .unwrap()
             .gear,
         Some(bike)

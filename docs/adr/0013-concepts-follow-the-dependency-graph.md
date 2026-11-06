@@ -49,7 +49,7 @@ domain → ∅
 
 ## Consequences
 
-- `tb_domain` is grep-verifiable clean: no `strava`, `icu`, or provider literal in its source — the ADR's acceptance bar, in the spirit of the machine-checkable bars in ADR-0007 and ADR-0012.
+- `tb_domain` names no provider in its `ActivityId` handling — no constructors, no prefix parsing, and its id tests are opaque-string tests. The residual `strava`/`icu` literals (the snapshot fixture, `partid_get_by_source`, doc comments) are the deferred items above; the machine-checkable bar is a fully grep-clean domain once they land, in the spirit of ADR-0007 and ADR-0012.
 - `ActivityId` construction and parsing live in `tb_strava` as private helpers; the future icu provider adds its own by implementing the domain's seams, without touching `tb_domain`.
 - The snapshot move and the `partid_get_by_source` rename land in a follow-up ticket.
 - A contributor adding a provider or a crate is placed by the same rule: depend on what you name, name only what you depend on.
