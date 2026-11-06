@@ -28,12 +28,15 @@
     <img src="/favicon.png" alt="TendaBike" class="rounded-circle h-8" />
     <span class="font-semibold">Tend a Bike</span>
   </div>
-  <a
-    href="#connect"
-    class="rounded-lg px-4 py-2 text-sm font-semibold text-white bg-blue-700 hover:bg-blue-800"
+  <Button
+    color="gray"
+    onclick={() =>
+      document
+        .getElementById("connect")
+        ?.scrollIntoView({ behavior: "smooth" })}
   >
     Connect
-  </a>
+  </Button>
 </div>
 
 <Section n="①" title="Connect — hero feature cards (from C)" />
