@@ -51,10 +51,7 @@ fn numeric_id_recovers_raw() {
 /// numeric_id is None for a non-strava id
 #[test]
 fn numeric_id_none_for_non_strava() {
-    assert_eq!(
-        numeric_id(&ActivityId::from("icu:i55751783".to_string())),
-        None
-    );
+    assert_eq!(numeric_id(&ActivityId::from("icu:i55751783")), None);
 }
 
 #[tokio::test]

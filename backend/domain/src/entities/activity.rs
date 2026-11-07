@@ -48,6 +48,12 @@ use crate::*;
 )]
 pub struct ActivityId(String);
 
+impl From<&str> for ActivityId {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+
 /// Round a UTC offset, in whole seconds, to the nearest 30 minutes.
 ///
 /// Integer division truncates toward zero, so negative offsets round toward

@@ -351,7 +351,7 @@ fn file_note() -> PartNote {
 /// The suite's activity.
 fn activity() -> Activity {
     Activity {
-        id: ActivityId::from("strava:1".to_string()),
+        id: ActivityId::from("strava:1"),
         user_id: UserId::from(1),
         what: ActTypeId::from(1),
         name: "Morning Ride".to_string(),

@@ -348,7 +348,7 @@ async fn process_activity_create_imports() -> TbResult<()> {
     assert!(
         summary
             .activities
-            .get(&ActivityId::from("strava:10".to_string()))
+            .get(&ActivityId::from("strava:10"))
             .is_some()
     );
     assert_eq!(
