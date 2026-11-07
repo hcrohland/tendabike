@@ -2,7 +2,7 @@
 
 ## Overview
 
-The service system tracks **maintenance history** and defines **future maintenance obligations**. It sits between the attachment timeline (what parts are physically on the bike) and Strava activity data (how much the bike has been ridden).
+The service system tracks **maintenance history** and defines **future maintenance obligations**. It sits between the attachment timeline (what parts are physically on the bike) and activity data (how much the bike has been ridden).
 
 ```
 Attachment (physical timeline)  ──▶  Service (maintenance history)  ──▶  ServicePlan (future obligations)
@@ -53,7 +53,7 @@ pub struct Service {
 
 ### Usage Calculation (`service.rs:107-115`)
 
-Service usage is **never user-entered**. It is computed from Strava activities:
+Service usage is **never user-entered**. It is computed from activities:
 
 ```rust
 if self.part_id.is_main(store).await? {
@@ -383,7 +383,7 @@ import { services } from "./service";
    │    km = 500, hours = 60, rides = 100                │
    └──────────────────────┬───────────────────────────────┘
                           │
-2. User rides → Strava activities imported               ▼
+2. User rides → activities imported                        ▼
    Attachments match activities to parts  ────▶ Usage accumulated
 
 3. User logs a service (or reattaches the part):
@@ -419,7 +419,7 @@ import { services } from "./service";
 
 ## Key Design Patterns
 
-1. **Usage is derived, not entered** — The `usage` field in both `Service` and `Attachment` is a foreign key to the `usages` table. The usage metrics are always computed by matching Strava activities against time windows (attachment periods or activity dates). Users never manually enter usage numbers.
+1. **Usage is derived, not entered** — The `usage` field in both `Service` and `Attachment` is a foreign key to the `usages` table. The usage metrics are always computed by matching activities against time windows (attachment periods or activity dates). Users never manually enter usage numbers.
 
 2. **Successor chains** — Services link to their successors via `successor: Option<ServiceId>`. This creates a linked-list-like chain within the same part's service history. Deleting a non-leaf service rewires all its predecessors to point to `None`.
 

@@ -79,20 +79,20 @@ pub trait PartStore {
     /// Returns a `Result` containing the number of deleted parts or an error if the operation fails.
     async fn parts_delete(&mut self, parts: &[Part]) -> TbResult<usize>;
 
-    /// Returns the PartId associated with the given Strava gear ID.
+    /// Returns the PartId associated with the given source.
     ///
     /// # Arguments
     ///
-    /// * `strava_id` - The Strava ID of the gear.
+    /// * `source` - The source (the provider's gear id) of the part.
     ///
     /// # Returns
     ///
-    /// The PartId associated with the given Strava gear ID.
+    /// The PartId associated with the given source.
     ///
     /// # Errors
     ///
     /// Returns an error if the PartId cannot be retrieved from the database.
-    async fn partid_get_by_source(&mut self, strava_id: &str) -> TbResult<Option<PartId>>;
+    async fn partid_get_by_source(&mut self, source: &str) -> TbResult<Option<PartId>>;
 
     /// Registers a part (bike) to a shop.
     ///

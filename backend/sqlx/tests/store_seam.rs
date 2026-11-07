@@ -73,9 +73,9 @@ use tb_domain::test_support::{
 };
 use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, Attachment, AttachmentStore, MAX_TIME,
-    NotificationStore, Part, PartId, PartStore, PartTypeId, SNAPSHOT_JSON, StoreSnapshot, UsageId,
-    UsageStore, UserId, UserStore,
+    NotificationStore, Part, PartId, PartStore, PartTypeId, UsageId, UsageStore, UserId, UserStore,
 };
+use tb_sqlx::{SNAPSHOT_JSON, StoreSnapshot};
 use time::{OffsetDateTime, macros::datetime};
 use tokio::sync::MutexGuard;
 use uuid::Uuid;

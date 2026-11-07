@@ -17,6 +17,7 @@ async-trait = { workspace = true }
 log = { workspace = true }
 anyhow = { workspace = true }
 time = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tb_strava = { workspace = true }
 tb_exec = { workspace = true }

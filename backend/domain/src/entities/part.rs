@@ -341,7 +341,7 @@ impl Part {
             .await
     }
 
-    /// looks up the part carrying the given Strava source
+    /// looks up the part carrying the given source
     ///
     /// Returns `None` when no part carries that source.
     pub async fn by_source(source: &str, store: &mut impl PartStore) -> TbResult<Option<Part>> {

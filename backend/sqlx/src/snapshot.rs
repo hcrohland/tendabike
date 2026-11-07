@@ -11,7 +11,7 @@
 
 pub use crate::prepopulated_data::SNAPSHOT_JSON;
 
-use crate::{Activity, Attachment, Part, Usage, User};
+use tb_domain::{Activity, Attachment, Part, Usage, User};
 
 /// Serializable snapshot of store data for JSON persistence.
 #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -21,10 +21,4 @@ pub struct StoreSnapshot {
     pub attachments: Vec<Attachment>,
     pub usages: Vec<Usage>,
     pub activities: Vec<Activity>,
-}
-
-/// Load the prepopulated fixture by direct JSON deserialization into
-/// `StoreSnapshot`. This is the sqlx seed path: no store round-trip.
-pub fn load_snapshot() -> StoreSnapshot {
-    serde_json::from_str(SNAPSHOT_JSON).expect("SNAPSHOT_JSON must be valid JSON")
 }

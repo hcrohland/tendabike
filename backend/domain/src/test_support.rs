@@ -2,8 +2,6 @@
 
 pub mod fixtures;
 
-pub use crate::snapshot::StoreSnapshot;
-
 mod mock_store;
 pub use mock_store::MockStore;
 
