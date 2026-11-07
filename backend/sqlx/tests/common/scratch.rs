@@ -59,8 +59,8 @@
 
 use sqlx::migrate::MigrateDatabase;
 use std::time::Duration;
-use tb_domain::{ActivityStore, AttachmentStore, SNAPSHOT_JSON, StoreSnapshot, UsageStore};
-use tb_sqlx::{DbPool, SqlxConn};
+use tb_domain::{ActivityStore, AttachmentStore, UsageStore};
+use tb_sqlx::{DbPool, SNAPSHOT_JSON, SqlxConn, StoreSnapshot};
 use tokio::sync::{Mutex, OnceCell};
 use uuid::Uuid;
 

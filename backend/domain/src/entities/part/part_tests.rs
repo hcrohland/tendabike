@@ -293,20 +293,20 @@ async fn part_create_with_source() -> TbResult<()> {
         "Easton".to_string(),
         "DA3".to_string(),
         PartTypeId::from(4),
-        Some("strava_67890".to_string()),
+        Some("gear_67890".to_string()),
         sample_purchase_date(),
         &sess,
         &mut store,
     )
     .await?;
 
-    assert_eq!(part.source, Some("strava_67890".to_string()));
+    assert_eq!(part.source, Some("gear_67890".to_string()));
     Ok(())
 }
 
 // === Part: by_source ===
 
-/// `Part::by_source` returns the part carrying the given Strava source.
+/// `Part::by_source` returns the part carrying the given source.
 #[tokio::test]
 async fn part_by_source_returns_part_with_source() -> TbResult<()> {
     let created = Part {

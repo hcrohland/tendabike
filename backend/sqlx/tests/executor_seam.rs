@@ -78,12 +78,12 @@ use std::time::Duration;
 use tb_domain::test_support::{
     mock_session, mock_session_admin, mock_session_with_shop, part_type_ids::CHAIN, sole_live,
 };
-use tb_domain::{ApiRead, ApiWrite, PartId, ReadOutcome, SNAPSHOT_JSON, ShopId, Summary, UserId};
+use tb_domain::{ApiRead, ApiWrite, PartId, ReadOutcome, ShopId, Summary, UserId};
 use tb_exec::{
     DeliveryContext, DetachedBegin, ExecutorStatus, FramePusher, LoopContext, ProviderService,
     Registry, Request, RequestReceiver, ServiceApi, StravaLane, request_channel,
 };
-use tb_sqlx::DbPool;
+use tb_sqlx::{DbPool, SNAPSHOT_JSON};
 use tb_strava::{
     StravaId,
     event::{Event, InEvent},
@@ -689,7 +689,7 @@ async fn gear_hydration_frame_and_fifo_read() {
 #[ignore]
 async fn failed_write_rolls_back_and_reclaims() {
     let seam = ready().await;
-    let fixture_parts: usize = serde_json::from_str::<tb_domain::StoreSnapshot>(SNAPSHOT_JSON)
+    let fixture_parts: usize = serde_json::from_str::<tb_sqlx::StoreSnapshot>(SNAPSHOT_JSON)
         .expect("SNAPSHOT_JSON must be valid JSON")
         .parts
         .len();

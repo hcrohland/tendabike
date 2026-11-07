@@ -10,9 +10,8 @@
 //! `#[async_trait]` on each impl block is the trick that makes the `async fn`
 //! methods desugar correctly in the generated code (see
 //! `docs/research/mockall-conn-witness.md` §1). The seam is collision-free
-//! (post-recipe: renamed methods, `usages_update(&[Usage])`, `stravauser_update_token`
-//! owning its token), so `mock!`'s flat `expect_<name>` API can express every
-//! method on one type.
+//! (post-recipe: renamed methods, `usages_update(&[Usage])`), so `mock!`'s
+//! flat `expect_<name>` API can express every method on one type.
 //!
 //! The declared struct name is `Store`, so `mock!` emits `MockStore`; the impl
 //! blocks reference `Store` (the macro rewrites it to `MockStore`), and the
@@ -48,7 +47,7 @@ mockall::mock! {
         async fn part_update(&mut self, part: Part) -> TbResult<Part>;
         async fn part_delete(&mut self, part: PartId) -> TbResult<PartId>;
         async fn parts_delete(&mut self, parts: &[Part]) -> TbResult<usize>;
-        async fn partid_get_by_source(&mut self, strava_id: &str) -> TbResult<Option<PartId>>;
+        async fn partid_get_by_source(&mut self, source: &str) -> TbResult<Option<PartId>>;
         async fn parts_register_shop(
             &mut self,
             shop_id: ShopId,

@@ -28,9 +28,9 @@
 //! §3.4): `User { shop }` covers `GET /user`, `GET /user/summary`, and
 //! `GET /user/export`, and `ShopSubscriptions(Option<ShopId>)` covers the
 //! mine route and the shop's route. The admin `GET /user/all` is not a
-//! variant: `get_all_stats` is a Strava-driver op, and the domain cannot
-//! depend on the Strava driver (the dependency direction is
-//! `domain ← strava`).
+//! variant: `get_all_stats` is a provider-driver op, and the domain cannot
+//! depend on a provider driver (the dependency direction is
+//! `domain ← provider`).
 //!
 //! No variant carries a `user_id`: the channel is per-user, the loop runs in
 //! that user's context, and the `Session` the caller supplies carries the
