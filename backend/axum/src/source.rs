@@ -27,7 +27,7 @@ async fn redirect_act(
     // `activity_url` op routes on the id's provider prefix and checks
     // ownership; the handler maps `Err` → a permanent redirect to "/".
     let uri = state
-        .api
+        .provider
         .activity_url(Box::new(user), ActivityId::from(id))
         .await
         .unwrap_or_else(|_| "/".to_string());

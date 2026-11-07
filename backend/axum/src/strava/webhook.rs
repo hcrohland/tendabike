@@ -103,7 +103,7 @@ pub(crate) async fn create_event(
     // (`InEvent::accept` — the queue insert, or the athlete-deauth
     // branch), then the wake if a user was queued (fire-and-forget). A
     // failed ingest 500s to Strava (its own retry policy applies).
-    state.api.accept_event(event).await?;
+    state.provider.accept_event(event).await?;
     Ok(Json(()))
 }
 
@@ -132,7 +132,7 @@ pub(super) async fn sync_api(
     // wake it, so the queue drains even for offline users; `user_id` narrows
     // the trigger to one user (the route's `?user_id=` query).
     state
-        .api
+        .provider
         .trigger_processing(
             Box::new(admin.session()),
             user_id,
@@ -157,7 +157,7 @@ pub(super) async fn sync(
     // read only on a lost broadcast. The admin's acting session rides
     // along (carried for the admin-verification `tb_strava` change).
     state
-        .api
+        .provider
         .sync(Box::new(admin.session()), user_id, query.time)
         .await?;
     Ok(StatusCode::NO_CONTENT)

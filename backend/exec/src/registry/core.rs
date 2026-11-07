@@ -52,9 +52,9 @@ use log::debug;
 use tokio::sync::{Mutex, Notify, broadcast, watch};
 
 use tb_domain::{ShopId, Summary, TbResult, UserId};
-use tb_strava::event::Event as StravaEvent;
 
 use crate::LoopContext;
+use crate::ProviderLane;
 use crate::TxnSource;
 use crate::message::RequestSender;
 use crate::{registry::FramePusher, request_channel};
@@ -101,17 +101,20 @@ pub enum ExecutorStatus {
 /// (`status`, `request_sender`, `frames`, `events`) are `pub(super)` so the
 /// facade can pull them; the rest stay private to the core.
 #[derive(Clone)]
-pub(super) struct Executor {
+pub(super) struct Executor<P>
+where
+    P: ProviderLane + Clone + Send + Sync + 'static,
+{
     pub(super) status: watch::Receiver<ExecutorStatus>,
     /// The request handlers' door into this user's loop (spec #558 §3.2):
     /// enqueue a `Request` here and await its oneshot.
     pub(super) request_sender: RequestSender,
     pub(super) frames: broadcast::Sender<Summary>,
-    /// Every Strava event the loop consumed (spec §6.4): the admin sync's
+    /// Every provider event the loop consumed (spec §6.4): the admin sync's
     /// completion signal, correlated by the event's identity.
-    pub(super) events: broadcast::Sender<StravaEvent>,
+    pub(super) events: broadcast::Sender<P::Event>,
     /// The in-memory wake signal (spec §4.4/§4.6): fired by the core's
-    /// `wake` after a Strava event is queued; the running loop selects on
+    /// `wake` after a provider event is queued; the running loop selects on
     /// it, so the event is processed at once, even mid-idle-sleep.
     wake: Arc<Notify>,
     /// Aborts the executor task (`stop_all`): the watchdog records `Dead`
@@ -157,8 +160,11 @@ pub struct DeliveryContext {
 /// (and the `Box<dyn FramePusher>` it hands the loop) and passes both to the
 /// spawn. Its methods are `pub(super)` so the facade can delegate to them.
 #[derive(Clone)]
-pub(super) struct Core {
-    executors: Arc<Mutex<HashMap<UserId, Executor>>>,
+pub(super) struct Core<P>
+where
+    P: ProviderLane + Clone + Send + Sync + 'static,
+{
+    executors: Arc<Mutex<HashMap<UserId, Executor<P>>>>,
     /// The per-shop frame channels (spec #517, ticket #582): a standalone
     /// `broadcast` channel per shop, created on demand by `subscribe_shop`
     /// and reaped when its last receiver disconnects (the "open shop" check
@@ -170,7 +176,10 @@ pub(super) struct Core {
     idle_timeout: Duration,
 }
 
-impl Core {
+impl<P> Core<P>
+where
+    P: ProviderLane + Clone + Send + Sync + 'static,
+{
     /// The core with an explicit idle cadence (the construction site is the
     /// facade's `new`/`with_defaults`; the maps start empty). The SSE
     /// heartbeat cadence is the crate constant [`super::HEARTBEAT_INTERVAL`]
@@ -226,14 +235,17 @@ impl Core {
     pub(super) async fn events<S>(
         &self,
         source: &S,
+        lane: &P,
         user_id: UserId,
         pusher: Box<dyn FramePusher>,
-    ) -> TbResult<broadcast::Receiver<StravaEvent>>
+    ) -> TbResult<broadcast::Receiver<P::Event>>
     where
         S: TxnSource + Clone + 'static,
     {
-        self.exec_field(source, user_id, pusher, |exec| exec.events.subscribe())
-            .await
+        self.exec_field(source, lane, user_id, pusher, |exec| {
+            exec.events.subscribe()
+        })
+        .await
     }
 
     /// Push a frame to the user's SSE streams (test helper: the production
@@ -281,7 +293,7 @@ impl Core {
         let task = tokio::spawn(async {}).abort_handle();
         // The stored receiver keeps the watch channel open; drop the sender.
         drop(status_tx);
-        let exec = Executor {
+        let exec = Executor::<P> {
             status: status_rx,
             request_sender,
             frames,
@@ -463,16 +475,17 @@ impl Core {
     pub(super) async fn exec_field<S, R>(
         &self,
         source: &S,
+        lane: &P,
         user_id: UserId,
         pusher: Box<dyn FramePusher>,
-        f: impl FnOnce(&Executor) -> R,
+        f: impl FnOnce(&Executor<P>) -> R,
     ) -> TbResult<R>
     where
         S: TxnSource + Clone + 'static,
     {
         let mut map = self.executors.lock().await;
-        let exec =
-            Self::ensure_running(&mut map, source, user_id, self.idle_timeout, pusher).await?;
+        let exec = Self::ensure_running(&mut map, source, lane, user_id, self.idle_timeout, pusher)
+            .await?;
         Ok(f(&exec))
     }
 
@@ -482,12 +495,13 @@ impl Core {
     /// a fresh request channel and frame channel, and spawn the `tb_exec`
     /// loop.
     async fn ensure_running<S>(
-        map: &mut HashMap<UserId, Executor>,
+        map: &mut HashMap<UserId, Executor<P>>,
         source: &S,
+        lane: &P,
         user_id: UserId,
         idle_timeout: Duration,
         pusher: Box<dyn FramePusher>,
-    ) -> TbResult<Executor>
+    ) -> TbResult<Executor<P>>
     where
         S: TxnSource + Clone + 'static,
     {
@@ -507,10 +521,11 @@ impl Core {
         // The task keeps a clone of the frame sender alive until *after* it
         // records its fate, so a stream that sees the frame channel close has
         // already seen the settled status (no race between the two signals).
-        // `source`, `frames_for_run`, and `events_for_run` are owned clones:
-        // the `async move` block needs `'static` values, not the `&S`
-        // reference.
+        // `source`, `lane`, `frames_for_run`, and `events_for_run` are owned
+        // clones: the `async move` block needs `'static` values, not the
+        // `&S`/`&P` references.
         let owned_source = source.clone();
+        let owned_lane = lane.clone();
         let frames_for_run = frames.clone();
         let events_for_run = events.clone();
         let wake_for_run = wake.clone();
@@ -521,6 +536,7 @@ impl Core {
                 user_id,
                 frames_for_run,
                 pusher,
+                owned_lane,
                 events_for_run,
                 idle_timeout,
                 wake_for_run,
@@ -580,6 +596,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::{Core, DeliveryContext, ExecutorStatus};
+    use crate::StravaLane;
     use crate::executor::executor_tests::{
         FakeSource, RecordingPusher, non_empty_summary, notification_part_registered,
         part_owned_by, shop_owned_by, summary_owned_by, summary_with_notification,
@@ -601,11 +618,12 @@ mod tests {
     /// without a real database).
     #[tokio::test]
     async fn exec_field_spawns_the_executor_on_first_demand() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let source = FakeSource::failing();
 
-        core.exec_field(&source, user_id, pusher(), |_| ()).await?;
+        core.exec_field(&source, &StravaLane, user_id, pusher(), |_| ())
+            .await?;
 
         assert_eq!(
             core.status(user_id).await,
@@ -621,11 +639,17 @@ mod tests {
     /// (`status` → `None`); a fresh `exec_field` brings it back `Running`.
     #[tokio::test]
     async fn stop_all_tears_down_and_the_next_demand_respawns() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
 
-        core.exec_field(&FakeSource::failing(), user_id, pusher(), |_| ())
-            .await?;
+        core.exec_field(
+            &FakeSource::failing(),
+            &StravaLane,
+            user_id,
+            pusher(),
+            |_| (),
+        )
+        .await?;
         assert_eq!(core.status(user_id).await, Some(ExecutorStatus::Running));
 
         core.stop_all().await;
@@ -636,8 +660,14 @@ mod tests {
         );
 
         // The next demand respawns fresh.
-        core.exec_field(&FakeSource::failing(), user_id, pusher(), |_| ())
-            .await?;
+        core.exec_field(
+            &FakeSource::failing(),
+            &StravaLane,
+            user_id,
+            pusher(),
+            |_| (),
+        )
+        .await?;
         assert_eq!(
             core.status(user_id).await,
             Some(ExecutorStatus::Running),
@@ -651,7 +681,7 @@ mod tests {
     /// core with no live executor leaves the map empty.
     #[tokio::test]
     async fn wake_never_spawns_an_executor() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
 
         core.wake(user_id).await;
@@ -669,11 +699,12 @@ mod tests {
     /// once) but never spawns a second executor nor changes the fate.
     #[tokio::test]
     async fn wake_on_a_running_executor_is_a_pure_signal() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let source = FakeSource::failing();
 
-        core.exec_field(&source, user_id, pusher(), |_| ()).await?;
+        core.exec_field(&source, &StravaLane, user_id, pusher(), |_| ())
+            .await?;
         core.wake(user_id).await;
 
         assert_eq!(
@@ -690,7 +721,7 @@ mod tests {
     /// facade — so the source is never `begin`-ed.
     #[tokio::test]
     async fn push_to_shop_delivers_to_an_open_shop_stream() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
 
         let mut rx = core.subscribe_shop(shop_id, UserId::from(1)).await;
@@ -710,7 +741,7 @@ mod tests {
     /// shop stream.
     #[tokio::test]
     async fn push_to_shop_is_a_noop_without_a_subscriber() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
 
         core.push_to_shop(shop_id, non_empty_summary()).await;
@@ -727,7 +758,7 @@ mod tests {
     /// installer stands in for a live executor, and no store is involved.
     #[tokio::test]
     async fn push_to_user_delivers_to_a_running_executor() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let mut frame_rx = core
             .install_executor_for_test(user_id, ExecutorStatus::Running)
@@ -747,7 +778,7 @@ mod tests {
     /// channel is not fed (spec #517).
     #[tokio::test]
     async fn push_to_user_is_a_noop_for_a_reaped_executor() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let mut frame_rx = core
             .install_executor_for_test(user_id, ExecutorStatus::Reaped)
@@ -790,7 +821,7 @@ mod tests {
     /// stream — and nothing else.
     #[tokio::test]
     async fn deliver_user_context_to_personal_stream() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let mut acting_rx = core
             .install_executor_for_test(user_id, ExecutorStatus::Running)
@@ -810,7 +841,7 @@ mod tests {
     /// A shop context delivers to the shop stream.
     #[tokio::test]
     async fn deliver_shop_context_to_shop_stream() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
         let mut shop_rx = core.subscribe_shop(shop_id, UserId::from(1)).await;
         let summary = summary_owned_by(UserId::from(2));
@@ -831,7 +862,7 @@ mod tests {
     /// A shop context delivers to the part owner's personal stream.
     #[tokio::test]
     async fn deliver_shop_context_to_part_owner() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
         let part_owner = UserId::from(2);
         let mut owner_rx = core
@@ -858,7 +889,7 @@ mod tests {
     /// owner, and the part owner is (2).
     #[tokio::test]
     async fn deliver_shop_context_not_to_shop_owner() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
         let shop_owner = UserId::from(1);
         let part_owner = UserId::from(2);
@@ -893,7 +924,7 @@ mod tests {
     /// shop owner IS the part owner.
     #[tokio::test]
     async fn deliver_shop_context_to_shop_owner_when_part_owner() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
         let shop_owner = UserId::from(2);
         let mut shop_owner_rx = core
@@ -920,7 +951,7 @@ mod tests {
     /// alone does not carry it.
     #[tokio::test]
     async fn deliver_shop_context_service_summary_to_part_owner() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
         let part_owner = UserId::from(2);
         let mut shop_rx = core.subscribe_shop(shop_id, UserId::from(1)).await;
@@ -951,7 +982,7 @@ mod tests {
     /// notifications ride the normal frame).
     #[tokio::test]
     async fn deliver_cross_recipient_notification_to_user_stream() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let recipient = UserId::from(3);
         let mut acting_rx = core
@@ -985,7 +1016,7 @@ mod tests {
     #[tokio::test]
     async fn deliver_cross_recipient_notification_to_shop_stream_without_shop_context()
     -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let shop_owner = UserId::from(2);
         let shop_id = ShopId::from(7);
@@ -1022,7 +1053,7 @@ mod tests {
     /// skipped).
     #[tokio::test]
     async fn deliver_shop_context_no_duplicate_shop_push() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
         let part_owner = UserId::from(2);
         let mut shop_rx = core.subscribe_shop(shop_id, UserId::from(1)).await;
@@ -1051,7 +1082,7 @@ mod tests {
     /// rides the normal frame).
     #[tokio::test]
     async fn deliver_no_cross_recipient_for_acting_user() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let mut acting_rx = core
             .install_executor_for_test(acting_user, ExecutorStatus::Running)
@@ -1080,7 +1111,7 @@ mod tests {
     /// stream).
     #[tokio::test]
     async fn deliver_no_cross_recipient_for_part_owner_in_shop_context() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let part_owner = UserId::from(2);
         let shop_id = ShopId::from(7);
@@ -1120,7 +1151,7 @@ mod tests {
     /// receives it).
     #[tokio::test]
     async fn deliver_cross_recipient_third_party_in_shop_context() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let part_owner = UserId::from(2);
         let third_party = UserId::from(5);
@@ -1164,7 +1195,7 @@ mod tests {
     /// tabs (follow-up to issue #687).
     #[tokio::test]
     async fn deliver_shop_context_transient_read_to_personal_stream() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let session_shop = ShopId::from(7);
         let other_shop = ShopId::from(8);
@@ -1203,7 +1234,7 @@ mod tests {
     /// open shop streams (the ones other than the session's shop).
     #[tokio::test]
     async fn deliver_shop_context_persistent_read_to_personal_stream() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let session_shop = ShopId::from(7);
         let other_shop = ShopId::from(8);
@@ -1236,7 +1267,7 @@ mod tests {
     /// gets the frame via the normal user-context delivery.
     #[tokio::test]
     async fn deliver_user_context_read_fans_out_to_shop_streams() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let shop_id = ShopId::from(8);
         let mut acting_rx = core
@@ -1267,7 +1298,7 @@ mod tests {
     /// hydration. The fan-out frame carries only the notifications.
     #[tokio::test]
     async fn deliver_creation_fans_out_to_recipient_shop_streams() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let shop_owner = UserId::from(2);
         let registered_shop = ShopId::from(7);
@@ -1301,7 +1332,7 @@ mod tests {
     /// An empty `Summary` pushes nothing, to any stream (spec §4.5).
     #[tokio::test]
     async fn deliver_empty_summary_is_a_noop() -> TbResult<()> {
-        let core = Core::new(Duration::from_secs(60));
+        let core = Core::<StravaLane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let mut acting_rx = core
             .install_executor_for_test(user_id, ExecutorStatus::Running)

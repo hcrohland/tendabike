@@ -83,7 +83,7 @@ async fn export(user: RequestSession, State(state): State<AppState>) -> ApiResul
 async fn userlist(
     admin: AxumAdmin,
     State(state): State<AppState>,
-) -> ApiResult<Vec<tb_strava::StravaStat>> {
+) -> ApiResult<Vec<tb_domain::UserStat>> {
     // The admin read rides the admin user's own channel (spec #558 §3.3):
     // the `AxumAdmin` extractor carries the admin's acting session, which
     // the stats read runs against.

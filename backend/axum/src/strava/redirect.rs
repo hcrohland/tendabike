@@ -22,7 +22,7 @@ pub(super) async fn redirect_gear(
     // ownership), then the Strava URL. The handler maps `Err` →
     // `Redirect::permanent("/")` as before.
     let uri = state
-        .api
+        .provider
         .gear_url(Box::new(user), PartId::from(id))
         .await
         .unwrap_or_else(|_| "/".to_string());
@@ -34,7 +34,7 @@ pub(super) async fn redirect_user(
     State(state): State<AppState>,
 ) -> Result<Redirect, AppError> {
     let uri = state
-        .api
+        .provider
         .user_url(id.into())
         .await
         .unwrap_or_else(|_| "/".to_string());
@@ -52,7 +52,7 @@ pub(super) async fn revoke_user(
     // acting session rides along (carried for the admin-verification
     // `tb_strava` change).
     state
-        .api
+        .provider
         .deauthorize(Box::new(admin.session()), tbid)
         .await?;
     Ok(Json(()))
@@ -69,7 +69,7 @@ pub(super) async fn deleteuser(
     // session rides along (carried for the admin-verification `tb_strava`
     // change).
     state
-        .api
+        .provider
         .delete_user(Box::new(admin.session()), tbid)
         .await?;
     Ok(Json(()))
