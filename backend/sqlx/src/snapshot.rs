@@ -22,9 +22,3 @@ pub struct StoreSnapshot {
     pub usages: Vec<Usage>,
     pub activities: Vec<Activity>,
 }
-
-/// Load the prepopulated fixture by direct JSON deserialization into
-/// `StoreSnapshot`. This is the sqlx seed path: no store round-trip.
-pub fn load_snapshot() -> StoreSnapshot {
-    serde_json::from_str(SNAPSHOT_JSON).expect("SNAPSHOT_JSON must be valid JSON")
-}
