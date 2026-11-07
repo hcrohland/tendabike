@@ -86,7 +86,7 @@
 <Navbar class="text-text-1">
   <NavBrand href="/cat">
     <img
-      src="favicon.png"
+      src="/favicon.png"
       alt="TendaBike"
       title="TendaBike"
       class="rounded-circle h-11"
@@ -195,7 +195,7 @@
   {:else}
     <div class="flex items-center md:order-2">
       <a href={"/strava/login" + page.url.search}>
-        <img src="connect_with_strava.png" alt="Login with Strava" />
+        <img src="/connect_with_strava.png" alt="Login with Strava" />
       </a>
     </div>
   {/if}
