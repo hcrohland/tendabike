@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The attachment entity models a **temporal, hierarchical relationship** between parts on a bike. An attachment records that a sub-part was attached to a specific gear (e.g., frame) at a particular hook/position during a time interval. This is the core data structure for tracking **part installation/removal history** and computing **usage-based service schedules**.
+The attachment entity models a **temporal, hierarchical relationship** between parts on a bike. An attachment records that a sub-part was attached to a specific gear (e.g., frame) at a given hook/position during a time interval. This is the core data structure for tracking **part installation/removal history** and computing **usage-based service schedules**.
 
 ---
 
@@ -17,7 +17,7 @@ The attachment entity models a **temporal, hierarchical relationship** between p
 | `gear`     | `PartId`         | The top-level part of the assembly the part is in (itself while loose) — see the flat row model below |
 | `hook`     | `PartTypeId`     | The type of the part it is mounted on directly (a tire's row carries the wheel type)                  |
 | `detached` | `OffsetDateTime` | When the part was removed — `MAX_TIME` (year 9100) means "still attached"                             |
-| `usage`    | `UsageId`        | UUID referencing a usage record that aggregates Strava activity metrics                               |
+| `usage`    | `UsageId`        | UUID referencing a usage record that aggregates activity metrics                                       |
 
 **Composite primary key**: `(part_id, attached)` — the timeline is append-only via new rows.
 
@@ -106,7 +106,7 @@ For soft-deleting parts — checks no active attachments exist, then marks the p
 
 ## Usage Recalculation
 
-Attachments are the bridge between **Strava cycling activities** and **part wear/service schedules**:
+Attachments are the bridge between **cycling activities** and **part wear/service schedules**:
 
 1. **`calculate_usage()`** (`attachment.rs:96-103`) — Finds all `Activity` records where `activity.start` falls within `[attached, detached)` for this attachment's gear and aggregates their metrics (time, distance, climb, energy) into a single `Usage`.
 
@@ -116,7 +116,7 @@ Attachments are the bridge between **Strava cycling activities** and **part wear
    - Recalculates all pending service usages for this part via `Service::recalculate()`
    - Stores everything atomically
 
-3. **`register_activity()`** (`attachment.rs:258-296`) — Called when a new Strava activity is imported. Finds all parts currently attached to the bike's gear at the activity start time and accumulates usage counters on each.
+3. **`register_activity()`** (`attachment.rs:258-296`) — Called when a new activity is imported. Finds all parts currently attached to the bike's gear at the activity start time and accumulates usage counters on each.
 
 ---
 
@@ -258,7 +258,7 @@ class Attachment {
 
 4. **Hook validation** — attach operations check that the part type's `hooks` list includes the target gear type, preventing invalid physical configurations.
 
-5. **Usage assembled from activities** — usage metrics are not manually entered; they are derived by matching Strava activity timestamps against attachment time windows.
+5. **Usage assembled from activities** — usage metrics are not manually entered; they are derived by matching activity timestamps against attachment time windows.
 
 ---
 

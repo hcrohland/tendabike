@@ -181,15 +181,12 @@ impl<'c> tb_domain::PartStore for SqlxConn<'c> {
         Ok(pid)
     }
 
-    async fn partid_get_by_source(&mut self, strava_id: &str) -> TbResult<Option<PartId>> {
-        sqlx::query_scalar!(
-            "SELECT id FROM parts WHERE source = $1 FOR UPDATE",
-            strava_id
-        )
-        .fetch_optional(&mut **self.inner())
-        .await
-        .map_err(into_domain)
-        .map(option_into)
+    async fn partid_get_by_source(&mut self, source: &str) -> TbResult<Option<PartId>> {
+        sqlx::query_scalar!("SELECT id FROM parts WHERE source = $1 FOR UPDATE", source)
+            .fetch_optional(&mut **self.inner())
+            .await
+            .map_err(into_domain)
+            .map(option_into)
     }
 
     async fn parts_delete(&mut self, list: &[Part]) -> TbResult<usize> {

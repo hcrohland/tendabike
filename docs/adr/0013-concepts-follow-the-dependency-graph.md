@@ -34,11 +34,11 @@ domain → ∅
 - `ActivityId` is an opaque `String` newtype. The `strava:` prefix — its constructor and raw-id parser — is private to `tb_strava`. `tb_exec::activity_url` just calls `tb_strava::strava_url`, with no provider discrimination: the redirect handler maps any error to a `"/"` redirect, so the "is this a Strava id?" check lives in the Strava driver, not the router.
 - The provider-specific id tests move to `tb_strava`; the domain's id tests are opaque-string tests.
 
-**Deferred (the rest of the invariant, one follow-up ticket under `#760`):**
+**Deferred (the rest of the invariant, follow-up tickets under `#760`):**
 
-- The snapshot fixture (`SNAPSHOT_JSON` / `StoreSnapshot` / `load_snapshot`) is a persistence concept → `tb_sqlx`.
-- `PartIdStore::partid_get_by_source(strava_id)` names a provider in the domain's public API → a provider-agnostic rename.
-- A provider-name scrub of the remaining domain doc comments.
+- The snapshot fixture (`SNAPSHOT_JSON` / `StoreSnapshot` / `load_snapshot`) is a persistence concept → `tb_sqlx`. Landed in #773.
+- `PartIdStore::partid_get_by_source(strava_id)` names a provider in the domain's public API → a provider-agnostic rename. Landed in #773 (the parameter is now `source`).
+- A provider-name scrub of the remaining domain doc comments. Landed in #773.
 - A `ProviderLane` abstraction so routing dispatches by prefix to a lane (the Strava lane owning `strava_id`), removing the last per-provider branch from `tb_exec` when the second provider lands.
 
 ## Rejected alternatives
@@ -49,7 +49,7 @@ domain → ∅
 
 ## Consequences
 
-- `tb_domain` names no provider in its `ActivityId` handling — no constructors, no prefix parsing, and its id tests are opaque-string tests. The residual `strava`/`icu` literals (the snapshot fixture, `partid_get_by_source`, doc comments) are the deferred items above; the machine-checkable bar is a fully grep-clean domain once they land, in the spirit of ADR-0007 and ADR-0012.
+- `tb_domain` names no provider in its `ActivityId` handling — no constructors, no prefix parsing, and its id tests are opaque-string tests. The domain is now fully grep-clean of `strava`/`icu` literals: the snapshot fixture moved to `tb_sqlx`, `partid_get_by_source` was renamed to `source`, and the doc comments were scrubbed (#773) — the machine-checkable bar, in the spirit of ADR-0007 and ADR-0012.
 - `ActivityId` construction and parsing live in `tb_strava` as private helpers; the future icu provider adds its own by implementing the domain's seams, without touching `tb_domain`.
-- The snapshot move and the `partid_get_by_source` rename land in a follow-up ticket.
+- The snapshot move and the `partid_get_by_source` rename landed in #773; the `ProviderLane` deferral above is the remaining item.
 - A contributor adding a provider or a crate is placed by the same rule: depend on what you name, name only what you depend on.

@@ -1,4 +1,4 @@
-//! Rebuilds `backend/domain/src/prepopulated_data.rs` from the canonical
+//! Rebuilds `backend/sqlx/src/prepopulated_data.rs` from the canonical
 //! workshop store.
 //!
 //! The fixture builder is re-based on a scratch Postgres DB (issue #647):
@@ -15,9 +15,9 @@ use std::time::Duration;
 
 use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, AttachmentStore, Part, PartId, PartStore,
-    PartTypeId, Session, StoreSnapshot, UsageId, UsageStore, UserId, UserStore, attach_assembly,
+    PartTypeId, Session, UsageId, UsageStore, UserId, UserStore, attach_assembly,
 };
-use tb_sqlx::DbPool;
+use tb_sqlx::{DbPool, StoreSnapshot};
 use time::OffsetDateTime;
 
 /// The scratch database url from the environment (the codegen requires a
@@ -552,12 +552,8 @@ async fn main() -> anyhow::Result<()> {
         json
     );
 
-    // Write to the `tb_domain` crate's `prepopulated_data.rs` (the bin lives
-    // in `tb_sqlx`, but the generated file is in `tb_domain`).
-    let path = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../domain/src/prepopulated_data.rs"
-    );
+    // Write to this crate's `prepopulated_data.rs`.
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/prepopulated_data.rs");
     std::fs::write(path, &content)?;
     println!("Wrote {}", path);
 

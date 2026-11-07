@@ -11,7 +11,7 @@
 
 pub use crate::prepopulated_data::SNAPSHOT_JSON;
 
-use crate::{Activity, Attachment, Part, Usage, User};
+use tb_domain::{Activity, Attachment, Part, Usage, User};
 
 /// Serializable snapshot of store data for JSON persistence.
 #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]

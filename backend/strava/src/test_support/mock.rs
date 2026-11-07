@@ -53,7 +53,7 @@ mock! {
         async fn part_update(&mut self, part: Part) -> TbResult<Part>;
         async fn part_delete(&mut self, part: PartId) -> TbResult<PartId>;
         async fn parts_delete(&mut self, parts: &[Part]) -> TbResult<usize>;
-        async fn partid_get_by_source(&mut self, strava_id: &str) -> TbResult<Option<PartId>>;
+        async fn partid_get_by_source(&mut self, source: &str) -> TbResult<Option<PartId>>;
         async fn parts_register_shop(
             &mut self,
             shop_id: ShopId,
