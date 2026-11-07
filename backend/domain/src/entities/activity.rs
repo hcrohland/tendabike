@@ -40,22 +40,19 @@ use crate::*;
 ///
 /// Most operations for activities are done on the Id alone
 ///
+/// An opaque identifier. The domain treats it as an opaque string and never
+/// interprets its contents; its string form is owned by the provider that
+/// created it.
 #[derive(
-    Clone,
-    Copy,
-    Debug,
-    Hash,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Serialize,
-    Deserialize,
-    From,
-    Into,
-    Display,
+    Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, From, Into, Display,
 )]
-pub struct ActivityId(i64);
+pub struct ActivityId(String);
+
+impl From<&str> for ActivityId {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
 
 /// Round a UTC offset, in whole seconds, to the nearest 30 minutes.
 ///
@@ -134,7 +131,7 @@ pub struct Activity {
 impl IdKeyed for Activity {
     type Key = ActivityId;
     fn key(&self) -> Self::Key {
-        self.id
+        self.id.clone()
     }
 }
 
@@ -145,15 +142,11 @@ enum Factor {
 }
 
 impl ActivityId {
-    pub fn new(id: i64) -> Self {
-        Self(id)
-    }
-
     /// Read the activity with id self
     ///
     /// checks authorization
     async fn read_optional(
-        self,
+        &self,
         session: &dyn Session,
         store: &mut impl ActivityStore,
     ) -> TbResult<Option<Activity>> {
@@ -171,7 +164,7 @@ impl ActivityId {
     ///
     /// checks authorization
     pub async fn read(
-        self,
+        &self,
         session: &dyn Session,
         store: &mut impl ActivityStore,
     ) -> TbResult<Activity> {
@@ -198,7 +191,7 @@ impl ActivityId {
             .await?
             .register(Factor::Sub, store)
             .await?;
-        store.activity_delete(self).await?;
+        store.activity_delete(&self).await?;
         // The deleted activity is reported as a None tombstone, so the
         // client's merge drops its row (issue #462).
         res.activities.tombstone(self);

@@ -351,7 +351,7 @@ fn file_note() -> PartNote {
 /// The suite's activity.
 fn activity() -> Activity {
     Activity {
-        id: ActivityId::from(1),
+        id: ActivityId::from("strava:1"),
         user_id: UserId::from(1),
         what: ActTypeId::from(1),
         name: "Morning Ride".to_string(),
@@ -909,11 +909,12 @@ async fn get_activity_returns_200_and_activity_body() {
         .returning(|_session, _read| Ok(ReadOutcome::Activity(activity())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
-    let (status, _headers, body) = run(app, Method::GET, "/api/activ/1", Some(&cookie)).await;
+    let (status, _headers, body) =
+        run(app, Method::GET, "/api/activ/strava:1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"id":1,"user_id":1,"what":1,"name":"Morning Ride","start":"2024-01-01T08:00:00Z","duration":3600,"time":null,"distance":20000,"climb":100,"descend":100,"energy":5000,"gear":null,"device_name":null,"external_id":null}"#
+        r#"{"id":"strava:1","user_id":1,"what":1,"name":"Morning Ride","start":"2024-01-01T08:00:00Z","duration":3600,"time":null,"distance":20000,"climb":100,"descend":100,"energy":5000,"gear":null,"device_name":null,"external_id":null}"#
     );
 }
 
@@ -1620,9 +1621,9 @@ async fn update_activity_returns_204() {
     let (status, _headers, _body) = run_json(
         app,
         Method::PUT,
-        "/api/activ/1",
+        "/api/activ/strava:1",
         Some(&cookie),
-        r#"{"id":1,"user_id":1,"what":1,"name":"Morning Ride","start":"2024-01-01T08:00:00Z","duration":3600,"time":null,"distance":20000,"climb":100,"descend":100,"energy":5000,"gear":null,"device_name":null,"external_id":null}"#,
+        r#"{"id":"strava:1","user_id":1,"what":1,"name":"Morning Ride","start":"2024-01-01T08:00:00Z","duration":3600,"time":null,"distance":20000,"climb":100,"descend":100,"energy":5000,"gear":null,"device_name":null,"external_id":null}"#,
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
@@ -1636,13 +1637,13 @@ async fn update_activity_id_mismatch_returns_400() {
     let (store, mock) = mock_ctx();
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
-    // Path id 1, body id 2: the mismatch is the presentation's guard.
+    // Path id strava:1, body id strava:2: the mismatch is the presentation's guard.
     let (status, _headers, _body) = run_json(
         app,
         Method::PUT,
-        "/api/activ/1",
+        "/api/activ/strava:1",
         Some(&cookie),
-        r#"{"id":2,"user_id":1,"what":1,"name":"Morning Ride","start":"2024-01-01T08:00:00Z","duration":3600,"time":null,"distance":20000,"climb":100,"descend":100,"energy":5000,"gear":null,"device_name":null,"external_id":null}"#,
+        r#"{"id":"strava:2","user_id":1,"what":1,"name":"Morning Ride","start":"2024-01-01T08:00:00Z","duration":3600,"time":null,"distance":20000,"climb":100,"descend":100,"energy":5000,"gear":null,"device_name":null,"external_id":null}"#,
     )
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -1658,7 +1659,8 @@ async fn delete_activity_returns_204() {
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
-    let (status, _headers, _body) = run(app, Method::DELETE, "/api/activ/1", Some(&cookie)).await;
+    let (status, _headers, _body) =
+        run(app, Method::DELETE, "/api/activ/strava:1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::NO_CONTENT);
 }
 
@@ -2265,8 +2267,8 @@ async fn redirect_gear_permains_to_strava_url() {
     assert_eq!(headers["location"], "/");
 }
 
-/// `GET /strava/activities/{id}` is the activity redirect direct op: the
-/// Strava URL permanent-redirects.
+/// `GET /source/activities/{id}` is the activity redirect direct op: the
+/// prefixed id routes to the provider URL, which permanent-redirects.
 #[tokio::test]
 async fn redirect_activity_permains_to_strava_url() {
     let (store, mut mock) = mock_ctx();
@@ -2275,8 +2277,13 @@ async fn redirect_activity_permains_to_strava_url() {
         .returning(|_session, _id| Ok("https://www.strava.com/activities/8".to_string()));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
-    let (status, headers, _body) =
-        run(app, Method::GET, "/strava/activities/8", Some(&cookie)).await;
+    let (status, headers, _body) = run(
+        app,
+        Method::GET,
+        "/source/activities/strava:8",
+        Some(&cookie),
+    )
+    .await;
     assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
     assert_eq!(headers["location"], "https://www.strava.com/activities/8");
 }

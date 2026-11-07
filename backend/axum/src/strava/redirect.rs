@@ -8,7 +8,7 @@ use axum::{
     extract::{Path, State},
     response::Redirect,
 };
-use tb_domain::{ActivityId, PartId, UserId};
+use tb_domain::{PartId, UserId};
 
 use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, error::AppError};
 
@@ -24,19 +24,6 @@ pub(super) async fn redirect_gear(
     let uri = state
         .api
         .gear_url(Box::new(user), PartId::from(id))
-        .await
-        .unwrap_or_else(|_| "/".to_string());
-    Ok(Redirect::permanent(&uri))
-}
-
-pub(super) async fn redirect_act(
-    user: RequestSession,
-    Path(id): Path<i64>,
-    State(state): State<AppState>,
-) -> Result<Redirect, AppError> {
-    let uri = state
-        .api
-        .activity_url(Box::new(user), ActivityId::from(id))
         .await
         .unwrap_or_else(|_| "/".to_string());
     Ok(Redirect::permanent(&uri))

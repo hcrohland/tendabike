@@ -519,11 +519,11 @@ where
     }
 
     /// The activity redirect URL (spec #558 §5.2): one transaction — the
-    /// `tb_strava` `strava_url` op (which checks the activity's ownership),
-    /// then the Strava URL.
+    /// `tb_strava` `strava_url` op (which checks the activity's ownership and
+    /// rejects a non-Strava id), then the Strava URL.
     async fn activity_url(&self, session: Box<dyn Session>, id: ActivityId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let uri = activity::strava_url(i64::from(id), &*session, &mut store).await?;
+        let uri = activity::strava_url(id, &*session, &mut store).await?;
         store.commit().await?;
         Ok(uri)
     }

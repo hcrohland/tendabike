@@ -36,6 +36,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod domain;
 
+mod source;
+
 mod strava;
 use strava::{AxumAdmin, RequestSession};
 
@@ -50,6 +52,7 @@ mod stream;
 pub fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> Router {
     let mut router = Router::new()
         .nest("/api", domain::router())
+        .nest("/source", source::router())
         .nest("/strava", strava::router())
         .with_state(app_state);
 

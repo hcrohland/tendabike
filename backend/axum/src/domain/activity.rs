@@ -56,11 +56,11 @@ async fn rescan(admin: AxumAdmin, State(state): State<AppState>) -> Result<Statu
 async fn act_get(
     user: RequestSession,
     State(state): State<AppState>,
-    Path(id): Path<i64>,
+    Path(id): Path<String>,
 ) -> ApiResult<Activity> {
     match state
         .api
-        .read(Box::new(user), ApiRead::Activity(ActivityId::new(id)))
+        .read(Box::new(user), ApiRead::Activity(ActivityId::from(id)))
         .await?
     {
         ReadOutcome::Activity(activity) => Ok(Json(activity)),
@@ -70,7 +70,7 @@ async fn act_get(
 
 /// web interface to change an activity
 async fn act_put(
-    Path(id): Path<i64>,
+    Path(id): Path<String>,
     user: RequestSession,
     State(state): State<AppState>,
     Json(activity): Json<Activity>,
@@ -89,7 +89,7 @@ async fn act_put(
 
 /// web interface to delete an activity
 async fn act_delete(
-    Path(id): Path<i64>,
+    Path(id): Path<String>,
     user: RequestSession,
     State(state): State<AppState>,
 ) -> Result<StatusCode, AppError> {
@@ -98,7 +98,7 @@ async fn act_delete(
         .write(
             Box::new(user),
             ApiWrite::ActivityDelete {
-                id: ActivityId::new(id),
+                id: ActivityId::from(id),
             },
         )
         .await?;

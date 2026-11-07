@@ -31,7 +31,7 @@ pub trait ActivityStore {
     /// # Returns
     ///
     /// Returns a `Result` containing the retrieved `Activity` or an error if the operation fails.
-    async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Option<Activity>>;
+    async fn activity_read_by_id(&mut self, aid: &ActivityId) -> TbResult<Option<Activity>>;
 
     /// Updates an existing activity.
     ///
@@ -64,7 +64,7 @@ pub trait ActivityStore {
     /// # Returns
     ///
     /// Returns a `Result` containing the number of deleted activities or an error if the operation fails.
-    async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize>;
+    async fn activity_delete(&mut self, aid: &ActivityId) -> TbResult<usize>;
 
     /// Deletes an activity by its ID.
     ///

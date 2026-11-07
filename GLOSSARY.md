@@ -62,3 +62,9 @@ _Avoid_: file
 **acting session**:
 The caller's identity and context as a domain operation runs. Carried with each request; immutable for the operation's duration — the domain reads it, never mutates it. The **identity** (who the caller is) is stable for the browser; the **context** is per-request. Today the context is the active `shop` — the shop the caller is acting in, stated per request rather than held as a persisted browser-wide state, so a caller's tabs can each act in their own shop. The context is open to carrying more.
 _Avoid_: session (the connection also has a cookie session and the loop a Strava session), user id
+
+### Providers
+
+**provider**:
+The external system a user's activities come from, and the one the user authenticates through. A user has exactly one, chosen at signup and immutable. Today: Strava; intervals.icu is the second.
+_Avoid_: source (a part's external id), lane (the dispatch abstraction)

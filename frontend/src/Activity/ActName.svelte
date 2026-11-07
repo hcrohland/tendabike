@@ -9,7 +9,7 @@
 </script>
 
 <div class="flex justify-between">
-  <a href={"/strava/activities/" + row.id} target="_blank">
+  <a href={"/source/activities/" + row.id} target="_blank">
     {row.name}
     <img
       src="strava_grey.png"

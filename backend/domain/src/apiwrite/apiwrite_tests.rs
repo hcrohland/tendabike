@@ -268,7 +268,7 @@ async fn part_delete_missing_is_not_found() -> TbResult<()> {
 #[tokio::test]
 async fn activity_update_dispatches() -> TbResult<()> {
     let mut store = MockStore::new();
-    let stored = activity_row(ActivityId::new(1), "Morning Ride");
+    let stored = activity_row(ActivityId::from("1"), "Morning Ride");
     let stored_read = stored.clone();
     store
         .expect_activity_read_by_id()
@@ -276,7 +276,7 @@ async fn activity_update_dispatches() -> TbResult<()> {
     store.expect_activity_update().returning(Ok);
 
     let mut act = stored.clone();
-    let id = act.id;
+    let id = act.id.clone();
     act.name = "Renamed Ride".to_string();
     let summary = outcome_summary(
         exec(
@@ -292,27 +292,34 @@ async fn activity_update_dispatches() -> TbResult<()> {
 
 #[tokio::test]
 async fn activity_delete_reports_tombstone() -> TbResult<()> {
-    let id = ActivityId::new(3);
+    let id = ActivityId::from("3");
     let mut store = MockStore::new();
     // The activity is read by the delete, then read again by the test's
     // post-delete assert — the second read must be gone.
     let counter = Arc::new(Mutex::new(0));
     let counter_calls = counter.clone();
+    let closure_id = id.clone();
     store.expect_activity_read_by_id().returning(move |_| {
         let n = *counter_calls.lock().unwrap();
         *counter_calls.lock().unwrap() += 1;
         if n == 0 {
-            Ok(Some(activity_row(id, "Ride")))
+            Ok(Some(activity_row(closure_id.clone(), "Ride")))
         } else {
             Ok(None)
         }
     });
     store.expect_activity_delete().returning(move |_| Ok(1));
 
-    let summary =
-        outcome_summary(exec(ApiWrite::ActivityDelete { id }, &test_session(), &mut store).await?);
-    assert_eq!(summary.activities, only_tombstone(id));
-    assert!(store.activity_read_by_id(id).await?.is_none());
+    let summary = outcome_summary(
+        exec(
+            ApiWrite::ActivityDelete { id: id.clone() },
+            &test_session(),
+            &mut store,
+        )
+        .await?,
+    );
+    assert_eq!(summary.activities, only_tombstone(id.clone()));
+    assert!(store.activity_read_by_id(&id).await?.is_none());
     Ok(())
 }
 
@@ -323,7 +330,7 @@ async fn activity_delete_missing_is_not_found() -> TbResult<()> {
 
     let err = exec(
         ApiWrite::ActivityDelete {
-            id: ActivityId::new(999_999),
+            id: ActivityId::from("999_999"),
         },
         &test_session(),
         &mut store,
@@ -337,7 +344,7 @@ async fn activity_delete_missing_is_not_found() -> TbResult<()> {
 #[tokio::test]
 async fn activity_descend_updates_matched_activity() -> TbResult<()> {
     let mut store = MockStore::new();
-    let matched = activity_row(ActivityId::new(1), "Morning Ride");
+    let matched = activity_row(ActivityId::from("1"), "Morning Ride");
     let matched_lookup = matched.clone();
     store
         .expect_get_by_user_and_time()
@@ -361,7 +368,11 @@ async fn activity_descend_updates_matched_activity() -> TbResult<()> {
         panic!("the descend write carries its match report");
     };
     assert_eq!(
-        summary.activities.get(&ActivityId::new(1)).unwrap().descend,
+        summary
+            .activities
+            .get(&ActivityId::from("1"))
+            .unwrap()
+            .descend,
         Some(900)
     );
     // The dispatch carries the match report (the handler's response

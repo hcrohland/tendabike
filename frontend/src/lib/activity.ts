@@ -2,7 +2,7 @@ import { mapableState } from "./mapable.svelte";
 import { handleError, myfetch } from "./utils";
 
 export class Activity {
-  id: number;
+  id: string;
   /// The athlete
   user_id: number;
   /// The activity type

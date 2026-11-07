@@ -448,7 +448,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
   ],
   "activities": [
     {
-      "id": 1,
+      "id": "strava:1",
       "user_id": 1,
       "what": 1,
       "name": "Morning Ride",
@@ -464,7 +464,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "external_id": null
     },
     {
-      "id": 2,
+      "id": "strava:2",
       "user_id": 1,
       "what": 1,
       "name": "Hill Repeats",
@@ -480,7 +480,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "external_id": null
     },
     {
-      "id": 3,
+      "id": "strava:3",
       "user_id": 1,
       "what": 1,
       "name": "Recovery Spin",
