@@ -5,7 +5,9 @@ A rationale comment copy-pasted across call sites (the same lines at
 four methods) is a smell the formatter and clippy cannot see: each line
 is individually valid, only the repetition is the problem. This check
 reads the staged additions and fails when the same comment line (after
-stripping leading whitespace) appears 3+ times.
+stripping leading whitespace) appears 3+ times. Blank comment markers
+(//, //!, ///, #) are paragraph/section separators, not rationale, and
+are ignored.
 
 Comment syntax per file type:
   .rs .ts .svelte  ->  //
@@ -55,6 +57,11 @@ def main():
                 continue
             stripped = line[1:].lstrip()
             if stripped.startswith(current_prefix):
+                # A blank comment marker (//, //!, ///, #) is a paragraph or
+                # section separator, not copy-pasted rationale: it carries no
+                # words, so it never counts.
+                if not any(ch.isalnum() for ch in stripped):
+                    continue
                 counts[stripped] += 1
 
     repeated = {text: count for text, count in counts.items() if count >= THRESHOLD}
