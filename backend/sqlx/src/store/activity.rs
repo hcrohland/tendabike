@@ -202,7 +202,7 @@ impl<'c> tb_domain::ActivityStore for SqlxConn<'c> {
         .try_into()
     }
 
-    async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize> {
+    async fn activity_delete(&mut self, aid: &ActivityId) -> TbResult<usize> {
         let result = sqlx::query!("DELETE FROM activities WHERE id = $1", aid.to_string())
             .execute(&mut **self.inner())
             .await

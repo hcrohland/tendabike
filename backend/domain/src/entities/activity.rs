@@ -191,7 +191,7 @@ impl ActivityId {
             .await?
             .register(Factor::Sub, store)
             .await?;
-        store.activity_delete(self.clone()).await?;
+        store.activity_delete(&self).await?;
         // The deleted activity is reported as a None tombstone, so the
         // client's merge drops its row (issue #462).
         res.activities.tombstone(self);

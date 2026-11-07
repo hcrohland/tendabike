@@ -204,7 +204,7 @@ mockall::mock! {
         async fn activity_create(&mut self, act: Activity) -> TbResult<Activity>;
         async fn activity_read_by_id(&mut self, aid: &ActivityId) -> TbResult<Option<Activity>>;
         async fn activity_update(&mut self, act: Activity) -> TbResult<Activity>;
-        async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize>;
+        async fn activity_delete(&mut self, aid: &ActivityId) -> TbResult<usize>;
         async fn activities_delete(&mut self, activities: &[Activity]) -> TbResult<usize>;
         async fn activity_get_all(&mut self, uid: &UserId) -> TbResult<Vec<Activity>>;
         async fn activities_find_by_gear_and_time(
