@@ -159,7 +159,7 @@ impl<'c> tb_domain::ActivityStore for SqlxConn<'c> {
         .try_into()
     }
 
-    async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Option<Activity>> {
+    async fn activity_read_by_id(&mut self, aid: &ActivityId) -> TbResult<Option<Activity>> {
         sqlx::query_as!(
             DbActivity,
             "SELECT * FROM activities WHERE id = $1 FOR UPDATE",

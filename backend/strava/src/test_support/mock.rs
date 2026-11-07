@@ -141,7 +141,7 @@ mock! {
     #[async_trait::async_trait]
     impl ActivityStore for StravaConn {
         async fn activity_create(&mut self, act: Activity) -> TbResult<Activity>;
-        async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Option<Activity>>;
+        async fn activity_read_by_id(&mut self, aid: &ActivityId) -> TbResult<Option<Activity>>;
         async fn activity_update(&mut self, act: Activity) -> TbResult<Activity>;
         async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize>;
         async fn activities_delete(&mut self, activities: &[Activity]) -> TbResult<usize>;

@@ -205,7 +205,7 @@ pub async fn strava_url(
     user: &dyn Session,
     store: &mut impl StravaStore,
 ) -> TbResult<String> {
-    id.clone().read(user, store).await?;
+    id.read(user, store).await?;
     let raw = numeric_id(&id).context("not a strava activity")?;
     Ok(format!("https://strava.com/activities/{raw}"))
 }

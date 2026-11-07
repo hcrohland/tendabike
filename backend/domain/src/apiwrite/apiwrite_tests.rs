@@ -319,7 +319,7 @@ async fn activity_delete_reports_tombstone() -> TbResult<()> {
         .await?,
     );
     assert_eq!(summary.activities, only_tombstone(id.clone()));
-    assert!(store.activity_read_by_id(id).await?.is_none());
+    assert!(store.activity_read_by_id(&id).await?.is_none());
     Ok(())
 }
 

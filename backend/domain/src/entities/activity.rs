@@ -140,11 +140,11 @@ impl ActivityId {
     ///
     /// checks authorization
     async fn read_optional(
-        self,
+        &self,
         session: &dyn Session,
         store: &mut impl ActivityStore,
     ) -> TbResult<Option<Activity>> {
-        let act = store.activity_read_by_id(self.clone()).await?;
+        let act = store.activity_read_by_id(self).await?;
         if let Some(act) = &act {
             session.check_owner(
                 act.user_id,
@@ -158,7 +158,7 @@ impl ActivityId {
     ///
     /// checks authorization
     pub async fn read(
-        self,
+        &self,
         session: &dyn Session,
         store: &mut impl ActivityStore,
     ) -> TbResult<Activity> {
@@ -181,7 +181,6 @@ impl ActivityId {
     ) -> TbResult<Summary> {
         info!("Deleting {self:?}");
         let mut res = self
-            .clone()
             .read(session, store)
             .await?
             .register(Factor::Sub, store)
@@ -213,7 +212,7 @@ impl Activity {
         user: &dyn Session,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<Summary> {
-        if let Some(old_activity) = self.id.clone().read_optional(user, store).await? {
+        if let Some(old_activity) = self.id.read_optional(user, store).await? {
             old_activity.replace(self, store).await
         } else {
             user.check_owner(
@@ -242,12 +241,7 @@ impl Activity {
         user: &dyn Session,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<Summary> {
-        self.id
-            .clone()
-            .read(user, store)
-            .await?
-            .replace(self, store)
-            .await
+        self.id.read(user, store).await?.replace(self, store).await
     }
 
     async fn replace(

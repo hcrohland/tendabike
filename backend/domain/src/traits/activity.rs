@@ -31,7 +31,7 @@ pub trait ActivityStore {
     /// # Returns
     ///
     /// Returns a `Result` containing the retrieved `Activity` or an error if the operation fails.
-    async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Option<Activity>>;
+    async fn activity_read_by_id(&mut self, aid: &ActivityId) -> TbResult<Option<Activity>>;
 
     /// Updates an existing activity.
     ///

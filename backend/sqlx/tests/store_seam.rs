@@ -490,11 +490,12 @@ async fn activity_create_rejects_duplicate_id() -> tb_domain::TbResult<()> {
         store.activity_create(ride.clone()).await?;
 
         // The first ride is stored, and a different id still succeeds.
+        let id = ActivityId::from("strava:100".to_string());
         let stored = store
-            .activity_read_by_id(ActivityId::from("strava:100".to_string()))
+            .activity_read_by_id(&id)
             .await?
             .expect("the first ride is stored");
-        assert_eq!(stored.id, ActivityId::from("strava:100".to_string()));
+        assert_eq!(stored.id, id);
         let mut other = ride.clone();
         other.id = ActivityId::from("strava:101".to_string());
         store.activity_create(other).await?;
