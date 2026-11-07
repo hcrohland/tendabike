@@ -139,7 +139,10 @@ pub(crate) async fn login_authorized(
         athlete.avatar = None;
     }
     let refresh_token = token.refresh_token().cloned();
-    let (user_id, is_admin) = state.api.login_from_token(athlete, refresh_token).await?;
+    let (user_id, is_admin) = state
+        .provider
+        .login_from_token(athlete, refresh_token)
+        .await?;
 
     // The tower-session write stays in axum (spec #558 §5.2): the token
     // flows through the `tb_strava` `TokenCache`, not the cookie.

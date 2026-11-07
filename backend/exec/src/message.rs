@@ -36,13 +36,15 @@
 //! (spec §4.5 — an empty `Summary` pushes nothing; a dropped frame is
 //! non-fatal, the client's reconnect + full refresh covers it).
 
-use tb_domain::{ApiRead, ApiWrite, ReadOutcome, Session, Summary, TbResult, WriteOutcome};
-use tb_strava::StravaStat;
+use tb_domain::{
+    ApiRead, ApiWrite, ReadOutcome, Session, Summary, TbResult, UserStat, WriteOutcome,
+};
 use tb_strava::event::Event;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 /// The one message the per-user executor consumes: a unified wrapper over the
-/// two sources (spec §4.2).
+/// message sources (spec §4.2) — the user's API-write channel plus the
+/// provider event queue.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Message {
     /// An in-memory write from the user's API channel.
@@ -106,7 +108,7 @@ pub enum Request {
         session: Box<dyn Session>,
         /// Resolved with the all-user stats on commit, or the error on
         /// failure.
-        reply: oneshot::Sender<TbResult<Vec<StravaStat>>>,
+        reply: oneshot::Sender<TbResult<Vec<UserStat>>>,
     },
 }
 
@@ -158,7 +160,7 @@ impl Request {
     /// #558 §3.3).
     pub fn new_all_stats(
         session: Box<dyn Session>,
-    ) -> (Self, oneshot::Receiver<TbResult<Vec<StravaStat>>>) {
+    ) -> (Self, oneshot::Receiver<TbResult<Vec<UserStat>>>) {
         let (reply, rx) = oneshot::channel();
         (Self::AllStats { session, reply }, rx)
     }

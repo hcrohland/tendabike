@@ -61,13 +61,14 @@ use tokio::sync::{broadcast, oneshot};
 use uuid::Uuid;
 
 use super::{
-    DbBackoff, LoopContext, Probe, Select, next_action, run_request, select_message,
+    DbBackoff, LoopContext, Select, next_action, run_request, select_message,
     sleep_or_take_request, stop_remaining,
 };
+use crate::lane::Probe;
 use crate::message::{Request, push_frame};
 use crate::{
-    Action, DeliveryContext, ExecutorStatus, FramePusher, Message, Registry, ServiceApi, Txn,
-    TxnSource, request_channel,
+    Action, DeliveryContext, ExecutorStatus, FramePusher, Message, ProviderService, Registry,
+    StravaLane, Txn, TxnSource, request_channel,
 };
 
 // --- The `mock!` connection witness (issue #631) ---
@@ -464,7 +465,7 @@ impl TxnSource for FakeSource {
 struct Never;
 
 impl Future for Never {
-    type Output = Option<Probe>;
+    type Output = Option<Probe<Event>>;
 
     fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
         Poll::Pending
@@ -472,7 +473,7 @@ impl Future for Never {
 }
 
 /// A future that immediately resolves with a ready probe outcome.
-async fn ready_probe(probe: Probe) -> Option<Probe> {
+async fn ready_probe(probe: Probe<Event>) -> Option<Probe<Event>> {
     Some(probe)
 }
 
@@ -492,12 +493,13 @@ fn test_context(
     source: FakeSource,
     frames: broadcast::Sender<Summary>,
     pusher: Box<dyn FramePusher>,
-) -> LoopContext<FakeSource> {
+) -> LoopContext<FakeSource, StravaLane> {
     LoopContext::new(
         source,
         UserId::from(1),
         frames,
         pusher,
+        StravaLane,
         broadcast::channel(64).0,
         Duration::from_secs(300),
         Arc::new(tokio::sync::Notify::new()),
@@ -1555,7 +1557,11 @@ pub(crate) fn non_empty_summary() -> Summary {
 async fn subscribe_shop_rejects_a_non_owner() {
     // A non-owner is forbidden (the web layer maps this to a 403): the canned
     // store reports the shop's owner as 1, so user 2 is rejected.
-    let registry = Registry::new(shop_source(UserId::from(1)), Duration::from_secs(60));
+    let registry = Registry::new(
+        shop_source(UserId::from(1)),
+        StravaLane,
+        Duration::from_secs(60),
+    );
 
     let result = registry
         .subscribe_shop(UserId::from(2), ShopId::from(7))
@@ -1568,7 +1574,11 @@ async fn subscribe_shop_rejects_a_non_owner() {
 
 #[tokio::test]
 async fn shop_stream_lifecycle_create_receive_drop() {
-    let registry = Registry::new(shop_source(UserId::from(1)), Duration::from_secs(60));
+    let registry = Registry::new(
+        shop_source(UserId::from(1)),
+        StravaLane,
+        Duration::from_secs(60),
+    );
     let shop_id = ShopId::from(7);
 
     // Created on demand: no stream before the owner's first connect.
@@ -1620,6 +1630,7 @@ async fn shop_stream_lifecycle_create_receive_drop() {
 async fn deliver_reaches_the_recipients_open_shop_streams() {
     let registry = Registry::new(
         FakeSource::with_conns(vec![shop_conn(UserId::from(1)), shop_conn(UserId::from(1))]),
+        StravaLane,
         Duration::from_secs(60),
     );
     let shop_a = ShopId::from(7);
@@ -1666,6 +1677,7 @@ async fn deliver_reaches_the_recipients_open_shop_streams() {
 async fn deliver_skips_the_session_shop_in_the_fan_out() {
     let registry = Registry::new(
         FakeSource::with_conns(vec![shop_conn(UserId::from(1)), shop_conn(UserId::from(1))]),
+        StravaLane,
         Duration::from_secs(60),
     );
     let session_shop = ShopId::from(7);
@@ -1717,7 +1729,11 @@ async fn deliver_skips_the_session_shop_in_the_fan_out() {
 /// delivery for one user never reaches a shop stream owned by another.
 #[tokio::test]
 async fn deliver_never_reaches_a_foreign_owners_shop_streams() {
-    let registry = Registry::new(shop_source(UserId::from(1)), Duration::from_secs(60));
+    let registry = Registry::new(
+        shop_source(UserId::from(1)),
+        StravaLane,
+        Duration::from_secs(60),
+    );
     // Shop 7 is owned by user 1; user 2's delivery has no business there.
     let mut rx = registry
         .subscribe_shop(UserId::from(1), ShopId::from(7))
@@ -1745,7 +1761,7 @@ async fn deliver_never_reaches_a_foreign_owners_shop_streams() {
 async fn deliver_is_a_noop_without_a_running_executor() {
     // No store is involved: a personal delivery to a user with no (or a
     // reaped) executor is a no-op, so the source's mock is never `begin`-ed.
-    let registry = Registry::new(FakeSource::failing(), Duration::from_secs(60));
+    let registry = Registry::new(FakeSource::failing(), StravaLane, Duration::from_secs(60));
 
     // No executor for the user: a no-op (no panic, no receiver).
     registry

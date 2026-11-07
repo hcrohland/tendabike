@@ -182,22 +182,19 @@ impl StravaUser {
     }
 }
 
-#[derive(Debug, Serialize)]
-pub struct StravaStat {
-    #[serde(flatten)]
-    stat: Stat,
-    events: i64,
-    disabled: bool,
-}
-
-pub async fn get_all_stats(store: &mut impl StravaStore) -> TbResult<Vec<StravaStat>> {
+/// The all-user stat read (spec #558 §3.3): every Strava user's provider
+/// neutral [`UserStat`] — the domain [`Stat`] plus this provider's queued
+/// event count and disabled flag. The [`UserStat`] type is provider-neutral
+/// (it lives in `tb_domain`, beside [`Stat`]), so a second provider's
+/// `all_stats` op returns the same type.
+pub async fn get_all_stats(store: &mut impl StravaStore) -> TbResult<Vec<UserStat>> {
     let users = store.stravauser_get_all().await?;
 
     let mut res = Vec::new();
     for u in users {
         let stat = u.tendabike_id.get_stat(store).await?;
         let events = store.strava_events_get_count_for_user(&u.id).await?;
-        res.push(StravaStat {
+        res.push(UserStat {
             stat,
             events,
             disabled: u.disabled(),

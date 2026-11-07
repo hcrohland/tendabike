@@ -46,27 +46,24 @@ use tokio::sync::{broadcast, watch};
 
 use tb_domain::{
     ActivityId, ApiRead, ApiWrite, PartId, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
-    WriteOutcome,
+    UserStat, WriteOutcome,
 };
-use tb_strava::{StravaStat, client::StravaAthleteInfo, event::InEvent};
+use tb_strava::{client::StravaAthleteInfo, event::InEvent};
 
 use crate::ExecutorStatus;
 
-/// The app's presentation-agnostic service API (spec #558 §2): 15 methods —
-/// the five channel ops (`read`, `write`, `hydrate_gear`, `subscribe`,
-/// `all_stats`) and the ten direct ops (spec #558 §5.2). Presentation
-/// layers depend on this trait, not the concrete [`crate::Registry`].
+/// The app's presentation-agnostic service API (spec #558 §2): the five
+/// generic channel ops (`read`, `write`, `hydrate_gear`, `subscribe`,
+/// `all_stats`). Presentation layers depend on this trait, not the concrete
+/// [`crate::Registry`]. The provider-specific ops live in
+/// [`ProviderService`] — a second provider implements `ProviderService` with
+/// its own ops while the generic `ServiceApi` stays the same.
 ///
 /// Every method that takes a `session` parameter threads the acting
-/// [`Session`] through the executor to the downstream domain/`tb_strava`
-/// functions it runs: the executor hands it to the op in its own
-/// transaction. The session's `shop()` is the frame's delivery context (it
-/// routes a committed `Summary`) and scopes a read's `Summary`; the admin
-/// deauth and delete ops use it to verify the caller is an admin. The
-/// executor's spawn-time session is identity-only — it serves only the
-/// background Strava lanes (the queue probe + events), which need just the
-/// fixed user_id + the TokenCache, never a shop; the per-request shop rides
-/// on each request.
+/// [`Session`] through the executor to the downstream domain functions it
+/// runs: the executor hands it to the op in its own transaction. The
+/// session's `shop()` is the frame's delivery context (it routes a committed
+/// `Summary`) and scopes a read's `Summary`.
 #[cfg_attr(feature = "mock", mockall::automock)]
 #[async_trait::async_trait]
 pub trait ServiceApi: Send + Sync {
@@ -100,21 +97,31 @@ pub trait ServiceApi: Send + Sync {
         watch::Receiver<ExecutorStatus>,
     )>;
 
+    /// The admin `GET /user/all` read (spec #558 §3.3): `get_all_stats` in
+    /// the admin user's own channel, in the loop's own transaction.
+    async fn all_stats(&self, session: Box<dyn Session>) -> TbResult<Vec<UserStat>>;
+}
+
+/// The provider-specific service API: the eleven direct ops (spec #558 §5.2)
+/// that are provider-specific (OAuth, webhook, sync, rescan, deauthorize,
+/// etc.). A second provider implements this trait with its own ops; the
+/// generic [`ServiceApi`] stays the same.
+///
+/// The `Registry` implements both [`ServiceApi`] and [`ProviderService`];
+/// presentation layers hold `Arc<dyn ServiceApi>` for the generic ops and
+/// `Arc<dyn ProviderService>` for the provider-specific ones.
+#[cfg_attr(feature = "mock", mockall::automock)]
+#[async_trait::async_trait]
+pub trait ProviderService: Send + Sync {
     /// Register a shop stream for `shop_id` (spec #517, ticket #582): the
     /// caller must be the shop owner (a non-owner is `Forbidden`, which the
     /// web layer maps to a 403); the channel is created on demand and the
-    /// returned receiver is a subscription to it. No `ExecutorStatus` — the
-    /// shop stream is a standalone channel, not tied to the executor's
-    /// lifecycle (unlike [`Self::subscribe`]).
+    /// returned receiver is a subscription to it.
     async fn subscribe_shop(
         &self,
         user_id: UserId,
         shop_id: ShopId,
     ) -> TbResult<broadcast::Receiver<Summary>>;
-
-    /// The admin `GET /user/all` read (spec #558 §3.3): `get_all_stats` in
-    /// the admin user's own channel, in the loop's own transaction.
-    async fn all_stats(&self, session: Box<dyn Session>) -> TbResult<Vec<StravaStat>>;
 
     /// The admin rescan (spec #558 §5.2): one transaction
     /// (`Activity::rescan_all`), then every live executor stopped (the
@@ -138,9 +145,8 @@ pub trait ServiceApi: Send + Sync {
     /// transaction (`sync_users`) queuing a `Sync` event per (non-disabled)
     /// user, then — per queued user — spawn the executor (a no-op if it is
     /// already running) and wake it, so the queue drains even for users
-    /// whose executor is not running (offline). Distinct from the per-user
-    /// [`Self::sync`], which awaits one user's completion. `user_id` narrows
-    /// the trigger to one user (the route's `?user_id=` query).
+    /// whose executor is not running (offline). `user_id` narrows the
+    /// trigger to one user (the route's `?user_id=` query).
     async fn trigger_processing(
         &self,
         session: Box<dyn Session>,

@@ -29,7 +29,7 @@ use anyhow::Context;
 use axum::Router;
 use sqlx::PgPool;
 use tb_domain::TbResult;
-use tb_exec::ServiceApi;
+use tb_exec::{ProviderService, ServiceApi};
 use tower_sessions::{ExpiredDeletion, SessionManagerLayer};
 use tower_sessions_sqlx_store::PostgresStore;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -68,6 +68,7 @@ pub fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> R
 
 pub async fn start(
     api: Arc<dyn ServiceApi>,
+    provider: Arc<dyn ProviderService>,
     pool: PgPool,
     path: std::path::PathBuf,
     addr: SocketAddr,
@@ -82,7 +83,7 @@ pub async fn start(
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let app_state = AppState::new(api);
+    let app_state = AppState::new(api, provider);
 
     // The web layer chose a `PostgresStore` for its sessions, so the
     // caller hands over the postgres connection — the same pool the
