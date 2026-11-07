@@ -61,7 +61,7 @@
         >
           {activity.name}
           <img
-            src="strava_grey.png"
+            src="/strava_grey.png"
             alt={m.gearcard_view_on_strava()}
             title={m.gearcard_view_on_strava()}
             class="inline mx-1 w-4 h-4 align-middle"

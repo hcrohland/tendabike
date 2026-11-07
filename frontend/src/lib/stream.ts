@@ -36,6 +36,15 @@ const snapshotRetryDelay = 3000;
 
 let active: UserStream | undefined;
 
+/// The session's hydration state: `true` once the initial catch-up snapshot
+/// (`initData`) has landed. It is a property of the *session*, not the stream
+/// instance, so it persists across stream re-opens (a shop change re-runs the
+/// caller's effect and opens a fresh source). `startStream` seeds each new
+/// stream from it, so a stream opened after hydration applies frames
+/// immediately — regardless of whether `markHydrated` ran before or after
+/// `startStream` in the caller's effect.
+let hydrated = false;
+
 /// Open the user stream and keep it open. The stream opens **only for an
 /// authenticated user** (the caller gates it on `getUser()`) — an anonymous
 /// session gets the About page, never a stream. The initial catch-up
@@ -47,7 +56,7 @@ export function startStream(
   factory: EventSourceFactory = (url) => new EventSource(url),
 ): void {
   stopStream();
-  active = new UserStream(factory, onSnapshot);
+  active = new UserStream(factory, onSnapshot, hydrated);
   active.start();
 }
 
@@ -58,24 +67,38 @@ export function stopStream() {
 }
 
 /// The initial hydration (the session init's catch-up snapshot) has landed:
-/// flush the frames that raced it. A frame that arrived while the snapshot
-/// was in flight must not be clobbered by the snapshot's full replace.
+/// record it for the session and flush the frames that raced it on the active
+/// stream. A frame that arrived while the snapshot was in flight must not be
+/// clobbered by the snapshot's full replace.
 export function markHydrated() {
+  hydrated = true;
   active?.flush();
+}
+
+/// Reset the session's hydration state. Test seam: each suite test is a fresh
+/// session, so the flag (module state shared across the suite) starts `false`.
+export function resetHydrated() {
+  hydrated = false;
 }
 
 class UserStream {
   private es: EventSourceLike | undefined;
   private failedOpens = 0;
   private opened = false;
-  private hydrated = false;
+  private hydrated: boolean;
   private pending: Summary[] = [];
   private stopped = false;
 
   constructor(
     private factory: EventSourceFactory,
     private onSnapshot: (p: Promise<void>) => void,
-  ) {}
+    /// Seeded from the session's hydration state (`startStream`): a stream
+    /// opened after the initial snapshot landed applies frames immediately
+    /// instead of buffering them for a `flush` that the caller may never run.
+    hydrated = false,
+  ) {
+    this.hydrated = hydrated;
+  }
 
   start() {
     const es = this.factory(streamUrl());

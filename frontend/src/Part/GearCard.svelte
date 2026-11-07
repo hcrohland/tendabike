@@ -68,7 +68,7 @@
       {#if part.what == 1}
         <a href={"/strava/bikes/" + part.id} target="_blank">
           <img
-            src="strava_grey.png"
+            src="/strava_grey.png"
             alt={m.gearcard_view_on_strava()}
             title={m.gearcard_view_on_strava()}
             class="inline ml-1"
