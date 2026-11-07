@@ -45,7 +45,6 @@
 
 mod api;
 mod executor;
-mod icu;
 mod lane;
 mod message;
 mod registry;
@@ -54,7 +53,6 @@ mod txn;
 
 pub use api::*;
 pub use executor::*;
-pub use icu::*;
 pub use lane::*;
 pub use message::*;
 pub use registry::*;
