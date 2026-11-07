@@ -12,7 +12,7 @@
   <a href={"/source/activities/" + row.id} target="_blank">
     {row.name}
     <img
-      src="strava_grey.png"
+      src="/strava_grey.png"
       alt={m.gearcard_view_on_strava()}
       title={m.gearcard_view_on_strava()}
       class="inline mx-2"
