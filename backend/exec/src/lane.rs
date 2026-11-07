@@ -19,21 +19,20 @@
 */
 
 //! The provider lane: the narrow seam the executor loop calls through to
-//! probe and process a provider's event queue (ticket #762). The loop is
-//! generic over this trait: it calls `probe` to read the provider's queue
-//! (one transaction's housekeeping) and `process` to handle a queued event
-//! (the work transaction), and never names a concrete provider. `tb_strava`
-//! implements it first (no behavioral change); a second provider (a new
-//! crate) implements it too, and the loop works with it unchanged. The
-//! [`Probe`] outcome is generic over the provider's event type, so the
-//! loop's select and reclaim policy are provider-agnostic.
+//! probe and process a provider's event queue. The loop is generic over this
+//! trait: it calls `probe` to read the provider's queue (one transaction's
+//! housekeeping) and `process` to handle a queued event (the work
+//! transaction), and never names a concrete provider. `tb_strava` implements
+//! it; a second provider (a new crate) implements it too, and the loop works
+//! with it unchanged. The [`Probe`] outcome is generic over the provider's
+//! event type, so the loop's select and reclaim policy are provider-agnostic.
 
 use tb_domain::{Summary, UserId};
 use tb_strava::StravaStore;
 
 /// The outcome of one probe of the provider's event queue (one transaction).
 /// Generic over the provider's event type, so the loop's select and reclaim
-/// policy are provider-agnostic (ticket #762).
+/// policy are provider-agnostic.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Probe<E> {
     /// An event was queued; the work transaction will process it.
@@ -49,14 +48,13 @@ pub enum Probe<E> {
     Error,
 }
 
-/// The narrow provider seam the executor loop calls through (ticket #762):
-/// `probe` reads the provider's event queue (one transaction's housekeeping),
-/// and `process` handles a queued event (the work transaction). The loop is
+/// The narrow provider seam the executor loop calls through: `probe` reads
+/// the provider's event queue (one transaction's housekeeping), and
+/// `process` handles a queued event (the work transaction). The loop is
 /// generic over this trait and never names a concrete provider.
 ///
-/// `tb_strava` implements it first (no behavioral change); a second provider
-/// (a new crate implementing [`ProviderLane`] + its data store) plugs in
-/// without touching the loop.
+/// `tb_strava` implements it; a second provider (a new crate implementing
+/// [`ProviderLane`] + its data store) plugs in without touching the loop.
 #[async_trait::async_trait]
 pub trait ProviderLane: Send + Sync {
     /// The provider's event type.

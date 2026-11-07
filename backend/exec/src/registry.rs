@@ -99,8 +99,8 @@ where
 {
     source: S,
     /// The provider lane: the narrow seam the loop calls through to probe
-    /// and process the provider's event queue (ticket #762). The registry
-    /// owns it and passes a clone to the core's spawn.
+    /// and process the provider's event queue. The registry owns it and
+    /// passes a clone to the core's spawn.
     lane: P,
     /// The lifecycle core: the per-user executor map, the per-shop
     /// frame-channel map, and the spawn/reap/wake/stop-all logic. Source-
@@ -330,10 +330,10 @@ where
     }
 }
 
-/// The provider-specific service API's impl for the registry (ticket #762):
-/// the eleven direct ops own their own transaction(s) and any lifecycle
-/// control. The `P::Event = StravaEvent` constraint is valid for the Strava
-/// provider (the `sync` op correlates by the Strava event's identity).
+/// The provider-specific service API's impl for the registry: the eleven
+/// direct ops own their own transaction(s) and any lifecycle control. The
+/// `P::Event = StravaEvent` constraint is valid for the Strava provider (the
+/// `sync` op correlates by the Strava event's identity).
 #[async_trait::async_trait]
 impl<S, P> ProviderService for Registry<S, P>
 where

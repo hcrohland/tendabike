@@ -18,20 +18,16 @@
 
 */
 
-//! The Icu provider's event payload (ticket #762) — a skeleton. The executor
-//! is provider-agnostic: the [`Message::Icu`] variant carries the Icu
-//! provider's event, parallel to [`Message::Strava`]'s
-//! `tb_strava::event::Event`. The Icu provider is not yet wired (no `tb_icu`
-//! crate, no `ProviderLane` implementation), so this module holds only the
-//! event's payload shape: the minimum the `Message` enum needs to be
-//! multi-provider today. When `tb_icu` is built, this type moves there and
-//! the variant re-exports it, exactly as the `Strava` variant references
-//! `tb_strava::event::Event`.
+//! The Icu provider's event payload — a skeleton. The executor is
+//! provider-agnostic: the [`Message::Icu`] variant carries the Icu provider's
+//! event, parallel to [`Message::Strava`]'s `tb_strava::event::Event`. The
+//! Icu provider is not yet wired (no `tb_icu` crate, no `ProviderLane`
+//! implementation), so this module holds only the event's payload shape: the
+//! minimum the `Message` enum needs to be multi-provider.
 
 /// A skeleton event from the Icu provider: the payload [`Message::Icu`]
-/// carries. The fields are the minimum an Icu webhook delivery is expected to
-/// name (the activity it references and when it happened); the Icu provider
-/// itself is not wired, so no code consumes them yet.
+/// carries. The fields are the minimum an Icu webhook delivery names (the
+/// activity it references and when it happened).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct IcuEvent {
     /// The Icu delivery's id (the push subscription / delivery id), when

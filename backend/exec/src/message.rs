@@ -46,17 +46,17 @@ use crate::icu::IcuEvent;
 
 /// The one message the per-user executor consumes: a unified wrapper over the
 /// message sources (spec §4.2) — the user's API-write channel plus the
-/// provider event queues. The provider variants are per-provider (ticket
-/// #762): `Strava` carries a `tb_strava` event, `Icu` carries the Icu
-/// provider's event (a skeleton — the Icu provider is not yet wired).
+/// provider event queues. The provider variants are per-provider: `Strava`
+/// carries a `tb_strava` event, `Icu` carries the Icu provider's event (a
+/// skeleton — the Icu provider is not yet wired).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Message {
     /// An in-memory write from the user's API channel.
     ApiWrite(ApiWrite),
     /// An event read from the user's `strava_events` queue.
     Strava(Event),
-    /// An event from the Icu provider's queue (skeleton — the Icu provider is
-    /// not yet wired, ticket #762).
+    /// An event from the Icu provider's queue (a skeleton — the Icu provider
+    /// is not yet wired).
     Icu(IcuEvent),
 }
 

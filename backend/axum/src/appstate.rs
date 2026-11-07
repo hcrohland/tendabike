@@ -6,10 +6,10 @@
 //! app's service API as `Arc<dyn ServiceApi>` (the generic ops — reads,
 //! writes, the hydration write, the stream subscription, the admin stats
 //! read) and the provider-specific surface as `Arc<dyn ProviderService>`
-//! (the direct ops — OAuth, webhook, sync, rescan, deauthorize, etc.,
-//! ticket #762). The concrete adapter (the `tb_exec::Registry` over the
-//! database pool) is built at the composition root; the web layer names the
-//! traits, never a seam type.
+//! (the direct ops — OAuth, webhook, sync, rescan, deauthorize, etc.). The
+//! concrete adapter (the `tb_exec::Registry` over the database pool) is
+//! built at the composition root; the web layer names the traits, never a
+//! seam type.
 
 use std::sync::Arc;
 

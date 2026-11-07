@@ -56,9 +56,8 @@ use crate::ExecutorStatus;
 /// generic channel ops (`read`, `write`, `hydrate_gear`, `subscribe`,
 /// `all_stats`). Presentation layers depend on this trait, not the concrete
 /// [`crate::Registry`]. The provider-specific ops live in
-/// [`ProviderService`] (ticket #762) — a second provider implements
-/// `ProviderService` with its own ops while the generic `ServiceApi` stays
-/// the same.
+/// [`ProviderService`] — a second provider implements `ProviderService` with
+/// its own ops while the generic `ServiceApi` stays the same.
 ///
 /// Every method that takes a `session` parameter threads the acting
 /// [`Session`] through the executor to the downstream domain functions it
@@ -103,10 +102,10 @@ pub trait ServiceApi: Send + Sync {
     async fn all_stats(&self, session: Box<dyn Session>) -> TbResult<Vec<UserStat>>;
 }
 
-/// The provider-specific service API (ticket #762): the eleven direct ops
-/// (spec #558 §5.2) that are provider-specific (OAuth, webhook, sync, rescan,
-/// deauthorize, etc.). A second provider implements this trait with its own
-/// ops; the generic [`ServiceApi`] stays the same.
+/// The provider-specific service API: the eleven direct ops (spec #558 §5.2)
+/// that are provider-specific (OAuth, webhook, sync, rescan, deauthorize,
+/// etc.). A second provider implements this trait with its own ops; the
+/// generic [`ServiceApi`] stays the same.
 ///
 /// The `Registry` implements both [`ServiceApi`] and [`ProviderService`];
 /// presentation layers hold `Arc<dyn ServiceApi>` for the generic ops and

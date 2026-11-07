@@ -146,7 +146,7 @@ pub fn next_action(pending_write: bool, queued_event: bool, active_streams: usiz
 
 /// One outcome of the biased select: which branch resolved, if any branch
 /// resolved with work. Crate-internal. Generic over the provider's event
-/// type (ticket #762) so the loop's select is provider-agnostic.
+/// type so the loop's select is provider-agnostic.
 pub(crate) enum Select<E> {
     /// An API request (write, read, hydration, admin stats) arrived on the
     /// channel.
@@ -301,8 +301,8 @@ where
     /// The frame push surface (the [`Registry`] in production).
     pusher: Box<dyn FramePusher>,
     /// The provider lane: the narrow seam the loop calls through to probe
-    /// and process the provider's event queue (ticket #762). The loop never
-    /// names a concrete provider.
+    /// and process the provider's event queue. The loop never names a
+    /// concrete provider.
     lane: P,
     /// The user's completed-provider-event channel (`broadcast`).
     events: broadcast::Sender<P::Event>,
@@ -618,9 +618,9 @@ where
             return Some(Probe::Error);
         }
     };
-    // The probe runs through the provider lane (ticket #762): the loop never
-    // names a concrete provider. A failed probe rolls back (the housekeeping
-    // rolled back, so the queue's state is unknown); a successful probe
+    // The probe runs through the provider lane: the loop never names a
+    // concrete provider. A failed probe rolls back (the housekeeping rolled
+    // back, so the queue's state is unknown); a successful probe
     // commits its housekeeping.
     let probe = ctx.lane.probe(user_id, &mut conn).await;
     let closed = match &probe {
@@ -1054,8 +1054,8 @@ where
 
     // The event is the user's own, so the owner is `user_id` and no shop
     // context applies (ADR-0011: the event lane passes the id directly). The
-    // work runs through the provider lane (ticket #762): the loop never names
-    // a concrete provider.
+    // work runs through the provider lane: the loop never names a concrete
+    // provider.
     match ctx.lane.process(ctx.user_id, &mut conn).await {
         Some(summary) => match conn.commit().await {
             Ok(()) => {
