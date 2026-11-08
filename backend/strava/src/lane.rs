@@ -24,8 +24,8 @@
 //! crate that owns those ops owns the lane. `probe` delegates to
 //! [`crate::event::get_event`] and `process` to [`crate::event::process`]. The
 //! lane is generic over the store type `S` (the provider's full store — the
-//! transaction's connection): `type Store = S`, so the loop's
-//! `TxnSource::Conn` ties to `S` and `probe`/`process` operate on it.
+//! transaction's connection): `type Store = S`, so the loop's transaction
+//! connection ties to `S` and `probe`/`process` operate on it.
 
 use std::marker::PhantomData;
 
@@ -40,11 +40,11 @@ use crate::event::{Event, QueueRead, get_event, process};
 /// [`ProviderLane`] too, and the loop works with it unchanged.
 ///
 /// Generic over the store type `S` (the provider's full store — the
-/// transaction's connection): `type Store = S`, so the loop's
-/// `TxnSource::Conn` ties to `S`. `S` is the connection the loop's
-/// `TxnSource` opens (`SqlxConn` in production, the test double in the
-/// suites), which is why the lane is generic over it rather than naming a
-/// concrete store.
+/// transaction's connection): `type Store = S`, so the loop's transaction
+/// connection ties to `S`. `S` is the connection the loop's transaction
+/// source opens (the Postgres connection in production, the test double in
+/// the suites), which is why the lane is generic over it rather than naming
+/// a concrete store.
 ///
 /// The marker-field impls (`Clone`/`Copy`/`Debug`/`Default`) are written by
 /// hand rather than derived: a derive would add an `S: Clone`/`S: Debug`
@@ -79,9 +79,10 @@ impl<S: StravaStore> Default for StravaLane<S> {
 
 // `StravaLane<S>` holds no `S` data (only a `PhantomData<S>` marker), so it is
 // safe to share across threads even when `S` is not `Sync` (a database
-// connection, like `SqlxConn`, is `Send` but not `Sync`). The auto-derived
-// `Sync` would require `S: Sync`; this sound `unsafe impl` provides the
-// unconditional `Sync` the `ProviderLane: Send + Sync` bound needs.
+// connection, like the Postgres one, is `Send` but not `Sync`). The
+// auto-derived `Sync` would require `S: Sync`; this sound `unsafe impl`
+// provides the unconditional `Sync` the `ProviderLane: Send + Sync` bound
+// needs.
 unsafe impl<S: StravaStore> Sync for StravaLane<S> {}
 
 impl<S: StravaStore> StravaLane<S> {

@@ -62,9 +62,9 @@ pub trait ProviderLane: Send + Sync {
     type Event: Clone + Send + Sync + std::fmt::Debug + 'static;
 
     /// The provider's full store: the transaction's connection the loop's
-    /// transaction source opens. The loop ties its `TxnSource::Conn` to this
-    /// type (`T::Conn = Self::Store`), so `probe` and `process` operate on
-    /// the loop's own transaction connection — the lane never names a
+    /// transaction source opens. The loop ties its transaction connection to
+    /// this type (`T::Conn = Self::Store`), so `probe` and `process` operate
+    /// on the loop's own transaction connection — the lane never names a
     /// concrete provider's store.
     type Store;
 
