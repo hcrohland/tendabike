@@ -46,7 +46,7 @@ async fn rescan(admin: AxumAdmin, State(state): State<AppState>) -> Result<Statu
     // spec §3/§6.4 carve-out): the service API's direct op runs the one
     // transaction (`Activity::rescan_all`), then stops every live executor
     // — open streams end, and each client's native reconnect + catch-up
-    // snapshot re-hydrates it (issue #446). The admin's acting session rides
+    // snapshot re-hydrates it. The admin's acting session rides
     // along (carried for the admin-verification `tb_strava` change).
     state.provider.rescan(Box::new(admin.session())).await?;
     Ok(StatusCode::NO_CONTENT)
@@ -107,8 +107,8 @@ async fn act_delete(
 
 /// `POST /api/activ/descend` — the raw CSV body. The write rides the
 /// user's executor (like every write), and the handler answers `200` with
-/// the match report `{good, bad}` (the spec §6.2 deviation recorded on
-/// issue #446): the report is an operation result, not `Summary` state —
+/// the match report `{good, bad}` (the spec §6.2 deviation): the report is
+/// an operation result, not `Summary` state —
 /// the matched activities' updated state arrives as the stream frame the
 /// executor publishes.
 async fn descend(

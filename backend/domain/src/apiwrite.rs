@@ -55,8 +55,7 @@
 //! - the one write whose result is an operation outcome the `Summary`
 //!   cannot carry is `ActivityDescend`: the CSV rows the domain matched and
 //!   skipped (the [`DescendReport`]) ride the HTTP response body — the
-//!   matched activities' state still rides the frame (the §6.2 deviation,
-//!   recorded on issue #446).
+//!   matched activities' state still rides the frame (the §6.2 deviation).
 
 use time::OffsetDateTime;
 
@@ -251,7 +250,7 @@ pub enum ApiWrite {
 /// domain matched and skipped (the [`DescendReport`]) are the handler's
 /// response body (`200 + {good, bad}`), not `Summary` state — the matched
 /// activities' updated state still rides the frame (the spec #446 §6.2
-/// deviation, recorded on issue #446).
+/// deviation).
 #[derive(Clone, Debug, PartialEq)]
 pub enum WriteOutcome {
     /// The write's `Summary` (every write except the descend).
@@ -293,7 +292,7 @@ impl WriteOutcome {
 /// update. The provider-side sync event is deliberately not part of this
 /// crate: the domain cannot depend on a provider driver (the dependency
 /// direction is `domain ← provider`), and the domain's store bound is `Store`,
-/// not a provider store. The cutover ticket (issue #457) enqueues a sync
+/// not a provider store. The cutover enqueues a sync
 /// `Event` on the user's channel for `UserOnboardingSync`.
 ///
 /// Returns the `Summary` of everything the operation touched (see the module

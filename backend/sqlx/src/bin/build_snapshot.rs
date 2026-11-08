@@ -1,7 +1,7 @@
 //! Rebuilds `backend/sqlx/src/prepopulated_data.rs` from the canonical
 //! workshop store.
 //!
-//! The fixture builder is re-based on a scratch Postgres DB (issue #647):
+//! The fixture builder is re-based on a scratch Postgres DB:
 //! the canonical workshop's domain-operation sequence runs against a
 //! `PostgresStore` (a `SqlxConn` over the scratch database), the rows are
 //! read back into `StoreSnapshot`, and serialized. Codegen requires a

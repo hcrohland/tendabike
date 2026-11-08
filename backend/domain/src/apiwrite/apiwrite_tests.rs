@@ -1,4 +1,4 @@
-//! The `exec` dispatch over a canned [`MockStore`] (issue #638).
+//! The `exec` dispatch over a canned [`MockStore`].
 //!
 //! Each test runs the real `exec` dispatch — the `Summary`/tombstone/guard
 //! computation the handlers rely on — over a [`MockStore`] whose methods

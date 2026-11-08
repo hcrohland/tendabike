@@ -1,4 +1,4 @@
-//! The `Attachment` entity tests over a canned [`MockStore`] (issue #645).
+//! The `Attachment` entity tests over a canned [`MockStore`].
 //!
 //! Each test runs the real attachment domain logic — the computing ops
 //! `attach_assembly` / `detach_assembly` / `dispose_assembly` /

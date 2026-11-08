@@ -43,7 +43,7 @@ impl ServiceId {
         }
 
         // delete service: it is reported as a None tombstone, so the
-        // client's merge drops its row (issue #462)
+        // client's merge drops its row
         service.usage.delete(store).await?;
         ServiceStore::service_delete(store, self).await?;
         summary.services.tombstone(service.key());
