@@ -2,14 +2,18 @@ use std::sync::{Arc, Mutex};
 
 use super::*;
 use crate::test_support::{
-    MockStravaConn, gear_json, part, queue, queue_error, requests, strava_session,
+    MockStravaDataStore, gear_json, part, queue, queue_error, requests, strava_session,
 };
 use tb_domain::MockSession;
 use tb_provider::MockDomainFacade;
 
-fn setup() -> (MockStravaConn, MockDomainFacade, MockSession) {
-    let store = MockStravaConn::new();
-    let facade = MockDomainFacade::new();
+fn setup() -> (
+    MockStravaDataStore,
+    MockDomainFacade<MockStravaDataStore>,
+    MockSession,
+) {
+    let store = MockStravaDataStore::new();
+    let facade = MockDomainFacade::<MockStravaDataStore>::new();
     let session = strava_session(UserId::from(1), 42.into());
     (store, facade, session)
 }
@@ -25,9 +29,9 @@ async fn into_partid_creates_bike() -> TbResult<()> {
     let created = Arc::new(Mutex::new(None));
     let created_rec = created.clone();
     facade
-        .expect_part_by_source::<MockStravaConn>()
+        .expect_part_by_source()
         .returning(|_s, _store| Ok(None));
-    facade.expect_create_part::<MockStravaConn>().returning(
+    facade.expect_create_part().returning(
         move |name, vendor, model, what, source, _p, _u, _store| {
             created_rec
                 .lock()
@@ -64,9 +68,9 @@ async fn into_partid_creates_shoes() -> TbResult<()> {
     let created = Arc::new(Mutex::new(None));
     let created_rec = created.clone();
     facade
-        .expect_part_by_source::<MockStravaConn>()
+        .expect_part_by_source()
         .returning(|_s, _store| Ok(None));
-    facade.expect_create_part::<MockStravaConn>().returning(
+    facade.expect_create_part().returning(
         move |name, vendor, model, what, source, _p, _u, _store| {
             created_rec
                 .lock()
@@ -107,18 +111,16 @@ async fn into_partid_reuses_existing() -> TbResult<()> {
     );
     let bike_source = bike.clone();
     let bike_create = bike.clone();
+    facade.expect_part_by_source().returning(move |_s, _store| {
+        let n = seen_rec.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if n < 2 {
+            Ok(None)
+        } else {
+            Ok(Some(bike_source.clone()))
+        }
+    });
     facade
-        .expect_part_by_source::<MockStravaConn>()
-        .returning(move |_s, _store| {
-            let n = seen_rec.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            if n < 2 {
-                Ok(None)
-            } else {
-                Ok(Some(bike_source.clone()))
-            }
-        });
-    facade
-        .expect_create_part::<MockStravaConn>()
+        .expect_create_part()
         .returning(move |_n, _v, _m, _w, _s, _p, _u, _store| Ok(bike_create.clone()));
     let first = into_partid("b1".to_string(), UserId::from(1), &facade, &mut store).await?;
     let second = into_partid("b1".to_string(), UserId::from(1), &facade, &mut store).await?;
@@ -133,7 +135,7 @@ async fn into_partid_propagates_error() {
     // The part is not imported and the Strava gear fetch fails: the error is
     // wrapped (`context("Couldn't map gear")`) and surfaced as `AnyFailure`.
     facade
-        .expect_part_by_source::<MockStravaConn>()
+        .expect_part_by_source()
         .returning(|_s, _store| Ok(None));
     queue_error("/gear/b1", Error::BadRequest("nope".into()));
     let res = into_partid("b1".to_string(), UserId::from(1), &facade, &mut store).await;
@@ -141,18 +143,18 @@ async fn into_partid_propagates_error() {
 }
 
 async fn seed_part(
-    store: &mut MockStravaConn,
-    facade: &mut MockDomainFacade,
+    store: &mut MockStravaDataStore,
+    facade: &mut MockDomainFacade<MockStravaDataStore>,
     source: &str,
 ) -> TbResult<PartId> {
     // A part carrying `source` is created: no existing part for the source,
     // the Strava gear fetch, then the create.
     queue(&format!("/gear/{source}"), &gear_json(source, Some(0)));
     facade
-        .expect_part_by_source::<MockStravaConn>()
+        .expect_part_by_source()
         .returning(|_s, _store| Ok(None));
     let src = source.to_string();
-    facade.expect_create_part::<MockStravaConn>().returning(
+    facade.expect_create_part().returning(
         move |_name, _vendor, _model, _what, _source, _purchase, _user, _store| {
             Ok(part(
                 PartId::from(1),
@@ -176,7 +178,7 @@ async fn gear_strava_url_bike() -> TbResult<()> {
     let (mut store, mut facade, session) = setup();
     let part_id = seed_part(&mut store, &mut facade, "b42").await?;
     facade
-        .expect_part::<MockStravaConn>()
+        .expect_part()
         .returning(move |_pid, _user, _store| Ok(sourced_part("b42", UserId::from(1))));
     let url = strava_url(i32::from(part_id), Box::new(session), &facade, &mut store).await?;
     assert_eq!(url, "https://strava.com/bikes/42");
@@ -188,7 +190,7 @@ async fn gear_strava_url_shoes() -> TbResult<()> {
     let (mut store, mut facade, session) = setup();
     let part_id = seed_part(&mut store, &mut facade, "g1").await?;
     facade
-        .expect_part::<MockStravaConn>()
+        .expect_part()
         .returning(move |_pid, _user, _store| Ok(sourced_part("g1", UserId::from(1))));
     let url = strava_url(i32::from(part_id), Box::new(session), &facade, &mut store).await?;
     assert_eq!(url, "https://www.strava.com/settings/gear");
@@ -200,7 +202,7 @@ async fn gear_strava_url_unknown_source() -> TbResult<()> {
     let (mut store, mut facade, session) = setup();
     let part_id = seed_part(&mut store, &mut facade, "x9").await?;
     facade
-        .expect_part::<MockStravaConn>()
+        .expect_part()
         .returning(move |_pid, _user, _store| Ok(sourced_part("x9", UserId::from(1))));
     let res = strava_url(i32::from(part_id), Box::new(session), &facade, &mut store).await;
     assert!(matches!(res, Err(Error::NotFound(_))));
@@ -211,11 +213,9 @@ async fn gear_strava_url_unknown_source() -> TbResult<()> {
 async fn gear_strava_url_missing_source() {
     let (mut store, mut facade, session) = setup();
     // A locally created part (no Strava source): `strava_url` is `NotFound`.
-    facade
-        .expect_part::<MockStravaConn>()
-        .returning(move |_pid, _user, _store| {
-            Ok(part(PartId::from(1), UserId::from(1), 1.into(), None))
-        });
+    facade.expect_part().returning(move |_pid, _user, _store| {
+        Ok(part(PartId::from(1), UserId::from(1), 1.into(), None))
+    });
     let res = strava_url(1, Box::new(session), &facade, &mut store).await;
     assert!(matches!(res, Err(Error::NotFound(_))));
 }
@@ -227,7 +227,7 @@ async fn gear_strava_url_forbidden_other_user() -> TbResult<()> {
     // The part is owned by user 1; a request from user 2 (no shop) is
     // `Forbidden` by the ownership check.
     facade
-        .expect_part::<MockStravaConn>()
+        .expect_part()
         .returning(move |_pid, _user, _store| Err(Error::Forbidden("not your part".to_string())));
     let other = strava_session(UserId::from(2), 43.into());
     let res = strava_url(i32::from(part_id), Box::new(other), &facade, &mut store).await;

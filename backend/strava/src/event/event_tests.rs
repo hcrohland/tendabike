@@ -3,15 +3,19 @@ use std::sync::{Arc, Mutex};
 use super::*;
 use crate::event::{AspectType, Event, ObjectType};
 use crate::test_support::{
-    MockStravaConn, activity_json, queue, queue_error, strava_admin_session, strava_session,
+    MockStravaDataStore, activity_json, queue, queue_error, strava_admin_session, strava_session,
     strava_user,
 };
 use tb_domain::MockSession;
 use tb_provider::MockDomainFacade;
 
-fn setup() -> (MockStravaConn, MockDomainFacade, MockSession) {
-    let store = MockStravaConn::new();
-    let facade = MockDomainFacade::new();
+fn setup() -> (
+    MockStravaDataStore,
+    MockDomainFacade<MockStravaDataStore>,
+    MockSession,
+) {
+    let store = MockStravaDataStore::new();
+    let facade = MockDomainFacade::<MockStravaDataStore>::new();
     let session = strava_session(UserId::from(1), 42.into());
     (store, facade, session)
 }
@@ -70,7 +74,7 @@ fn event_with_id(
 
 /// Canned the `get_event` read of a single queued event: the event is both the
 /// "next" event and the only "later" event for its object.
-fn queue_event(store: &mut MockStravaConn, event: Event) {
+fn queue_event(store: &mut MockStravaDataStore, event: Event) {
     let next = event.clone();
     let later = event.clone();
     store
@@ -334,7 +338,7 @@ async fn process_activity_create_imports() -> TbResult<()> {
     queue("/activities/10", &activity_json(10, "Ride", None));
     // The facade's upsert returns a summary with the activity.
     facade
-        .expect_upsert_activity::<MockStravaConn>()
+        .expect_upsert_activity()
         .returning(move |act, _user, _store| {
             let mut summary = Summary::default();
             summary.activities.upsert(act);
@@ -371,7 +375,7 @@ async fn process_activity_delete_missing_ignores() -> TbResult<()> {
     );
     // A delete for a missing activity is ignored (the event is consumed).
     facade
-        .expect_delete_activity::<MockStravaConn>()
+        .expect_delete_activity()
         .returning(|_id, _user, _store| Err(Error::NotFound("".to_string())));
     store.expect_strava_event_delete().returning(|_id| Ok(()));
     let summary = process(UserId::from(1), &facade, &mut store).await?;
@@ -531,7 +535,7 @@ async fn process_sync_imports_activities() -> TbResult<()> {
     queue("/activities/10", &activity_json(10, "Ride", None));
     // The facade's upsert returns a summary with the activity.
     facade
-        .expect_upsert_activity::<MockStravaConn>()
+        .expect_upsert_activity()
         .returning(move |act, _user, _store| {
             let mut summary = Summary::default();
             summary.activities.upsert(act);
@@ -580,14 +584,14 @@ async fn process_sync_bad_activity_skips_and_advances_cursor() -> TbResult<()> {
     // The good activity (10) is new (upsert succeeds); the bad activity
     // (11, gear g11) fails its gear fetch and is skipped.
     facade
-        .expect_upsert_activity::<MockStravaConn>()
+        .expect_upsert_activity()
         .returning(move |act, _user, _store| {
             let mut summary = Summary::default();
             summary.activities.upsert(act);
             Ok(summary)
         });
     facade
-        .expect_part_by_source::<MockStravaConn>()
+        .expect_part_by_source()
         .returning(|_s, _store| Ok(None));
     let cursor = Arc::new(Mutex::new(0));
     let cursor_rec = cursor.clone();

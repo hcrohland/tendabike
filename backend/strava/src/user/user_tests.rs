@@ -3,15 +3,19 @@ use std::sync::{Arc, Mutex};
 use super::*;
 use crate::event::{AspectType, Event, ObjectType};
 use crate::test_support::{
-    MockStravaConn, deauthorizes, gear_json, queue, strava_admin_session, strava_session,
+    MockStravaDataStore, deauthorizes, gear_json, queue, strava_admin_session, strava_session,
     strava_user, user,
 };
 use tb_domain::MockSession;
 use tb_provider::MockDomainFacade;
 
-fn setup() -> (MockStravaConn, MockDomainFacade, MockSession) {
-    let store = MockStravaConn::new();
-    let facade = MockDomainFacade::new();
+fn setup() -> (
+    MockStravaDataStore,
+    MockDomainFacade<MockStravaDataStore>,
+    MockSession,
+) {
+    let store = MockStravaDataStore::new();
+    let facade = MockDomainFacade::<MockStravaDataStore>::new();
     let session = strava_session(UserId::from(1), 42.into());
     (store, facade, session)
 }
@@ -28,15 +32,15 @@ async fn upsert_creates_new_user() -> TbResult<()> {
     store
         .expect_stravauser_get_by_stravaid()
         .returning(|_id| Ok(None));
-    facade.expect_create_user::<MockStravaConn>().returning(
-        move |firstname, lastname, _avatar, _store| {
+    facade
+        .expect_create_user()
+        .returning(move |firstname, lastname, _avatar, _store| {
             created_user_rec
                 .lock()
                 .unwrap()
                 .replace((firstname.to_string(), lastname.to_string()));
             Ok(UserId::from(1))
-        },
-    );
+        });
     store.expect_stravauser_create().returning(move |su| {
         created_strava_rec.lock().unwrap().replace(su.clone());
         Ok(su)
@@ -83,12 +87,12 @@ async fn upsert_updates_existing_user() -> TbResult<()> {
     store
         .expect_stravauser_get_by_stravaid()
         .returning(|_id| Ok(Some(strava_user(UserId::from(1), 42, true))));
-    facade.expect_update_user::<MockStravaConn>().returning(
-        move |_uid, firstname, _lastname, _avatar, _store| {
+    facade
+        .expect_update_user()
+        .returning(move |_uid, firstname, _lastname, _avatar, _store| {
             *updated_name_rec.lock().unwrap() = Some(firstname.to_string());
             Ok(UserId::from(1))
-        },
-    );
+        });
     store
         .expect_stravauser_update_token()
         .returning(move |_id, refresh| {
@@ -125,7 +129,7 @@ async fn upsert_without_refresh_is_disabled() -> TbResult<()> {
         .expect_stravauser_get_by_stravaid()
         .returning(|_id| Ok(None));
     facade
-        .expect_create_user::<MockStravaConn>()
+        .expect_create_user()
         .returning(|_f, _l, _a, _s| Ok(UserId::from(1)));
     store.expect_stravauser_create().returning(Ok);
     let user =
@@ -329,12 +333,10 @@ async fn user_delete_removes_everything() -> TbResult<()> {
     // The domain cascade is handled by the facade.
     let user_deleted = Arc::new(Mutex::new(0));
     let user_deleted_rec = user_deleted.clone();
-    facade
-        .expect_delete_user::<MockStravaConn>()
-        .returning(move |_user, _store| {
-            *user_deleted_rec.lock().unwrap() = 1;
-            Ok(())
-        });
+    facade.expect_delete_user().returning(move |_user, _store| {
+        *user_deleted_rec.lock().unwrap() = 1;
+        Ok(())
+    });
     store
         .strava_event_create(Event {
             owner_id: 42.into(),
@@ -396,7 +398,7 @@ async fn stats_include_event_counts() -> TbResult<()> {
         ])
     });
     facade
-        .expect_get_stat::<MockStravaConn>()
+        .expect_get_stat()
         .returning(move |uid, _store| Ok(Stat::new(user(*uid))));
     store
         .expect_strava_events_get_count_for_user()
@@ -446,9 +448,9 @@ async fn update_gear_imports_bikes_and_shoes() -> TbResult<()> {
     let whats = Arc::new(Mutex::new(Vec::new()));
     let whats_rec = whats.clone();
     facade
-        .expect_part_by_source::<MockStravaConn>()
+        .expect_part_by_source()
         .returning(|_s, _store| Ok(None));
-    facade.expect_create_part::<MockStravaConn>().returning(
+    facade.expect_create_part().returning(
         move |_name, _vendor, _model, what, _source, _purchase, _user, _store| {
             whats_rec.lock().unwrap().push(what);
             let id = next_id_rec.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;

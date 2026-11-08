@@ -15,6 +15,7 @@ use tb_domain::{
     MockSession,
     test_support::{mock_session, mock_session_admin},
 };
+use time::OffsetDateTime;
 
 use crate::*;
 
@@ -166,6 +167,57 @@ pub fn strava_user(tbid: UserId, stravaid: i32, enabled: bool) -> StravaUser {
         id: stravaid.into(),
         tendabike_id: tbid,
         refresh_token: enabled.then(|| RefreshToken::new("test-token".to_string())),
+    }
+}
+
+/// A canned [`Part`] for tests.
+pub fn part(id: PartId, owner: UserId, what: PartTypeId, source: Option<String>) -> Part {
+    let now = OffsetDateTime::UNIX_EPOCH;
+    Part {
+        id,
+        owner,
+        what,
+        name: "Test Part".to_string(),
+        vendor: "Test Vendor".to_string(),
+        model: "Test Model".to_string(),
+        purchase: now,
+        last_used: now,
+        disposed_at: None,
+        usage: UsageId::default(),
+        source,
+        shop: None,
+    }
+}
+
+/// A canned [`Activity`] with the given id and owner.
+pub fn activity(id: ActivityId, user: UserId) -> Activity {
+    Activity {
+        id,
+        user_id: user,
+        what: ActTypeId::from(1),
+        name: "Test Ride".to_string(),
+        start: OffsetDateTime::UNIX_EPOCH,
+        duration: 3600,
+        time: None,
+        distance: Some(25000),
+        climb: Some(300),
+        descend: None,
+        energy: None,
+        gear: None,
+        device_name: None,
+        external_id: None,
+    }
+}
+
+/// A canned [`User`] with the given id.
+pub fn user(id: UserId) -> User {
+    User {
+        id,
+        name: "Test User".to_string(),
+        firstname: "Test".to_string(),
+        avatar: None,
+        is_admin: false,
+        onboarding_status: OnboardingStatus::Completed,
     }
 }
 

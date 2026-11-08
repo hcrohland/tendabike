@@ -2,15 +2,19 @@ use std::sync::{Arc, Mutex};
 
 use super::*;
 use crate::test_support::{
-    MockStravaConn, activity, activity_json, gear_json, part, queue, queue_error, requests,
+    MockStravaDataStore, activity, activity_json, gear_json, part, queue, queue_error, requests,
     strava_session,
 };
 use tb_domain::MockSession;
 use tb_provider::MockDomainFacade;
 
-fn setup() -> (MockStravaConn, MockDomainFacade, MockSession) {
-    let store = MockStravaConn::new();
-    let facade = MockDomainFacade::new();
+fn setup() -> (
+    MockStravaDataStore,
+    MockDomainFacade<MockStravaDataStore>,
+    MockSession,
+) {
+    let store = MockStravaDataStore::new();
+    let facade = MockDomainFacade::<MockStravaDataStore>::new();
     let session = strava_session(UserId::from(1), 42.into());
     (store, facade, session)
 }
@@ -91,9 +95,9 @@ async fn into_activity_creates_missing_gear() -> TbResult<()> {
     let created = Arc::new(Mutex::new(None));
     let created_rec = created.clone();
     facade
-        .expect_part_by_source::<MockStravaConn>()
+        .expect_part_by_source()
         .returning(|_s, _store| Ok(None));
-    facade.expect_create_part::<MockStravaConn>().returning(
+    facade.expect_create_part().returning(
         move |name, vendor, model, what, source, _p, _u, _store| {
             created_rec
                 .lock()
@@ -137,18 +141,16 @@ async fn into_activity_reuses_existing_gear() -> TbResult<()> {
     );
     let bike_source = bike.clone();
     let bike_create = bike.clone();
+    facade.expect_part_by_source().returning(move |_s, _store| {
+        let n = seen_rec.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if n < 2 {
+            Ok(None)
+        } else {
+            Ok(Some(bike_source.clone()))
+        }
+    });
     facade
-        .expect_part_by_source::<MockStravaConn>()
-        .returning(move |_s, _store| {
-            let n = seen_rec.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            if n < 2 {
-                Ok(None)
-            } else {
-                Ok(Some(bike_source.clone()))
-            }
-        });
-    facade
-        .expect_create_part::<MockStravaConn>()
+        .expect_create_part()
         .returning(move |_n, _v, _m, _w, _s, _p, _u, _store| Ok(bike_create.clone()));
     let first = strava_activity(Some("b1"))
         .into_activity(UserId::from(1), &facade, &mut store)
@@ -171,7 +173,7 @@ async fn upsert_activity_stores_new() -> TbResult<()> {
     queue("/activities/10", &activity_json(10, "Ride", None));
     // A new activity: the facade's upsert returns a summary with the activity.
     facade
-        .expect_upsert_activity::<MockStravaConn>()
+        .expect_upsert_activity()
         .returning(move |act, _user, _store| {
             let mut summary = Summary::default();
             summary.activities.upsert(act);
@@ -189,7 +191,7 @@ async fn upsert_activity_updates_existing() -> TbResult<()> {
     queue("/activities/10", &activity_json(10, "Ride", None));
     // The facade's upsert returns a summary with the activity (both calls).
     facade
-        .expect_upsert_activity::<MockStravaConn>()
+        .expect_upsert_activity()
         .times(2)
         .returning(move |act, _user, _store| {
             let mut summary = Summary::default();
@@ -221,7 +223,7 @@ async fn activity_strava_url() -> TbResult<()> {
     let (mut store, mut facade, session) = setup();
     // The facade's read returns the activity (the ownership check passes).
     facade
-        .expect_read_activity::<MockStravaConn>()
+        .expect_read_activity()
         .returning(move |_id, _user, _store| Ok(activity(activity_id(10), UserId::from(1))));
     let url = strava_url(activity_id(10), Box::new(session), &facade, &mut store).await?;
     assert_eq!(url, "https://strava.com/activities/10");
@@ -233,7 +235,7 @@ async fn activity_strava_url_missing() {
     let (mut store, mut facade, session) = setup();
     // The activity does not exist: the facade's read is `NotFound`.
     facade
-        .expect_read_activity::<MockStravaConn>()
+        .expect_read_activity()
         .returning(|_id, _user, _store| Err(Error::NotFound("".to_string())));
     let res = strava_url(activity_id(99), Box::new(session), &facade, &mut store).await;
     assert!(matches!(res, Err(Error::NotFound(_))));
@@ -244,7 +246,7 @@ async fn delete_activity_removes() -> TbResult<()> {
     let (mut store, mut facade, _) = setup();
     // The facade's delete returns a summary with the activity tombstoned.
     facade
-        .expect_delete_activity::<MockStravaConn>()
+        .expect_delete_activity()
         .returning(move |id, _user, _store| {
             let mut summary = Summary::default();
             summary.activities.tombstone(id);
@@ -263,7 +265,7 @@ async fn delete_activity_missing() {
     let (mut store, mut facade, _) = setup();
     // The activity does not exist: the facade's delete is `NotFound`.
     facade
-        .expect_delete_activity::<MockStravaConn>()
+        .expect_delete_activity()
         .returning(|_id, _user, _store| Err(Error::NotFound("".to_string())));
     let res = delete_activity(42, UserId::from(1), &facade, &mut store).await;
     assert!(matches!(res, Err(Error::NotFound(_))));
@@ -274,7 +276,7 @@ async fn delete_activity_forbidden_for_other_user() -> TbResult<()> {
     let (mut store, mut facade, _) = setup();
     // The delete from user 2 is `Forbidden` by the ownership check.
     facade
-        .expect_delete_activity::<MockStravaConn>()
+        .expect_delete_activity()
         .returning(|_id, _user, _store| Err(Error::Forbidden("not your activity".to_string())));
     let res = delete_activity(10, UserId::from(2), &facade, &mut store).await;
     assert!(matches!(res, Err(Error::Forbidden(_))));

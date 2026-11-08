@@ -27,11 +27,11 @@ use tb_domain::{
 /// [`MockDomainFacade`]: crate::test_support::MockDomainFacade
 #[cfg_attr(any(test, feature = "test-support"), mockall::automock)]
 #[async_trait::async_trait]
-pub trait DomainFacade: Send + Sync {
+pub trait DomainFacade<C: Send + Sync>: Send + Sync {
     // ── Activity ─────────────────────────────────────────────────────────
     /// Upsert the activity and register its usage (the domain's
     /// `Activity::upsert`).
-    async fn upsert_activity<C: Store + 'static>(
+    async fn upsert_activity(
         &self,
         activity: Activity,
         user: Box<dyn Session>,
@@ -40,7 +40,7 @@ pub trait DomainFacade: Send + Sync {
 
     /// Read the activity (the domain's `ActivityId::read` — the ownership
     /// check is the read).
-    async fn read_activity<C: Store + 'static>(
+    async fn read_activity(
         &self,
         id: &ActivityId,
         user: Box<dyn Session>,
@@ -49,7 +49,7 @@ pub trait DomainFacade: Send + Sync {
 
     /// Delete the activity and unregister its usage (the domain's
     /// `ActivityId::delete`).
-    async fn delete_activity<C: Store + 'static>(
+    async fn delete_activity(
         &self,
         id: ActivityId,
         user: Box<dyn Session>,
@@ -58,7 +58,7 @@ pub trait DomainFacade: Send + Sync {
 
     // ── Part ─────────────────────────────────────────────────────────────
     /// Create a part (the domain's `Part::create`).
-    async fn create_part<C: Store + 'static>(
+    async fn create_part(
         &self,
         name: String,
         vendor: String,
@@ -72,24 +72,15 @@ pub trait DomainFacade: Send + Sync {
 
     /// Look up the part carrying the given source (the domain's
     /// `Part::by_source`).
-    async fn part_by_source<C: Store + 'static>(
-        &self,
-        source: &str,
-        store: &mut C,
-    ) -> TbResult<Option<Part>>;
+    async fn part_by_source(&self, source: &str, store: &mut C) -> TbResult<Option<Part>>;
 
     /// Read the part (the domain's `PartId::part` — the ownership check is
     /// the read).
-    async fn part<C: Store + 'static>(
-        &self,
-        id: PartId,
-        user: Box<dyn Session>,
-        store: &mut C,
-    ) -> TbResult<Part>;
+    async fn part(&self, id: PartId, user: Box<dyn Session>, store: &mut C) -> TbResult<Part>;
 
     // ── User ─────────────────────────────────────────────────────────────
     /// Create a user (the domain's `UserId::create`).
-    async fn create_user<C: Store + 'static>(
+    async fn create_user(
         &self,
         firstname: &str,
         lastname: &str,
@@ -98,7 +89,7 @@ pub trait DomainFacade: Send + Sync {
     ) -> TbResult<UserId>;
 
     /// Update a user (the domain's `UserId::update`).
-    async fn update_user<C: Store + 'static>(
+    async fn update_user(
         &self,
         id: &UserId,
         firstname: &str,
@@ -108,11 +99,11 @@ pub trait DomainFacade: Send + Sync {
     ) -> TbResult<UserId>;
 
     /// Read the user's stat (the domain's `UserId::get_stat`).
-    async fn get_stat<C: Store + 'static>(&self, id: &UserId, store: &mut C) -> TbResult<Stat>;
+    async fn get_stat(&self, id: &UserId, store: &mut C) -> TbResult<Stat>;
 
     /// Delete the user plus everything they own (the domain's
     /// `UserId::delete`).
-    async fn delete_user<C: Store + 'static>(&self, id: &UserId, store: &mut C) -> TbResult<()>;
+    async fn delete_user(&self, id: &UserId, store: &mut C) -> TbResult<()>;
 }
 
 /// The concrete [`DomainFacade`]: a stateless unit struct that forwards each
@@ -121,8 +112,8 @@ pub trait DomainFacade: Send + Sync {
 pub struct DomainFacadeImpl;
 
 #[async_trait::async_trait]
-impl DomainFacade for DomainFacadeImpl {
-    async fn upsert_activity<C: Store + 'static>(
+impl<C: Store + Sync + 'static> DomainFacade<C> for DomainFacadeImpl {
+    async fn upsert_activity(
         &self,
         activity: Activity,
         user: Box<dyn Session>,
@@ -131,7 +122,7 @@ impl DomainFacade for DomainFacadeImpl {
         activity.upsert(&*user, store).await
     }
 
-    async fn read_activity<C: Store + 'static>(
+    async fn read_activity(
         &self,
         id: &ActivityId,
         user: Box<dyn Session>,
@@ -140,7 +131,7 @@ impl DomainFacade for DomainFacadeImpl {
         id.read(&*user, store).await
     }
 
-    async fn delete_activity<C: Store + 'static>(
+    async fn delete_activity(
         &self,
         id: ActivityId,
         user: Box<dyn Session>,
@@ -149,7 +140,7 @@ impl DomainFacade for DomainFacadeImpl {
         id.delete(&*user, store).await
     }
 
-    async fn create_part<C: Store + 'static>(
+    async fn create_part(
         &self,
         name: String,
         vendor: String,
@@ -163,24 +154,15 @@ impl DomainFacade for DomainFacadeImpl {
         Part::create(name, vendor, model, what, source, purchase, &*user, store).await
     }
 
-    async fn part_by_source<C: Store + 'static>(
-        &self,
-        source: &str,
-        store: &mut C,
-    ) -> TbResult<Option<Part>> {
+    async fn part_by_source(&self, source: &str, store: &mut C) -> TbResult<Option<Part>> {
         Part::by_source(source, store).await
     }
 
-    async fn part<C: Store + 'static>(
-        &self,
-        id: PartId,
-        user: Box<dyn Session>,
-        store: &mut C,
-    ) -> TbResult<Part> {
+    async fn part(&self, id: PartId, user: Box<dyn Session>, store: &mut C) -> TbResult<Part> {
         id.part(&*user, store).await
     }
 
-    async fn create_user<C: Store + 'static>(
+    async fn create_user(
         &self,
         firstname: &str,
         lastname: &str,
@@ -190,7 +172,7 @@ impl DomainFacade for DomainFacadeImpl {
         UserId::create(firstname, lastname, avatar, store).await
     }
 
-    async fn update_user<C: Store + 'static>(
+    async fn update_user(
         &self,
         id: &UserId,
         firstname: &str,
@@ -201,11 +183,11 @@ impl DomainFacade for DomainFacadeImpl {
         id.update(firstname, lastname, avatar, store).await
     }
 
-    async fn get_stat<C: Store + 'static>(&self, id: &UserId, store: &mut C) -> TbResult<Stat> {
+    async fn get_stat(&self, id: &UserId, store: &mut C) -> TbResult<Stat> {
         id.get_stat(store).await
     }
 
-    async fn delete_user<C: Store + 'static>(&self, id: &UserId, store: &mut C) -> TbResult<()> {
+    async fn delete_user(&self, id: &UserId, store: &mut C) -> TbResult<()> {
         id.delete(store).await
     }
 }
@@ -253,7 +235,7 @@ mod tests {
         let mut store = MockStore::new();
         store.expect_partid_get_by_source().returning(|_s| Ok(None));
         let facade = DomainFacadeImpl;
-        let part = facade.part_by_source::<MockStore>("b1", &mut store).await?;
+        let part = facade.part_by_source("b1", &mut store).await?;
         assert!(part.is_none());
         Ok(())
     }
@@ -266,7 +248,7 @@ mod tests {
             .returning(|_f, _l, _a| Ok(user(UserId::from(42))));
         let facade = DomainFacadeImpl;
         let id = facade
-            .create_user::<MockStore>("first", "last", &None, &mut store)
+            .create_user("first", "last", &None, &mut store)
             .await?;
         assert_eq!(id, UserId::from(42));
         Ok(())
@@ -283,22 +265,22 @@ mod tests {
         let facade = DomainFacadeImpl;
         let session: Box<dyn Session> = Box::new(mock_session(UserId::from(1)));
         let act = facade
-            .read_activity::<MockStore>(&ActivityId::from("strava:1"), session, &mut store)
+            .read_activity(&ActivityId::from("strava:1"), session, &mut store)
             .await?;
         assert_eq!(act.id, ActivityId::from("strava:1"));
         Ok(())
     }
 
     /// The `#[automock]` witness is the seam a provider test mocks: set an
-    /// expectation with the store type as a turbofish and the canned outcome
-    /// is served without touching the domain.
+    /// expectation and the canned outcome is served without touching the
+    /// domain. The store type `C` is inferred from the argument.
     #[tokio::test]
     async fn mock_domain_facade_serves_canned_outcome() -> TbResult<()> {
         let mut mock = MockDomainFacade::new();
-        mock.expect_part_by_source::<MockStore>()
+        mock.expect_part_by_source()
             .returning(|_source, _store| Ok(None));
         let mut store = MockStore::new();
-        let part = mock.part_by_source::<MockStore>("b1", &mut store).await?;
+        let part = mock.part_by_source("b1", &mut store).await?;
         assert!(part.is_none());
         Ok(())
     }

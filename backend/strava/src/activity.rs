@@ -64,7 +64,7 @@ pub(crate) struct StravaActivity {
 
 impl StravaActivity {
     /// Converts a StravaActivity into a Activity struct which is used to create a new activity in the Tendabike API.
-    async fn into_activity<D: DomainFacade, S: StravaStore + 'static>(
+    async fn into_activity<D: DomainFacade<S>, S: StravaDataStore>(
         self,
         user_id: UserId,
         facade: &D,
@@ -158,7 +158,7 @@ impl StravaActivity {
     }
 
     /// Sends the activity to Tendabike API.
-    pub(crate) async fn send_to_tb<D: DomainFacade, S: StravaStore + 'static>(
+    pub(crate) async fn send_to_tb<D: DomainFacade<S>, S: StravaDataStore>(
         self,
         user_id: UserId,
         facade: &D,
@@ -172,7 +172,7 @@ impl StravaActivity {
 
 /// The Strava URL for a Strava activity: the read is the ownership check,
 /// and the URL is built from the raw (unprefixed) Strava id.
-pub async fn strava_url<D: DomainFacade, S: StravaStore + 'static>(
+pub async fn strava_url<D: DomainFacade<S>, S: StravaDataStore>(
     id: ActivityId,
     user: Box<dyn Session>,
     facade: &D,
@@ -183,7 +183,7 @@ pub async fn strava_url<D: DomainFacade, S: StravaStore + 'static>(
     Ok(format!("https://strava.com/activities/{raw}"))
 }
 
-pub async fn upsert_activity<D: DomainFacade, S: StravaStore + 'static>(
+pub async fn upsert_activity<D: DomainFacade<S>, S: StravaDataStore>(
     id: i64,
     user_id: UserId,
     facade: &D,
@@ -193,7 +193,7 @@ pub async fn upsert_activity<D: DomainFacade, S: StravaStore + 'static>(
     act.send_to_tb(user_id, facade, store).await
 }
 
-pub(crate) async fn delete_activity<D: DomainFacade, S: StravaStore + 'static>(
+pub(crate) async fn delete_activity<D: DomainFacade<S>, S: StravaDataStore>(
     act: i64,
     user_id: UserId,
     facade: &D,

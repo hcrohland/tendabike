@@ -109,7 +109,7 @@ impl StravaUser {
     /// # Returns
     ///
     /// An `TbResult` containing a `StravaUser` representing the upserted user.
-    pub async fn upsert<D: DomainFacade, S: StravaStore + 'static>(
+    pub async fn upsert<D: DomainFacade<S>, S: StravaDataStore>(
         id: StravaId,
         firstname: &str,
         lastname: &str,
@@ -153,7 +153,7 @@ impl StravaUser {
     /// Skips the Strava call silently when the rate limiter reports no
     /// budget: hydration is best-effort and must not be blocked by a
     /// non-essential API call.
-    pub async fn update_gear<D: DomainFacade, S: StravaStore + 'static>(
+    pub async fn update_gear<D: DomainFacade<S>, S: StravaDataStore>(
         user_id: UserId,
         facade: &D,
         store: &mut S,
@@ -192,7 +192,7 @@ impl StravaUser {
 /// event count and disabled flag. The [`UserStat`] type is provider-neutral
 /// (it lives in `tb_domain`, beside [`Stat`]), so a second provider's
 /// `all_stats` op returns the same type.
-pub async fn get_all_stats<D: DomainFacade, S: StravaStore + 'static>(
+pub async fn get_all_stats<D: DomainFacade<S>, S: StravaDataStore>(
     facade: &D,
     store: &mut S,
 ) -> TbResult<Vec<UserStat>> {
@@ -261,7 +261,7 @@ pub async fn strava_url(user_id: UserId, store: &mut impl StravaDataStore) -> Tb
 /// Delete a user: deauthorize them (admin-only) plus delete their rows.
 /// Admin-only — the acting `session` must be an admin; `tbid` is the target
 /// user.
-pub async fn user_delete<D: DomainFacade, S: StravaStore + 'static>(
+pub async fn user_delete<D: DomainFacade<S>, S: StravaDataStore>(
     session: &mut dyn Session,
     tbid: UserId,
     facade: &D,
