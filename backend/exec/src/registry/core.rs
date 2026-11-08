@@ -52,9 +52,9 @@ use log::debug;
 use tokio::sync::{Mutex, Notify, broadcast, watch};
 
 use tb_domain::{ShopId, Summary, TbResult, UserId};
+use tb_provider::ProviderLane;
 
 use crate::LoopContext;
-use crate::ProviderLane;
 use crate::TxnSource;
 use crate::message::RequestSender;
 use crate::{registry::FramePusher, request_channel};
@@ -596,10 +596,10 @@ mod tests {
     use std::time::Duration;
 
     use tb_domain::{NotificationId, ShopId, Summary, TbResult, UserId};
+    use tb_strava::StravaLane;
     use uuid::Uuid;
 
     use super::{Core, DeliveryContext, ExecutorStatus};
-    use crate::StravaLane;
     use crate::executor::executor_tests::{
         FakeSource, MockConn, RecordingPusher, non_empty_summary, notification_part_registered,
         part_owned_by, shop_owned_by, summary_owned_by, summary_with_notification,

@@ -40,13 +40,13 @@ use tb_domain::{
     ApiRead, ApiWrite, Error, ReadOutcome, Session, ShopId, Summary, TbResult, UserId, UserStat,
     WriteOutcome, exec,
 };
+use tb_provider::{Probe, ProviderLane};
 use tb_strava::event::insert_sync;
 use tb_strava::{StravaUser, get_all_stats};
 use tokio::sync::{broadcast, oneshot};
 
-use crate::lane::Probe;
 use crate::message::{Request, RequestReceiver};
-use crate::{DeliveryContext, FramePusher, ProviderLane, Txn, TxnSource};
+use crate::{DeliveryContext, FramePusher, Txn, TxnSource};
 
 /// The per-executor in-memory backoff for database failures (spec #446
 /// §4.6): exponential, capped at 30s, no `Stop` row (that is the Strava

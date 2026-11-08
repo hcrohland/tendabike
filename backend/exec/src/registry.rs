@@ -52,6 +52,7 @@ use tb_domain::{
     Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, Summary,
     TbResult, UserId, UserStat, WriteOutcome,
 };
+use tb_provider::ProviderLane;
 use tb_strava::{
     StravaUser, activity,
     client::StravaAthleteInfo,
@@ -61,7 +62,7 @@ use tb_strava::{
 
 use crate::api::{ProviderService, ServiceApi};
 use crate::message::Request;
-use crate::{ProviderLane, Txn, TxnSource};
+use crate::{Txn, TxnSource};
 
 mod core;
 

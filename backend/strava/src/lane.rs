@@ -18,24 +18,22 @@
 
 */
 
-//! The Strava provider lane: the [`ProviderLane`] impl for the Strava
-//! driver. Lives in `tb_exec` (not `tb_strava`) because the crate graph is
-//! `tb_domain` ← `tb_strava` ← `tb_exec` — `tb_strava` cannot depend on
-//! `tb_exec` (circular), so the lane that bridges the loop's [`ProviderLane`]
-//! seam to `tb_strava`'s `get_event`/`process` ops sits in the crate that
-//! depends on both. `probe` delegates to `tb_strava::event::get_event` and
-//! `process` to `tb_strava::event::process`. The lane is generic over the
-//! store type `S` (the provider's full store — the transaction's connection):
-//! `type Store = S`, so the loop's `TxnSource::Conn` ties to `S` and
-//! `probe`/`process` operate on it.
+//! The Strava provider lane: the [`ProviderLane`] impl for the Strava driver.
+//! Lives in `tb_strava` because the lane bridges the loop's [`ProviderLane`]
+//! seam (in `tb_provider`) to `tb_strava`'s `get_event`/`process` ops — the
+//! crate that owns those ops owns the lane. `probe` delegates to
+//! [`crate::event::get_event`] and `process` to [`crate::event::process`]. The
+//! lane is generic over the store type `S` (the provider's full store — the
+//! transaction's connection): `type Store = S`, so the loop's
+//! `TxnSource::Conn` ties to `S` and `probe`/`process` operate on it.
 
 use std::marker::PhantomData;
 
 use tb_domain::{Summary, UserId};
-use tb_strava::StravaStore;
-use tb_strava::event::{Event, QueueRead, get_event, process};
+use tb_provider::{Probe, ProviderLane};
 
-use crate::lane::{Probe, ProviderLane};
+use crate::StravaStore;
+use crate::event::{Event, QueueRead, get_event, process};
 
 /// The Strava provider lane: the [`ProviderLane`] impl for the Strava driver.
 /// The loop calls through it; a second provider (a new crate) implements
@@ -106,7 +104,7 @@ where
     /// Probe the Strava event queue (one transaction's housekeeping): read
     /// the next event, applying the queue's read-side rules (the rate-limit
     /// gate, the latest-per-object dedup). Delegates to
-    /// [`tb_strava::event::get_event`].
+    /// [`crate::event::get_event`].
     async fn probe(&self, user_id: UserId, store: &mut S) -> Probe<Self::Event> {
         match get_event(user_id, store).await {
             Ok(QueueRead::Event(event)) => Probe::Event(event),
@@ -118,7 +116,7 @@ where
 
     /// Process the user's next queued Strava event (the work transaction):
     /// read the queue again (the accepted double read) and handle the event.
-    /// Delegates to [`tb_strava::event::process`]. Returns the event's
+    /// Delegates to [`crate::event::process`]. Returns the event's
     /// [`Summary`] on success, or `None` on a DB failure.
     async fn process(&self, user_id: UserId, store: &mut S) -> Option<Summary> {
         process(user_id, store).await.ok()

@@ -54,8 +54,9 @@ use tb_domain::{
     ShopSubscription, Store, SubscriptionId, SubscriptionStatus, Summary, TbResult, Usage, UsageId,
     UsageStore, User, UserId, UserStore, WriteOutcome,
 };
+use tb_provider::Probe;
 use tb_strava::event::Event;
-use tb_strava::{StravaDataStore, StravaId, StravaStore, StravaUser};
+use tb_strava::{StravaDataStore, StravaId, StravaLane, StravaStore, StravaUser};
 use time::OffsetDateTime;
 use tokio::sync::{broadcast, oneshot};
 use uuid::Uuid;
@@ -64,11 +65,10 @@ use super::{
     DbBackoff, LoopContext, Select, next_action, run_request, select_message,
     sleep_or_take_request, stop_remaining,
 };
-use crate::lane::Probe;
 use crate::message::{Request, push_frame};
 use crate::{
-    Action, DeliveryContext, ExecutorStatus, FramePusher, Message, ProviderService, Registry,
-    StravaLane, Txn, TxnSource, request_channel,
+    Action, DeliveryContext, ExecutorStatus, FramePusher, Message, ProviderService, Registry, Txn,
+    TxnSource, request_channel,
 };
 
 // --- The `mock!` connection witness (issue #631) ---

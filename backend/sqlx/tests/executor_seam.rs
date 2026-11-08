@@ -81,11 +81,12 @@ use tb_domain::test_support::{
 use tb_domain::{ApiRead, ApiWrite, PartId, ReadOutcome, ShopId, Summary, UserId};
 use tb_exec::{
     DeliveryContext, DetachedBegin, ExecutorStatus, FramePusher, LoopContext, ProviderService,
-    Registry, Request, RequestReceiver, ServiceApi, StravaLane, request_channel,
+    Registry, Request, RequestReceiver, ServiceApi, request_channel,
 };
+use tb_provider::ProviderLane;
 use tb_sqlx::{DbPool, SNAPSHOT_JSON, SqlxConn};
 use tb_strava::{
-    StravaId,
+    StravaId, StravaLane,
     event::{Event, InEvent},
     test_support::{canned_strava, seed_token_cache},
 };
@@ -1265,7 +1266,7 @@ async fn delete_user_removes_the_rows() {
 async fn wait_for_status<S, P>(reg: &Registry<S, P>, user: UserId, want: ExecutorStatus)
 where
     S: tb_exec::TxnSource + Clone,
-    P: tb_exec::ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
 {
     let deadline = tokio::time::Instant::now() + TEST_TIMEOUT;
     loop {
