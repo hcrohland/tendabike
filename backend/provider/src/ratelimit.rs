@@ -70,6 +70,7 @@ pub struct WindowSpec {
 /// A per-provider rate limiter: one [`Window`] of state per [`WindowSpec`],
 /// plus the `was_limited` transition tracker.
 pub struct RateLimiter {
+    label: &'static str,
     windows: Vec<Window>,
     specs: Vec<WindowSpec>,
     was_limited: bool,
@@ -77,9 +78,12 @@ pub struct RateLimiter {
 
 impl RateLimiter {
     /// Create a new limiter with one window per spec.
-    pub fn new(specs: Vec<WindowSpec>) -> Self {
+    ///
+    /// `label` identifies the provider in WARN logs (e.g. `"strava"`).
+    pub fn new(label: &'static str, specs: Vec<WindowSpec>) -> Self {
         let windows = vec![Window::default(); specs.len()];
         Self {
+            label,
             windows,
             specs,
             was_limited: false,
@@ -109,17 +113,22 @@ impl RateLimiter {
     }
 
     /// The latest boundary of any exhausted window, or `None` if budget
-    /// remains (or no data yet).
-    ///
-    /// Emits a WARN log on transition into or out of the rate-limited state.
-    pub fn limited_until(&mut self) -> Option<i64> {
-        let until = self
-            .windows
+    /// remains (or no data yet). Pure: no logging, no mutation.
+    pub fn gate(&self) -> Option<i64> {
+        self.windows
             .iter()
             .zip(self.specs.iter())
             .filter(|(w, _)| w.is_exhausted())
             .map(|(_, spec)| spec.cadence.boundary())
-            .max();
+            .max()
+    }
+
+    /// The latest boundary of any exhausted window, or `None` if budget
+    /// remains (or no data yet).
+    ///
+    /// Emits a WARN log on transition into or out of the rate-limited state.
+    pub fn limited_until(&mut self) -> Option<i64> {
+        let until = self.gate();
 
         let is_limited = until.is_some();
         if is_limited && !self.was_limited {
@@ -130,7 +139,8 @@ impl RateLimiter {
                 .collect::<Vec<_>>()
                 .join(", ");
             log::warn!(
-                "Rate limit reached ({}); pausing until {}",
+                "{} rate limit reached ({}); pausing until {}",
+                self.label,
                 states,
                 until.unwrap_or(0),
             );
@@ -141,7 +151,7 @@ impl RateLimiter {
                 .map(|w| w.to_string())
                 .collect::<Vec<_>>()
                 .join(", ");
-            log::warn!("Rate limit cleared ({})", states);
+            log::warn!("{} rate limit cleared ({})", self.label, states);
         }
         self.was_limited = is_limited;
         until
@@ -179,27 +189,28 @@ pub fn next_midnight_utc() -> i64 {
 mod tests {
     use super::*;
 
-    /// The strava header mapping: 4 specs (overall 15min/daily, read 15min/daily).
-    fn strava_specs() -> Vec<WindowSpec> {
+    /// A generic 4-window header mapping: 2 header-pairs, each with a
+    /// 15-minute and a daily window.
+    fn test_specs() -> Vec<WindowSpec> {
         vec![
             WindowSpec {
-                limit_header: HeaderName::from_bytes(b"X-RateLimit-Limit").unwrap(),
-                usage_header: HeaderName::from_bytes(b"X-RateLimit-Usage").unwrap(),
+                limit_header: HeaderName::from_bytes(b"X-Limit").unwrap(),
+                usage_header: HeaderName::from_bytes(b"X-Usage").unwrap(),
                 cadence: Cadence::FifteenMin,
             },
             WindowSpec {
-                limit_header: HeaderName::from_bytes(b"X-RateLimit-Limit").unwrap(),
-                usage_header: HeaderName::from_bytes(b"X-RateLimit-Usage").unwrap(),
+                limit_header: HeaderName::from_bytes(b"X-Limit").unwrap(),
+                usage_header: HeaderName::from_bytes(b"X-Usage").unwrap(),
                 cadence: Cadence::Daily,
             },
             WindowSpec {
-                limit_header: HeaderName::from_bytes(b"X-ReadRateLimit-Limit").unwrap(),
-                usage_header: HeaderName::from_bytes(b"X-ReadRateLimit-Usage").unwrap(),
+                limit_header: HeaderName::from_bytes(b"X-Read-Limit").unwrap(),
+                usage_header: HeaderName::from_bytes(b"X-Read-Usage").unwrap(),
                 cadence: Cadence::FifteenMin,
             },
             WindowSpec {
-                limit_header: HeaderName::from_bytes(b"X-ReadRateLimit-Limit").unwrap(),
-                usage_header: HeaderName::from_bytes(b"X-ReadRateLimit-Usage").unwrap(),
+                limit_header: HeaderName::from_bytes(b"X-Read-Limit").unwrap(),
+                usage_header: HeaderName::from_bytes(b"X-Read-Usage").unwrap(),
                 cadence: Cadence::Daily,
             },
         ]
@@ -283,12 +294,12 @@ mod tests {
 
     #[test]
     fn update_from_headers_parses_all_four() {
-        let mut limiter = RateLimiter::new(strava_specs());
+        let mut limiter = RateLimiter::new("test", test_specs());
         let h = headers(&[
-            ("X-RateLimit-Limit", "200,2000"),
-            ("X-RateLimit-Usage", "150,1500"),
-            ("X-ReadRateLimit-Limit", "100,1000"),
-            ("X-ReadRateLimit-Usage", "80,800"),
+            ("X-Limit", "200,2000"),
+            ("X-Usage", "150,1500"),
+            ("X-Read-Limit", "100,1000"),
+            ("X-Read-Usage", "80,800"),
         ]);
         limiter.update_from_headers(&h);
         let w = limiter.windows();
@@ -300,18 +311,12 @@ mod tests {
 
     #[test]
     fn update_from_headers_missing_headers_keeps_previous() {
-        let mut limiter = RateLimiter::new(strava_specs());
+        let mut limiter = RateLimiter::new("test", test_specs());
         // First: populate overall windows.
-        let h = headers(&[
-            ("X-RateLimit-Limit", "200,2000"),
-            ("X-RateLimit-Usage", "150,1500"),
-        ]);
+        let h = headers(&[("X-Limit", "200,2000"), ("X-Usage", "150,1500")]);
         limiter.update_from_headers(&h);
         // Second: only read headers present; overall keeps its previous values.
-        let h2 = headers(&[
-            ("X-ReadRateLimit-Limit", "100,1000"),
-            ("X-ReadRateLimit-Usage", "80,800"),
-        ]);
+        let h2 = headers(&[("X-Read-Limit", "100,1000"), ("X-Read-Usage", "80,800")]);
         limiter.update_from_headers(&h2);
         let w = limiter.windows();
         assert_eq!(w[0], window(200, 150));
@@ -322,8 +327,8 @@ mod tests {
 
     #[test]
     fn update_from_headers_malformed_value_ignored() {
-        let mut limiter = RateLimiter::new(strava_specs());
-        let h = headers(&[("X-RateLimit-Limit", "not,a,number")]);
+        let mut limiter = RateLimiter::new("test", test_specs());
+        let h = headers(&[("X-Limit", "not,a,number")]);
         limiter.update_from_headers(&h);
         let w = limiter.windows();
         assert_eq!(w[0], Window::default());
@@ -332,11 +337,8 @@ mod tests {
 
     #[test]
     fn update_from_headers_empty_map_no_change() {
-        let mut limiter = RateLimiter::new(strava_specs());
-        let h = headers(&[
-            ("X-ReadRateLimit-Limit", "100,1000"),
-            ("X-ReadRateLimit-Usage", "42,420"),
-        ]);
+        let mut limiter = RateLimiter::new("test", test_specs());
+        let h = headers(&[("X-Read-Limit", "100,1000"), ("X-Read-Usage", "42,420")]);
         limiter.update_from_headers(&h);
         let h2 = HeaderMap::new();
         limiter.update_from_headers(&h2);
@@ -348,18 +350,18 @@ mod tests {
 
     #[test]
     fn limited_until_no_data_returns_none() {
-        let mut limiter = RateLimiter::new(strava_specs());
+        let mut limiter = RateLimiter::new("test", test_specs());
         assert_eq!(limiter.limited_until(), None);
     }
 
     #[test]
     fn limited_until_budget_available_returns_none() {
-        let mut limiter = RateLimiter::new(strava_specs());
+        let mut limiter = RateLimiter::new("test", test_specs());
         let h = headers(&[
-            ("X-RateLimit-Limit", "200,2000"),
-            ("X-RateLimit-Usage", "80,800"),
-            ("X-ReadRateLimit-Limit", "100,1000"),
-            ("X-ReadRateLimit-Usage", "50,500"),
+            ("X-Limit", "200,2000"),
+            ("X-Usage", "80,800"),
+            ("X-Read-Limit", "100,1000"),
+            ("X-Read-Usage", "50,500"),
         ]);
         limiter.update_from_headers(&h);
         assert_eq!(limiter.limited_until(), None);
@@ -367,12 +369,12 @@ mod tests {
 
     #[test]
     fn limited_until_read_15min_exhausted_returns_15min_boundary() {
-        let mut limiter = RateLimiter::new(strava_specs());
+        let mut limiter = RateLimiter::new("test", test_specs());
         let h = headers(&[
-            ("X-RateLimit-Limit", "200,2000"),
-            ("X-RateLimit-Usage", "150,800"),
-            ("X-ReadRateLimit-Limit", "100,1000"),
-            ("X-ReadRateLimit-Usage", "100,500"),
+            ("X-Limit", "200,2000"),
+            ("X-Usage", "150,800"),
+            ("X-Read-Limit", "100,1000"),
+            ("X-Read-Usage", "100,500"),
         ]);
         limiter.update_from_headers(&h);
         let until = limiter.limited_until().unwrap();
@@ -387,12 +389,12 @@ mod tests {
 
     #[test]
     fn limited_until_daily_exhausted_returns_midnight() {
-        let mut limiter = RateLimiter::new(strava_specs());
+        let mut limiter = RateLimiter::new("test", test_specs());
         let h = headers(&[
-            ("X-RateLimit-Limit", "200,2000"),
-            ("X-RateLimit-Usage", "80,1500"),
-            ("X-ReadRateLimit-Limit", "100,1000"),
-            ("X-ReadRateLimit-Usage", "50,1000"),
+            ("X-Limit", "200,2000"),
+            ("X-Usage", "80,1500"),
+            ("X-Read-Limit", "100,1000"),
+            ("X-Read-Usage", "50,1000"),
         ]);
         limiter.update_from_headers(&h);
         let until = limiter.limited_until().unwrap();
@@ -407,12 +409,12 @@ mod tests {
 
     #[test]
     fn limited_until_both_exhausted_returns_later() {
-        let mut limiter = RateLimiter::new(strava_specs());
+        let mut limiter = RateLimiter::new("test", test_specs());
         let h = headers(&[
-            ("X-RateLimit-Limit", "200,2000"),
-            ("X-RateLimit-Usage", "200,2000"),
-            ("X-ReadRateLimit-Limit", "100,1000"),
-            ("X-ReadRateLimit-Usage", "100,1000"),
+            ("X-Limit", "200,2000"),
+            ("X-Usage", "200,2000"),
+            ("X-Read-Limit", "100,1000"),
+            ("X-Read-Usage", "100,1000"),
         ]);
         limiter.update_from_headers(&h);
         let until = limiter.limited_until().unwrap();
@@ -422,12 +424,12 @@ mod tests {
 
     #[test]
     fn limited_until_overall_15min_exhausted() {
-        let mut limiter = RateLimiter::new(strava_specs());
+        let mut limiter = RateLimiter::new("test", test_specs());
         let h = headers(&[
-            ("X-RateLimit-Limit", "200,2000"),
-            ("X-RateLimit-Usage", "200,800"),
-            ("X-ReadRateLimit-Limit", "100,1000"),
-            ("X-ReadRateLimit-Usage", "50,500"),
+            ("X-Limit", "200,2000"),
+            ("X-Usage", "200,800"),
+            ("X-Read-Limit", "100,1000"),
+            ("X-Read-Usage", "50,500"),
         ]);
         limiter.update_from_headers(&h);
         assert!(limiter.limited_until().is_some());

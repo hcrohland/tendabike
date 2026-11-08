@@ -1,5 +1,5 @@
 //! Proactive Strava rate limiting: a thin shim over the shared
-//! [`tb_provider::RateLimiter`] kernel (spec #781, T6).
+//! [`tb_provider::RateLimiter`] kernel.
 //!
 //! The process-wide limiter is constructed with Strava's 4-window header
 //! mapping — the overall and read scopes, each a 15-minute and a daily window
@@ -50,7 +50,7 @@ fn strava_specs() -> Vec<WindowSpec> {
 
 /// The process-wide Strava rate limiter (shared across all executors).
 static RATE_LIMITER: std::sync::LazyLock<Mutex<RateLimiter>> =
-    std::sync::LazyLock::new(|| Mutex::new(RateLimiter::new(strava_specs())));
+    std::sync::LazyLock::new(|| Mutex::new(RateLimiter::new("strava", strava_specs())));
 
 // A per-thread override limiter, set by the test hooks
 // (`test_set_limited` / `test_set_not_limited`). When `Some`, `limited_until`
@@ -70,8 +70,7 @@ thread_local! {
 pub fn limited_until() -> Option<i64> {
     // Test seam: a per-thread override shadows the process-global limiter, so
     // parallel rate-limiter tests can't observe each other's state.
-    if let Some(until) = TEST_OVERRIDE.with(|o| o.borrow_mut().as_mut().map(|l| l.limited_until()))
-    {
+    if let Some(until) = TEST_OVERRIDE.with(|o| o.borrow().as_ref().map(|l| l.gate())) {
         return until;
     }
     let mut limiter = RATE_LIMITER.lock().unwrap();
@@ -121,7 +120,7 @@ fn limiter_from_headers(pairs: &[(&str, &str)]) -> RateLimiter {
         let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
         m.insert(name, http::HeaderValue::from_str(v).unwrap());
     }
-    let mut limiter = RateLimiter::new(strava_specs());
+    let mut limiter = RateLimiter::new("strava", strava_specs());
     limiter.update_from_headers(&m);
     limiter
 }
