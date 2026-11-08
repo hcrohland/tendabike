@@ -1,0 +1,22 @@
+[package]
+name = "tb_provider"
+version = "0.9.0"
+authors = ["Christoph Rohland <tendabike@rohland.net>"]
+edition = { workspace = true }
+
+[dependencies]
+tb_domain = { workspace = true }
+async-trait = { workspace = true }
+time = { workspace = true, features = ["serde"] }
+mockall = { workspace = true, optional = true }
+
+[features]
+test-support = ["dep:mockall"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+tb_domain = { workspace = true, features = ["test-support"] }
+mockall = { workspace = true }
+
+[lib]
+doctest = false
