@@ -1,22 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use super::*;
-use crate::test_support::{
-    MockStravaDataStore, gear_json, part, queue, queue_error, requests, strava_session,
-};
-use tb_domain::MockSession;
+use crate::test_support::{gear_json, part, queue, queue_error, requests, setup, strava_session};
 use tb_provider::MockDomainFacade;
-
-fn setup() -> (
-    MockStravaDataStore,
-    MockDomainFacade<MockStravaDataStore>,
-    MockSession,
-) {
-    let store = MockStravaDataStore::new();
-    let facade = MockDomainFacade::<MockStravaDataStore>::new();
-    let session = strava_session(UserId::from(1), 42.into());
-    (store, facade, session)
-}
 
 #[tokio::test]
 async fn into_partid_creates_bike() -> TbResult<()> {

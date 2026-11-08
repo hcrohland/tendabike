@@ -161,6 +161,21 @@ pub fn strava_admin_session(user: UserId, strava: StravaId) -> MockSession {
     mock_session_admin(user)
 }
 
+/// The standard test triple: a fresh `MockStravaDataStore`, a
+/// `MockDomainFacade` (with `C` = `MockStravaDataStore`), and a
+/// [`strava_session`] for user 1 / Strava ID 42.
+#[cfg(test)]
+pub fn setup() -> (
+    crate::traits::MockStravaDataStore,
+    tb_provider::MockDomainFacade<crate::traits::MockStravaDataStore>,
+    MockSession,
+) {
+    let store = crate::traits::MockStravaDataStore::new();
+    let facade = tb_provider::MockDomainFacade::<crate::traits::MockStravaDataStore>::new();
+    let session = strava_session(UserId::from(1), 42.into());
+    (store, facade, session)
+}
+
 /// Builds a [`StravaUser`] for tests.
 pub fn strava_user(tbid: UserId, stravaid: i32, enabled: bool) -> StravaUser {
     StravaUser {

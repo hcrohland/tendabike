@@ -2,22 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use super::*;
 use crate::test_support::{
-    MockStravaDataStore, activity, activity_json, gear_json, part, queue, queue_error, requests,
-    strava_session,
+    activity, activity_json, gear_json, part, queue, queue_error, requests, setup,
 };
-use tb_domain::MockSession;
-use tb_provider::MockDomainFacade;
-
-fn setup() -> (
-    MockStravaDataStore,
-    MockDomainFacade<MockStravaDataStore>,
-    MockSession,
-) {
-    let store = MockStravaDataStore::new();
-    let facade = MockDomainFacade::<MockStravaDataStore>::new();
-    let session = strava_session(UserId::from(1), 42.into());
-    (store, facade, session)
-}
 
 fn strava_activity(gear: Option<&str>) -> StravaActivity {
     serde_json::from_str(&activity_json(10, "Ride", gear)).unwrap()

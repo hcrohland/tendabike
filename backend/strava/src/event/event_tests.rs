@@ -3,22 +3,8 @@ use std::sync::{Arc, Mutex};
 use super::*;
 use crate::event::{AspectType, Event, ObjectType};
 use crate::test_support::{
-    MockStravaDataStore, activity_json, queue, queue_error, strava_admin_session, strava_session,
-    strava_user,
+    activity_json, queue, queue_error, setup, strava_admin_session, strava_user,
 };
-use tb_domain::MockSession;
-use tb_provider::MockDomainFacade;
-
-fn setup() -> (
-    MockStravaDataStore,
-    MockDomainFacade<MockStravaDataStore>,
-    MockSession,
-) {
-    let store = MockStravaDataStore::new();
-    let facade = MockDomainFacade::<MockStravaDataStore>::new();
-    let session = strava_session(UserId::from(1), 42.into());
-    (store, facade, session)
-}
 
 /// Sets this thread's rate-limiter override to "at limit" (read 15-min
 /// exhausted), so `get_event` reports `Limited`.

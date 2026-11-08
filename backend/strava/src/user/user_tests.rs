@@ -3,22 +3,8 @@ use std::sync::{Arc, Mutex};
 use super::*;
 use crate::event::{AspectType, Event, ObjectType};
 use crate::test_support::{
-    MockStravaDataStore, deauthorizes, gear_json, queue, strava_admin_session, strava_session,
-    strava_user, user,
+    deauthorizes, gear_json, queue, setup, strava_admin_session, strava_user, user,
 };
-use tb_domain::MockSession;
-use tb_provider::MockDomainFacade;
-
-fn setup() -> (
-    MockStravaDataStore,
-    MockDomainFacade<MockStravaDataStore>,
-    MockSession,
-) {
-    let store = MockStravaDataStore::new();
-    let facade = MockDomainFacade::<MockStravaDataStore>::new();
-    let session = strava_session(UserId::from(1), 42.into());
-    (store, facade, session)
-}
 
 #[tokio::test]
 async fn upsert_creates_new_user() -> TbResult<()> {
