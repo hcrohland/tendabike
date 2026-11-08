@@ -1,101 +1,81 @@
-//! Proactive Strava rate limiting: reads usage and limits from response
-//! headers, gates event processing when budget is exhausted.
+//! Proactive Strava rate limiting: a thin shim over the shared
+//! [`tb_provider::RateLimiter`] kernel (spec #781, T6).
+//!
+//! The process-wide limiter is constructed with Strava's 4-window header
+//! mapping — the overall and read scopes, each a 15-minute and a daily window
+//! reading the same `X-RateLimit-*` / `X-ReadRateLimit-*` pair. The HTTP layer
+//! feeds it from response headers ([`update_from_headers`]); the event-queue
+//! read consults it for the "limited until" gate ([`limited_until`]).
 //!
 //! The state is process-wide (shared across all executors) and in-memory:
 //! on restart it starts empty and learns from the first response.
 //!
-//! Test seam: the test hooks set a per-thread override that
+//! Test seam: the test hooks set a per-thread override limiter that
 //! [`limited_until`] reports from, so parallel rate-limiter tests can't
 //! observe each other's process-global state.
 
 use std::cell::RefCell;
 use std::sync::Mutex;
 
-use http::HeaderMap;
+use http::{HeaderMap, HeaderName};
 
-/// A single rate-limit window: the limit and the current usage.
-/// `None` until the first response populates the values.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct Window {
-    pub limit: Option<u32>,
-    pub usage: Option<u32>,
+use tb_provider::{Cadence, RateLimiter, WindowSpec};
+
+/// Strava's 4-window header mapping: the overall and read scopes, each a
+/// 15-minute and a daily window reading the same header pair.
+fn strava_specs() -> Vec<WindowSpec> {
+    vec![
+        WindowSpec {
+            limit_header: HeaderName::from_bytes(b"X-RateLimit-Limit").unwrap(),
+            usage_header: HeaderName::from_bytes(b"X-RateLimit-Usage").unwrap(),
+            cadence: Cadence::FifteenMin,
+        },
+        WindowSpec {
+            limit_header: HeaderName::from_bytes(b"X-RateLimit-Limit").unwrap(),
+            usage_header: HeaderName::from_bytes(b"X-RateLimit-Usage").unwrap(),
+            cadence: Cadence::Daily,
+        },
+        WindowSpec {
+            limit_header: HeaderName::from_bytes(b"X-ReadRateLimit-Limit").unwrap(),
+            usage_header: HeaderName::from_bytes(b"X-ReadRateLimit-Usage").unwrap(),
+            cadence: Cadence::FifteenMin,
+        },
+        WindowSpec {
+            limit_header: HeaderName::from_bytes(b"X-ReadRateLimit-Limit").unwrap(),
+            usage_header: HeaderName::from_bytes(b"X-ReadRateLimit-Usage").unwrap(),
+            cadence: Cadence::Daily,
+        },
+    ]
 }
 
-impl Window {
-    /// Whether the budget is exhausted (usage >= limit).
-    /// `None` values (no data yet) are not exhausted.
-    pub fn is_exhausted(&self) -> bool {
-        match (self.usage, self.limit) {
-            (Some(u), Some(l)) => u >= l,
-            _ => false,
-        }
-    }
-}
+/// The process-wide Strava rate limiter (shared across all executors).
+static RATE_LIMITER: std::sync::LazyLock<Mutex<RateLimiter>> =
+    std::sync::LazyLock::new(|| Mutex::new(RateLimiter::new(strava_specs())));
 
-impl std::fmt::Display for Window {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}/{}", self.usage.unwrap_or(0), self.limit.unwrap_or(0))
-    }
-}
-
-/// The rate-limit state: usage and limits for both the overall and the
-/// non-upload (read) scopes, each with a 15-minute and a daily window.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct RateLimitState {
-    pub overall_15min: Window,
-    pub overall_daily: Window,
-    pub read_15min: Window,
-    pub read_daily: Window,
-    /// Whether the last `limited_until()` call reported a limit (for WARN
-    /// log transitions: entering / exiting the rate-limited state).
-    pub was_limited: bool,
-}
-
-static STATE: std::sync::LazyLock<Mutex<RateLimitState>> =
-    std::sync::LazyLock::new(|| Mutex::new(RateLimitState::default()));
-
-// A per-thread override of the rate-limit state, set by the test hooks
+// A per-thread override limiter, set by the test hooks
 // (`test_set_limited` / `test_set_not_limited`). When `Some`, `limited_until`
-// reports from this state instead of the process-global `STATE`, so parallel
-// rate-limiter tests can't observe each other's state (each test runs on its
-// own thread, the same isolation the `test_support::CANNED` canned-response
-// map relies on). `None` in production and on any thread a test hook hasn't
-// touched.
+// reports from this limiter instead of the process-global `RATE_LIMITER`, so
+// parallel rate-limiter tests can't observe each other's state (each test runs
+// on its own thread, the same isolation the `test_support::CANNED`
+// canned-response map relies on). `None` in production and on any thread a
+// test hook hasn't touched.
 thread_local! {
-    static TEST_OVERRIDE: RefCell<Option<RateLimitState>> = const { RefCell::new(None) };
+    static TEST_OVERRIDE: RefCell<Option<RateLimiter>> = const { RefCell::new(None) };
 }
 
-/// The shared rate-limit state: the unix time at which the exhausted window
+/// The shared rate-limit gate: the unix time at which the exhausted window
 /// resets, or `None` if budget remains (or no data yet).
 ///
 /// Emits a WARN log on transition into or out of the rate-limited state.
 pub fn limited_until() -> Option<i64> {
-    // Test seam: a per-thread override shadows the process-global state, so
+    // Test seam: a per-thread override shadows the process-global limiter, so
     // parallel rate-limiter tests can't observe each other's state.
-    if let Some(override_state) = TEST_OVERRIDE.with(|o| o.borrow().clone()) {
-        return limited_until_inner(&override_state);
+    if let Some(until) = TEST_OVERRIDE.with(|o| o.borrow_mut().as_mut().map(|l| l.limited_until()))
+    {
+        return until;
     }
-    let mut state = STATE.lock().unwrap();
-    let until = limited_until_inner(&state);
-    let is_limited = until.is_some();
-    if is_limited && !state.was_limited {
-        log::warn!(
-            "Strava rate limit reached (read 15min: {}, read daily: {}, overall 15min: {}, overall daily: {}); pausing until {}",
-            state.read_15min,
-            state.read_daily,
-            state.overall_15min,
-            state.overall_daily,
-            until.unwrap_or(0),
-        );
-    } else if !is_limited && state.was_limited {
-        log::warn!(
-            "Strava rate limit cleared (read 15min: {}, read daily: {})",
-            state.read_15min,
-            state.read_daily,
-        );
-    }
-    state.was_limited = is_limited;
-    until
+    let mut limiter = RATE_LIMITER.lock().unwrap();
+    limiter.limited_until()
 }
 
 /// Parses Strava's `X-RateLimit-*` response headers into the shared state.
@@ -104,111 +84,44 @@ pub fn limited_until() -> Option<i64> {
 /// Missing or malformed headers are ignored (the state keeps its previous
 /// values for those fields).
 pub fn update_from_headers(headers: &HeaderMap) {
-    let mut state = STATE.lock().unwrap();
-    update_from_headers_inner(&mut state, headers);
-}
-
-fn limited_until_inner(state: &RateLimitState) -> Option<i64> {
-    // The latest boundary of any exhausted window: the longest limit wins,
-    // so we sleep until the last window resets (waking earlier would find
-    // the other window still exhausted).
-    [
-        state.read_15min.is_exhausted().then(next_15min_boundary),
-        state.read_daily.is_exhausted().then(next_midnight_utc),
-        state.overall_15min.is_exhausted().then(next_15min_boundary),
-        state.overall_daily.is_exhausted().then(next_midnight_utc),
-    ]
-    .into_iter()
-    .flatten()
-    .max()
-}
-
-fn update_from_headers_inner(state: &mut RateLimitState, headers: &HeaderMap) {
-    if let Some(val) = parse_pair(headers.get("X-RateLimit-Limit")) {
-        state.overall_15min.limit = Some(val.0);
-        state.overall_daily.limit = Some(val.1);
-    }
-    if let Some(val) = parse_pair(headers.get("X-RateLimit-Usage")) {
-        state.overall_15min.usage = Some(val.0);
-        state.overall_daily.usage = Some(val.1);
-    }
-    if let Some(val) = parse_pair(headers.get("X-ReadRateLimit-Limit")) {
-        state.read_15min.limit = Some(val.0);
-        state.read_daily.limit = Some(val.1);
-    }
-    if let Some(val) = parse_pair(headers.get("X-ReadRateLimit-Usage")) {
-        state.read_15min.usage = Some(val.0);
-        state.read_daily.usage = Some(val.1);
-    }
-    log::debug!(
-        "Strava rate limit state updated: read 15min: {}, read daily: {}, overall 15min: {}, overall daily: {}",
-        state.read_15min,
-        state.read_daily,
-        state.overall_15min,
-        state.overall_daily,
-    );
-}
-
-/// Parses a `"15min,daily"` comma-separated header value into a pair.
-fn parse_pair(header: Option<&http::HeaderValue>) -> Option<(u32, u32)> {
-    let s = header?.to_str().ok()?;
-    let mut parts = s.split(',');
-    let first = parts.next()?.trim().parse::<u32>().ok()?;
-    let second = parts.next()?.trim().parse::<u32>().ok()?;
-    Some((first, second))
-}
-
-/// The current unix time in seconds.
-fn now_unix() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
-}
-
-/// The next 15-minute window boundary (:00, :15, :30, :45) in unix seconds.
-fn next_15min_boundary() -> i64 {
-    (now_unix() / 900 + 1) * 900
-}
-
-/// The next midnight UTC in unix seconds.
-fn next_midnight_utc() -> i64 {
-    (now_unix() / 86400 + 1) * 86400
+    let mut limiter = RATE_LIMITER.lock().unwrap();
+    limiter.update_from_headers(headers);
 }
 
 #[cfg(test)]
+/// Sets this thread's rate-limiter override to "at limit" (read 15-min
+/// exhausted), so [`limited_until`] reports a boundary.
 pub fn test_set_limited() {
     TEST_OVERRIDE.with(|o| {
-        *o.borrow_mut() = Some(RateLimitState {
-            read_15min: Window {
-                limit: Some(100),
-                usage: Some(100),
-            },
-            read_daily: Window {
-                limit: Some(1000),
-                usage: Some(500),
-            },
-            ..Default::default()
-        });
+        *o.borrow_mut() = Some(limiter_from_headers(&[
+            ("X-ReadRateLimit-Limit", "100,1000"),
+            ("X-ReadRateLimit-Usage", "100,500"),
+        ]));
     });
 }
 
 #[cfg(test)]
+/// Sets this thread's rate-limiter override to "no data" (allows all
+/// requests), so [`limited_until`] reports no limit.
 pub fn test_set_not_limited() {
     TEST_OVERRIDE.with(|o| {
-        *o.borrow_mut() = Some(RateLimitState {
-            read_15min: Window {
-                limit: Some(100),
-                usage: Some(0),
-            },
-            read_daily: Window {
-                limit: Some(1000),
-                usage: Some(0),
-            },
-            ..Default::default()
-        });
+        *o.borrow_mut() = Some(limiter_from_headers(&[
+            ("X-ReadRateLimit-Limit", "100,1000"),
+            ("X-ReadRateLimit-Usage", "0,0"),
+        ]));
     });
 }
 
+/// A fresh process-limiter-shaped limiter populated from the given headers
+/// (test helper for the per-thread override).
 #[cfg(test)]
-mod ratelimit_tests;
+fn limiter_from_headers(pairs: &[(&str, &str)]) -> RateLimiter {
+    let mut m = HeaderMap::new();
+    for (k, v) in pairs {
+        let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
+        m.insert(name, http::HeaderValue::from_str(v).unwrap());
+    }
+    let mut limiter = RateLimiter::new(strava_specs());
+    limiter.update_from_headers(&m);
+    limiter
+}
