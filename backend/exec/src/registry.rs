@@ -95,7 +95,7 @@ pub const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 pub struct Registry<S, P>
 where
     S: TxnSource + Clone + 'static,
-    P: ProviderLane + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
 {
     source: S,
     /// The provider lane: the narrow seam the loop calls through to probe
@@ -130,7 +130,7 @@ pub trait FramePusher: Send + Sync {
 impl<S, P> Registry<S, P>
 where
     S: TxnSource + Clone + 'static,
-    P: ProviderLane + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
 {
     /// The registry with an explicit idle cadence (test ergonomics: a
     /// short idle cadence makes the executor's lifecycle observable).
@@ -242,7 +242,7 @@ where
 impl<S, P> FramePusher for Registry<S, P>
 where
     S: TxnSource + Clone + 'static,
-    P: ProviderLane + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
 {
     /// Delegate the routing to the core (the complete frame-routing policy).
     async fn deliver(&self, context: DeliveryContext, summary: Summary) {
@@ -257,7 +257,7 @@ where
 impl<S, P> ServiceApi for Registry<S, P>
 where
     S: TxnSource + Clone + 'static,
-    P: ProviderLane + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
 {
     /// Enqueue one [`ApiRead`] on the user's executor and await its data
     /// (spec #558 §3): the loop runs the read in its own transaction
@@ -338,7 +338,7 @@ where
 impl<S, P> ProviderService for Registry<S, P>
 where
     S: TxnSource + Clone + 'static,
-    P: ProviderLane + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     P::Event: Into<tb_strava::event::Event>,
 {
     /// Register a shop stream for `shop_id` (spec #517, ticket #582): verify
@@ -603,7 +603,7 @@ where
 impl<S, P> Registry<S, P>
 where
     S: TxnSource + Clone + 'static,
-    P: ProviderLane + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
 {
     async fn send_request<Out>(
         &self,

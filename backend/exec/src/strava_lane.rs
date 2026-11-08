@@ -24,7 +24,12 @@
 //! `tb_exec` (circular), so the lane that bridges the loop's [`ProviderLane`]
 //! seam to `tb_strava`'s `get_event`/`process` ops sits in the crate that
 //! depends on both. `probe` delegates to `tb_strava::event::get_event` and
-//! `process` to `tb_strava::event::process`.
+//! `process` to `tb_strava::event::process`. The lane is generic over the
+//! store type `S` (the provider's full store — the transaction's connection):
+//! `type Store = S`, so the loop's `TxnSource::Conn` ties to `S` and
+//! `probe`/`process` operate on it.
+
+use std::marker::PhantomData;
 
 use tb_domain::{Summary, UserId};
 use tb_strava::StravaStore;
@@ -35,18 +40,74 @@ use crate::lane::{Probe, ProviderLane};
 /// The Strava provider lane: the [`ProviderLane`] impl for the Strava driver.
 /// The loop calls through it; a second provider (a new crate) implements
 /// [`ProviderLane`] too, and the loop works with it unchanged.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct StravaLane;
+///
+/// Generic over the store type `S` (the provider's full store — the
+/// transaction's connection): `type Store = S`, so the loop's
+/// `TxnSource::Conn` ties to `S`. `S` is the connection the loop's
+/// `TxnSource` opens (`SqlxConn` in production, the test double in the
+/// suites), which is why the lane is generic over it rather than naming a
+/// concrete store.
+///
+/// The marker-field impls (`Clone`/`Copy`/`Debug`/`Default`) are written by
+/// hand rather than derived: a derive would add an `S: Clone`/`S: Debug`
+/// bound, but the lane holds no `S` data (only a `PhantomData<S>` marker), so
+/// it is `Clone`/`Copy`/`Debug`/`Default` for any `S` — including a database
+/// connection, which is neither `Clone` nor `Debug`.
+pub struct StravaLane<S: StravaStore> {
+    _store: PhantomData<S>,
+}
+
+impl<S: StravaStore> Clone for StravaLane<S> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<S: StravaStore> Copy for StravaLane<S> {}
+
+impl<S: StravaStore> std::fmt::Debug for StravaLane<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StravaLane").finish()
+    }
+}
+
+impl<S: StravaStore> Default for StravaLane<S> {
+    fn default() -> Self {
+        Self {
+            _store: PhantomData,
+        }
+    }
+}
+
+// `StravaLane<S>` holds no `S` data (only a `PhantomData<S>` marker), so it is
+// safe to share across threads even when `S` is not `Sync` (a database
+// connection, like `SqlxConn`, is `Send` but not `Sync`). The auto-derived
+// `Sync` would wrongly require `S: Sync`; this sound `unsafe impl` restores
+// the unconditional `Sync` the `ProviderLane: Send + Sync` bound needs.
+unsafe impl<S: StravaStore> Sync for StravaLane<S> {}
+
+impl<S: StravaStore> StravaLane<S> {
+    /// The lane for a store of type `S`.
+    pub fn new() -> Self {
+        Self {
+            _store: PhantomData,
+        }
+    }
+}
 
 #[async_trait::async_trait]
-impl ProviderLane for StravaLane {
+impl<S> ProviderLane for StravaLane<S>
+where
+    S: StravaStore + Send + 'static,
+{
     type Event = Event;
+    type Store = S;
 
     /// Probe the Strava event queue (one transaction's housekeeping): read
     /// the next event, applying the queue's read-side rules (the rate-limit
     /// gate, the latest-per-object dedup). Delegates to
     /// [`tb_strava::event::get_event`].
-    async fn probe<C: StravaStore>(&self, user_id: UserId, store: &mut C) -> Probe<Self::Event> {
+    async fn probe(&self, user_id: UserId, store: &mut S) -> Probe<Self::Event> {
         match get_event(user_id, store).await {
             Ok(QueueRead::Event(event)) => Probe::Event(event),
             Ok(QueueRead::Limited { until }) => Probe::Limited(until),
@@ -59,7 +120,7 @@ impl ProviderLane for StravaLane {
     /// read the queue again (the accepted double read) and handle the event.
     /// Delegates to [`tb_strava::event::process`]. Returns the event's
     /// [`Summary`] on success, or `None` on a DB failure.
-    async fn process<C: StravaStore>(&self, user_id: UserId, store: &mut C) -> Option<Summary> {
+    async fn process(&self, user_id: UserId, store: &mut S) -> Option<Summary> {
         process(user_id, store).await.ok()
     }
 }
