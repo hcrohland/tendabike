@@ -27,6 +27,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 | Assign | `gh issue edit <n> --add-assignee <login>` |
 | Comment | `gh issue comment <n> --body "…"` |
 | Close | `gh issue close <n> --reason completed` |
+| Merge PR | `gh pr merge <n> --squash --auto` |
 | Add sub-issue | `gh issue edit <parent> --add-sub-issue <child1>,<child2>` |
 | Add blocked-by | `gh issue edit <n> --add-blocked-by <blocker1>,<blocker2>` |
 | Add blocking | `gh issue edit <n> --add-blocking <n1>,<n2>` |
