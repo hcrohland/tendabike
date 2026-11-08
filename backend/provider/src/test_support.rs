@@ -8,5 +8,4 @@
 //! [`DomainFacade`]: crate::DomainFacade
 //! [`DomainFacadeImpl`]: crate::DomainFacadeImpl
 
-#[cfg(any(test, feature = "test-support"))]
 pub use crate::facade::MockDomainFacade;
