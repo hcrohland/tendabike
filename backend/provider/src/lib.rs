@@ -36,5 +36,8 @@ pub use facade::*;
 mod lane;
 pub use lane::*;
 
+mod ratelimit;
+pub use ratelimit::*;
+
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
