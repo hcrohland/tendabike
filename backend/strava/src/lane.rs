@@ -120,6 +120,8 @@ where
     /// Delegates to [`crate::event::process`]. Returns the event's
     /// [`Summary`] on success, or `None` on a DB failure.
     async fn process(&self, user_id: UserId, store: &mut S) -> Option<Summary> {
-        process(user_id, store).await.ok()
+        process(user_id, &tb_provider::DomainFacadeImpl, store)
+            .await
+            .ok()
     }
 }

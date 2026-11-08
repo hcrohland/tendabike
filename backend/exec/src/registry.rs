@@ -511,6 +511,7 @@ where
             &lastname,
             &avatar,
             refresh.as_ref(),
+            &tb_provider::DomainFacadeImpl,
             &mut store,
         )
         .await?;
@@ -541,9 +542,15 @@ where
     /// The gear redirect URL (spec #558 §5.2): one transaction — the
     /// `tb_strava` `strava_url` op (which checks the part's ownership), then
     /// the Strava URL.
-    async fn gear_url(&self, mut session: Box<dyn Session>, id: PartId) -> TbResult<String> {
+    async fn gear_url(&self, session: Box<dyn Session>, id: PartId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let uri = gear::strava_url(i32::from(id), &mut *session, &mut store).await?;
+        let uri = gear::strava_url(
+            i32::from(id),
+            session,
+            &tb_provider::DomainFacadeImpl,
+            &mut store,
+        )
+        .await?;
         store.commit().await?;
         Ok(uri)
     }
@@ -553,7 +560,8 @@ where
     /// rejects a non-Strava id), then the Strava URL.
     async fn activity_url(&self, session: Box<dyn Session>, id: ActivityId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let uri = activity::strava_url(id, &*session, &mut store).await?;
+        let uri =
+            activity::strava_url(id, session, &tb_provider::DomainFacadeImpl, &mut store).await?;
         store.commit().await?;
         Ok(uri)
     }
@@ -586,7 +594,13 @@ where
     /// wake, no message; the existing race is preserved.
     async fn delete_user(&self, mut session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_strava::user_delete(&mut *session, tbid, &mut store).await?;
+        tb_strava::user_delete(
+            &mut *session,
+            tbid,
+            &tb_provider::DomainFacadeImpl,
+            &mut store,
+        )
+        .await?;
         store.commit().await?;
         Ok(())
     }

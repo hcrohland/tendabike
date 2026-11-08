@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 use crate::activity::StravaActivity;
 use crate::*;
+use tb_provider::DomainFacade;
 
 #[derive(Debug, Serialize, Deserialize)]
 /// A struct representing an incoming Strava event.
@@ -201,12 +202,13 @@ impl Event {
         store.strava_event_set_time(self.id, self.event_time).await
     }
 
-    async fn process_activity(
-        self,
+    async fn process_activity<D: DomainFacade<S>, S: StravaDataStore>(
+        &self,
         user_id: UserId,
-        store: &mut impl StravaStore,
+        facade: &D,
+        store: &mut S,
     ) -> TbResult<Summary> {
-        match self.process_hook(user_id, store).await {
+        match self.process_hook(user_id, facade, store).await {
             Ok(summary) => Ok(summary),
             Err(err) => self.fail_event(err, store).await,
         }
@@ -226,17 +228,18 @@ impl Event {
     /// # Examples
     ///
     ///
-    async fn process_hook(
+    async fn process_hook<D: DomainFacade<S>, S: StravaDataStore>(
         &self,
         user_id: UserId,
-        store: &mut impl StravaStore,
+        facade: &D,
+        store: &mut S,
     ) -> TbResult<Summary> {
         let res = match self.aspect_type {
             AspectType::Create | AspectType::Update => {
-                activity::upsert_activity(self.object_id, user_id, store).await?
+                activity::upsert_activity(self.object_id, user_id, facade, store).await?
             }
             AspectType::Delete => {
-                match activity::delete_activity(self.object_id, user_id, store).await {
+                match activity::delete_activity(self.object_id, user_id, facade, store).await {
                     Err(Error::NotFound(_)) => {
                         warn!("Activity {} did not exist (yet)", self.object_id);
                         Summary::default()
@@ -249,7 +252,12 @@ impl Event {
         Ok(res)
     }
 
-    async fn sync(&mut self, user_id: UserId, store: &mut impl StravaStore) -> TbResult<Summary> {
+    async fn sync<D: DomainFacade<S>, S: StravaDataStore>(
+        &mut self,
+        user_id: UserId,
+        facade: &D,
+        store: &mut S,
+    ) -> TbResult<Summary> {
         // let mut len = batch;
         let mut start = self.event_time;
         let mut summary = Summary::default();
@@ -264,7 +272,7 @@ impl Event {
                 for a in acts {
                     let act_id = a.id;
                     start = std::cmp::max(start, a.start_date.unix_timestamp());
-                    match a.send_to_tb(user_id, store).await {
+                    match a.send_to_tb(user_id, facade, store).await {
                         Ok(ps) => summary += ps,
                         // Rate limit, dead auth, or DB failure: bubble up to
                         // the classifier (`fail_event`) — the Stop keeps the
@@ -294,12 +302,13 @@ impl Event {
         Ok(summary)
     }
 
-    async fn process_sync(
+    async fn process_sync<D: DomainFacade<S>, S: StravaDataStore>(
         mut self,
         user_id: UserId,
-        store: &mut impl StravaStore,
+        facade: &D,
+        store: &mut S,
     ) -> TbResult<Summary> {
-        match self.sync(user_id, store).await {
+        match self.sync(user_id, facade, store).await {
             Ok(summary) => Ok(summary),
             Err(err) => self.fail_event(err, store).await,
         }
@@ -514,7 +523,11 @@ async fn next_activities(
     .await
 }
 
-pub async fn process(user_id: UserId, store: &mut impl StravaStore) -> TbResult<Summary> {
+pub async fn process<D: DomainFacade<S>, S: StravaDataStore>(
+    user_id: UserId,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<Summary> {
     let read = get_event(user_id, store).await?;
     let event = match read {
         QueueRead::Event(event) => event,
@@ -525,8 +538,8 @@ pub async fn process(user_id: UserId, store: &mut impl StravaStore) -> TbResult<
     info!("Processing {event}");
 
     match event.object_type {
-        ObjectType::Activity => event.process_activity(user_id, store).await,
-        ObjectType::Sync => event.process_sync(user_id, store).await,
+        ObjectType::Activity => event.process_activity(user_id, facade, store).await,
+        ObjectType::Sync => event.process_sync(user_id, facade, store).await,
         _ => {
             warn!("skipping {event}");
             event.delete(store).await?;

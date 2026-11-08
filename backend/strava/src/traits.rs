@@ -18,8 +18,9 @@ use tb_domain::{TbResult, UserId};
 /// This is the local trait — it carries no domain supertrait, so a consumer
 /// that only drives Strava work can bound on it directly instead of the full
 /// [`StravaStore`] umbrella.
+#[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
-pub trait StravaDataStore: Send {
+pub trait StravaDataStore: Send + Sync {
     /// Returns all Strava users.
     ///
     /// # Errors

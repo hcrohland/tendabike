@@ -15,6 +15,7 @@ use tb_domain::{
     MockSession,
     test_support::{mock_session, mock_session_admin},
 };
+use time::OffsetDateTime;
 
 use crate::*;
 
@@ -160,12 +161,78 @@ pub fn strava_admin_session(user: UserId, strava: StravaId) -> MockSession {
     mock_session_admin(user)
 }
 
+/// The standard test triple: a fresh `MockStravaDataStore`, a
+/// `MockDomainFacade` (with `C` = `MockStravaDataStore`), and a
+/// [`strava_session`] for user 1 / Strava ID 42.
+#[cfg(test)]
+pub fn setup() -> (
+    crate::traits::MockStravaDataStore,
+    tb_provider::MockDomainFacade<crate::traits::MockStravaDataStore>,
+    MockSession,
+) {
+    let store = crate::traits::MockStravaDataStore::new();
+    let facade = tb_provider::MockDomainFacade::<crate::traits::MockStravaDataStore>::new();
+    let session = strava_session(UserId::from(1), 42.into());
+    (store, facade, session)
+}
+
 /// Builds a [`StravaUser`] for tests.
 pub fn strava_user(tbid: UserId, stravaid: i32, enabled: bool) -> StravaUser {
     StravaUser {
         id: stravaid.into(),
         tendabike_id: tbid,
         refresh_token: enabled.then(|| RefreshToken::new("test-token".to_string())),
+    }
+}
+
+/// A canned [`Part`] for tests.
+pub fn part(id: PartId, owner: UserId, what: PartTypeId, source: Option<String>) -> Part {
+    let now = OffsetDateTime::UNIX_EPOCH;
+    Part {
+        id,
+        owner,
+        what,
+        name: "Test Part".to_string(),
+        vendor: "Test Vendor".to_string(),
+        model: "Test Model".to_string(),
+        purchase: now,
+        last_used: now,
+        disposed_at: None,
+        usage: UsageId::default(),
+        source,
+        shop: None,
+    }
+}
+
+/// A canned [`Activity`] with the given id and owner.
+pub fn activity(id: ActivityId, user: UserId) -> Activity {
+    Activity {
+        id,
+        user_id: user,
+        what: ActTypeId::from(1),
+        name: "Test Ride".to_string(),
+        start: OffsetDateTime::UNIX_EPOCH,
+        duration: 3600,
+        time: None,
+        distance: Some(25000),
+        climb: Some(300),
+        descend: None,
+        energy: None,
+        gear: None,
+        device_name: None,
+        external_id: None,
+    }
+}
+
+/// A canned [`User`] with the given id.
+pub fn user(id: UserId) -> User {
+    User {
+        id,
+        name: "Test User".to_string(),
+        firstname: "Test".to_string(),
+        avatar: None,
+        is_admin: false,
+        onboarding_status: OnboardingStatus::Completed,
     }
 }
 

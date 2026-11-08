@@ -3,16 +3,8 @@ use std::sync::{Arc, Mutex};
 use super::*;
 use crate::event::{AspectType, Event, ObjectType};
 use crate::test_support::{
-    MockStravaConn, activity, activity_json, queue, queue_error, strava_admin_session,
-    strava_session, strava_user,
+    activity_json, queue, queue_error, setup, strava_admin_session, strava_user,
 };
-use tb_domain::MockSession;
-
-fn setup() -> (MockStravaConn, MockSession) {
-    let store = MockStravaConn::new();
-    let session = strava_session(UserId::from(1), 42.into());
-    (store, session)
-}
 
 /// Sets this thread's rate-limiter override to "at limit" (read 15-min
 /// exhausted), so `get_event` reports `Limited`.
@@ -68,7 +60,7 @@ fn event_with_id(
 
 /// Canned the `get_event` read of a single queued event: the event is both the
 /// "next" event and the only "later" event for its object.
-fn queue_event(store: &mut MockStravaConn, event: Event) {
+fn queue_event(store: &mut MockStravaDataStore, event: Event) {
     let next = event.clone();
     let later = event.clone();
     store
@@ -81,7 +73,7 @@ fn queue_event(store: &mut MockStravaConn, event: Event) {
 
 #[tokio::test]
 async fn into_event_maps_fields() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     // The owner (42) is a known strava user: the event maps cleanly.
     store
         .expect_stravauser_get_by_stravaid()
@@ -101,7 +93,7 @@ async fn into_event_maps_fields() -> TbResult<()> {
 
 #[tokio::test]
 async fn into_event_rejects_unknown_owner() {
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     // An unknown owner (99) is a `BadRequest`.
     store
         .expect_stravauser_get_by_stravaid()
@@ -114,7 +106,7 @@ async fn into_event_rejects_unknown_owner() {
 
 #[tokio::test]
 async fn into_event_rejects_unknown_types() {
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     // The owner is known; the object/aspect types are not.
     store
         .expect_stravauser_get_by_stravaid()
@@ -133,7 +125,7 @@ async fn into_event_rejects_unknown_types() {
 
 #[tokio::test]
 async fn accept_stores_activity_event() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     // An activity event is queued: the owner is known (twice: `accept` and
     // `into_event`), and the event is stored.
     let created = Arc::new(Mutex::new(None));
@@ -163,7 +155,7 @@ async fn accept_stores_activity_event() -> TbResult<()> {
 
 #[tokio::test]
 async fn accept_athlete_deauth_disables_user() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     // An athlete deauth (`authorized: false`) disables the user: drops their
     // events and clears their token. Nothing is queued.
     store
@@ -208,7 +200,7 @@ async fn accept_athlete_deauth_disables_user() -> TbResult<()> {
 
 #[tokio::test]
 async fn insert_sync_stores_event() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     // A migrate sync queues a `Sync` event with `object_id` 1 for the user's
     // strava id (42, from the warm token cache).
     let created = Arc::new(Mutex::new(None));
@@ -227,7 +219,7 @@ async fn insert_sync_stores_event() -> TbResult<()> {
 
 #[tokio::test]
 async fn insert_sync_rejects_future() {
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     // A future event time is a `BadRequest` (no store write fires).
     let res = insert_sync(UserId::from(1), get_time() + 1000, false, &mut store).await;
     assert!(matches!(res, Err(Error::BadRequest(_))));
@@ -235,7 +227,7 @@ async fn insert_sync_rejects_future() {
 
 #[tokio::test]
 async fn get_event_returns_latest_and_drops_older() -> TbResult<()> {
-    let (mut store, session) = setup();
+    let (mut store, _facade, session) = setup();
     // Two events for the same object: the read returns the latest (Create)
     // and drops the older (Update).
     let first = event_with_id(1, ObjectType::Activity, 10, AspectType::Update, 50);
@@ -272,7 +264,7 @@ async fn get_event_returns_latest_and_drops_older() -> TbResult<()> {
 
 #[tokio::test]
 async fn get_event_ignores_other_owners() -> TbResult<()> {
-    let (mut store, session) = setup();
+    let (mut store, _facade, session) = setup();
     // The queue has no event for this user's strava id: the read is `Empty`.
     store
         .expect_strava_event_get_next_for_user()
@@ -289,7 +281,7 @@ async fn get_event_rate_limited_returns_limited() -> TbResult<()> {
     // When the rate limiter reports no budget, get_event returns Limited
     // without dequeuing: the event stays queued for when the window resets.
     set_rate_limited();
-    let (mut _store, session) = setup();
+    let (mut _store, _facade, session) = setup();
     let res = get_event(session.user_id(), &mut _store).await?;
     assert!(matches!(res, QueueRead::Limited { .. }));
     reset_rate_limiter();
@@ -300,7 +292,7 @@ async fn get_event_rate_limited_returns_limited() -> TbResult<()> {
 async fn get_event_not_rate_limited_returns_event() -> TbResult<()> {
     // When the rate limiter has budget, get_event dequeues normally.
     reset_rate_limiter();
-    let (mut store, session) = setup();
+    let (mut store, _facade, session) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Activity, 10, AspectType::Create, 100),
@@ -312,38 +304,39 @@ async fn get_event_not_rate_limited_returns_event() -> TbResult<()> {
 
 #[tokio::test]
 async fn process_no_events() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, facade, _) = setup();
     // An empty queue: nothing to process.
     store
         .expect_strava_event_get_next_for_user()
         .returning(|_user| Ok(None));
-    let summary = process(UserId::from(1), &mut store).await?;
+    let summary = process(UserId::from(1), &facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     Ok(())
 }
 
 #[tokio::test]
 async fn process_activity_create_imports() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, mut facade, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Activity, 10, AspectType::Create, 100),
     );
     queue("/activities/10", &activity_json(10, "Ride", None));
-    // The activity is new (read `None`, create), then the event is consumed.
-    store
-        .expect_activity_read_by_id()
-        .returning(|_aid| Ok(None));
-    store
-        .expect_activity_create()
-        .returning(move |act| Ok(activity(act.id, act.user_id)));
+    // The facade's upsert returns a summary with the activity.
+    facade
+        .expect_upsert_activity()
+        .returning(move |act, _user, _store| {
+            let mut summary = Summary::default();
+            summary.activities.upsert(act);
+            Ok(summary)
+        });
     let deleted = Arc::new(Mutex::new(None));
     let deleted_rec = deleted.clone();
     store.expect_strava_event_delete().returning(move |id| {
         deleted_rec.lock().unwrap().replace(id);
         Ok(())
     });
-    let summary = process(UserId::from(1), &mut store).await?;
+    let summary = process(UserId::from(1), &facade, &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
     assert!(
         summary
@@ -361,17 +354,17 @@ async fn process_activity_create_imports() -> TbResult<()> {
 
 #[tokio::test]
 async fn process_activity_delete_missing_ignores() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, mut facade, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Activity, 10, AspectType::Delete, 100),
     );
     // A delete for a missing activity is ignored (the event is consumed).
-    store
-        .expect_activity_read_by_id()
-        .returning(|_aid| Ok(None));
+    facade
+        .expect_delete_activity()
+        .returning(|_id, _user, _store| Err(Error::NotFound("".to_string())));
     store.expect_strava_event_delete().returning(|_id| Ok(()));
-    let summary = process(UserId::from(1), &mut store).await?;
+    let summary = process(UserId::from(1), &facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     Ok(())
 }
@@ -382,7 +375,7 @@ async fn process_try_again_keeps_event_queued() -> TbResult<()> {
     // updated from the response headers (in production), and the next
     // get_event probe will report Limited. No Stop event is created.
     reset_rate_limiter();
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Activity, 10, AspectType::Create, 100),
@@ -390,7 +383,7 @@ async fn process_try_again_keeps_event_queued() -> TbResult<()> {
     // The 429 keeps the event queued: it is NOT deleted.
     store.expect_strava_event_delete().times(0);
     queue_error("/activities/10", Error::TryAgain("rate limit"));
-    let summary = process(UserId::from(1), &mut store).await?;
+    let summary = process(UserId::from(1), &_facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     Ok(())
 }
@@ -400,7 +393,7 @@ async fn process_activity_nontransient_drops_event() -> TbResult<()> {
     // A permanently bad activity (parse error, a 404's domain shape) is
     // dropped from the queue and logged — it is committed, so the event
     // is gone and the queue cannot wedge on it (spec #446 §4.6).
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Activity, 10, AspectType::Create, 100),
@@ -415,7 +408,7 @@ async fn process_activity_nontransient_drops_event() -> TbResult<()> {
         "/activities/10",
         Error::AnyFailure(anyhow::anyhow!("parse boom")),
     );
-    let summary = process(UserId::from(1), &mut store).await?;
+    let summary = process(UserId::from(1), &_facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     assert_eq!(
         deleted.lock().unwrap().take(),
@@ -430,7 +423,7 @@ async fn process_activity_not_auth_disables_user() -> TbResult<()> {
     // A 401 after a token refresh disables the user's Strava integration
     // and drops all their queued events (spec #446 §4.6): the data freezes
     // stale-but-consistent; no event-by-event 401s follow.
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Activity, 10, AspectType::Create, 100),
@@ -447,7 +440,7 @@ async fn process_activity_not_auth_disables_user() -> TbResult<()> {
             Ok(strava_user(UserId::from(1), 42, false))
         });
     queue_error("/activities/10", Error::NotAuth(String::from("token dead")));
-    let summary = process(UserId::from(1), &mut store).await?;
+    let summary = process(UserId::from(1), &_facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     assert_eq!(
         token_refresh.lock().unwrap().as_slice(),
@@ -459,7 +452,7 @@ async fn process_activity_not_auth_disables_user() -> TbResult<()> {
 
 #[tokio::test]
 async fn process_sync_not_auth_disables_user() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Sync, 0, AspectType::Create, 0),
@@ -479,7 +472,7 @@ async fn process_sync_not_auth_disables_user() -> TbResult<()> {
         "/activities?after=0&per_page=25",
         Error::NotAuth(String::from("token dead")),
     );
-    let summary = process(UserId::from(1), &mut store).await?;
+    let summary = process(UserId::from(1), &_facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     assert_eq!(
         token_refresh.lock().unwrap().as_slice(),
@@ -491,7 +484,7 @@ async fn process_sync_not_auth_disables_user() -> TbResult<()> {
 
 #[tokio::test]
 async fn process_sync_empty_list_removes_event() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Sync, 0, AspectType::Create, 0),
@@ -504,7 +497,7 @@ async fn process_sync_empty_list_removes_event() -> TbResult<()> {
         Ok(())
     });
     queue("/activities?after=0&per_page=25", "[]");
-    let summary = process(UserId::from(1), &mut store).await?;
+    let summary = process(UserId::from(1), &_facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     assert_eq!(
         deleted.lock().unwrap().take(),
@@ -516,7 +509,7 @@ async fn process_sync_empty_list_removes_event() -> TbResult<()> {
 
 #[tokio::test]
 async fn process_sync_imports_activities() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, mut facade, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Sync, 0, AspectType::Create, 0),
@@ -526,14 +519,14 @@ async fn process_sync_imports_activities() -> TbResult<()> {
         &format!("[{}]", activity_json(10, "Ride", None)),
     );
     queue("/activities/10", &activity_json(10, "Ride", None));
-    // The activity is new (read `None`, create); the sync event stays queued
-    // with its cursor advanced to the activity's start time.
-    store
-        .expect_activity_read_by_id()
-        .returning(|_aid| Ok(None));
-    store
-        .expect_activity_create()
-        .returning(move |act| Ok(activity(act.id, act.user_id)));
+    // The facade's upsert returns a summary with the activity.
+    facade
+        .expect_upsert_activity()
+        .returning(move |act, _user, _store| {
+            let mut summary = Summary::default();
+            summary.activities.upsert(act);
+            Ok(summary)
+        });
     let cursor = Arc::new(Mutex::new(0));
     let cursor_rec = cursor.clone();
     store
@@ -542,7 +535,7 @@ async fn process_sync_imports_activities() -> TbResult<()> {
             *cursor_rec.lock().unwrap() = e_time;
             Ok(())
         });
-    let summary = process(UserId::from(1), &mut store).await?;
+    let summary = process(UserId::from(1), &facade, &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
     assert_eq!(
         *cursor.lock().unwrap(),
@@ -559,7 +552,7 @@ async fn process_sync_bad_activity_skips_and_advances_cursor() -> TbResult<()> {
     // activity must not wedge the queue in an infinite retry loop. The
     // event stays queued at the advanced cursor (one page per wake); the
     // admin sync endpoint re-covers the gap if the user cares.
-    let (mut store, _) = setup();
+    let (mut store, mut facade, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Sync, 0, AspectType::Create, 0),
@@ -574,15 +567,18 @@ async fn process_sync_bad_activity_skips_and_advances_cursor() -> TbResult<()> {
         ),
     );
     queue("/activities/10", &activity_json(10, "Ride", None));
-    // The good activity (10) is new (read `None`, create); the bad activity
+    // The good activity (10) is new (upsert succeeds); the bad activity
     // (11, gear g11) fails its gear fetch and is skipped.
-    store
-        .expect_activity_read_by_id()
-        .returning(|_aid| Ok(None));
-    store
-        .expect_activity_create()
-        .returning(move |act| Ok(activity(act.id, act.user_id)));
-    store.expect_partid_get_by_source().returning(|_s| Ok(None));
+    facade
+        .expect_upsert_activity()
+        .returning(move |act, _user, _store| {
+            let mut summary = Summary::default();
+            summary.activities.upsert(act);
+            Ok(summary)
+        });
+    facade
+        .expect_part_by_source()
+        .returning(|_s, _store| Ok(None));
     let cursor = Arc::new(Mutex::new(0));
     let cursor_rec = cursor.clone();
     store
@@ -595,7 +591,7 @@ async fn process_sync_bad_activity_skips_and_advances_cursor() -> TbResult<()> {
         "/gear/g11",
         Error::AnyFailure(anyhow::anyhow!("parse boom")),
     );
-    let summary = process(UserId::from(1), &mut store).await?;
+    let summary = process(UserId::from(1), &facade, &mut store).await?;
     assert_eq!(summary.activities.len(), 1, "the good activity imports");
     assert_eq!(
         *cursor.lock().unwrap(),
@@ -608,7 +604,7 @@ async fn process_sync_bad_activity_skips_and_advances_cursor() -> TbResult<()> {
 #[tokio::test]
 async fn process_sync_try_again_keeps_event_queued() -> TbResult<()> {
     reset_rate_limiter();
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Sync, 0, AspectType::Create, 0),
@@ -616,28 +612,28 @@ async fn process_sync_try_again_keeps_event_queued() -> TbResult<()> {
     // The 429 keeps the sync event queued: it is NOT deleted.
     store.expect_strava_event_delete().times(0);
     queue_error("/activities?after=0&per_page=25", Error::TryAgain("nope"));
-    let summary = process(UserId::from(1), &mut store).await?;
+    let summary = process(UserId::from(1), &_facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     Ok(())
 }
 
 #[tokio::test]
 async fn process_skips_athlete_event() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     queue_event(
         &mut store,
         event_with_id(1, ObjectType::Athlete, 42, AspectType::Update, 100),
     );
     // An athlete event is not processed: it is dropped (consumed).
     store.expect_strava_event_delete().returning(|_id| Ok(()));
-    let summary = process(UserId::from(1), &mut store).await?;
+    let summary = process(UserId::from(1), &_facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     Ok(())
 }
 
 #[tokio::test]
 async fn sync_users_skips_disabled() -> TbResult<()> {
-    let mut store = MockStravaConn::new();
+    let (mut store, _facade, _) = setup();
     let mut session = strava_admin_session(UserId::from(1), 42.into());
     // The all-users sync queues a `Sync` event for every non-disabled user
     // (the disabled one is skipped).
@@ -662,7 +658,7 @@ async fn sync_users_skips_disabled() -> TbResult<()> {
 
 #[tokio::test]
 async fn sync_users_single() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     let mut session = strava_admin_session(UserId::from(1), 42.into());
     // A single-user sync queues a `Sync` event for that user.
     let created = Arc::new(Mutex::new(Vec::new()));
@@ -681,7 +677,7 @@ async fn sync_users_single() -> TbResult<()> {
 
 #[tokio::test]
 async fn sync_users_unknown_user() {
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     let mut session = strava_admin_session(UserId::from(1), 42.into());
     // A single-user sync for an unknown user is a `NotFound`.
     store.expect_stravauser_get_by_tbid().returning(|_id| {

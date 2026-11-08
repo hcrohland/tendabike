@@ -152,6 +152,18 @@ pub struct Stat {
     activities: i64,
 }
 
+impl Stat {
+    /// A stat with zero counts (for test construction).
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn new(user: User) -> Self {
+        Self {
+            user,
+            parts: 0,
+            activities: 0,
+        }
+    }
+}
+
 /// The all-user stat (the admin `GET /user/all` read's row, spec #558 §3.3):
 /// the provider-neutral [`Stat`] plus the provider's queued-event count and
 /// disabled flag. Provider-neutral in name (the `all_stats` op is generic —

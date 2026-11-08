@@ -956,7 +956,12 @@ where
         |summary| Some(summary),
         |mut conn| async move {
             let outcome = async {
-                let created = StravaUser::update_gear(session, &mut conn).await?;
+                let created = StravaUser::update_gear(
+                    session.user_id(),
+                    &tb_provider::DomainFacadeImpl,
+                    &mut conn,
+                )
+                .await?;
                 for id in created {
                     summary.parts.upsert(id.part(session, &mut conn).await?);
                 }
@@ -996,7 +1001,7 @@ where
         shop,
         |_| None, // the stats read pushes no frame (spec #558 §3.7)
         |mut conn| async move {
-            let outcome = get_all_stats(&mut conn).await;
+            let outcome = get_all_stats(&tb_provider::DomainFacadeImpl, &mut conn).await;
             (outcome, conn, None)
         },
     )
