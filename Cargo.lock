@@ -3021,6 +3021,7 @@ dependencies = [
  "sqlx",
  "tb_domain",
  "tb_exec",
+ "tb_provider",
  "tb_strava",
  "time",
  "tokio",
@@ -3059,6 +3060,7 @@ dependencies = [
  "tb_axum",
  "tb_exec",
  "tb_sqlx",
+ "tb_strava",
  "tokio",
 ]
 

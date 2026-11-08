@@ -81,11 +81,12 @@ use tb_domain::test_support::{
 use tb_domain::{ApiRead, ApiWrite, PartId, ReadOutcome, ShopId, Summary, UserId};
 use tb_exec::{
     DeliveryContext, DetachedBegin, ExecutorStatus, FramePusher, LoopContext, ProviderService,
-    Registry, Request, RequestReceiver, ServiceApi, StravaLane, request_channel,
+    Registry, Request, RequestReceiver, ServiceApi, request_channel,
 };
-use tb_sqlx::{DbPool, SNAPSHOT_JSON};
+use tb_provider::ProviderLane;
+use tb_sqlx::{DbPool, SNAPSHOT_JSON, SqlxConn};
 use tb_strava::{
-    StravaId,
+    StravaId, StravaLane,
     event::{Event, InEvent},
     test_support::{canned_strava, seed_token_cache},
 };
@@ -138,7 +139,7 @@ fn loop_ctx(
         UserId::from(1),
         frames,
         Box::new(NoopPusher),
-        StravaLane,
+        StravaLane::new(),
         events,
         IDLE_TIMEOUT,
         Arc::new(Notify::new()),
@@ -849,7 +850,7 @@ async fn sync_enqueues_wakes_and_awaits() {
     // mechanism intact for a running, idle-waiting executor.
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
-        StravaLane,
+        StravaLane::new(),
         Duration::from_secs(3600),
     );
 
@@ -914,7 +915,7 @@ async fn trigger_processing_drains_each_queued_user() {
     canned_strava("/activities?after=200&per_page=25", "[]");
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
-        StravaLane,
+        StravaLane::new(),
         Duration::from_secs(3600),
     );
     // Both executors running and idle-waiting (streams attached keep them
@@ -996,8 +997,12 @@ async fn seed_strava_user(pool: &DbPool, queue_event: bool) {
 /// One test's registry over the live pool (the direct ops' shape): the
 /// suite's short idle cadence; the ops under test never rely on the
 /// re-probe.
-fn registry(pool: &DbPool) -> Registry<DetachedBegin<DbPool>, StravaLane> {
-    Registry::new(DetachedBegin::new(pool.clone()), StravaLane, IDLE_TIMEOUT)
+fn registry(pool: &DbPool) -> Registry<DetachedBegin<DbPool>, StravaLane<SqlxConn<'static>>> {
+    Registry::new(
+        DetachedBegin::new(pool.clone()),
+        StravaLane::new(),
+        IDLE_TIMEOUT,
+    )
 }
 
 /// The queue's row count for `strava` on a fresh connection.
@@ -1261,7 +1266,7 @@ async fn delete_user_removes_the_rows() {
 async fn wait_for_status<S, P>(reg: &Registry<S, P>, user: UserId, want: ExecutorStatus)
 where
     S: tb_exec::TxnSource + Clone,
-    P: tb_exec::ProviderLane + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
 {
     let deadline = tokio::time::Instant::now() + TEST_TIMEOUT;
     loop {
@@ -1296,7 +1301,7 @@ async fn attached_stream_keeps_the_executor_alive() {
     // reap-on-idle policy would have reclaimed this executor quickly.
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
-        StravaLane,
+        StravaLane::new(),
         Duration::from_millis(300),
     );
 
@@ -1348,7 +1353,7 @@ async fn stream_survives_executor_reap() {
     // spawn reaps quickly.
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
-        StravaLane,
+        StravaLane::new(),
         Duration::from_millis(300),
     );
 

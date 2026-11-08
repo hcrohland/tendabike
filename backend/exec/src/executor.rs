@@ -40,13 +40,13 @@ use tb_domain::{
     ApiRead, ApiWrite, Error, ReadOutcome, Session, ShopId, Summary, TbResult, UserId, UserStat,
     WriteOutcome, exec,
 };
+use tb_provider::{Probe, ProviderLane};
 use tb_strava::event::insert_sync;
 use tb_strava::{StravaUser, get_all_stats};
 use tokio::sync::{broadcast, oneshot};
 
-use crate::lane::Probe;
 use crate::message::{Request, RequestReceiver};
-use crate::{DeliveryContext, FramePusher, ProviderLane, Txn, TxnSource};
+use crate::{DeliveryContext, FramePusher, Txn, TxnSource};
 
 /// The per-executor in-memory backoff for database failures (spec #446
 /// §4.6): exponential, capped at 30s, no `Stop` row (that is the Strava
@@ -290,7 +290,7 @@ pub(crate) async fn select_message<E>(
 pub struct LoopContext<T, P>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
 {
     /// The transaction source (`DbPool` in production).
     source: T,
@@ -321,7 +321,7 @@ where
 impl<T, P> LoopContext<T, P>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
 {
     /// Assemble the loop's wiring, starting its mutable state (the backoff
     /// at its base, the first-idle flag set) — the two state locals the
@@ -605,7 +605,7 @@ pub(crate) async fn sleep_or_take_request(
 async fn queue_probe<T, P>(ctx: &mut LoopContext<T, P>) -> Option<Probe<P::Event>>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
 {
     let user_id = ctx.user_id;
     let mut conn = match ctx.source.begin().await {
@@ -657,7 +657,7 @@ pub(crate) async fn run_request<T, P>(
 ) -> Result<(), Error>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
 {
     match request {
         Request::Write {
@@ -718,7 +718,7 @@ async fn run_message<T, P, Out, Fut>(
 ) -> Result<(), Error>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
     Fut: Future<Output = (TbResult<Out>, T::Conn, Option<UserId>)>,
 {
     let conn = match ctx.source.begin().await {
@@ -821,7 +821,7 @@ async fn run_write<T, P>(
 ) -> Result<(), Error>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
 {
     debug!("user {}: Processing {write:?}", session.user_id());
     // The onboarding cutover's Strava side (spec #558 §5.1): extracted
@@ -897,7 +897,7 @@ async fn run_read<T, P>(
 ) -> Result<(), Error>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
 {
     debug!("user {}: Reading {read:?}", session.user_id());
     run_message(
@@ -938,7 +938,7 @@ async fn run_gear<T, P>(
 ) -> Result<(), Error>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
 {
     debug!("user {}: Hydrating the user's gear", session.user_id());
     // The hydration's work in the loop's transaction: import the Strava
@@ -988,7 +988,7 @@ async fn run_all_stats<T, P>(
 ) -> Result<(), Error>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
 {
     debug!("user {}: Reading the all-user stats", session.user_id());
     let shop = session.shop();
@@ -1042,7 +1042,7 @@ fn lifecycle_error(what: impl std::fmt::Display) -> Error {
 async fn run_event<T, P>(ctx: &mut LoopContext<T, P>, event: &P::Event) -> Result<(), Error>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
 {
     debug!("user {}: Processing event", ctx.user_id);
 
