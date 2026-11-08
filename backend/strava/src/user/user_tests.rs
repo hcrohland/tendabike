@@ -4,7 +4,7 @@ use super::*;
 use crate::event::{AspectType, Event, ObjectType};
 use crate::test_support::{
     MockStravaConn, deauthorizes, gear_json, queue, strava_admin_session, strava_session,
-    strava_user,
+    strava_user, user,
 };
 use tb_domain::MockSession;
 use tb_provider::MockDomainFacade;
@@ -382,6 +382,32 @@ async fn user_delete_requires_an_admin() {
     // A non-admin acting session is `Forbidden`. No store read fires.
     let res = user_delete(&mut session, UserId::from(1), &_facade, &mut store).await;
     assert!(matches!(res, Err(Error::Forbidden(_))));
+}
+
+#[tokio::test]
+async fn stats_include_event_counts() -> TbResult<()> {
+    let (mut store, mut facade, _) = setup();
+    // `get_all_stats` reads every strava user, each user's stat (via the
+    // facade), and each user's event count.
+    store.expect_stravauser_get_all().returning(|| {
+        Ok(vec![
+            strava_user(UserId::from(1), 42, true),
+            strava_user(UserId::from(2), 43, false),
+        ])
+    });
+    facade
+        .expect_get_stat::<MockStravaConn>()
+        .returning(move |uid, _store| Ok(Stat::new(user(*uid))));
+    store
+        .expect_strava_events_get_count_for_user()
+        .returning(move |user| Ok(if *user == 42.into() { 1 } else { 0 }));
+    let stats = get_all_stats(&facade, &mut store).await?;
+    assert_eq!(stats.len(), 2);
+    let enabled = stats.iter().find(|s| !s.disabled).unwrap();
+    assert_eq!(enabled.events, 1);
+    let disabled = stats.iter().find(|s| s.disabled).unwrap();
+    assert_eq!(disabled.events, 0);
+    Ok(())
 }
 
 #[tokio::test]
