@@ -24,25 +24,28 @@ COPY backend/axum/Cargo.toml backend/axum/
 COPY backend/strava/Cargo.toml backend/strava/
 COPY backend/sqlx/Cargo.toml backend/sqlx/
 COPY backend/exec/Cargo.toml backend/exec/
+COPY backend/provider/Cargo.toml backend/provider/
 RUN mkdir -p backend/app/src \
              backend/domain/src \
              backend/axum/src \
              backend/strava/src \
              backend/sqlx/src/bin \
              backend/exec/src \
+             backend/provider/src \
     && printf 'fn main() {}\n' > backend/app/src/main.rs \
     && printf 'fn main() {}\n' > backend/sqlx/src/bin/build_snapshot.rs \
     && for f in backend/domain/src/lib.rs \
                 backend/axum/src/lib.rs \
                 backend/strava/src/lib.rs \
                 backend/sqlx/src/lib.rs \
-                backend/exec/src/lib.rs; do \
+                backend/exec/src/lib.rs \
+                backend/provider/src/lib.rs; do \
         echo '// stub' > $f; \
     done
 RUN cargo build --release
 
 # Build stage: starts from the pre-compiled target directory, so cargo
-# recompiles only the six real workspace crates.
+# recompiles only the seven real workspace crates.
 FROM rust-base AS build-engine
 
 WORKDIR /app
