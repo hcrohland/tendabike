@@ -52,9 +52,9 @@ use log::debug;
 use tokio::sync::{Mutex, Notify, broadcast, watch};
 
 use tb_domain::{ShopId, Summary, TbResult, UserId};
+use tb_provider::ProviderLane;
 
 use crate::LoopContext;
-use crate::ProviderLane;
 use crate::TxnSource;
 use crate::message::RequestSender;
 use crate::{registry::FramePusher, request_channel};
@@ -241,6 +241,7 @@ where
     ) -> TbResult<broadcast::Receiver<P::Event>>
     where
         S: TxnSource + Clone + 'static,
+        P: ProviderLane<Store = S::Conn>,
     {
         self.exec_field(source, lane, user_id, pusher, |exec| {
             exec.events.subscribe()
@@ -482,6 +483,7 @@ where
     ) -> TbResult<R>
     where
         S: TxnSource + Clone + 'static,
+        P: ProviderLane<Store = S::Conn>,
     {
         let mut map = self.executors.lock().await;
         let exec = Self::ensure_running(&mut map, source, lane, user_id, self.idle_timeout, pusher)
@@ -504,6 +506,7 @@ where
     ) -> TbResult<Executor<P>>
     where
         S: TxnSource + Clone + 'static,
+        P: ProviderLane<Store = S::Conn>,
     {
         if let Some(exec) = map.get(&user_id)
             && *exec.status.borrow() == ExecutorStatus::Running
@@ -593,16 +596,21 @@ mod tests {
     use std::time::Duration;
 
     use tb_domain::{NotificationId, ShopId, Summary, TbResult, UserId};
+    use tb_strava::StravaLane;
     use uuid::Uuid;
 
     use super::{Core, DeliveryContext, ExecutorStatus};
-    use crate::StravaLane;
     use crate::executor::executor_tests::{
-        FakeSource, RecordingPusher, non_empty_summary, notification_part_registered,
+        FakeSource, MockConn, RecordingPusher, non_empty_summary, notification_part_registered,
         part_owned_by, shop_owned_by, summary_owned_by, summary_with_notification,
         summary_with_service,
     };
     use crate::registry::FramePusher;
+
+    /// The core's test lane: the Strava lane over the unit-test store double
+    /// (`MockConn` — the `FakeSource`'s `Conn`), so the core's spawn ties the
+    /// `FakeSource`'s connection to the lane's store.
+    type Lane = StravaLane<MockConn>;
 
     /// A canned `FramePusher` for the core's spawn (the `RecordingPusher`
     /// double): the core is source-agnostic and takes the pusher as a
@@ -618,11 +626,11 @@ mod tests {
     /// without a real database).
     #[tokio::test]
     async fn exec_field_spawns_the_executor_on_first_demand() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let source = FakeSource::failing();
 
-        core.exec_field(&source, &StravaLane, user_id, pusher(), |_| ())
+        core.exec_field(&source, &Lane::new(), user_id, pusher(), |_| ())
             .await?;
 
         assert_eq!(
@@ -639,12 +647,12 @@ mod tests {
     /// (`status` → `None`); a fresh `exec_field` brings it back `Running`.
     #[tokio::test]
     async fn stop_all_tears_down_and_the_next_demand_respawns() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
 
         core.exec_field(
             &FakeSource::failing(),
-            &StravaLane,
+            &Lane::new(),
             user_id,
             pusher(),
             |_| (),
@@ -662,7 +670,7 @@ mod tests {
         // The next demand respawns fresh.
         core.exec_field(
             &FakeSource::failing(),
-            &StravaLane,
+            &Lane::new(),
             user_id,
             pusher(),
             |_| (),
@@ -681,7 +689,7 @@ mod tests {
     /// core with no live executor leaves the map empty.
     #[tokio::test]
     async fn wake_never_spawns_an_executor() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
 
         core.wake(user_id).await;
@@ -699,11 +707,11 @@ mod tests {
     /// once) but never spawns a second executor nor changes the fate.
     #[tokio::test]
     async fn wake_on_a_running_executor_is_a_pure_signal() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let source = FakeSource::failing();
 
-        core.exec_field(&source, &StravaLane, user_id, pusher(), |_| ())
+        core.exec_field(&source, &Lane::new(), user_id, pusher(), |_| ())
             .await?;
         core.wake(user_id).await;
 
@@ -721,7 +729,7 @@ mod tests {
     /// facade — so the source is never `begin`-ed.
     #[tokio::test]
     async fn push_to_shop_delivers_to_an_open_shop_stream() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
 
         let mut rx = core.subscribe_shop(shop_id, UserId::from(1)).await;
@@ -741,7 +749,7 @@ mod tests {
     /// shop stream.
     #[tokio::test]
     async fn push_to_shop_is_a_noop_without_a_subscriber() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
 
         core.push_to_shop(shop_id, non_empty_summary()).await;
@@ -758,7 +766,7 @@ mod tests {
     /// installer stands in for a live executor, and no store is involved.
     #[tokio::test]
     async fn push_to_user_delivers_to_a_running_executor() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let mut frame_rx = core
             .install_executor_for_test(user_id, ExecutorStatus::Running)
@@ -778,7 +786,7 @@ mod tests {
     /// channel is not fed (spec #517).
     #[tokio::test]
     async fn push_to_user_is_a_noop_for_a_reaped_executor() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let mut frame_rx = core
             .install_executor_for_test(user_id, ExecutorStatus::Reaped)
@@ -821,7 +829,7 @@ mod tests {
     /// stream — and nothing else.
     #[tokio::test]
     async fn deliver_user_context_to_personal_stream() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let mut acting_rx = core
             .install_executor_for_test(user_id, ExecutorStatus::Running)
@@ -841,7 +849,7 @@ mod tests {
     /// A shop context delivers to the shop stream.
     #[tokio::test]
     async fn deliver_shop_context_to_shop_stream() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
         let mut shop_rx = core.subscribe_shop(shop_id, UserId::from(1)).await;
         let summary = summary_owned_by(UserId::from(2));
@@ -862,7 +870,7 @@ mod tests {
     /// A shop context delivers to the part owner's personal stream.
     #[tokio::test]
     async fn deliver_shop_context_to_part_owner() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
         let part_owner = UserId::from(2);
         let mut owner_rx = core
@@ -889,7 +897,7 @@ mod tests {
     /// owner, and the part owner is (2).
     #[tokio::test]
     async fn deliver_shop_context_not_to_shop_owner() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
         let shop_owner = UserId::from(1);
         let part_owner = UserId::from(2);
@@ -924,7 +932,7 @@ mod tests {
     /// shop owner IS the part owner.
     #[tokio::test]
     async fn deliver_shop_context_to_shop_owner_when_part_owner() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
         let shop_owner = UserId::from(2);
         let mut shop_owner_rx = core
@@ -951,7 +959,7 @@ mod tests {
     /// alone does not carry it.
     #[tokio::test]
     async fn deliver_shop_context_service_summary_to_part_owner() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
         let part_owner = UserId::from(2);
         let mut shop_rx = core.subscribe_shop(shop_id, UserId::from(1)).await;
@@ -982,7 +990,7 @@ mod tests {
     /// notifications ride the normal frame).
     #[tokio::test]
     async fn deliver_cross_recipient_notification_to_user_stream() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let recipient = UserId::from(3);
         let mut acting_rx = core
@@ -1016,7 +1024,7 @@ mod tests {
     #[tokio::test]
     async fn deliver_cross_recipient_notification_to_shop_stream_without_shop_context()
     -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let shop_owner = UserId::from(2);
         let shop_id = ShopId::from(7);
@@ -1053,7 +1061,7 @@ mod tests {
     /// skipped).
     #[tokio::test]
     async fn deliver_shop_context_no_duplicate_shop_push() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
         let part_owner = UserId::from(2);
         let mut shop_rx = core.subscribe_shop(shop_id, UserId::from(1)).await;
@@ -1082,7 +1090,7 @@ mod tests {
     /// rides the normal frame).
     #[tokio::test]
     async fn deliver_no_cross_recipient_for_acting_user() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let mut acting_rx = core
             .install_executor_for_test(acting_user, ExecutorStatus::Running)
@@ -1111,7 +1119,7 @@ mod tests {
     /// stream).
     #[tokio::test]
     async fn deliver_no_cross_recipient_for_part_owner_in_shop_context() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let part_owner = UserId::from(2);
         let shop_id = ShopId::from(7);
@@ -1151,7 +1159,7 @@ mod tests {
     /// receives it).
     #[tokio::test]
     async fn deliver_cross_recipient_third_party_in_shop_context() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let part_owner = UserId::from(2);
         let third_party = UserId::from(5);
@@ -1195,7 +1203,7 @@ mod tests {
     /// tabs (follow-up to issue #687).
     #[tokio::test]
     async fn deliver_shop_context_transient_read_to_personal_stream() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let session_shop = ShopId::from(7);
         let other_shop = ShopId::from(8);
@@ -1234,7 +1242,7 @@ mod tests {
     /// open shop streams (the ones other than the session's shop).
     #[tokio::test]
     async fn deliver_shop_context_persistent_read_to_personal_stream() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let session_shop = ShopId::from(7);
         let other_shop = ShopId::from(8);
@@ -1267,7 +1275,7 @@ mod tests {
     /// gets the frame via the normal user-context delivery.
     #[tokio::test]
     async fn deliver_user_context_read_fans_out_to_shop_streams() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let shop_id = ShopId::from(8);
         let mut acting_rx = core
@@ -1298,7 +1306,7 @@ mod tests {
     /// hydration. The fan-out frame carries only the notifications.
     #[tokio::test]
     async fn deliver_creation_fans_out_to_recipient_shop_streams() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let shop_owner = UserId::from(2);
         let registered_shop = ShopId::from(7);
@@ -1332,7 +1340,7 @@ mod tests {
     /// An empty `Summary` pushes nothing, to any stream (spec §4.5).
     #[tokio::test]
     async fn deliver_empty_summary_is_a_noop() -> TbResult<()> {
-        let core = Core::<StravaLane>::new(Duration::from_secs(60));
+        let core = Core::<Lane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let mut acting_rx = core
             .install_executor_for_test(user_id, ExecutorStatus::Running)

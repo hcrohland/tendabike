@@ -2989,6 +2989,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tb_domain",
+ "tb_provider",
  "tb_strava",
  "time",
  "tokio",
@@ -3020,6 +3021,7 @@ dependencies = [
  "sqlx",
  "tb_domain",
  "tb_exec",
+ "tb_provider",
  "tb_strava",
  "time",
  "tokio",
@@ -3043,6 +3045,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tb_domain",
+ "tb_provider",
  "time",
  "tokio",
 ]
@@ -3057,6 +3060,7 @@ dependencies = [
  "tb_axum",
  "tb_exec",
  "tb_sqlx",
+ "tb_strava",
  "tokio",
 ]
 
