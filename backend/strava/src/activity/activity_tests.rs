@@ -6,11 +6,13 @@ use crate::test_support::{
     strava_session,
 };
 use tb_domain::MockSession;
+use tb_provider::MockDomainFacade;
 
-fn setup() -> (MockStravaConn, MockSession) {
+fn setup() -> (MockStravaConn, MockDomainFacade, MockSession) {
     let store = MockStravaConn::new();
+    let facade = MockDomainFacade::new();
     let session = strava_session(UserId::from(1), 42.into());
-    (store, session)
+    (store, facade, session)
 }
 
 fn strava_activity(gear: Option<&str>) -> StravaActivity {
@@ -57,10 +59,10 @@ fn numeric_id_none_for_non_strava() {
 #[tokio::test]
 async fn into_activity_maps_fields() -> TbResult<()> {
     // No gear: `into_activity` is a pure field mapping (no store read), so the
-    // canned store is unused.
-    let (mut _store, _) = setup();
+    // canned store and facade are unused.
+    let (mut _store, _facade, _) = setup();
     let act = strava_activity(None)
-        .into_activity(UserId::from(1), &mut _store)
+        .into_activity(UserId::from(1), &_facade, &mut _store)
         .await?;
     assert_eq!(act.id, activity_id(10));
     assert_eq!(act.what, 1.into());
@@ -81,16 +83,18 @@ async fn into_activity_maps_fields() -> TbResult<()> {
 
 #[tokio::test]
 async fn into_activity_creates_missing_gear() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, mut facade, _) = setup();
     queue("/gear/b1", &gear_json("b1", Some(0)));
     // The gear is not imported: the Strava gear fetch runs and the part is
-    // created. The canned store records the create's arguments and returns a
+    // created. The facade records the create's arguments and returns a
     // part with a known id; the activity's `gear` is that id.
     let created = Arc::new(Mutex::new(None));
     let created_rec = created.clone();
-    store.expect_partid_get_by_source().returning(|_s| Ok(None));
-    store.expect_part_create().returning(
-        move |what, name, vendor, model, _p, source, _u, _o, _s| {
+    facade
+        .expect_part_by_source::<MockStravaConn>()
+        .returning(|_s, _store| Ok(None));
+    facade.expect_create_part::<MockStravaConn>().returning(
+        move |name, vendor, model, what, source, _p, _u, _store| {
             created_rec
                 .lock()
                 .unwrap()
@@ -99,7 +103,7 @@ async fn into_activity_creates_missing_gear() -> TbResult<()> {
         },
     );
     let act = strava_activity(Some("b1"))
-        .into_activity(UserId::from(1), &mut store)
+        .into_activity(UserId::from(1), &facade, &mut store)
         .await?;
     assert_eq!(act.gear, Some(PartId::from(1)));
     let (what, name, vendor, model, source) = created
@@ -118,7 +122,7 @@ async fn into_activity_creates_missing_gear() -> TbResult<()> {
 
 #[tokio::test]
 async fn into_activity_reuses_existing_gear() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, mut facade, _) = setup();
     queue("/gear/b1", &gear_json("b1", Some(0)));
     // First activity: no part yet (the fetch runs, the create fires). Second
     // activity: the part exists, so `by_source` returns it and no second
@@ -133,26 +137,24 @@ async fn into_activity_reuses_existing_gear() -> TbResult<()> {
     );
     let bike_source = bike.clone();
     let bike_create = bike.clone();
-    let bike_get = bike.clone();
-    store.expect_partid_get_by_source().returning(move |_s| {
-        let n = seen_rec.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        if n < 2 {
-            Ok(None)
-        } else {
-            Ok(Some(bike_source.id))
-        }
-    });
-    store.expect_part_create().returning(
-        move |_what, _name, _vendor, _model, _p, _source, _u, _o, _s| Ok(bike_create.clone()),
-    );
-    store
-        .expect_partid_get_part()
-        .returning(move |_pid| Ok(bike_get.clone()));
+    facade
+        .expect_part_by_source::<MockStravaConn>()
+        .returning(move |_s, _store| {
+            let n = seen_rec.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if n < 2 {
+                Ok(None)
+            } else {
+                Ok(Some(bike_source.clone()))
+            }
+        });
+    facade
+        .expect_create_part::<MockStravaConn>()
+        .returning(move |_n, _v, _m, _w, _s, _p, _u, _store| Ok(bike_create.clone()));
     let first = strava_activity(Some("b1"))
-        .into_activity(UserId::from(1), &mut store)
+        .into_activity(UserId::from(1), &facade, &mut store)
         .await?;
     let second = strava_activity(Some("b1"))
-        .into_activity(UserId::from(1), &mut store)
+        .into_activity(UserId::from(1), &facade, &mut store)
         .await?;
     assert_eq!(first.gear, second.gear);
     let requests = requests()
@@ -165,17 +167,17 @@ async fn into_activity_reuses_existing_gear() -> TbResult<()> {
 
 #[tokio::test]
 async fn upsert_activity_stores_new() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, mut facade, _) = setup();
     queue("/activities/10", &activity_json(10, "Ride", None));
-    // A new activity: the read is `None`, so the create fires (gear `None`
-    // keeps the register's usage/attachment reads out of the picture).
-    store
-        .expect_activity_read_by_id()
-        .returning(|_aid| Ok(None));
-    store
-        .expect_activity_create()
-        .returning(move |act| Ok(activity(act.id, act.user_id)));
-    let summary = upsert_activity(10, UserId::from(1), &mut store).await?;
+    // A new activity: the facade's upsert returns a summary with the activity.
+    facade
+        .expect_upsert_activity::<MockStravaConn>()
+        .returning(move |act, _user, _store| {
+            let mut summary = Summary::default();
+            summary.activities.upsert(act);
+            Ok(summary)
+        });
+    let summary = upsert_activity(10, UserId::from(1), &facade, &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
     assert!(summary.activities.get(&activity_id(10)).is_some());
     Ok(())
@@ -183,31 +185,21 @@ async fn upsert_activity_stores_new() -> TbResult<()> {
 
 #[tokio::test]
 async fn upsert_activity_updates_existing() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, mut facade, _) = setup();
     queue("/activities/10", &activity_json(10, "Ride", None));
-    // The read is `None` for the first upsert (create) and `Some` for the
-    // second (update): one canned read with a call counter drives both.
-    let seen = Arc::new(std::sync::atomic::AtomicI32::new(0));
-    let seen_rec = seen.clone();
-    store.expect_activity_read_by_id().returning(move |_aid| {
-        let n = seen_rec.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        if n == 0 {
-            Ok(None)
-        } else {
-            Ok(Some(activity(activity_id(10), UserId::from(1))))
-        }
-    });
-    store
-        .expect_activity_create()
-        .returning(move |act| Ok(activity(act.id, act.user_id)));
-    store
-        .expect_activity_update()
-        .times(1)
-        .returning(|_act| Ok(activity(activity_id(10), UserId::from(1))));
-    upsert_activity(10, UserId::from(1), &mut store).await?;
+    // The facade's upsert returns a summary with the activity (both calls).
+    facade
+        .expect_upsert_activity::<MockStravaConn>()
+        .times(2)
+        .returning(move |act, _user, _store| {
+            let mut summary = Summary::default();
+            summary.activities.upsert(act);
+            Ok(summary)
+        });
+    upsert_activity(10, UserId::from(1), &facade, &mut store).await?;
     let json = activity_json(10, "Ride", None).replace("25000.0", "30000.0");
     queue("/activities/10", &json);
-    let summary = upsert_activity(10, UserId::from(1), &mut store).await?;
+    let summary = upsert_activity(10, UserId::from(1), &facade, &mut store).await?;
     assert!(
         summary.activities.get(&activity_id(10)).is_some(),
         "the updated activity is in the summary"
@@ -217,73 +209,48 @@ async fn upsert_activity_updates_existing() -> TbResult<()> {
 
 #[tokio::test]
 async fn upsert_activity_propagates_try_again() {
-    let (mut _store, _) = setup();
+    let (mut _store, _facade, _) = setup();
     // The Strava fetch 429s: the `TryAgain` is surfaced (no store read fires).
     queue_error("/activities/10", Error::TryAgain("rate limited"));
-    let res = upsert_activity(10, UserId::from(1), &mut _store).await;
+    let res = upsert_activity(10, UserId::from(1), &_facade, &mut _store).await;
     assert!(matches!(res, Err(Error::TryAgain(_))));
 }
 
 #[tokio::test]
 async fn activity_strava_url() -> TbResult<()> {
-    let (mut store, session) = setup();
-    queue("/activities/10", &activity_json(10, "Ride", None));
-    // The upsert creates the activity (read `None`, create), then `strava_url`
-    // reads it back (read `Some`).
-    let seen = Arc::new(std::sync::atomic::AtomicI32::new(0));
-    let seen_rec = seen.clone();
-    store.expect_activity_read_by_id().returning(move |_aid| {
-        let n = seen_rec.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        if n == 0 {
-            Ok(None)
-        } else {
-            Ok(Some(activity(activity_id(10), UserId::from(1))))
-        }
-    });
-    store
-        .expect_activity_create()
-        .returning(move |act| Ok(activity(act.id, act.user_id)));
-    upsert_activity(10, UserId::from(1), &mut store).await?;
-    let url = strava_url(activity_id(10), &session, &mut store).await?;
+    let (mut store, mut facade, session) = setup();
+    // The facade's read returns the activity (the ownership check passes).
+    facade
+        .expect_read_activity::<MockStravaConn>()
+        .returning(move |_id, _user, _store| Ok(activity(activity_id(10), UserId::from(1))));
+    let url = strava_url(activity_id(10), Box::new(session), &facade, &mut store).await?;
     assert_eq!(url, "https://strava.com/activities/10");
     Ok(())
 }
 
 #[tokio::test]
 async fn activity_strava_url_missing() {
-    let (mut store, session) = setup();
-    // The activity does not exist: the read is `None`, so `strava_url` is
-    // `NotFound`.
-    store
-        .expect_activity_read_by_id()
-        .returning(|_aid| Ok(None));
-    let res = strava_url(activity_id(99), &session, &mut store).await;
+    let (mut store, mut facade, session) = setup();
+    // The activity does not exist: the facade's read is `NotFound`.
+    facade
+        .expect_read_activity::<MockStravaConn>()
+        .returning(|_id, _user, _store| Err(Error::NotFound("".to_string())));
+    let res = strava_url(activity_id(99), Box::new(session), &facade, &mut store).await;
     assert!(matches!(res, Err(Error::NotFound(_))));
 }
 
 #[tokio::test]
 async fn delete_activity_removes() -> TbResult<()> {
-    let (mut store, _) = setup();
-    queue("/activities/10", &activity_json(10, "Ride", None));
-    // The upsert creates the activity (read `None`, create); the delete reads
-    // it back (read `Some`), then deletes it. The delete reports the activity
-    // as a tombstone.
-    let seen = Arc::new(std::sync::atomic::AtomicI32::new(0));
-    let seen_rec = seen.clone();
-    store.expect_activity_read_by_id().returning(move |_aid| {
-        let n = seen_rec.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        if n == 0 {
-            Ok(None)
-        } else {
-            Ok(Some(activity(activity_id(10), UserId::from(1))))
-        }
-    });
-    store
-        .expect_activity_create()
-        .returning(move |act| Ok(activity(act.id, act.user_id)));
-    store.expect_activity_delete().returning(|_aid| Ok(1));
-    upsert_activity(10, UserId::from(1), &mut store).await?;
-    let summary = delete_activity(10, UserId::from(1), &mut store).await?;
+    let (mut store, mut facade, _) = setup();
+    // The facade's delete returns a summary with the activity tombstoned.
+    facade
+        .expect_delete_activity::<MockStravaConn>()
+        .returning(move |id, _user, _store| {
+            let mut summary = Summary::default();
+            summary.activities.tombstone(id);
+            Ok(summary)
+        });
+    let summary = delete_activity(10, UserId::from(1), &facade, &mut store).await?;
     assert!(
         summary.activities.is_tombstoned(&activity_id(10)),
         "the deleted activity is reported as a tombstone"
@@ -293,37 +260,23 @@ async fn delete_activity_removes() -> TbResult<()> {
 
 #[tokio::test]
 async fn delete_activity_missing() {
-    let (mut store, _) = setup();
-    // The activity does not exist: the read is `None`, so the delete is
-    // `NotFound`.
-    store
-        .expect_activity_read_by_id()
-        .returning(|_aid| Ok(None));
-    let res = delete_activity(42, UserId::from(1), &mut store).await;
+    let (mut store, mut facade, _) = setup();
+    // The activity does not exist: the facade's delete is `NotFound`.
+    facade
+        .expect_delete_activity::<MockStravaConn>()
+        .returning(|_id, _user, _store| Err(Error::NotFound("".to_string())));
+    let res = delete_activity(42, UserId::from(1), &facade, &mut store).await;
     assert!(matches!(res, Err(Error::NotFound(_))));
 }
 
 #[tokio::test]
 async fn delete_activity_forbidden_for_other_user() -> TbResult<()> {
-    let (mut store, _) = setup();
-    queue("/activities/10", &activity_json(10, "Ride", None));
-    // The upsert creates the activity (owned by user 1); the delete from user
-    // 2 is `Forbidden` by the ownership check on the read.
-    let seen = Arc::new(std::sync::atomic::AtomicI32::new(0));
-    let seen_rec = seen.clone();
-    store.expect_activity_read_by_id().returning(move |_aid| {
-        let n = seen_rec.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        if n == 0 {
-            Ok(None)
-        } else {
-            Ok(Some(activity(activity_id(10), UserId::from(1))))
-        }
-    });
-    store
-        .expect_activity_create()
-        .returning(move |act| Ok(activity(act.id, act.user_id)));
-    let _ = upsert_activity(10, UserId::from(1), &mut store).await?;
-    let res = delete_activity(10, UserId::from(2), &mut store).await;
+    let (mut store, mut facade, _) = setup();
+    // The delete from user 2 is `Forbidden` by the ownership check.
+    facade
+        .expect_delete_activity::<MockStravaConn>()
+        .returning(|_id, _user, _store| Err(Error::Forbidden("not your activity".to_string())));
+    let res = delete_activity(10, UserId::from(2), &facade, &mut store).await;
     assert!(matches!(res, Err(Error::Forbidden(_))));
     Ok(())
 }

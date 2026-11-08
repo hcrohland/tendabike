@@ -11,6 +11,7 @@ use oauth2::RefreshToken;
 use serde::Deserialize;
 
 use crate::*;
+use tb_provider::DomainFacade;
 
 #[derive(
     Clone, Copy, Debug, Display, From, Into, Default, Hash, PartialEq, Eq, Serialize, Deserialize,
@@ -108,20 +109,21 @@ impl StravaUser {
     /// # Returns
     ///
     /// An `TbResult` containing a `StravaUser` representing the upserted user.
-    pub async fn upsert(
+    pub async fn upsert<D: DomainFacade, S: StravaStore + 'static>(
         id: StravaId,
         firstname: &str,
         lastname: &str,
         avatar: &Option<String>,
         refresh: Option<&RefreshToken>,
-        store: &mut impl StravaStore,
+        facade: &D,
+        store: &mut S,
     ) -> TbResult<StravaUser> {
         debug!("got id {}: {} {}", id, firstname, lastname);
 
         let user = id.read(store).await?;
         if let Some(user) = user {
-            user.tendabike_id
-                .update(firstname, lastname, avatar, store)
+            facade
+                .update_user(&user.tendabike_id, firstname, lastname, avatar, store)
                 .await?;
             store
                 .stravauser_update_token(user.id, refresh.map(|t| t.secret().to_string()))
@@ -130,7 +132,9 @@ impl StravaUser {
         }
 
         // create new user!
-        let tendabike_id = crate::UserId::create(firstname, lastname, avatar, store).await?;
+        let tendabike_id = facade
+            .create_user(firstname, lastname, avatar, store)
+            .await?;
 
         let user = StravaUser {
             id,
@@ -149,9 +153,10 @@ impl StravaUser {
     /// Skips the Strava call silently when the rate limiter reports no
     /// budget: hydration is best-effort and must not be blocked by a
     /// non-essential API call.
-    pub async fn update_gear(
-        user: &mut dyn Session,
-        store: &mut impl StravaStore,
+    pub async fn update_gear<D: DomainFacade, S: StravaStore + 'static>(
+        user_id: UserId,
+        facade: &D,
+        store: &mut S,
     ) -> TbResult<Vec<PartId>> {
         if crate::ratelimit::limited_until().is_some() {
             log::debug!("update_gear: rate limited, skipping hydration");
@@ -171,11 +176,11 @@ impl StravaUser {
             shoes: Vec<Gear>,
         }
 
-        let ath: Athlete = request_json(user.user_id(), "/athlete", store).await?;
+        let ath: Athlete = request_json(user_id, "/athlete", store).await?;
 
         let mut parts = Vec::new();
         for gear in ath.bikes.into_iter().chain(ath.shoes) {
-            parts.push(gear::into_partid(gear.id, user, store).await?);
+            parts.push(gear::into_partid(gear.id, user_id, facade, store).await?);
         }
 
         Ok(parts)
@@ -187,12 +192,15 @@ impl StravaUser {
 /// event count and disabled flag. The [`UserStat`] type is provider-neutral
 /// (it lives in `tb_domain`, beside [`Stat`]), so a second provider's
 /// `all_stats` op returns the same type.
-pub async fn get_all_stats(store: &mut impl StravaStore) -> TbResult<Vec<UserStat>> {
+pub async fn get_all_stats<D: DomainFacade, S: StravaStore + 'static>(
+    facade: &D,
+    store: &mut S,
+) -> TbResult<Vec<UserStat>> {
     let users = store.stravauser_get_all().await?;
 
     let mut res = Vec::new();
     for u in users {
-        let stat = u.tendabike_id.get_stat(store).await?;
+        let stat = facade.get_stat(&u.tendabike_id, store).await?;
         let events = store.strava_events_get_count_for_user(&u.id).await?;
         res.push(UserStat {
             stat,
@@ -253,10 +261,11 @@ pub async fn strava_url(user_id: UserId, store: &mut impl StravaDataStore) -> Tb
 /// Delete a user: deauthorize them (admin-only) plus delete their rows.
 /// Admin-only — the acting `session` must be an admin; `tbid` is the target
 /// user.
-pub async fn user_delete(
+pub async fn user_delete<D: DomainFacade, S: StravaStore + 'static>(
     session: &mut dyn Session,
     tbid: UserId,
-    store: &mut impl StravaStore,
+    facade: &D,
+    store: &mut S,
 ) -> TbResult<()> {
     if !session.is_admin() {
         return Err(Error::Forbidden(
@@ -267,7 +276,7 @@ pub async fn user_delete(
     user_deauthorize(session, tbid, store).await?;
     let n = store.stravauser_delete(tbid).await?;
     debug!("Deleted {n} strava user");
-    tbid.delete(store).await
+    facade.delete_user(&tbid, store).await
 }
 
 #[cfg(test)]

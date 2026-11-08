@@ -71,5 +71,9 @@ pub trait ProviderLane: Send + Sync {
     /// queue again (the accepted double read) and handle the event. Returns
     /// the event's [`Summary`] on success, or `None` on a DB failure (the
     /// caller rolls back and backs off).
-    async fn process<C: StravaStore>(&self, user_id: UserId, store: &mut C) -> Option<Summary>;
+    async fn process<C: StravaStore + 'static>(
+        &self,
+        user_id: UserId,
+        store: &mut C,
+    ) -> Option<Summary>;
 }

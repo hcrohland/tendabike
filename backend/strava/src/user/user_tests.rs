@@ -4,22 +4,23 @@ use super::*;
 use crate::event::{AspectType, Event, ObjectType};
 use crate::test_support::{
     MockStravaConn, deauthorizes, gear_json, queue, strava_admin_session, strava_session,
-    strava_user, user,
+    strava_user,
 };
 use tb_domain::MockSession;
+use tb_provider::MockDomainFacade;
 
-fn setup() -> (MockStravaConn, MockSession) {
+fn setup() -> (MockStravaConn, MockDomainFacade, MockSession) {
     let store = MockStravaConn::new();
+    let facade = MockDomainFacade::new();
     let session = strava_session(UserId::from(1), 42.into());
-    (store, session)
+    (store, facade, session)
 }
 
 #[tokio::test]
 async fn upsert_creates_new_user() -> TbResult<()> {
-    let mut store = MockStravaConn::new();
+    let (mut store, mut facade, _) = setup();
     // A new Strava user: the strava read is `None`, so the domain user is
-    // created and the strava row is created. The canned store records the
-    // create's arguments (the names) and the strava row (the tbid binding).
+    // created (via the facade) and the strava row is created.
     let created_user = Arc::new(Mutex::new(None));
     let created_user_rec = created_user.clone();
     let created_strava = Arc::new(Mutex::new(None));
@@ -27,15 +28,15 @@ async fn upsert_creates_new_user() -> TbResult<()> {
     store
         .expect_stravauser_get_by_stravaid()
         .returning(|_id| Ok(None));
-    store
-        .expect_user_create()
-        .returning(move |firstname, lastname, _avatar| {
+    facade.expect_create_user::<MockStravaConn>().returning(
+        move |firstname, lastname, _avatar, _store| {
             created_user_rec
                 .lock()
                 .unwrap()
                 .replace((firstname.to_string(), lastname.to_string()));
-            Ok(user(UserId::from(1)))
-        });
+            Ok(UserId::from(1))
+        },
+    );
     store.expect_stravauser_create().returning(move |su| {
         created_strava_rec.lock().unwrap().replace(su.clone());
         Ok(su)
@@ -46,6 +47,7 @@ async fn upsert_creates_new_user() -> TbResult<()> {
         "Last",
         &None,
         Some(&RefreshToken::new("tok".to_string())),
+        &facade,
         &mut store,
     )
     .await?;
@@ -70,10 +72,10 @@ async fn upsert_creates_new_user() -> TbResult<()> {
 
 #[tokio::test]
 async fn upsert_updates_existing_user() -> TbResult<()> {
-    let mut store = MockStravaConn::new();
+    let (mut store, mut facade, _) = setup();
     // An existing Strava user: the strava read returns the row (bound to tbid
-    // 1), so the domain user is updated (not created) and the token is
-    // refreshed. The canned store records the update's name and the new token.
+    // 1), so the domain user is updated (via the facade) and the token is
+    // refreshed.
     let updated_name: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
     let updated_name_rec = updated_name.clone();
     let updated_token: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
@@ -81,12 +83,12 @@ async fn upsert_updates_existing_user() -> TbResult<()> {
     store
         .expect_stravauser_get_by_stravaid()
         .returning(|_id| Ok(Some(strava_user(UserId::from(1), 42, true))));
-    store
-        .expect_user_update()
-        .returning(move |_uid, firstname, _lastname, _avatar| {
+    facade.expect_update_user::<MockStravaConn>().returning(
+        move |_uid, firstname, _lastname, _avatar, _store| {
             *updated_name_rec.lock().unwrap() = Some(firstname.to_string());
-            Ok(user(UserId::from(1)))
-        });
+            Ok(UserId::from(1))
+        },
+    );
     store
         .expect_stravauser_update_token()
         .returning(move |_id, refresh| {
@@ -99,6 +101,7 @@ async fn upsert_updates_existing_user() -> TbResult<()> {
         "Name",
         &None,
         Some(&RefreshToken::new("tok2".to_string())),
+        &facade,
         &mut store,
     )
     .await?;
@@ -116,23 +119,24 @@ async fn upsert_updates_existing_user() -> TbResult<()> {
 
 #[tokio::test]
 async fn upsert_without_refresh_is_disabled() -> TbResult<()> {
-    let mut store = MockStravaConn::new();
+    let (mut store, mut facade, _) = setup();
     // No refresh token: the created strava row is disabled.
     store
         .expect_stravauser_get_by_stravaid()
         .returning(|_id| Ok(None));
-    store
-        .expect_user_create()
-        .returning(move |_f, _l, _a| Ok(user(UserId::from(1))));
+    facade
+        .expect_create_user::<MockStravaConn>()
+        .returning(|_f, _l, _a, _s| Ok(UserId::from(1)));
     store.expect_stravauser_create().returning(Ok);
-    let user = StravaUser::upsert(43.into(), "First", "Last", &None, None, &mut store).await?;
+    let user =
+        StravaUser::upsert(43.into(), "First", "Last", &None, None, &facade, &mut store).await?;
     assert!(user.disabled());
     Ok(())
 }
 
 #[tokio::test]
 async fn read_stravauser() {
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     // `StravaUser::read` is a direct strava read: tbid 1 resolves, tbid 2 does
     // not.
     store.expect_stravauser_get_by_tbid().returning(|id| {
@@ -153,7 +157,7 @@ async fn read_stravauser() {
 
 #[tokio::test]
 async fn strava_id_read_option() {
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     // `StravaId::read` resolves a known strava id to `Some`, an unknown one to
     // `None`.
     store.expect_stravauser_get_by_stravaid().returning(|id| {
@@ -179,7 +183,7 @@ async fn strava_id_read_option() {
 
 #[tokio::test]
 async fn update_token() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     // `update_token` is a direct strava write: the canned store returns the
     // user with the token it was given (or disabled for `None`).
     store
@@ -205,7 +209,7 @@ async fn update_token() -> TbResult<()> {
 
 #[tokio::test]
 async fn disable_removes_events_and_token() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     // `disable` drops the user's events and clears their token. The canned
     // store records both side effects.
     store.expect_strava_event_create().returning(|_e| Ok(()));
@@ -250,7 +254,7 @@ async fn disable_removes_events_and_token() -> TbResult<()> {
 
 #[tokio::test]
 async fn deauthorizes_user_and_events() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     // Deauthorize: the acting admin (user 2) revokes the target's (user 1)
     // Strava token (recorded in the thread-local seam) and drops their events
     // + token. The target's strava id (42) comes from the warm token cache
@@ -301,10 +305,9 @@ async fn deauthorizes_user_and_events() -> TbResult<()> {
 
 #[tokio::test]
 async fn user_delete_removes_everything() -> TbResult<()> {
-    let (mut store, _) = setup();
+    let (mut store, mut facade, _) = setup();
     // Delete: deauthorize (revokes the token, drops events) plus the strava
-    // row and the domain cascade. The canned store records the strava row
-    // delete, the token clear, and the domain user delete.
+    // row and the domain cascade (via the facade).
     store.expect_strava_event_create().returning(|_e| Ok(()));
     store
         .expect_strava_events_delete_for_user()
@@ -323,35 +326,15 @@ async fn user_delete_removes_everything() -> TbResult<()> {
         *strava_deleted_rec.lock().unwrap() = 1;
         Ok(1)
     });
-    // The domain cascade reads the user's state (all empty) and deletes each
-    // collection plus the user row.
-    store
-        .expect_activity_get_all()
-        .returning(|_uid| Ok(Vec::new()));
-    store
-        .expect_shops_get_all_for_user()
-        .returning(|_uid| Ok(Vec::new()));
-    store
-        .expect_part_get_all_for_userid()
-        .returning(|_uid| Ok(Vec::new()));
-    store.expect_by_user().returning(|_uid| Ok(Vec::new()));
-    store
-        .expect_notification_all_for_user()
-        .returning(|_uid| Ok(Vec::new()));
-    store.expect_services_delete().returning(|_s| Ok(0));
-    store.expect_serviceplans_delete().returning(|_s| Ok(0));
-    store
-        .expect_attachments_delete_by_parts()
-        .returning(|_p| Ok(0));
-    store.expect_activities_delete().returning(|_a| Ok(0));
-    store.expect_parts_delete().returning(|_p| Ok(0));
-    store.expect_usages_delete().returning(|_u| Ok(0));
+    // The domain cascade is handled by the facade.
     let user_deleted = Arc::new(Mutex::new(0));
     let user_deleted_rec = user_deleted.clone();
-    store.expect_user_delete().returning(move |_user| {
-        *user_deleted_rec.lock().unwrap() = 1;
-        Ok(1)
-    });
+    facade
+        .expect_delete_user::<MockStravaConn>()
+        .returning(move |_user, _store| {
+            *user_deleted_rec.lock().unwrap() = 1;
+            Ok(())
+        });
     store
         .strava_event_create(Event {
             owner_id: 42.into(),
@@ -364,7 +347,7 @@ async fn user_delete_removes_everything() -> TbResult<()> {
     // The acting admin is a distinct user from the target (tbid 1): the
     // target's token (strava 42) is revoked, not the actor's.
     let mut actor = strava_admin_session(UserId::from(2), 43.into());
-    user_delete(&mut actor, UserId::from(1), &mut store).await?;
+    user_delete(&mut actor, UserId::from(1), &facade, &mut store).await?;
     assert_eq!(deauthorizes(), vec![42.into()]);
     assert_eq!(
         *strava_deleted.lock().unwrap(),
@@ -386,7 +369,7 @@ async fn user_delete_removes_everything() -> TbResult<()> {
 
 #[tokio::test]
 async fn deauthorize_requires_an_admin() {
-    let (mut store, mut session) = setup();
+    let (mut store, _facade, mut session) = setup();
     // A non-admin acting session is `Forbidden` (the domain enforces the
     // invariant, not just the web layer's AxumAdmin guard). No store read fires.
     let res = user_deauthorize(&mut session, UserId::from(1), &mut store).await;
@@ -395,45 +378,15 @@ async fn deauthorize_requires_an_admin() {
 
 #[tokio::test]
 async fn user_delete_requires_an_admin() {
-    let (mut store, mut session) = setup();
+    let (mut store, _facade, mut session) = setup();
     // A non-admin acting session is `Forbidden`. No store read fires.
-    let res = user_delete(&mut session, UserId::from(1), &mut store).await;
+    let res = user_delete(&mut session, UserId::from(1), &_facade, &mut store).await;
     assert!(matches!(res, Err(Error::Forbidden(_))));
 }
 
 #[tokio::test]
-async fn stats_include_event_counts() -> TbResult<()> {
-    let mut store = MockStravaConn::new();
-    // `get_all_stats` reads every strava user, each user's stat (user row,
-    // parts, activities), and each user's event count.
-    store.expect_stravauser_get_all().returning(|| {
-        Ok(vec![
-            strava_user(UserId::from(1), 42, true),
-            strava_user(UserId::from(2), 43, false),
-        ])
-    });
-    store.expect_user_get().returning(move |uid| Ok(user(uid)));
-    store
-        .expect_part_get_all_for_userid()
-        .returning(|_uid| Ok(Vec::new()));
-    store
-        .expect_activity_get_all()
-        .returning(|_uid| Ok(Vec::new()));
-    store
-        .expect_strava_events_get_count_for_user()
-        .returning(move |user| Ok(if *user == 42.into() { 1 } else { 0 }));
-    let stats = get_all_stats(&mut store).await?;
-    assert_eq!(stats.len(), 2);
-    let enabled = stats.iter().find(|s| !s.disabled).unwrap();
-    assert_eq!(enabled.events, 1);
-    let disabled = stats.iter().find(|s| s.disabled).unwrap();
-    assert_eq!(disabled.events, 0);
-    Ok(())
-}
-
-#[tokio::test]
 async fn user_strava_url() {
-    let (mut store, _) = setup();
+    let (mut store, _facade, _) = setup();
     // `strava_url` is a direct strava read: tbid 1 resolves to its athlete
     // URL, tbid 99 does not.
     store.expect_stravauser_get_by_tbid().returning(|id| {
@@ -453,23 +406,24 @@ async fn user_strava_url() {
 
 #[tokio::test]
 async fn update_gear_imports_bikes_and_shoes() -> TbResult<()> {
-    let (mut store, mut session) = setup();
+    let (mut store, mut facade, _session) = setup();
     queue(
         "/athlete",
         r#"{"bikes":[{"id":"b1"}],"shoes":[{"id":"g1"}]}"#,
     );
     queue("/gear/b1", &gear_json("b1", Some(0)));
     queue("/gear/g1", &gear_json("g1", None));
-    // No gear is imported yet: each fetch creates a part. The canned store
+    // No gear is imported yet: each fetch creates a part. The facade
     // assigns ids in order and records each part's `what` (bike vs shoes).
     let next_id = Arc::new(std::sync::atomic::AtomicI32::new(0));
     let next_id_rec = next_id.clone();
     let whats = Arc::new(Mutex::new(Vec::new()));
     let whats_rec = whats.clone();
-    store.expect_partid_get_by_source().returning(|_s| Ok(None));
-    store
-        .expect_part_create()
-        .returning(move |what, _n, _v, _m, _p, _src, _u, _o, _s| {
+    facade
+        .expect_part_by_source::<MockStravaConn>()
+        .returning(|_s, _store| Ok(None));
+    facade.expect_create_part::<MockStravaConn>().returning(
+        move |_name, _vendor, _model, what, _source, _purchase, _user, _store| {
             whats_rec.lock().unwrap().push(what);
             let id = next_id_rec.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
             Ok(crate::test_support::part(
@@ -478,8 +432,9 @@ async fn update_gear_imports_bikes_and_shoes() -> TbResult<()> {
                 what,
                 None,
             ))
-        });
-    let parts = StravaUser::update_gear(&mut session, &mut store).await?;
+        },
+    );
+    let parts = StravaUser::update_gear(UserId::from(1), &facade, &mut store).await?;
     assert_eq!(parts, vec![PartId::from(1), PartId::from(2)]);
     assert_eq!(
         whats.lock().unwrap().as_slice(),

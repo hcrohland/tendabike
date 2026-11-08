@@ -59,7 +59,13 @@ impl ProviderLane for StravaLane {
     /// read the queue again (the accepted double read) and handle the event.
     /// Delegates to [`tb_strava::event::process`]. Returns the event's
     /// [`Summary`] on success, or `None` on a DB failure.
-    async fn process<C: StravaStore>(&self, user_id: UserId, store: &mut C) -> Option<Summary> {
-        process(user_id, store).await.ok()
+    async fn process<C: StravaStore + 'static>(
+        &self,
+        user_id: UserId,
+        store: &mut C,
+    ) -> Option<Summary> {
+        process(user_id, &tb_provider::DomainFacadeImpl, store)
+            .await
+            .ok()
     }
 }
