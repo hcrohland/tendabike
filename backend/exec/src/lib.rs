@@ -45,12 +45,17 @@
 
 mod api;
 mod executor;
+mod facade;
 mod message;
 mod registry;
 mod txn;
 
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
+
 pub use api::*;
 pub use executor::*;
+pub use facade::*;
 pub use message::*;
 pub use registry::*;
 pub use txn::*;
