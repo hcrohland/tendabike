@@ -28,7 +28,7 @@
 //! [`Probe`] outcome is generic over the provider's event type, so the
 //! loop's select and reclaim policy are provider-agnostic.
 
-use tb_domain::{Summary, UserId};
+use tb_domain::{PartId, Summary, TbResult, UserId, UserStat};
 
 /// The outcome of one probe of the provider's event queue (one transaction).
 /// Generic over the provider's event type, so the loop's select and reclaim
@@ -52,6 +52,12 @@ pub enum Probe<E> {
 /// the provider's event queue (one transaction's housekeeping), and
 /// `process` handles a queued event (the work transaction). The loop is
 /// generic over this trait and never names a concrete provider.
+///
+/// Beyond the queue's two-step (`probe`/`process`), the lane carries the
+/// provider-specific ops the loop drives in its own transaction — `insert_sync`
+/// (the onboarding cutover's provider side), `update_gear` (the hydration
+/// write), and `all_stats` (the admin read). These are provider-specific: a
+/// second provider implements them for its own domain.
 ///
 /// Each provider crate implements it for its own lane; a second provider (a
 /// new crate implementing [`ProviderLane`] + its data store) plugs in without
@@ -80,4 +86,27 @@ pub trait ProviderLane: Send + Sync {
     /// the event's [`Summary`] on success, or `None` on a DB failure (the
     /// caller rolls back and backs off).
     async fn process(&self, user_id: UserId, store: &mut Self::Store) -> Option<Summary>;
+
+    /// Queue a sync event on the provider's event queue (the onboarding
+    /// cutover's provider side, spec #558 §5.1): the loop runs it in the
+    /// write's own transaction, so the queued event commits with the domain
+    /// half. `auto` is the migration flag — a `true` sync is the one-time
+    /// onboarding backfill, a `false` sync a routine one.
+    async fn insert_sync(
+        &self,
+        user_id: UserId,
+        time: i64,
+        auto: bool,
+        store: &mut Self::Store,
+    ) -> TbResult<()>;
+
+    /// Import the user's gear from the provider, returning the created part
+    /// ids (the hydration write's provider side, spec #558 §4): the loop runs
+    /// it in its own transaction and reads the parts it created for the frame.
+    async fn update_gear(&self, user_id: UserId, store: &mut Self::Store) -> TbResult<Vec<PartId>>;
+
+    /// Read every user's provider-neutral stat (the admin read's provider
+    /// side, spec #558 §3.3): the domain [`UserStat`] — the stat plus the
+    /// provider's queued-event count and disabled flag.
+    async fn all_stats(&self, store: &mut Self::Store) -> TbResult<Vec<UserStat>>;
 }
