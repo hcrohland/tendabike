@@ -15,3 +15,13 @@ Comments describe what the code **does**, not what **changed**. The commit messa
 ## User-facing strings
 
 Reuse an existing message that already expresses the same text rather than adding a duplicate. The shared `action_*` labels (`action_delete`, `action_close`, …) cover most buttons and are the first place to look; a new message is for genuinely new phrasing, not a rewording of a string the app already has.
+
+## Generality
+
+Flag designs that are more specific than their weakest consumer requires. The seam should be as general as the least-capable caller needs:
+
+- A trait bound that only the concrete impl needs belongs on the impl, not the trait (consumers' mocks shouldn't carry it).
+- Identical setup/teardown across multiple test modules is one helper, not N copies.
+- A mock that implements traits the code under test never calls is over-broad; narrow it to what's exercised.
+
+The test: could a second consumer (a new provider, a new test module) use this shape unchanged? If not, the shape is carrying case-specific weight that belongs elsewhere.
