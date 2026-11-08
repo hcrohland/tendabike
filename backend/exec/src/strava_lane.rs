@@ -82,8 +82,8 @@ impl<S: StravaStore> Default for StravaLane<S> {
 // `StravaLane<S>` holds no `S` data (only a `PhantomData<S>` marker), so it is
 // safe to share across threads even when `S` is not `Sync` (a database
 // connection, like `SqlxConn`, is `Send` but not `Sync`). The auto-derived
-// `Sync` would wrongly require `S: Sync`; this sound `unsafe impl` restores
-// the unconditional `Sync` the `ProviderLane: Send + Sync` bound needs.
+// `Sync` would require `S: Sync`; this sound `unsafe impl` provides the
+// unconditional `Sync` the `ProviderLane: Send + Sync` bound needs.
 unsafe impl<S: StravaStore> Sync for StravaLane<S> {}
 
 impl<S: StravaStore> StravaLane<S> {
