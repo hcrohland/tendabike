@@ -45,4 +45,4 @@ jobs:
           # persists the intermediate build-deps layer that makes new
           # commits build incrementally.
           cache-from: type=gha,mode=max
-          cache-to: type=gha,mode=min
+          cache-to: type=gha,mode=max
