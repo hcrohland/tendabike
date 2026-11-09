@@ -41,7 +41,7 @@ const bikeType = {
 };
 const wheelAsmType = { ...wheelType, main: 1 };
 
-// Door test suite for the new public surface of serviceplan.ts (issue #327).
+// Door test suite for the new public surface of serviceplan.ts.
 // Fixture helpers are copied from serviceplan.test.ts on purpose: importing
 // that file would re-run its describes. The one exception is `usage`, shared
 // from test/helpers (a non-test module, safe to import).
@@ -166,7 +166,7 @@ describe("duesForPlans", () => {
   });
 
   // The door, due_for and plan.services read the module state objects in
-  // their bodies (issue #374); seed the world and reset it between tests.
+  // their bodies; seed the world and reset it between tests.
   beforeEach(() => {
     services.setMap([]);
     usages.setMap([]);
@@ -219,7 +219,7 @@ describe("duesForPlans", () => {
   });
 
   // The per-limit severity verdict: the thresholds the badge used to
-  // re-derive itself (issue #345), asserted through the door.
+  // re-derive itself, asserted through the door.
   const kmOnly = (distance: number) => {
     usages.setMap([usage("u_now", { distance })]);
     return duesForPlans(p, [plan({ what: 10, km: "100" })]).km!;
@@ -263,8 +263,8 @@ describe("duesForPlans", () => {
 });
 
 describe("gearsForPlan", () => {
-  // The door and its helper read the module state objects in their bodies
-  // (issue #372); seed the world and reset it between tests.
+  // The door and its helper read the module state objects in their bodies;
+  // seed the world and reset it between tests.
   beforeEach(() => {
     parts.setMap([]);
     attachments.setMap([]);

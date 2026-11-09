@@ -1,4 +1,4 @@
-//! A `mockall` `mock!` witness for the `Store` seam (issue #630).
+//! A `mockall` `mock!` witness for the `Store` seam.
 //!
 //! [`MockStore`] is a single type implementing the full `Store` seam — the nine
 //! sub-traits (`PartStore`, `UserStore`, `ShopStore`, `ActivityStore`,

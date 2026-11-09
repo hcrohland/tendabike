@@ -21,8 +21,8 @@
 //! This module contains the domain logic for notifications.
 //!
 //! A [`Notification`] is a message addressed to a single recipient, created
-//! as a side effect of a domain operation — never directly by the user
-//! (issue #586). It has a kind and a lifecycle.
+//! as a side effect of a domain operation — never directly by the user.
+//! It has a kind and a lifecycle.
 //!
 //! **Lifecycles:**
 //! - **Persistent** (subscription kinds): a read marks it `seen` and it stays
@@ -44,7 +44,7 @@ use uuid::Uuid;
 use crate::*;
 
 /// A message addressed to a single recipient, created as a side effect of a
-/// domain operation — never directly by the user (issue #586).
+/// domain operation — never directly by the user.
 #[serde_as]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Notification {

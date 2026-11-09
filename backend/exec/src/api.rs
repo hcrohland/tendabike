@@ -113,7 +113,7 @@ pub trait ServiceApi: Send + Sync {
 #[cfg_attr(feature = "mock", mockall::automock)]
 #[async_trait::async_trait]
 pub trait ProviderService: Send + Sync {
-    /// Register a shop stream for `shop_id` (spec #517, ticket #582): the
+    /// Register a shop stream for `shop_id` (spec #517): the
     /// caller must be the shop owner (a non-owner is `Forbidden`, which the
     /// web layer maps to a 403); the channel is created on demand and the
     /// returned receiver is a subscription to it.

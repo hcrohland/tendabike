@@ -250,7 +250,7 @@ export function localizeLimitKey(key: limit_keys): string {
 }
 
 /*
- * Doors: the narrow public surface of the plan rule (issue #323).
+ * Doors: the narrow public surface of the plan rule.
  * Signatures carry only entity values and time; the rule reads the module's
  * state objects in the function bodies. Dependencies register at the
  * enclosing reactive call site.
@@ -260,8 +260,8 @@ export function localizeLimitKey(key: limit_keys): string {
  * The plan module's per-limit due value: the remaining `due`, the limit
  * `plan`, and the severity verdict the module computes for it (see
  * severity_for). The badge and chip render from it; the part-card status
- * module sequenced after this ticket exposes the same value. One-export
- * extension of the locked #323 surface (issue #345).
+ * module will expose the same value. A one-export extension of the plan
+ * rule's public surface.
  */
 export class Due {
   due: number;

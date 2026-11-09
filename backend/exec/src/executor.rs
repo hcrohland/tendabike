@@ -222,7 +222,7 @@ pub(crate) async fn select_message<E>(
     }
 }
 
-/// The per-user executor loop's context (issue #661): the loop's wiring and
+/// The per-user executor loop's context: the loop's wiring and
 /// its mutable state in one type, so the loop's full set of dependencies is
 /// readable from one struct definition and its stateful behavior has a
 /// single home.
