@@ -9,7 +9,7 @@ use tb_domain::{TbResult, UserId};
 use tb_strava::{StravaId, StravaUser, event::Event};
 
 #[derive(Clone, Debug, Default, FromRow)]
-pub struct DbStravaUser {
+pub(crate) struct DbStravaUser {
     id: i32,
     tendabike_id: i32,
     refresh_token: Option<String>,
@@ -45,15 +45,15 @@ impl From<DbStravaUser> for StravaUser {
 }
 
 #[derive(Debug, Default, FromRow)]
-pub struct DbEvent {
+pub(crate) struct DbEvent {
     id: Option<i32>,
-    pub object_type: String,
-    pub object_id: i64,
-    pub aspect_type: String,
+    object_type: String,
+    object_id: i64,
+    aspect_type: String,
     updates: String,
     owner_id: i32,
     subscription_id: i32,
-    pub event_time: i64,
+    event_time: i64,
 }
 
 impl From<Event> for DbEvent {

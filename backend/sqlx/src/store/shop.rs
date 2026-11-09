@@ -5,7 +5,7 @@ use crate::{SqlxConn, into_domain, vec_into};
 use tb_domain::{Shop, ShopId, ShopSubscription, SubscriptionStatus, TbResult, UserId};
 
 #[derive(Clone, Debug, FromRow)]
-pub struct DbShop {
+pub(crate) struct DbShop {
     id: i32,
     owner: i32,
     name: String,
@@ -57,7 +57,7 @@ impl From<DbShop> for Shop {
 }
 
 #[derive(Clone, Debug, FromRow)]
-pub struct DbSubscription {
+pub(crate) struct DbSubscription {
     id: i32,
     shop_id: i32,
     user_id: i32,

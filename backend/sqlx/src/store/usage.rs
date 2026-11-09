@@ -6,21 +6,21 @@ use crate::{SqlxConn, into_domain, option_into};
 use tb_domain::{TbResult, Usage, UsageId, UsageStore};
 
 #[derive(Clone, Debug, PartialEq, Default, FromRow)]
-pub struct DbUsage {
+pub(crate) struct DbUsage {
     // id for referencing
-    pub id: Uuid,
+    id: Uuid,
     // usage time
-    pub time: i32,
+    time: i32,
     /// Usage distance
-    pub distance: i32,
+    distance: i32,
     /// Overall climbing
-    pub climb: i32,
+    climb: i32,
     /// Overall descending
-    pub descend: i32,
+    descend: i32,
     /// Overall energy
-    pub energy: i32,
+    energy: i32,
     /// number of activities
-    pub count: i32,
+    count: i32,
 }
 
 impl From<&Usage> for DbUsage {

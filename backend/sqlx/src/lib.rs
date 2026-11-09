@@ -1,4 +1,4 @@
-pub use tb_sqlx::*;
+pub use tb_sqlx::{DbPool, SqlxConn};
 
 mod prepopulated_data;
 mod snapshot;
