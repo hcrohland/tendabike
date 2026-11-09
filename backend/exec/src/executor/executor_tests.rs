@@ -58,13 +58,12 @@ use tokio::sync::{broadcast, oneshot};
 use uuid::Uuid;
 
 use super::{
-    DbBackoff, LoopContext, Select, next_action, run_request, select_message,
+    Action, DbBackoff, LoopContext, Select, next_action, run_request, select_message,
     sleep_or_take_request, stop_remaining,
 };
 use crate::message::{Request, push_frame};
 use crate::{
-    Action, DeliveryContext, FramePusher, Message, MockDomainFacade, Txn, TxnSource,
-    request_channel,
+    DeliveryContext, FramePusher, Message, MockDomainFacade, Txn, TxnSource, request_channel,
 };
 
 // --- The `mock!` connection witness ---

@@ -36,7 +36,7 @@ impl InEvent {
     /// # Returns
     ///
     /// Returns a `Result` containing an `Event` struct if the conversion is successful, or an `anyhow::Error` if it fails.
-    pub async fn into_event(self, store: &mut impl StravaDataStore) -> TbResult<Event> {
+    async fn into_event(self, store: &mut impl StravaDataStore) -> TbResult<Event> {
         if StravaId::read(&self.owner_id.into(), store)
             .await?
             .is_none()
@@ -453,7 +453,7 @@ pub async fn sync_queued_for_user(
 /// One outcome of a read of the `strava_events` queue (spec #446 §4.6):
 /// what is interesting for the user right now, and when the queue is paused.
 #[derive(Debug, Clone, PartialEq)]
-pub enum QueueRead {
+pub(crate) enum QueueRead {
     /// The event to process (the read-side dedup already applied).
     Event(Event),
     /// The Strava rate-limit budget is exhausted until this unix time: the
@@ -473,10 +473,13 @@ pub enum QueueRead {
 ///   same object are deleted and the latest is returned.
 ///
 /// The read runs inside the caller's transaction (the deletions above commit
-/// or roll back with it). `pub` because the caller owns the "read next Strava
-/// event" step; reading the queue stays a Strava-side concern, so the
-/// function stays here rather than being inlined in the caller.
-pub async fn get_event(user_id: UserId, store: &mut impl StravaDataStore) -> TbResult<QueueRead> {
+/// or roll back with it). Crate-internal: the lane's `probe` is the only
+/// caller; reading the queue stays a Strava-side concern, so the function
+/// stays here rather than being inlined in the lane.
+pub(crate) async fn get_event(
+    user_id: UserId,
+    store: &mut impl StravaDataStore,
+) -> TbResult<QueueRead> {
     // Proactive rate-limit gate: if the budget is exhausted, report the
     // window boundary without dequeuing (the event stays queued).
     if let Some(until) = crate::ratelimit::limited_until() {
@@ -523,7 +526,7 @@ async fn next_activities(
     .await
 }
 
-pub async fn process<D: DomainFacade<S>, S: StravaDataStore>(
+pub(crate) async fn process<D: DomainFacade<S>, S: StravaDataStore>(
     user_id: UserId,
     facade: &D,
     store: &mut S,

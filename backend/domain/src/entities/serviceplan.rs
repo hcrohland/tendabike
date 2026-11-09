@@ -18,7 +18,7 @@ impl ServicePlanId {
         store.serviceplan_get(self).await
     }
 
-    pub async fn delete(
+    pub(crate) async fn delete(
         self,
         user: &dyn Session,
         store: &mut (impl PartStore + ServicePlanStore + ServiceStore + ShopStore),
@@ -106,7 +106,7 @@ impl ServicePlan {
         Ok(())
     }
 
-    pub async fn create(
+    pub(crate) async fn create(
         mut self,
         user: &dyn Session,
         store: &mut (impl PartStore + ServicePlanStore),
@@ -119,7 +119,7 @@ impl ServicePlan {
         store.serviceplan_create(self).await
     }
 
-    pub async fn update(
+    pub(crate) async fn update(
         mut self,
         user: &dyn Session,
         store: &mut (impl PartStore + ServicePlanStore + ShopStore),

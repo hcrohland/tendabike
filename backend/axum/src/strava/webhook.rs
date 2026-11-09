@@ -66,7 +66,7 @@ use tb_domain::{ApiRead, ApiWrite, Error, ReadOutcome, TbResult};
 use tb_strava::event::InEvent;
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct Hub {
+pub(crate) struct Hub {
     #[serde(rename = "hub.mode")]
     #[serde(skip_serializing)]
     mode: String,

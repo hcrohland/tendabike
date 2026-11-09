@@ -4,7 +4,7 @@ use crate::{SqlxConn, into_domain};
 use tb_domain::{OnboardingStatus, TbResult, User, UserId};
 
 #[derive(Clone, Debug, FromRow)]
-pub struct DbUser {
+struct DbUser {
     id: i32,
     name: String,
     firstname: String,

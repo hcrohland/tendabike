@@ -71,7 +71,7 @@ impl AttachmentDetail {
     ///
     /// `part_id + "/" + attached` in epoch milliseconds — the same key format as the
     /// client's `Attachment.idx`, so the wire key names the client's map row directly.
-    pub fn idx(&self) -> String {
+    pub(crate) fn idx(&self) -> String {
         format!(
             "{}/{}",
             self.a.part_id,
@@ -568,7 +568,7 @@ pub async fn attach_assembly(
     Ok(summary)
 }
 
-pub async fn detach_assembly(
+pub(crate) async fn detach_assembly(
     user: &dyn Session,
     part_id: PartId,
     time: OffsetDateTime,
@@ -587,7 +587,7 @@ pub async fn detach_assembly(
     attachment.detach_assembly(time, all, store).await
 }
 
-pub async fn dispose_assembly(
+pub(crate) async fn dispose_assembly(
     user: &dyn Session,
     part_id: PartId,
     time: OffsetDateTime,
@@ -640,7 +640,7 @@ async fn dispose_subparts(
     Ok(res)
 }
 
-pub async fn recover_assembly(
+pub(crate) async fn recover_assembly(
     user: &dyn Session,
     part: PartId,
     all: bool,
@@ -660,7 +660,7 @@ pub async fn recover_assembly(
     }
 }
 
-pub async fn is_attached(
+pub(crate) async fn is_attached(
     part: PartId,
     time: OffsetDateTime,
     store: &mut impl AttachmentStore,

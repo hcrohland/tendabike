@@ -17,6 +17,8 @@
 //!   sqlx seam, `sqlx/tests/store_seam.rs`, where Postgres is the source of
 //!   truth.
 
+use std::collections::HashSet;
+
 use super::*;
 use crate::test_support::{MockStore, fixtures, mock_session, only_tombstone, part_type_ids};
 
@@ -25,10 +27,6 @@ use part_type_ids::BIKE;
 
 fn activity_start() -> OffsetDateTime {
     OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
-}
-
-fn later_start() -> OffsetDateTime {
-    OffsetDateTime::from_unix_timestamp(1700100000).unwrap()
 }
 
 fn sample_activity() -> Activity {
@@ -519,42 +517,6 @@ async fn activity_update_missing_activity_returns_not_found() -> TbResult<()> {
     };
     let result = fake.update(&test_session(), &mut store).await;
     assert!(result.is_err());
-    Ok(())
-}
-
-// === Suite 6: categories (mapping) ===
-
-/// Activity::categories maps the user's activity types to unique gear types:
-/// two rides of the same type collapse to one gear type (the bike).
-#[tokio::test]
-async fn activity_categories_returns_unique_gear_types() -> TbResult<()> {
-    let mut store = MockStore::new();
-    let acts = vec![
-        sample_activity(),
-        Activity {
-            id: ActivityId::from("2"),
-            name: "Another Ride".to_string(),
-            start: later_start(),
-            ..sample_activity()
-        },
-    ];
-    store
-        .expect_activity_get_all()
-        .returning(move |_| Ok(acts.clone()));
-
-    let categories = Activity::categories(&test_session(), &mut store).await?;
-    assert_eq!(categories, HashSet::from([BIKE]));
-    Ok(())
-}
-
-/// Activity::categories is empty for a user with no activities.
-#[tokio::test]
-async fn activity_categories_empty_for_no_activities() -> TbResult<()> {
-    let mut store = MockStore::new();
-    store.expect_activity_get_all().returning(|_| Ok(vec![]));
-
-    let categories = Activity::categories(&mock_session(UserId::from(99)), &mut store).await?;
-    assert!(categories.is_empty());
     Ok(())
 }
 

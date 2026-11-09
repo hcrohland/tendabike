@@ -19,6 +19,9 @@ use std::{
 use crate::*;
 
 /// An entity that carries its own map key: the id under which its [`IdKeyedMap`] entry lives.
+///
+/// `pub` because the `pub` `IdKeyedMap` upsert ops are bounded by it: the
+/// bound on a public type keeps the trait as visible as the map.
 pub trait IdKeyed {
     /// The map key type.
     type Key;

@@ -39,14 +39,18 @@
 use tb_domain::{
     ApiRead, ApiWrite, ReadOutcome, Session, Summary, TbResult, UserStat, WriteOutcome,
 };
+#[cfg(test)]
 use tb_strava::event::Event;
-use tokio::sync::{broadcast, mpsc, oneshot};
+#[cfg(test)]
+use tokio::sync::broadcast;
+use tokio::sync::{mpsc, oneshot};
 
 /// The one message the per-user executor consumes: a unified wrapper over the
 /// message sources (spec §4.2) — the user's API-write channel plus the
 /// provider event queue.
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq)]
-pub enum Message {
+pub(crate) enum Message {
     /// An in-memory write from the user's API channel.
     ApiWrite(ApiWrite),
     /// An event read from the user's `strava_events` queue.
@@ -73,9 +77,10 @@ pub enum Message {
 ///   §3.3): `get_all_stats` is a `tb_strava` op, so it rides the admin
 ///   user's channel as an exec-level variant, dispatched loop-side.
 ///
-/// `pub` (fields too) because the web layer builds one per request and the
-/// executor consumes it; the oneshots keep the type from deriving `Clone`
-/// or `PartialEq` — those live on the payloads the request bundles.
+/// `pub` (the fields stay private) because the integration (seam) suite —
+/// a separate crate — builds one per request through the constructors and
+/// the executor consumes it; the oneshots keep the type from deriving
+/// `Clone` or `PartialEq` — those live on the payloads the request bundles.
 pub enum Request {
     /// An API write from the user's channel.
     Write {
@@ -158,7 +163,7 @@ impl Request {
 
     /// The admin stats read and its session with a fresh reply channel (spec
     /// #558 §3.3).
-    pub fn new_all_stats(
+    pub(crate) fn new_all_stats(
         session: Box<dyn Session>,
     ) -> (Self, oneshot::Receiver<TbResult<Vec<UserStat>>>) {
         let (reply, rx) = oneshot::channel();
@@ -195,8 +200,8 @@ impl std::fmt::Debug for Request {
     }
 }
 
-/// The send half of a user's request channel (held by the web layer).
-pub type RequestSender = mpsc::UnboundedSender<Request>;
+/// The send half of a user's request channel (held by the registry).
+pub(crate) type RequestSender = mpsc::UnboundedSender<Request>;
 
 /// The receive half of a user's request channel (consumed by the loop).
 pub type RequestReceiver = mpsc::UnboundedReceiver<Request>;
@@ -217,7 +222,8 @@ pub fn request_channel() -> (RequestSender, RequestReceiver) {
 /// one. A send that finds no receiver (or a lagged one) is dropped without
 /// error — a lost frame just means a not-yet-connected or slow client, and
 /// the client's reconnect + full refresh covers it.
-pub fn push_frame(frames: &broadcast::Sender<Summary>, summary: &Summary) {
+#[cfg(test)]
+pub(crate) fn push_frame(frames: &broadcast::Sender<Summary>, summary: &Summary) {
     if summary.is_empty() {
         return;
     }

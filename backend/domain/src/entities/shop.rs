@@ -67,12 +67,12 @@ pub struct ShopId(i32);
 
 impl ShopId {
     /// Get a shop by ID, checking that the user has access to it (ownership only)
-    pub async fn get(id: i32, user: UserId, store: &mut impl ShopStore) -> TbResult<ShopId> {
+    pub(crate) async fn get(id: i32, user: UserId, store: &mut impl ShopStore) -> TbResult<ShopId> {
         Ok(ShopId(id).check_owner(user, store).await?.id)
     }
 
     /// Get a shop by ID for read access (owner, or active subscriber)
-    pub async fn get_for_read(
+    pub(crate) async fn get_for_read(
         id: i32,
         user: UserId,
         store: &mut impl ShopStore,
@@ -92,11 +92,7 @@ impl ShopId {
     }
 
     /// Check if the user has read access to this shop (owner, or active subscriber)
-    pub async fn check_read_access(
-        self,
-        user: UserId,
-        store: &mut impl ShopStore,
-    ) -> TbResult<ShopId> {
+    async fn check_read_access(self, user: UserId, store: &mut impl ShopStore) -> TbResult<ShopId> {
         let shop = store.shop_get(self).await?;
         let is_owner = shop.owner == user;
 
@@ -108,7 +104,7 @@ impl ShopId {
     }
 
     /// Create a new shop
-    pub async fn create(
+    pub(crate) async fn create(
         name: String,
         description: Option<String>,
         auto_approve: bool,
@@ -121,7 +117,7 @@ impl ShopId {
     }
 
     /// Update an existing shop
-    pub async fn update(
+    pub(crate) async fn update(
         self,
         name: String,
         description: Option<String>,
@@ -136,7 +132,7 @@ impl ShopId {
     }
 
     /// Delete a shop (only if it has no bikes)
-    pub async fn delete(
+    pub(crate) async fn delete(
         self,
         user: UserId,
         store: &mut (impl PartStore + ShopStore),
@@ -161,7 +157,7 @@ impl ShopId {
     /// Side effect: a `part_registered` (transient) notification to the shop
     /// owner, naming the top-level part (a cascade of attached subparts does
     /// not fan out).
-    pub async fn register_part(
+    pub(crate) async fn register_part(
         self,
         part_id: PartId,
         session: &dyn Session,
@@ -209,7 +205,7 @@ impl ShopId {
     /// other party (never the actor): the shop owner when the part owner (or
     /// a subscribed user) acts, the part owner when the shop owner acts. No
     /// notification when the actor is both the shop owner and the part owner.
-    pub async fn unregister_part(
+    pub(crate) async fn unregister_part(
         self,
         part_id: PartId,
         session: &dyn Session,
@@ -262,7 +258,7 @@ impl ShopId {
     ///   owner, carrying the request text.
     /// - **auto-approve**: a `sub_response` (persistent) notification to the
     ///   requester, carrying the welcome message.
-    pub async fn subscribe(
+    pub(crate) async fn subscribe(
         self,
         message: Option<String>,
         user: UserId,
@@ -304,7 +300,7 @@ impl ShopId {
     ///
     /// Side effect: a `sub_response` (persistent) notification to the
     /// requester, carrying the reply.
-    pub async fn approve_subscription(
+    pub(crate) async fn approve_subscription(
         self,
         sub_id: SubscriptionId,
         message: Option<String>,
@@ -333,7 +329,7 @@ impl ShopId {
     ///
     /// Side effect: a `sub_response` (persistent) notification to the
     /// requester, carrying the reply.
-    pub async fn reject_subscription(
+    pub(crate) async fn reject_subscription(
         self,
         sub_id: SubscriptionId,
         message: Option<String>,
@@ -362,7 +358,7 @@ impl ShopId {
     ///
     /// Side effect: a `sub_cancelled` (persistent) notification to the shop
     /// owner.
-    pub async fn cancel_subscription(
+    pub(crate) async fn cancel_subscription(
         self,
         sub_id: SubscriptionId,
         user: UserId,
@@ -389,7 +385,7 @@ impl ShopId {
 
     /// Get all parts and their subparts registered to this shop
     /// Can be accessed by shop owner
-    pub async fn get_parts(
+    pub(crate) async fn get_parts(
         self,
         user: UserId,
         store: &mut (impl PartStore + ShopStore),
@@ -426,7 +422,7 @@ async fn parts_for_register(
 
 impl Shop {
     /// Get all shops for a user
-    pub async fn get_all_for_user(
+    pub(crate) async fn get_all_for_user(
         user: &UserId,
         store: &mut impl ShopStore,
     ) -> TbResult<Vec<Shop>> {
@@ -434,7 +430,7 @@ impl Shop {
     }
 
     /// Search for shops by name (for users to find shops to request registration)
-    pub async fn search(query: &str, store: &mut impl ShopStore) -> TbResult<Vec<Shop>> {
+    pub(crate) async fn search(query: &str, store: &mut impl ShopStore) -> TbResult<Vec<Shop>> {
         store.shops_search(query).await
     }
 
@@ -443,7 +439,7 @@ impl Shop {
     /// `caller` is the pre-fetched [`UserPublic`] of the calling user
     /// (the `user` argument): when `Some`, it is reused for the caller's
     /// own shops instead of re-reading the row.
-    pub async fn get_users(
+    pub(crate) async fn get_users(
         shops: &Vec<Shop>,
         user: &UserId,
         caller: Option<UserPublic>,

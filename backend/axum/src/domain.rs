@@ -17,7 +17,7 @@ mod user;
 /// The single live entity in a `Summary` map a create write returns (spec
 /// §6.2: a `201` body is the created entity extracted from the write's
 /// `Summary`).
-pub(crate) fn created_entity<K, V: Clone>(
+fn created_entity<K, V: Clone>(
     entries: &IdKeyedMap<K, V>,
     what: &str,
 ) -> Result<V, crate::error::AppError> {

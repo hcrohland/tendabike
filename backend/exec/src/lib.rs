@@ -29,7 +29,7 @@
 //! - [`txn`] — the `Txn` and `TxnSource` traits: the transaction lifecycle
 //!   named for the loop. The loop is generic over the source and never names
 //!   a concrete adapter.
-//! - [`message`] — the [`Message`] enum and the in-memory plumbing (the
+//! - [`message`] — the `Message` enum and the in-memory plumbing (the
 //!   per-user API-write channel, the oneshot reply, the `Summary` frame sink).
 //! - [`executor`] — [`LoopContext`], the loop itself (its wiring and its
 //!   state) and its `run` method: a biased select, one transaction per

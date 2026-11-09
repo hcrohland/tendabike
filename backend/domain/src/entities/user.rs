@@ -81,7 +81,7 @@ impl From<OnboardingStatus> for i32 {
 }
 
 impl OnboardingStatus {
-    pub fn is_initial_sync_completed(&self) -> bool {
+    pub(crate) fn is_initial_sync_completed(&self) -> bool {
         matches!(self, Self::Completed)
     }
 }
@@ -187,7 +187,11 @@ impl UserId {
     ///
     /// Crosses: activity, attachment, part, partnote, service, serviceplan,
     /// shop, usage, user.
-    pub async fn read(self, shop: Option<ShopId>, store: &mut impl Store) -> TbResult<UserState> {
+    pub(crate) async fn read(
+        self,
+        shop: Option<ShopId>,
+        store: &mut impl Store,
+    ) -> TbResult<UserState> {
         let user = UserStore::user_get(store, self).await?;
         let caller: UserPublic = user.clone().into();
         let summary = self.get_summary(shop, Some(caller), store).await?;
@@ -198,11 +202,11 @@ impl UserId {
     /// For callers that need only the record — the onboarding guard, the
     /// `ApiRead::UserRecord` webhook read — and must not pay for the full
     /// [`UserState`] composite (spec #558 §3.5).
-    pub async fn record(&self, store: &mut impl UserStore) -> TbResult<User> {
+    pub(crate) async fn record(&self, store: &mut impl UserStore) -> TbResult<User> {
         UserStore::user_get(store, *self).await
     }
 
-    pub async fn get_public(self, store: &mut impl UserStore) -> TbResult<UserPublic> {
+    pub(crate) async fn get_public(self, store: &mut impl UserStore) -> TbResult<UserPublic> {
         let User {
             id,
             name,
@@ -291,7 +295,7 @@ impl UserId {
     /// it is reused in the shop-user lookup instead of re-reading the row.
     ///
     /// Crosses: activity, attachment, notification, part, partnote, service, serviceplan, shop, usage, user.
-    pub async fn get_summary(
+    pub(crate) async fn get_summary(
         &self,
         shop: Option<ShopId>,
         caller: Option<UserPublic>,

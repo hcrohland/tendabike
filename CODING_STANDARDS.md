@@ -20,6 +20,12 @@ Reuse an existing message that already expresses the same text rather than addin
 
 Each crate's test guide (`backend/docs/tests/<crate>.md`) is the navigation surface for its test infrastructure. When a test double, fixture, or seam is added, renamed, or removed, update the guide in the same commit — a guide pointing at a double that no longer exists is a broken pointer.
 
+## Public surface
+
+Every item has the narrowest visibility that compiles: `pub` only if a different crate names it, `pub(crate)` only if a different module names it, `private` otherwise. The rule reaches fields, not just functions and types. Enum variants are all-or-nothing (Rust has no per-variant visibility), so an enum stays `pub` if any variant is named externally.
+
+The test: drop the modifier. If it still compiles, the item was over-exposed. A public item no consumer names is case-specific weight exported past the seam (see [Generality](#generality)).
+
 ## Generality
 
 Flag designs that are more specific than their weakest consumer requires. The seam should be as general as the least-capable caller needs:

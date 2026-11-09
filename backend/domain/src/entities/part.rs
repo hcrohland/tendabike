@@ -93,15 +93,7 @@ impl IdKeyed for Part {
 pub struct PartId(i32);
 
 impl PartId {
-    pub async fn get(
-        id: i32,
-        user: &dyn Session,
-        store: &mut (impl PartStore + ShopStore),
-    ) -> TbResult<PartId> {
-        PartId(id).checkuser(user, store).await
-    }
-
-    pub async fn delete(
+    pub(crate) async fn delete(
         self,
         user: &dyn Session,
         store: &mut (
@@ -160,13 +152,6 @@ impl PartId {
         Ok(part)
     }
 
-    /// get the name of the part
-    ///
-    /// does not check ownership. This is needed for rentals.
-    pub async fn name(self, store: &mut impl PartStore) -> TbResult<String> {
-        Ok(self.read(store).await?.name)
-    }
-
     /// The part's owner, with no ownership check. The session-less read the
     /// executor uses to route a shop-context frame to the part's owner
     /// (ADR-0010): the executor is not an entity, so it must not call the
@@ -175,14 +160,14 @@ impl PartId {
         Ok(self.read(store).await?.owner)
     }
 
-    pub async fn is_main(self, store: &mut impl PartStore) -> TbResult<bool> {
+    pub(crate) async fn is_main(self, store: &mut impl PartStore) -> TbResult<bool> {
         let part = self.read(store).await?;
         part.what.is_main()
     }
 
     /// check if the given user is the owner or an authorized shop owner.
     /// Returns Forbidden if not.
-    pub async fn checkuser(
+    pub(crate) async fn checkuser(
         self,
         session: &dyn Session,
         store: &mut (impl PartStore + ShopStore),
@@ -233,7 +218,7 @@ impl PartId {
         store.part_update(part).await
     }
 
-    pub async fn change(
+    pub(crate) async fn change(
         self,
         name: String,
         vendor: String,
@@ -352,7 +337,7 @@ impl Part {
         })
     }
 
-    pub async fn categories(
+    pub(crate) async fn categories(
         user: &dyn Session,
         store: &mut impl PartStore,
     ) -> TbResult<HashSet<PartTypeId>> {

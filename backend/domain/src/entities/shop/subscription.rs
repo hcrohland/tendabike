@@ -65,7 +65,7 @@ impl SubscriptionId {
     /// Create a new subscription request.
     ///
     /// Returns the created subscription's id.
-    pub async fn create(
+    pub(crate) async fn create(
         shop_id: ShopId,
         user: UserId,
         store: &mut impl ShopStore,
@@ -100,7 +100,7 @@ impl SubscriptionId {
     }
 
     /// Get a subscription by ID
-    pub async fn get(
+    pub(crate) async fn get(
         id: i32,
         user: UserId,
         store: &mut impl ShopStore,
@@ -109,7 +109,7 @@ impl SubscriptionId {
     }
 
     /// Read a subscription from the database
-    pub async fn read(
+    pub(crate) async fn read(
         self,
         user: UserId,
         store: &mut impl ShopStore,
@@ -119,7 +119,7 @@ impl SubscriptionId {
     }
 
     /// Check if the user has access to this subscription (either subscriber or shop owner)
-    pub async fn checkuser(
+    pub(crate) async fn checkuser(
         self,
         user: UserId,
         store: &mut impl ShopStore,
@@ -139,7 +139,7 @@ impl SubscriptionId {
     }
 
     /// Approve a subscription (shop owner only).
-    pub async fn approve(self, user: UserId, store: &mut impl ShopStore) -> TbResult<()> {
+    pub(crate) async fn approve(self, user: UserId, store: &mut impl ShopStore) -> TbResult<()> {
         let subscription = store.subscription_get(self).await?;
 
         // Verify user owns the shop
@@ -158,7 +158,7 @@ impl SubscriptionId {
     }
 
     /// Reject a subscription (shop owner only).
-    pub async fn reject(self, user: UserId, store: &mut impl ShopStore) -> TbResult<()> {
+    pub(crate) async fn reject(self, user: UserId, store: &mut impl ShopStore) -> TbResult<()> {
         let subscription = store.subscription_get(self).await?;
 
         // Verify user owns the shop
@@ -177,7 +177,7 @@ impl SubscriptionId {
 
     /// Cancel a subscription (subscriber only).
     /// Allows deletion of pending, active, and rejected subscriptions.
-    pub async fn cancel(
+    pub(crate) async fn cancel(
         self,
         user: UserId,
         store: &mut (impl PartStore + ShopStore),
@@ -214,7 +214,7 @@ impl SubscriptionId {
 
 impl ShopSubscription {
     /// Get all pending subscriptions for a shop (shop owner only)
-    pub async fn get_pending_for_shop(
+    pub(crate) async fn get_pending_for_shop(
         shop_id: ShopId,
         user: UserId,
         store: &mut impl ShopStore,
@@ -229,7 +229,7 @@ impl ShopSubscription {
             .collect())
     }
 
-    pub async fn get_for_shop(
+    pub(crate) async fn get_for_shop(
         shop_id: ShopId,
         store: &mut impl ShopStore,
     ) -> TbResult<Vec<ShopSubscription>> {
@@ -237,7 +237,7 @@ impl ShopSubscription {
     }
 
     /// Get all subscriptions made by a user
-    pub async fn get_for_user(
+    pub(crate) async fn get_for_user(
         user: UserId,
         store: &mut impl ShopStore,
     ) -> TbResult<Vec<ShopSubscription>> {
@@ -245,7 +245,7 @@ impl ShopSubscription {
     }
 
     /// Convert a list of subscriptions to subscriptions with shop details
-    pub async fn with_shop_details(
+    pub(crate) async fn with_shop_details(
         subscriptions: Vec<ShopSubscription>,
         store: &mut impl ShopStore,
     ) -> TbResult<Vec<ShopSubscriptionWithDetails>> {
@@ -271,7 +271,7 @@ impl ShopSubscription {
         }
     }
 
-    pub fn add_shop(self, shop: Shop) -> ShopSubscriptionWithDetails {
+    fn add_shop(self, shop: Shop) -> ShopSubscriptionWithDetails {
         ShopSubscriptionWithDetails {
             id: self.id,
             shop_id: self.shop_id,

@@ -16,7 +16,7 @@ use std::sync::Arc;
 use tb_exec::{ProviderService, ServiceApi};
 
 #[derive(Clone)]
-pub struct AppState {
+pub(crate) struct AppState {
     /// The generic service API (reads, writes, hydration, subscription,
     /// stats).
     pub(crate) api: Arc<dyn ServiceApi>,
@@ -29,7 +29,7 @@ impl AppState {
     /// Build the state over the service API and provider service handles
     /// (the composition root builds the `Registry` over the pool and hands
     /// it over as `Arc<dyn ServiceApi>` + `Arc<dyn ProviderService>`).
-    pub fn new(api: Arc<dyn ServiceApi>, provider: Arc<dyn ProviderService>) -> Self {
+    pub(crate) fn new(api: Arc<dyn ServiceApi>, provider: Arc<dyn ProviderService>) -> Self {
         Self { api, provider }
     }
 }

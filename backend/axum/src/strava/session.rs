@@ -32,7 +32,7 @@ pub(crate) struct RequestSession {
 /// The fetch requests' per-request active-shop header (ADR-0009). The SSE
 /// stream keeps its `?shop=` query parameter — the native `EventSource`
 /// client cannot send custom headers.
-pub(crate) const ACTIVE_SHOP_HEADER: &str = "X-Active-Shop";
+const ACTIVE_SHOP_HEADER: &str = "X-Active-Shop";
 
 const SESSION_KEY: &str = "session";
 const SESSION_NEXT_UPDATE: &str = "update";
@@ -180,7 +180,7 @@ where
 /// checked `is_admin()`. It carries the acting session through, so the admin
 /// handlers can hand it to the registry (which verifies admin in a later
 /// `tb_strava` ticket) rather than rebuilding an identity-only one.
-pub struct AxumAdmin {
+pub(crate) struct AxumAdmin {
     session: RequestSession,
 }
 
