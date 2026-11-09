@@ -38,7 +38,7 @@
 //! The core is source-agnostic: the facade owns the [`TxnSource`] and the
 //! `Box<dyn FramePusher>` the loop routes committed `Summary`s through, and
 //! passes both to the core's spawn. The facade's `subscribe_shop` keeps the
-//! ownership read (a `Shop` store call, ADR-0010) and delegates only the
+//! ownership check (a `ShopId` store call, ADR-0010) and delegates only the
 //! channel creation to the core. The [`ExecutorStatus`] settled-fate enum
 //! lives in the core and is re-exported here so `crate::ExecutorStatus`
 //! resolves unchanged.
@@ -264,13 +264,8 @@ where
         // Verify ownership in a transaction (the web layer maps `Forbidden`
         // to a 403).
         let mut store = self.source.begin().await?;
-        let shop = shop_id.read(&mut store).await?;
+        shop_id.check_owner(user_id, &mut store).await?;
         store.commit().await?;
-        if shop.owner != user_id {
-            return Err(Error::Forbidden(
-                "You must be the shop owner to open this shop's stream".into(),
-            ));
-        }
 
         // Create the shop channel on demand and subscribe (the "open shop"
         // check is implicit: `receiver_count() > 0`). The owner tag is the
@@ -408,7 +403,7 @@ where
     /// — the shop stream is a standalone channel, not tied to the executor's
     /// lifecycle.
     ///
-    /// The ownership read is a `Shop` store call (ADR-0010), so it stays
+    /// The ownership check is a `ShopId` store call (ADR-0010), so it stays
     /// here in the facade; the channel creation is delegated to the core.
     async fn subscribe_shop(
         &self,
