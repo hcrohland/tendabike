@@ -2990,7 +2990,6 @@ dependencies = [
  "serde_json",
  "tb_domain",
  "tb_provider",
- "tb_strava",
  "time",
  "tokio",
  "uuid",

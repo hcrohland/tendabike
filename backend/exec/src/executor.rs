@@ -29,7 +29,7 @@
 //! production `DbPool` is injected at the composition root — `DbPool` is
 //! `Clone` + `Send` + `Sync`, so no `Arc` wrapper is needed) and over the
 //! user's [`Session`]. It computes no domain state of its own: it
-//! drives the existing `ApiWrite` dispatch and `tb_strava` event processing
+//! drives the existing `ApiWrite` dispatch and `tb_provider::strava` event processing
 //! inside transactions it owns.
 
 use std::future::Future;
@@ -91,7 +91,7 @@ fn stop_remaining(until_unix: i64, now_unix: i64) -> Duration {
 }
 
 /// The current unix time in seconds (the clock `Stop` deadlines are written
-/// in — `tb_strava`'s `get_time`): saturating at zero, since the deadline
+/// in — `tb_provider::strava`'s `get_time`): saturating at zero, since the deadline
 /// arithmetic is what matters, not a pre-1970 clock.
 fn now_unix() -> i64 {
     std::time::SystemTime::now()
@@ -928,7 +928,7 @@ where
 
 /// The hydration write in the loop's own transaction (spec #558 §4):
 /// `begin` → [`StravaUser::update_gear`] → read the parts it created →
-/// `commit`. `update_gear` is a `tb_strava` op (the session's
+/// `commit`. `update_gear` is a `tb_provider::strava` op (the session's
 /// `request_json` plus the `into_partid` store work), so it is dispatched
 /// loop-side — not an `ApiWrite` variant.
 ///
@@ -987,7 +987,7 @@ where
 
 /// The admin `AllStats` read in the loop's own transaction (spec #558
 /// §3.3): `begin` → [`get_all_stats`] → `commit`, read-only within it by
-/// spec. `get_all_stats` is a `tb_strava` op, so it is dispatched loop-side
+/// spec. `get_all_stats` is a `tb_provider::strava` op, so it is dispatched loop-side
 /// — the same home the `Gear` hydration and the Strava events' `process`
 /// get — riding the admin user's channel. The backoff discipline is the
 /// read's (spec #558 §3.7): a failure resolves the oneshot with the `Err`

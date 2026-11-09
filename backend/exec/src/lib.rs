@@ -36,7 +36,7 @@
 //!   message, and the reclaim-on-idle policy.
 //!
 //! The loop computes no domain state of its own: it drives the existing
-//! `ApiWrite` dispatch and `tb_strava` event processing inside transactions
+//! `ApiWrite` dispatch and `tb_provider::strava` event processing inside transactions
 //! it owns. The seam's Postgres half lives in `tb_sqlx`, and the transaction
 //! integration is verified against real Postgres in `tb_sqlx`'s
 //! `tests/executor_seam.rs`; the unit tests stand in for the seam with a

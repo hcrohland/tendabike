@@ -51,8 +51,8 @@ use tb_domain::{
     PartTypeId, ReadOutcome, Service, ServiceId, Shop, ShopId, SubscriptionId, Summary, TbResult,
     Usage, UsageId, User, UserId, UserStat, UserState, WriteOutcome,
 };
+use tb_provider::strava::event::Event;
 use tb_provider::{Probe, ProviderLane};
-use tb_strava::event::Event;
 use time::OffsetDateTime;
 use tokio::sync::{broadcast, oneshot};
 use uuid::Uuid;

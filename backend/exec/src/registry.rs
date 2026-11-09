@@ -53,7 +53,7 @@ use tb_domain::{
     Summary, TbResult, UserId, UserStat, WriteOutcome,
 };
 use tb_provider::ProviderLane;
-use tb_strava::{
+use tb_provider::strava::{
     StravaStore, StravaUser, activity,
     client::StravaAthleteInfo,
     event::{InEvent, insert_sync, is_sync_for_user, sync_queued_for_user, sync_users},
@@ -332,7 +332,7 @@ where
     /// Enqueue the [`Gear`](Request::Gear) hydration write on the user's
     /// executor and await its frame (spec #558 §4): the loop runs
     /// `update_gear` in its own transaction with its own session (a
-    /// `tb_strava` op — it cannot be an `ApiWrite` variant) and resolves
+    /// `tb_provider::strava` op — it cannot be an `ApiWrite` variant) and resolves
     /// with the created parts' `Summary` — the frame (the union of the
     /// parts it created, one entry per part, empty when nothing is new).
     /// The `/user/summary` route runs this **before** its unified `User`
@@ -365,7 +365,7 @@ where
     /// Enqueue the admin [`AllStats`](Request::AllStats) read on the user's
     /// executor and await its stats (spec #558 §3.3): the admin's `GET
     /// /user/all` rides the admin user's own channel — `get_all_stats` is a
-    /// `tb_strava` op, so it is an exec-level variant, dispatched loop-side
+    /// `tb_provider::strava` op, so it is an exec-level variant, dispatched loop-side
     /// in the loop's own transaction. The oneshot wait is unbounded, like a
     /// read's (spec #558 §3.7).
     async fn all_stats(&self, session: Box<dyn Session>) -> TbResult<Vec<UserStat>> {
@@ -394,7 +394,7 @@ where
     S::Conn: Store + StravaStore,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
-    P::Event: Into<tb_strava::event::Event>,
+    P::Event: Into<tb_provider::strava::event::Event>,
 {
     /// Register a shop stream for `shop_id` (spec #517): verify
     /// the caller is the shop owner in a transaction (a non-owner is
@@ -451,7 +451,7 @@ where
         let mut done = self.events(user_id).await?;
 
         // The enqueue txn (spec #558 §5.2): the `Sync` event, committed —
-        // the `strava_id` (the queue's key) is resolved inside `tb_strava`.
+        // the `strava_id` (the queue's key) is resolved inside `tb_provider::strava`.
         let mut store = self.source.begin().await?;
         insert_sync(user_id, event_time, false, &mut store).await?;
         store.commit().await?;
@@ -465,9 +465,9 @@ where
         loop {
             match done.recv().await {
                 Ok(event) => {
-                    // The correlation is a `tb_strava` concern (the queue is
+                    // The correlation is a `tb_provider::strava` concern (the queue is
                     // keyed by the `strava_id`, resolved inside the crate).
-                    let strava_event: tb_strava::event::Event = event.into();
+                    let strava_event: tb_provider::strava::event::Event = event.into();
                     let mut store = self.source.begin().await?;
                     let is_our_sync =
                         is_sync_for_user(&strava_event, user_id, event_time, &mut store).await?;
@@ -578,7 +578,7 @@ where
     }
 
     /// The gear redirect URL (spec #558 §5.2): one transaction — the
-    /// `tb_strava` `strava_url` op (which checks the part's ownership), then
+    /// `tb_provider::strava` `strava_url` op (which checks the part's ownership), then
     /// the Strava URL.
     async fn gear_url(&self, session: Box<dyn Session>, id: PartId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
@@ -594,7 +594,7 @@ where
     }
 
     /// The activity redirect URL (spec #558 §5.2): one transaction — the
-    /// `tb_strava` `strava_url` op (which checks the activity's ownership and
+    /// `tb_provider::strava` `strava_url` op (which checks the activity's ownership and
     /// rejects a non-Strava id), then the Strava URL.
     async fn activity_url(&self, session: Box<dyn Session>, id: ActivityId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
@@ -605,34 +605,34 @@ where
     }
 
     /// The user redirect URL (spec #558 §5.2): one transaction — the
-    /// `tb_strava` `strava_url` op for the target's tbid (no session: the
+    /// `tb_provider::strava` `strava_url` op for the target's tbid (no session: the
     /// route has no user context to gate on).
     async fn user_url(&self, id: UserId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let uri = tb_strava::strava_url(id, &mut store).await?;
+        let uri = tb_provider::strava::strava_url(id, &mut store).await?;
         store.commit().await?;
         Ok(uri)
     }
 
     /// The deauthorization (spec #558 §5.2): one transaction —
-    /// `tb_strava::user_deauthorize` (which verifies the caller is an admin)
+    /// `tb_provider::strava::user_deauthorize` (which verifies the caller is an admin)
     /// and the target `tbid`. No wake, no message; the existing race (deauth
     /// deletes the target's queued events outside the target's loop) is
     /// preserved.
     async fn deauthorize(&self, mut session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_strava::user_deauthorize(&mut *session, tbid, &mut store).await?;
+        tb_provider::strava::user_deauthorize(&mut *session, tbid, &mut store).await?;
         store.commit().await?;
         Ok(())
     }
 
     /// The user delete (spec #558 §5.2): one transaction —
-    /// `tb_strava::user_delete` (which verifies the caller is an admin) and
+    /// `tb_provider::strava::user_delete` (which verifies the caller is an admin) and
     /// the target `tbid` (the deauthorization plus the row deletions). No
     /// wake, no message; the existing race is preserved.
     async fn delete_user(&self, mut session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_strava::user_delete(
+        tb_provider::strava::user_delete(
             &mut *session,
             tbid,
             &tb_provider::DomainFacadeImpl,
