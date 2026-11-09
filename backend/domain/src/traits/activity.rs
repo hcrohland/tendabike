@@ -10,7 +10,7 @@ pub trait ActivityStore {
     ///
     /// The activity id is a primary key: an id the store already holds
     /// fails the create with [`crate::Error::DatabaseFailure`] — the
-    /// database's INSERT hits the key (issue #405).
+    /// database's INSERT hits the key.
     ///
     /// # Arguments
     ///
@@ -124,7 +124,7 @@ pub trait ActivityStore {
     /// rule). `rstart` is the query time as an instant, e.g. the CSV
     /// import's local wall clock parsed as UTC.
     ///
-    /// The match must be unambiguous (maintainer-confirmed, issue #408):
+    /// The match must be unambiguous (maintainer-confirmed):
     /// zero matches returns [`Error::NotFound`], exactly one match returns
     /// that activity, and two or more activities of the user in the same
     /// minute returns [`Error::Ambiguous`] — a conflicting import row must

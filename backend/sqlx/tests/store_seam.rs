@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with TendaBike. If not, see <https://www.gnu.org/licenses/>.
 
-//! Store seam integration suite (issue #406).
+//! Store seam integration suite.
 //!
 //! Loads the standard prepopulated domain fixture into a real Postgres
 //! database and verifies the store's I/O contract: the fixture roundtrip,
@@ -58,7 +58,7 @@
 //! never passes.
 //!
 //! The CI job that runs this suite against a real Postgres service is the
-//! required `rust` job in `.github/workflows/test.yml` (issue #411): it
+//! required `rust` job in `.github/workflows/test.yml`: it
 //! carries a `postgres:18` service, sets `SCRATCH_DATABASE_URL` to a scratch
 //! database, and runs `cargo test --release -- --include-ignored`, so the
 //! suite is part of the one required gate.
@@ -480,7 +480,7 @@ async fn find_attached_already_never_attached() -> tb_domain::TbResult<()> {
 // Activity: store-path rules
 // ---------------------------------------------------------------------------
 
-/// The activity id is a primary key (issue #405): the INSERT hits the key
+/// The activity id is a primary key: the INSERT hits the key
 /// on a duplicate id and maps to `Error::DatabaseFailure`.
 #[tokio::test]
 #[ignore]

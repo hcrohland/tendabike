@@ -1696,7 +1696,7 @@ async fn default_gear_returns_204() {
 
 /// `POST /api/activ/descend` enqueues the `ActivityDescend` write (the raw
 /// CSV body) and answers `200` with the match report `{good, bad}` (the
-/// spec §6.2 deviation recorded on issue #446): the report is an operation
+/// spec §6.2 deviation): the report is an operation
 /// result, not `Summary` state — the matched activity's updated state
 /// arrives as the executor's stream frame (the seam suite's territory).
 #[tokio::test]
@@ -2476,7 +2476,7 @@ fn mock_sse(
 
 /// Set up the mock's `expect_subscribe_shop` with a real broadcast channel
 /// (the shop stream is a standalone channel — no `ExecutorStatus`, spec
-/// #517, ticket #583). Returns the frame sender (push `Summary` frames) and
+/// #517). Returns the frame sender (push `Summary` frames) and
 /// the mock ready for [`build_app`].
 fn mock_sse_shop(provider: &mut MockProviderService) -> tokio::sync::broadcast::Sender<Summary> {
     let (frame_tx, _) = tokio::sync::broadcast::channel(16);
@@ -2605,8 +2605,8 @@ async fn assert_stream_ends(body: &mut axum::body::Body) {
 }
 
 /// `GET /api/user/stream?shop=X` with the shop owner's session returns a 200
-/// `text/event-stream` and forwards the shop channel's frames (spec #517,
-/// ticket #583). The shop stream is a standalone channel — no `ExecutorStatus`.
+/// `text/event-stream` and forwards the shop channel's frames (spec #517).
+/// The shop stream is a standalone channel — no `ExecutorStatus`.
 #[tokio::test]
 async fn shop_stream_owner_forwards_frames() {
     let (store, mock, mut provider) = mock_ctx();
@@ -2636,7 +2636,7 @@ async fn shop_stream_owner_forwards_frames() {
 }
 
 /// `GET /api/user/stream?shop=X` with a non-owner's session returns a 403
-/// (the `subscribe_shop`'s `Forbidden` maps to 403, spec #517, ticket #583).
+/// (the `subscribe_shop`'s `Forbidden` maps to 403, spec #517).
 #[tokio::test]
 async fn shop_stream_non_owner_is_forbidden() {
     let (store, mock, mut provider) = mock_ctx();

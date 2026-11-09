@@ -13,8 +13,8 @@ export type EventSourceFactory = (url: string) => EventSourceLike;
 
 /// The session-scoped SSE endpoint: each `data:` frame carries the full
 /// `Summary` JSON of one completed executor message, no envelope. Personal
-/// mode → the bare endpoint; shop mode → the owner-only shop-scoped endpoint
-/// (ticket #583). Derived from `getShop()` at open time, so the stream is
+/// mode → the bare endpoint; shop mode → the owner-only shop-scoped endpoint.
+/// Derived from `getShop()` at open time, so the stream is
 /// reactive to shop state: the caller's effect reads the shop through this
 /// and re-runs (re-opening) when it changes.
 function streamUrl(): string {

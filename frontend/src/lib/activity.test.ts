@@ -41,7 +41,7 @@ function partData(overrides: Partial<any> = {}): any {
   };
 }
 
-// Test-only helpers, moved out of the Activity class (issue #386); they stay
+// Test-only helpers, moved out of the Activity class; they stay
 // pure over their local maps.
 function gearLink(act: Activity, parts: Map<Part>) {
   if (act.gear && parts[act.gear]) {

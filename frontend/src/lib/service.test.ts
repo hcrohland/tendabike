@@ -38,7 +38,7 @@ function part(overrides: Partial<any> = {}): Part {
   });
 }
 
-// Test-only helper, moved out of the Service class (issue #385); it stays
+// Test-only helper, moved out of the Service class; it stays
 // pure over its local map.
 function fmtTime(svc: Service, s: Map<Service>) {
   let res = fmtDate(svc.time);
@@ -50,7 +50,7 @@ function fmtTime(svc: Service, s: Map<Service>) {
   return res;
 }
 
-// The doors read the module state in their bodies (issue #385); seed the
+// The doors read the module state in their bodies; seed the
 // world and reset it between tests.
 function reset() {
   services.setMap([]);

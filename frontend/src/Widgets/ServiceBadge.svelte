@@ -3,7 +3,7 @@
   import type { Due } from "../lib/serviceplan";
 
   // The badge renders only: verdict → colour, remaining/limit → used
-  // percentage. The severity rule lives in the plan module (issue #345).
+  // percentage. The severity rule lives in the plan module.
   const verdict_color = {
     alert: "red",
     warn: "yellow",

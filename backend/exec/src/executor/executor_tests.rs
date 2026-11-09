@@ -67,8 +67,8 @@ use crate::{
     request_channel,
 };
 
-// --- The `mock!` connection witness (issue #631) ---
-// --- The test doubles for the executor's seams (issue #631, spec #795) ---
+// --- The `mock!` connection witness ---
+// --- The test doubles for the executor's seams (spec #795) ---
 //
 // [`MockConn`] is a `mockall` `mock!` witness carrying **only** the [`Txn`]
 // lifecycle (commit/rollback) — the `TxnSource::Conn` bound. The domain and

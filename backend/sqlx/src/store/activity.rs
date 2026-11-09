@@ -247,7 +247,7 @@ impl<'c> tb_domain::ActivityStore for SqlxConn<'c> {
     /// exact instant: an activity's local wall-clock minute (its start in
     /// the stored `utc_offset`, floored to the minute) must equal the query
     /// instant's UTC wall-clock minute. The match must be unambiguous
-    /// (maintainer-confirmed, issue #408): zero rows is
+    /// (maintainer-confirmed): zero rows is
     /// [`tb_domain::Error::NotFound`], exactly one is returned, and two or
     /// more is [`tb_domain::Error::Ambiguous`], so a conflicting import row
     /// fails loudly instead of updating one of the rides at random.

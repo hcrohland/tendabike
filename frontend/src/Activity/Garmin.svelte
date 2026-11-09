@@ -13,8 +13,7 @@
   /// The match report of the upload (`200 + {good, bad}`): the rows the
   /// domain matched against the user's activities and the rows it skipped.
   /// It is rendered, never merged — the matched activities' state rides the
-  /// stream frame the executor publishes (the spec §6.2 deviation recorded
-  /// on issue #446).
+  /// stream frame the executor publishes (the spec §6.2 deviation).
   let result: { good: string[]; bad: string[] } | undefined = $state();
 
   interface Props {

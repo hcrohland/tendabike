@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with TendaBike. If not, see <https://www.gnu.org/licenses/>.
 
-//! The per-user executor loop integration suite (issue #453).
+//! The per-user executor loop integration suite.
 //!
 //! Drives the real executor loop — `tb_exec::LoopContext` over the real
 //! `DbPool` (`TxnSource`/`Txn` implemented on the live `SqlxConn`, the seam
@@ -396,8 +396,8 @@ async fn read_as_message_round_trip() {
     outcome.expect("a reaped loop returns Ok");
 }
 
-/// The shop-scoping fix end to end on the live adapter (issue #600 / ticket
-/// #610): a `User` read whose **request** session is in a shop context returns
+/// The shop-scoping fix end to end on the live adapter: a `User` read whose
+/// **request** session is in a shop context returns
 /// only the shop's parts (not the user's whole state), even when the executor
 /// was spawned in a personal context — and a personal read enqueued after it
 /// returns the full state. The loop runs the read against the request's
@@ -481,7 +481,7 @@ async fn shop_context_read_is_scoped_to_the_request_session() {
     outcome.expect("a reaped loop returns Ok");
 }
 
-/// The sticky-shop fix, read side, end to end (issue #600 / ticket #610): a
+/// The sticky-shop fix, read side, end to end: a
 /// `User` read whose **request** session is personal returns the user's full
 /// state — not a shop's subset — even when the user owns a shop with
 /// registered parts. The loop is identity-only (a `user_id`, no shop), so the
@@ -1260,7 +1260,7 @@ async fn delete_user_removes_the_rows() {
     drop(conn);
 }
 
-/// The shop-subscribe policy against the live adapter (issue #798): the
+/// The shop-subscribe policy against the live adapter: the
 /// `subscribe_shop` ownership read is a real store call on Postgres — a
 /// non-owner's connect is `Forbidden` (the web layer maps it to a 403), the
 /// owner's connect returns a stream receiver, and a shop-context `deliver`
