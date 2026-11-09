@@ -64,7 +64,7 @@ use crate::ExecutorStatus;
 /// runs: the executor hands it to the op in its own transaction. The
 /// session's `shop()` is the frame's delivery context (it routes a committed
 /// `Summary`) and scopes a read's `Summary`.
-#[cfg_attr(feature = "mock", mockall::automock)]
+#[cfg_attr(feature = "test-support", mockall::automock)]
 #[async_trait::async_trait]
 pub trait ServiceApi: Send + Sync {
     /// One per-user read on the user's executor (spec #558 §3): the loop
@@ -110,10 +110,10 @@ pub trait ServiceApi: Send + Sync {
 /// The `Registry` implements both [`ServiceApi`] and [`ProviderService`];
 /// presentation layers hold `Arc<dyn ServiceApi>` for the generic ops and
 /// `Arc<dyn ProviderService>` for the provider-specific ones.
-#[cfg_attr(feature = "mock", mockall::automock)]
+#[cfg_attr(feature = "test-support", mockall::automock)]
 #[async_trait::async_trait]
 pub trait ProviderService: Send + Sync {
-    /// Register a shop stream for `shop_id` (spec #517, ticket #582): the
+    /// Register a shop stream for `shop_id` (spec #517): the
     /// caller must be the shop owner (a non-owner is `Forbidden`, which the
     /// web layer maps to a 403); the channel is created on demand and the
     /// returned receiver is a subscription to it.

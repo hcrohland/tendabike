@@ -1,4 +1,4 @@
-//! The `PartNote` entity tests over a canned [`MockStore`] (issue #642).
+//! The `PartNote` entity tests over a canned [`MockStore`].
 //!
 //! Each test runs the real part-note domain logic — the blank-name guard that
 //! returns before any store call, the `!has_file()` guards, the

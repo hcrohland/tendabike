@@ -26,11 +26,15 @@
 //! carry methods on two different types, so the seam is two traits linked by
 //! an associated type: a [`TxnSource`] whose `Conn` is a [`Txn`]. The
 //! executor loop is generic over the source and names only the traits, never
-//! a concrete adapter — the `StravaStore` bound sits on the associated
-//! type, so every generic over the seam gets it for free.
+//! a concrete adapter. The connection is a complete store behind the domain
+//! and provider seams ([`DomainFacade`] and [`ProviderLane`] carry the
+//! `Store`/`StravaStore` bounds they need), so the transaction seam names
+//! only the lifecycle.
+//!
+//! [`DomainFacade`]: crate::DomainFacade
+//! [`ProviderLane`]: tb_provider::ProviderLane
 
-use tb_domain::{Error, Store, TbResult};
-use tb_strava::StravaStore;
+use tb_domain::{Error, TbResult};
 
 /// A source of open transactions for the executor loop (ADR-0005, executable
 /// spec #446 §4.1).
@@ -42,11 +46,12 @@ use tb_strava::StravaStore;
 /// holds `&self` across awaits.
 #[async_trait::async_trait]
 pub trait TxnSource: Send + Sync {
-    /// A connection with an open transaction: every [`Store`] sub-trait
-    /// (so it can run the domain operation), [`StravaStore`] (so the loop
-    /// can drain the Strava event queue), and [`Txn`] (so the loop can
-    /// close the transaction).
-    type Conn: StravaStore + Txn;
+    /// A connection with an open transaction: the [`Txn`] lifecycle (so the
+    /// loop can close the transaction). The connection is a complete store —
+    /// the domain and provider seams ([`DomainFacade`] and [`ProviderLane`])
+    /// carry the `Store`/`StravaStore` bounds they need, so the loop names
+    /// only the transaction lifecycle here.
+    type Conn: Txn;
 
     /// Opens a new transaction on a fresh connection.
     async fn begin(&self) -> TbResult<Self::Conn>;
@@ -55,12 +60,19 @@ pub trait TxnSource: Send + Sync {
 /// The transaction lifecycle of a connection, named for the executor loop
 /// (ADR-0005, executable spec #446 §4.1).
 ///
-/// While the transaction is open, a connection is a complete [`Store`];
-/// `commit` and `rollback` close it. Both consume the connection, matching
-/// `SqlxConn`'s inherent methods (the Postgres adapter returns the connection
-/// to the pool).
+/// While the transaction is open, a connection is a complete store (the
+/// domain and provider seams carry the `Store`/`StravaStore` bounds they
+/// need); `commit` and `rollback` close it. Both consume the connection,
+/// matching `SqlxConn`'s inherent methods (the Postgres adapter returns the
+/// connection to the pool).
+///
+/// `Send + Sync` because the connection crosses tasks and threads: the
+/// executor loop is a long-lived `Send` task that holds the open transaction
+/// across awaits, [`DetachedBegin`] runs `begin` in a spawned task that hands
+/// the connection back over a oneshot, and the [`DomainFacade`] (which is
+/// `Send + Sync`) takes the connection by `&mut`.
 #[async_trait::async_trait]
-pub trait Txn: Store {
+pub trait Txn: Send + Sync {
     /// Commits the transaction, consuming the connection.
     async fn commit(self) -> TbResult<()>;
 

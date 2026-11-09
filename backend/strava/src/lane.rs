@@ -29,7 +29,7 @@
 
 use std::marker::PhantomData;
 
-use tb_domain::{Summary, UserId};
+use tb_domain::{PartId, Summary, TbResult, UserId, UserStat};
 use tb_provider::{Probe, ProviderLane};
 
 use crate::StravaStore;
@@ -123,5 +123,35 @@ where
         process(user_id, &tb_provider::DomainFacadeImpl, store)
             .await
             .ok()
+    }
+
+    /// Queue a sync event on the Strava event queue (the onboarding cutover's
+    /// provider side): the loop runs it in the write's own transaction, so the
+    /// queued event commits with the domain half. Delegates to
+    /// [`crate::event::insert_sync`].
+    async fn insert_sync(
+        &self,
+        user_id: UserId,
+        time: i64,
+        auto: bool,
+        store: &mut S,
+    ) -> TbResult<()> {
+        crate::event::insert_sync(user_id, time, auto, store).await
+    }
+
+    /// Import the user's Strava gear, returning the created part ids (the
+    /// hydration write's provider side): the loop runs it in its own
+    /// transaction and reads the parts it created for the frame. Delegates to
+    /// [`crate::user::StravaUser::update_gear`].
+    async fn update_gear(&self, user_id: UserId, store: &mut S) -> TbResult<Vec<PartId>> {
+        crate::user::StravaUser::update_gear(user_id, &tb_provider::DomainFacadeImpl, store).await
+    }
+
+    /// Read every user's provider-neutral stat (the admin read's provider
+    /// side): the domain [`UserStat`] — the stat plus the provider's
+    /// queued-event count and disabled flag. Delegates to
+    /// [`crate::user::get_all_stats`].
+    async fn all_stats(&self, store: &mut S) -> TbResult<Vec<UserStat>> {
+        crate::user::get_all_stats(&tb_provider::DomainFacadeImpl, store).await
     }
 }

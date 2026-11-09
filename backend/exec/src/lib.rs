@@ -45,12 +45,14 @@
 
 mod api;
 mod executor;
+mod facade;
 mod message;
 mod registry;
 mod txn;
 
 pub use api::*;
 pub use executor::*;
+pub use facade::*;
 pub use message::*;
 pub use registry::*;
 pub use txn::*;

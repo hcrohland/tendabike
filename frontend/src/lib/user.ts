@@ -95,7 +95,7 @@ type SummaryRow<K extends keyof Summary> = {
 type AnySummaryRow = { [K in keyof Summary]: SummaryRow<K> }[keyof Summary];
 
 /**
- * The sync registry (issue #412): one row per Summary field, pairing the
+ * The sync registry: one row per Summary field, pairing the
  * payload field with the state collection it feeds. Both merge lanes fold
  * over it, so the table is the single answer to "which collections does a
  * Summary feed?" The row type pins each key to its own collection, so a

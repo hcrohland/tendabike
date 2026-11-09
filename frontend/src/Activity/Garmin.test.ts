@@ -4,7 +4,7 @@ import Garmin from "./Garmin.svelte";
 
 /// The 200 response of `POST /api/activ/descend`: the match report
 /// (`{good, bad}`), the state of the matched activities riding the stream
-/// frame (the spec §6.2 deviation recorded on issue #446). The body is
+/// frame (the spec §6.2 deviation). The body is
 /// read lazily, so tests can swap it between renders.
 function json200(getBody: () => object) {
   return {

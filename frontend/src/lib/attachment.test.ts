@@ -32,7 +32,7 @@ function attMap(...atts: Attachment[]): Map<Attachment> {
   return Object.fromEntries(atts.map((a) => [a.idx, a])) as Map<Attachment>;
 }
 
-// Test-only helper, moved out of attachment.ts (issue #387); it stays
+// Test-only helper, moved out of attachment.ts; it stays
 // pure over its local map.
 function attacheesForGear(
   gear: number | undefined,
