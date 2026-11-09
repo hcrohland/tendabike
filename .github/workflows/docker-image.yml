@@ -44,5 +44,5 @@ jobs:
           # and re-runs, while a new branch starts cold once. mode=max
           # persists the intermediate build-deps layer that makes new
           # commits build incrementally.
-          cache-from: type=gha,mode=max
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=ghcr.io/hcrohland/tendabike:buildcache
+          cache-to: type=registry,ref=ghcr.io/hcrohland/tendabike:buildcache,mode=max,image-manifest=true,oci-mediatypes=true
