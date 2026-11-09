@@ -3,6 +3,7 @@
 ## Commands
 
 - `cargo sqlx prepare` (run from `backend/sqlx/`) - Regenerate the crate-local offline query metadata in `backend/sqlx/.sqlx/`
+- **rust-analyzer MCP**: available as direct tools (`rust-analyzer_rust_analyzer_references`, `…_symbols`, `…_hover`, `…_diagnostics`). Set the workspace first: `rust-analyzer_rust_analyzer_set_workspace` with `"/workspaces/domain-cleanup/backend"`. Use `references` for cross-module reference resolution.
 
 ## Architecture
 
