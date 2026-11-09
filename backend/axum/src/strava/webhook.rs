@@ -63,7 +63,7 @@ use crate::{
     error::AppError,
 };
 use tb_domain::{ApiRead, ApiWrite, Error, ReadOutcome, TbResult};
-use tb_strava::event::InEvent;
+use tb_provider::strava::event::InEvent;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct Hub {
@@ -155,7 +155,7 @@ pub(super) async fn sync(
     // the executor, and await that event's completion (unbounded — the
     // spec'd behavior for the admin endpoint), with the queue-fallback
     // read only on a lost broadcast. The admin's acting session rides
-    // along (carried for the admin-verification `tb_strava` change).
+    // along (carried for the admin-verification `tb_provider::strava` change).
     state
         .provider
         .sync(Box::new(admin.session()), user_id, query.time)

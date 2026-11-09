@@ -2945,7 +2945,7 @@ dependencies = [
  "sqlx",
  "tb_domain",
  "tb_exec",
- "tb_strava",
+ "tb_provider",
  "thiserror 2.0.21",
  "time",
  "tokio",

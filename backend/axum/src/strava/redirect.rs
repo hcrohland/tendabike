@@ -47,10 +47,10 @@ pub(super) async fn revoke_user(
     State(state): State<AppState>,
 ) -> ApiResult<()> {
     // The service API's direct op (spec #558 §5.2): one transaction — the
-    // target's session built in-txn, then `tb_strava::user_deauthorize`
+    // target's session built in-txn, then `tb_provider::strava::user_deauthorize`
     // (no wake, no message; the existing queue race is preserved). The admin's
     // acting session rides along (carried for the admin-verification
-    // `tb_strava` change).
+    // `tb_provider::strava` change).
     state
         .provider
         .deauthorize(Box::new(admin.session()), tbid)
@@ -64,9 +64,9 @@ pub(super) async fn deleteuser(
     State(state): State<AppState>,
 ) -> ApiResult<()> {
     // The service API's direct op (spec #558 §5.2): one transaction — the
-    // target's session built in-txn, then `tb_strava::user_delete` (no wake,
+    // target's session built in-txn, then `tb_provider::strava::user_delete` (no wake,
     // no message; the existing queue race is preserved). The admin's acting
-    // session rides along (carried for the admin-verification `tb_strava`
+    // session rides along (carried for the admin-verification `tb_provider::strava`
     // change).
     state
         .provider
