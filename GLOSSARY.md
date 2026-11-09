@@ -68,3 +68,7 @@ _Avoid_: session (the connection also has a cookie session and the loop a Strava
 **provider**:
 The external system a user's activities come from, and the one the user authenticates through. A user has exactly one, chosen at signup and immutable. Today: Strava; intervals.icu is the second.
 _Avoid_: source (a part's external id), lane (the dispatch abstraction)
+
+**provider layer**:
+The `tb_provider` crate: the provider-agnostic seams (the `DomainFacade` domain door, the `ProviderLane` lane seam, the rate-limit kernel) plus the provider integrations, each a feature module. Today the Strava driver is its `strava` module; a future provider adds its own feature module.
+_Avoid_: provider (the external system a user syncs from — not the crate)

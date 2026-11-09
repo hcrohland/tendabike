@@ -36,8 +36,8 @@ use super::StravaStore;
 use super::event::{Event, QueueRead, get_event, process};
 
 /// The Strava provider lane: the [`ProviderLane`] impl for the Strava driver.
-/// The loop calls through it; a second provider (a new crate) implements
-/// [`ProviderLane`] too, and the loop works with it unchanged.
+/// The loop calls through it; a second provider (a new feature module)
+/// implements [`ProviderLane`] too, and the loop works with it unchanged.
 ///
 /// Generic over the store type `S` (the provider's full store — the
 /// transaction's connection): `type Store = S`, so the loop's transaction

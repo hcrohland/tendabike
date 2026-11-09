@@ -43,6 +43,6 @@ domain   → ∅
 ## Consequences
 
 - `tb_domain` names no provider in its `ActivityId` handling — no constructors, no prefix parsing, and its id tests are opaque-string tests. The domain is now fully grep-clean of `strava`/`icu` literals: the snapshot fixture moved to `tb_sqlx`, `partid_get_by_source` was renamed to `source`, and the doc comments were scrubbed (#773) — the machine-checkable bar, in the spirit of ADR-0007 and ADR-0012.
-- `ActivityId` construction and parsing live in the Strava driver as private helpers; the future icu provider adds its own by implementing the domain's seams, without touching `tb_domain`.
+- `ActivityId` construction and parsing live in the Strava driver as private helpers; the future icu provider adds its own feature module to the provider layer by implementing the domain's seams, without touching `tb_domain`.
 - The snapshot move and the `partid_get_by_source` rename landed in #773, completing the domain's provider-ignorance.
 - A contributor adding a provider or a crate is placed by the same rule: depend on what you name, name only what you depend on.

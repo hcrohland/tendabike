@@ -47,7 +47,7 @@ A mutation reaches the domain from a presentation layer (today the web layer `tb
 
 ## Consequences
 
-- **Crate graph:** `tb_exec` holds the loop, the `Registry`, the `Txn` / `TxnSource` / `ServiceApi` traits, and the `Message` enum. `tb_axum` depends on `tb_exec` (the `ServiceApi` trait) but not on `tb_sqlx` — the concrete `DbPool` is injected at the composition root (`app`). The Strava driver (in `tb_provider`) depends on `tb_exec`; `tb_sqlx` implements the seam traits.
+- **Crate graph:** `tb_exec` holds the loop, the `Registry`, the `Txn` / `TxnSource` / `ServiceApi` traits, and the `Message` enum. `tb_axum` depends on `tb_exec` (the `ServiceApi` trait) but not on `tb_sqlx` — the concrete `DbPool` is injected at the composition root (`app`). `tb_exec` depends on the provider layer (`tb_provider`, which holds the strava module); `tb_sqlx` implements the seam traits.
 - **The `Summary` is the id-keyed map** (a `null` entry is a tombstone); operations return it directly, and it is the payload of every SSE frame.
 - **The web layer is presentation-only:** it extracts the session, enqueues the write, and answers a status (204; creates 201+entity; onboarding 200+User) — the change rides the stream.
 - **Two machine-verifiable bars:** `tb_axum` names no seam type (grep), and no entity touches a foreign store (the pre-commit hook).
