@@ -18,7 +18,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS build-deps
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json && rm -rf /usr/local/cargo/registry/cache
 
 FROM build-deps AS build-engine
 ENV SQLX_OFFLINE=true
@@ -34,7 +34,7 @@ WORKDIR /build
 
 COPY package.json package-lock.json /build/
 COPY frontend/package.json /build/frontend/
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 
 COPY frontend/ /build/frontend
 RUN npm run build
