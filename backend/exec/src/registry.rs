@@ -74,7 +74,7 @@ pub use core::{DeliveryContext, ExecutorStatus};
 /// (it is reaped only when no stream is attached), so the window sets how
 /// often the idle loop re-probes the `strava_events` queue. A stream-less
 /// executor (a write-only spawn) reaps immediately after its work.
-pub const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+pub(crate) const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 /// The SSE heartbeat cadence (spec §4.5): a `: ping` comment keeps the
 /// connection alive (and proxies) while the executor is idle (or reaped).
 /// The web layer's SSE `KeepAlive` wiring uses this constant.
@@ -159,7 +159,7 @@ where
     /// write) — the DB queue is the source of truth. Infallible by design:
     /// a missed wake only delays the event to the next spawn, so the
     /// webhook treats it as non-critical.
-    pub async fn wake(&self, user_id: UserId) {
+    pub(crate) async fn wake(&self, user_id: UserId) {
         self.core.wake(user_id).await
     }
 
@@ -167,7 +167,7 @@ where
     /// issue #446): abort every task (the watchdog records `Dead` on the
     /// abort `JoinError`, like a panic) and clear the executor map — the
     /// core's `stop_all`. The next `subscribe`/`write` respawns fresh.
-    pub async fn stop_all(&self) {
+    pub(crate) async fn stop_all(&self) {
         self.core.stop_all().await
     }
 
@@ -175,7 +175,7 @@ where
     /// (spec §6.4): spawning the executor if it is not running. The admin
     /// sync subscribes **before** it enqueues its event, so the completion
     /// signal cannot be missed.
-    pub async fn events(&self, user_id: UserId) -> TbResult<broadcast::Receiver<P::Event>> {
+    pub(crate) async fn events(&self, user_id: UserId) -> TbResult<broadcast::Receiver<P::Event>> {
         let pusher: Box<dyn FramePusher> = Box::new(self.clone());
         self.core
             .events(&self.source, &self.lane, user_id, pusher)

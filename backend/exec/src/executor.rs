@@ -106,7 +106,7 @@ pub(crate) fn now_unix() -> i64 {
 /// the biased select found work (or none). Pure so the reclaim rule is
 /// unit-testable without a store (spec §10).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Action {
+pub(crate) enum Action {
     /// Process a pending API write first (a client action never waits).
     ProcessWrite,
     /// No write, but a Strava event is queued.
@@ -130,7 +130,11 @@ pub enum Action {
 ///   re-probes the `strava_events` queue, not a reap trigger — the stream's
 ///   TCP death is what ends it (its heartbeat write fails, the receiver
 ///   drops, and the no-streams rule reaps the loop).
-pub fn next_action(pending_write: bool, queued_event: bool, active_streams: usize) -> Action {
+pub(crate) fn next_action(
+    pending_write: bool,
+    queued_event: bool,
+    active_streams: usize,
+) -> Action {
     if pending_write {
         return Action::ProcessWrite;
     }
