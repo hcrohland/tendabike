@@ -59,7 +59,7 @@ const MIN_TIME: OffsetDateTime = time::macros::datetime!(0000-01-01 0:00 UTC);
 /// # Panics
 ///
 /// Panics if the rounding leads to a ComponentRange error
-pub fn round_time(time: OffsetDateTime) -> OffsetDateTime {
+pub(crate) fn round_time(time: OffsetDateTime) -> OffsetDateTime {
     let minute = time.minute();
     time.replace_microsecond(0)
         .unwrap()
