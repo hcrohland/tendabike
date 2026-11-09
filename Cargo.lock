@@ -3031,7 +3031,6 @@ dependencies = [
  "tb_domain",
  "tb_exec",
  "tb_provider",
- "tb_strava",
  "time",
  "tokio",
  "uuid",

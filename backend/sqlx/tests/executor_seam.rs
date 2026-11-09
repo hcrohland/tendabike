@@ -84,12 +84,12 @@ use tb_exec::{
     ProviderService, Registry, Request, RequestReceiver, ServiceApi, request_channel,
 };
 use tb_provider::ProviderLane;
-use tb_sqlx::{DbPool, SNAPSHOT_JSON, SqlxConn};
-use tb_strava::{
+use tb_provider::strava::{
     StravaId, StravaLane,
     event::{Event, InEvent},
     test_support::{canned_strava, seed_token_cache},
 };
+use tb_sqlx::{DbPool, SNAPSHOT_JSON, SqlxConn};
 use time::macros::datetime;
 use tokio::sync::{MutexGuard, Notify, broadcast};
 
@@ -149,7 +149,7 @@ fn loop_ctx(
 }
 
 /// The in-memory suite's session identity: the fixture's one user and its
-/// Strava id (the same pair the seam suite and the `tb_strava` tests use).
+/// Strava id (the same pair the seam suite and the `tb_provider::strava` tests use).
 fn test_identity() -> (UserId, StravaId) {
     (UserId::from(1), StravaId::from(42))
 }
