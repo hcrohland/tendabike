@@ -1,10 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use super::*;
-use crate::event::{AspectType, Event, ObjectType};
-use crate::test_support::{
+use super::super::event::{AspectType, Event, ObjectType};
+use super::super::test_support::{
     deauthorizes, gear_json, queue, setup, strava_admin_session, strava_user, user,
 };
+use super::*;
 
 #[tokio::test]
 async fn upsert_creates_new_user() -> TbResult<()> {
@@ -440,7 +440,7 @@ async fn update_gear_imports_bikes_and_shoes() -> TbResult<()> {
         move |_name, _vendor, _model, what, _source, _purchase, _user, _store| {
             whats_rec.lock().unwrap().push(what);
             let id = next_id_rec.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
-            Ok(crate::test_support::part(
+            Ok(super::super::test_support::part(
                 PartId::from(id),
                 UserId::from(1),
                 what,

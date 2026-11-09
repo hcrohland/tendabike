@@ -10,7 +10,7 @@ consumer that only drives Strava work can bound on it directly.
 the same "local traits plus an umbrella" shape as `tb_domain::Store` itself.
 */
 
-use crate::{StravaId, StravaUser, event::Event};
+use super::{StravaId, StravaUser, event::Event};
 use tb_domain::{TbResult, UserId};
 
 /// The Strava-side data store: the `strava_users` and `strava_events` tables.
@@ -18,7 +18,7 @@ use tb_domain::{TbResult, UserId};
 /// This is the local trait — it carries no domain supertrait, so a consumer
 /// that only drives Strava work can bound on it directly instead of the full
 /// [`StravaStore`] umbrella.
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "test-support"), mockall::automock)]
 #[async_trait::async_trait]
 pub trait StravaDataStore: Send + Sync {
     /// Returns all Strava users.

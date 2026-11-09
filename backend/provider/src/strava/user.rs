@@ -10,8 +10,8 @@ use derive_more::{Display, From, Into};
 use oauth2::RefreshToken;
 use serde::Deserialize;
 
-use crate::*;
-use tb_provider::DomainFacade;
+use super::*;
+use crate::DomainFacade;
 
 #[derive(
     Clone, Copy, Debug, Display, From, Into, Default, Hash, PartialEq, Eq, Serialize, Deserialize,
@@ -158,7 +158,7 @@ impl StravaUser {
         facade: &D,
         store: &mut S,
     ) -> TbResult<Vec<PartId>> {
-        if crate::ratelimit::limited_until().is_some() {
+        if super::ratelimit::limited_until().is_some() {
             log::debug!("update_gear: rate limited, skipping hydration");
             return Ok(Vec::new());
         }

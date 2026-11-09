@@ -17,7 +17,7 @@ use tb_domain::{
 };
 use time::OffsetDateTime;
 
-use crate::*;
+use super::super::*;
 
 // ─── Thread-local canned responses ──────────────────────────────────────────
 //
@@ -62,12 +62,12 @@ pub fn begin_test() {
 /// the `get_token` free function from forcing a (network) refresh on the first
 /// request (spec #602: the token source moved to `tb_strava`).
 pub fn seed_token_cache(user_id: UserId, strava_id: StravaId, access_token: &str) {
-    crate::session::TOKEN_CACHE
+    super::super::session::TOKEN_CACHE
         .lock()
         .expect("the token cache is not poisoned")
         .insert(
             user_id,
-            crate::session::TokenState::warm(strava_id, access_token),
+            super::super::session::TokenState::warm(strava_id, access_token),
         );
 }
 
@@ -166,12 +166,12 @@ pub fn strava_admin_session(user: UserId, strava: StravaId) -> MockSession {
 /// [`strava_session`] for user 1 / Strava ID 42.
 #[cfg(test)]
 pub fn setup() -> (
-    crate::traits::MockStravaDataStore,
-    tb_provider::MockDomainFacade<crate::traits::MockStravaDataStore>,
+    super::super::traits::MockStravaDataStore,
+    crate::MockDomainFacade<super::super::traits::MockStravaDataStore>,
     MockSession,
 ) {
-    let store = crate::traits::MockStravaDataStore::new();
-    let facade = tb_provider::MockDomainFacade::<crate::traits::MockStravaDataStore>::new();
+    let store = super::super::traits::MockStravaDataStore::new();
+    let facade = crate::MockDomainFacade::<super::super::traits::MockStravaDataStore>::new();
     let session = strava_session(UserId::from(1), 42.into());
     (store, facade, session)
 }

@@ -3000,10 +3000,18 @@ dependencies = [
 name = "tb_provider"
 version = "0.9.0"
 dependencies = [
+ "anyhow",
+ "async-recursion",
  "async-trait",
+ "derive_more",
  "http",
  "log",
  "mockall",
+ "oauth2",
+ "reqwest 0.13.5",
+ "serde",
+ "serde_derive",
+ "serde_json",
  "tb_domain",
  "time",
  "tokio",
@@ -3034,22 +3042,7 @@ dependencies = [
 name = "tb_strava"
 version = "0.9.0"
 dependencies = [
- "anyhow",
- "async-recursion",
- "async-trait",
- "derive_more",
- "http",
- "log",
- "mockall",
- "oauth2",
- "reqwest 0.13.5",
- "serde",
- "serde_derive",
- "serde_json",
- "tb_domain",
  "tb_provider",
- "time",
- "tokio",
 ]
 
 [[package]]

@@ -6,9 +6,11 @@
 //! expectation set — a refresh would call an unprogrammed mock method and
 //! panic.
 
+use super::super::StravaId;
+use super::super::test_support::{
+    MockStravaDataStore, begin_test, deauthorizes, queue, seed_token_cache,
+};
 use super::*;
-use crate::StravaId;
-use crate::test_support::{MockStravaDataStore, begin_test, deauthorizes, queue, seed_token_cache};
 use tb_domain::UserId;
 
 /// `request_json` uses the `TokenCache`'s warm token and persists nothing

@@ -8,8 +8,8 @@
 
 use time::{OffsetDateTime, UtcOffset};
 
-use crate::*;
-use tb_provider::DomainFacade;
+use super::*;
+use crate::DomainFacade;
 
 /// The [`ActivityId`] for a Strava activity, rendered as `"strava:<n>"`.
 ///

@@ -37,8 +37,8 @@ use std::time::SystemTime;
 use log::debug;
 use oauth2::{AccessToken, RefreshToken, TokenResponse};
 
-use crate::client::{HTTP_CLIENT, STRAVACLIENT};
-use crate::{StravaDataStore, StravaId, StravaUser};
+use super::client::{HTTP_CLIENT, STRAVACLIENT};
+use super::{StravaDataStore, StravaId, StravaUser};
 use tb_domain::{Error, TbResult, UserId};
 
 /// A one-line expiry check: a known expiry in the past is expired; an unknown

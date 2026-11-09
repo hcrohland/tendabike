@@ -1,21 +1,21 @@
 use std::sync::{Arc, Mutex};
 
-use super::*;
-use crate::event::{AspectType, Event, ObjectType};
-use crate::test_support::{
+use super::super::test_support::{
     activity_json, queue, queue_error, setup, strava_admin_session, strava_user,
 };
+use super::*;
+use super::{AspectType, Event, ObjectType};
 
 /// Sets this thread's rate-limiter override to "at limit" (read 15-min
 /// exhausted), so `get_event` reports `Limited`.
 fn set_rate_limited() {
-    crate::ratelimit::test_set_limited();
+    super::super::ratelimit::test_set_limited();
 }
 
 /// Sets this thread's rate-limiter override to "no data" (allows all
 /// requests), so `get_event` dequeues normally.
 fn reset_rate_limiter() {
-    crate::ratelimit::test_set_not_limited();
+    super::super::ratelimit::test_set_not_limited();
 }
 
 fn in_event(

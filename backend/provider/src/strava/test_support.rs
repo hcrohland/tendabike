@@ -5,6 +5,6 @@
 
 pub mod seam;
 
-#[cfg(test)]
-pub use crate::traits::MockStravaDataStore;
+#[cfg(any(test, feature = "test-support"))]
+pub use super::traits::MockStravaDataStore;
 pub use seam::*;
