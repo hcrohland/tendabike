@@ -8,23 +8,22 @@ ENV CARGO_INCREMENTAL=0 \
     CARGO_PROFILE_RELEASE_STRIP=symbols
 
 FROM rust-base AS chef
-RUN apk add cargo-chef
+RUN apk add --no-cache cargo-chef
 WORKDIR /app
 
 FROM chef AS planner
-COPY . .
+COPY Cargo.toml Cargo.lock ./
+COPY backend backend/
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS build-deps
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json && rm -rf /usr/local/cargo/registry/cache
 
-FROM rust-base AS build-engine
-WORKDIR /app
+FROM build-deps AS build-engine
 ENV SQLX_OFFLINE=true
-COPY --from=build-deps /app/target ./target
-COPY --from=build-deps /usr/local/cargo/registry /usr/local/cargo/registry
-COPY . .
+COPY Cargo.toml Cargo.lock ./
+COPY backend backend/
 RUN cargo build --release \
     && cp target/release/tendabike /app/tendabike
 
@@ -35,7 +34,7 @@ WORKDIR /build
 
 COPY package.json package-lock.json /build/
 COPY frontend/package.json /build/frontend/
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 
 COPY frontend/ /build/frontend
 RUN npm run build
