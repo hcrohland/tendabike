@@ -6,8 +6,6 @@
 
 - Work from the interface, not through it. A type's public interface — its module doc and method signatures — is the complete specification. Confirm it with 1–3 representative usages. When the interface is unchanged, callers are out of scope; when calling a function, its internal dependencies are out of scope. Drop into implementation only to modify the type, debug, or when the contract is too thin to decide.
 - The boundary holds at the package level too: a package's public API is its complete interface, even with a single consumer or implementor. Confirm the API; the implementation behind it is out of scope.
-- When more than one option is defensible, ask the user before choosing — even when you're confident in your pick.
-- Prefer the straightforward, proven action; do not spend effort optimizing process when the simple path is known to work.
 - Keep batch size one: draft a unit, write it, confirm it landed, then draft the next — one ticket per create, one file or function per edit. Each unit's content is written after the previous one lands, not drafted in a batch up front.
 - Formatting is done by external formatters, never by hand: write the code, then run cargo fmt (Rust) or npm run format from the project root.
 
@@ -23,7 +21,6 @@
 
 ## Agent skills
 
-- GitHub MCP tools: `<entity>_<action>` naming (`issue_read`, not `get_issue`).
 - Issue tracker: when working with issues, specs, or PRs, read [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
 - Triage labels: five-role vocabulary, each label string equal to its role name; see [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md).
 - Domain docs: single-context `GLOSSARY.md` and `docs/adr/` at the repo root; see [`docs/agents/domain.md`](docs/agents/domain.md).
