@@ -183,7 +183,7 @@ pub async fn strava_url<D: DomainFacade<S>, S: StravaDataStore>(
     Ok(format!("https://strava.com/activities/{raw}"))
 }
 
-pub async fn upsert_activity<D: DomainFacade<S>, S: StravaDataStore>(
+pub(crate) async fn upsert_activity<D: DomainFacade<S>, S: StravaDataStore>(
     id: i64,
     user_id: UserId,
     facade: &D,

@@ -35,7 +35,7 @@ use http::*;
 pub mod activity;
 pub mod event;
 pub mod gear;
-pub mod ratelimit;
+mod ratelimit;
 
 mod lane;
 pub use lane::*;

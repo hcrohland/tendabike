@@ -85,7 +85,7 @@ impl StravaUser {
     }
 
     /// get the strava id for this user
-    pub fn strava_id(&self) -> StravaId {
+    pub(crate) fn strava_id(&self) -> StravaId {
         self.id
     }
 
