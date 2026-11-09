@@ -12,8 +12,8 @@ use http::{HeaderMap, HeaderName, HeaderValue};
 /// `None` until the first response populates the values.
 #[derive(Debug, Clone, Default, PartialEq)]
 struct Window {
-    pub limit: Option<u32>,
-    pub usage: Option<u32>,
+    limit: Option<u32>,
+    usage: Option<u32>,
 }
 
 impl Window {

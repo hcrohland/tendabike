@@ -104,7 +104,7 @@ fn now_unix() -> i64 {
 /// the biased select found work (or none). Pure so the reclaim rule is
 /// unit-testable without a store (spec §10).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Action {
+enum Action {
     /// Process a pending API write first (a client action never waits).
     ProcessWrite,
     /// No write, but a Strava event is queued.
