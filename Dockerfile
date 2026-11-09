@@ -1,91 +1,54 @@
-# Shared rust base: C linker deps + slim rustup profile. Both cargo
-# stages inherit from it so these layers are built once and cached
-# identically.
+### backend build
+
 FROM rust:alpine AS rust-base
-RUN apk add  musl-dev
+RUN apk add --no-cache musl-dev
 RUN rustup set profile minimal
+ENV CARGO_INCREMENTAL=0 \
+    CARGO_PROFILE_RELEASE_DEBUG=0 \
+    CARGO_PROFILE_RELEASE_STRIP=symbols
 
-# Dependency stage: compiles the full dependency graph from the
-# workspace manifests alone. Its cache key is a function of the
-# manifests, Cargo.lock and the rust base image, so it stays warm
-# across source-only commits. The compiled /app/target is a regular
-# layer (not a cache mount), which is what lets the remote cache in
-# .github/workflows/docker-image.yml (cache-from/cache-to type=gha)
-# share it across runners. Workspace members are stubbed below so no
-# real source feeds this stage; a lockfile change is the only thing
-# that forces a full rebuild here.
-FROM rust-base AS build-deps
-
+FROM rust-base AS chef
+RUN apk add cargo-chef
 WORKDIR /app
-COPY Cargo.toml Cargo.lock ./
-COPY backend/app/Cargo.toml backend/app/
-COPY backend/domain/Cargo.toml backend/domain/
-COPY backend/axum/Cargo.toml backend/axum/
-COPY backend/strava/Cargo.toml backend/strava/
-COPY backend/sqlx/Cargo.toml backend/sqlx/
-COPY backend/exec/Cargo.toml backend/exec/
-COPY backend/provider/Cargo.toml backend/provider/
-RUN mkdir -p backend/app/src \
-             backend/domain/src \
-             backend/axum/src \
-             backend/strava/src \
-             backend/sqlx/src/bin \
-             backend/exec/src \
-             backend/provider/src \
-    && printf 'fn main() {}\n' > backend/app/src/main.rs \
-    && printf 'fn main() {}\n' > backend/sqlx/src/bin/build_snapshot.rs \
-    && for f in backend/domain/src/lib.rs \
-                backend/axum/src/lib.rs \
-                backend/strava/src/lib.rs \
-                backend/sqlx/src/lib.rs \
-                backend/exec/src/lib.rs \
-                backend/provider/src/lib.rs; do \
-        echo '// stub' > $f; \
-    done
-RUN cargo build --release
 
-# Build stage: starts from the pre-compiled target directory, so cargo
-# recompiles only the seven real workspace crates.
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS build-deps
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+
 FROM rust-base AS build-engine
-
 WORKDIR /app
+ENV SQLX_OFFLINE=true
 COPY --from=build-deps /app/target ./target
 COPY --from=build-deps /usr/local/cargo/registry /usr/local/cargo/registry
+COPY . .
+RUN cargo build --release \
+    && cp target/release/tendabike /app/tendabike
 
-ENV SQLX_OFFLINE=true
-COPY Cargo.toml Cargo.lock ./
-COPY backend/sqlx/.sqlx backend/sqlx/.sqlx/
-COPY backend backend/
-# The copied target directory carries cargo's fingerprints from the stub
-# build: each unit's invoked.timestamp is the stub build time, which is
-# always newer than the build-context mtimes that COPY preserves (the git
-# checkout). Cargo's mtime check would then call every workspace source
-# unchanged and ship the stub binary as-is. Touching the sources past
-# those fingerprints forces the five workspace crates to recompile; the
-# registry dependencies are untouched and stay cached.
-RUN find backend -type f -name '*.rs' -exec touch {} + \
-    && cargo build --release \
-    && cp /app/target/release/tendabike /app/tendabike
-
+### Frontend build
 FROM node:slim AS build-frontend
 
 WORKDIR /build
 
 COPY package.json package-lock.json /build/
 COPY frontend/package.json /build/frontend/
-RUN npm update rollup
+RUN npm ci
 
 COPY frontend/ /build/frontend
 RUN npm run build
 
+### final assembly
 FROM scratch
 
 USER 999:999
 WORKDIR /tendabike
-ENV STATIC_WWW="/tendabike/build"
+ENV STATIC_WWW="/tendabike/assets"
 
 COPY --from=build-engine /app/tendabike ./
 COPY --from=build-engine /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=build-frontend /build/frontend/build build
+COPY --from=build-frontend /build/frontend/build assets
 
 ENTRYPOINT [ "./tendabike" ]
