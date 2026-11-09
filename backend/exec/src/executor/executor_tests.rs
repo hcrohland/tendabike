@@ -71,7 +71,7 @@ use crate::{
     TxnSource, request_channel,
 };
 
-// --- The `mock!` connection witness (issue #631) ---
+// --- The `mock!` connection witness ---
 //
 // A single type accumulating the full `Store` seam (the nine sub-traits plus
 // the method-free [`Store`] marker) *and* the Strava surface ([`StravaDataStore`]
@@ -1521,7 +1521,7 @@ async fn personal_write_delivers_the_personal_delivery_context() {
     );
 }
 
-// --- Shop stream infrastructure (spec #517, ticket #582) ---
+// --- Shop stream infrastructure (spec #517) ---
 //
 // The `Registry` owns a per-shop `broadcast` channel map (the shop streams)
 // and the [`FramePusher`] surface (a single `deliver`, spec #706). The tests
@@ -1624,7 +1624,7 @@ async fn shop_stream_lifecycle_create_receive_drop() {
 }
 
 /// `deliver` fans a notification out to every open shop stream its recipient
-/// owns (follow-up to issue #687): the recipient's shop views show all their
+/// owns: the recipient's shop views show all their
 /// notifications, like the hydration snapshot.
 #[tokio::test]
 async fn deliver_reaches_the_recipients_open_shop_streams() {

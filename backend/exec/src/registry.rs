@@ -111,7 +111,7 @@ where
 }
 
 /// The frame push surface the executor loop uses to route a completed
-/// `Summary` to its delivery targets (spec #517, ticket #582; collapsed from
+/// `Summary` to its delivery targets (spec #517; collapsed from
 /// three push methods to one `deliver`, spec #706): the implementation (the
 /// [`Registry`]'s lifecycle core) owns the complete routing policy — given
 /// the acting session's context, it inspects the `Summary`'s content and
@@ -163,8 +163,8 @@ where
         self.core.wake(user_id).await
     }
 
-    /// Stop every live executor (the admin rescan's global re-hydration,
-    /// issue #446): abort every task (the watchdog records `Dead` on the
+    /// Stop every live executor (the admin rescan's global re-hydration):
+    /// abort every task (the watchdog records `Dead` on the
     /// abort `JoinError`, like a panic) and clear the executor map — the
     /// core's `stop_all`. The next `subscribe`/`write` respawns fresh.
     pub async fn stop_all(&self) {
@@ -233,7 +233,7 @@ where
     }
 }
 
-/// The frame push surface (spec #517, ticket #582): the executor loop
+/// The frame push surface (spec #517): the executor loop
 /// routes a completed `Summary` through this, and the implementation
 /// delegates the routing to the core — the deep "where does a frame go?"
 /// policy lives there (spec #705/#706), locking its own maps (the shop
@@ -342,7 +342,7 @@ where
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     P::Event: Into<tb_strava::event::Event>,
 {
-    /// Register a shop stream for `shop_id` (spec #517, ticket #582): verify
+    /// Register a shop stream for `shop_id` (spec #517): verify
     /// the caller is the shop owner in a transaction (a non-owner is
     /// `Forbidden`, mapped to a 403 by the web layer), then create the shop
     /// channel on demand and return a subscription to it. No `ExecutorStatus`
@@ -369,7 +369,7 @@ where
 
         // Create the shop channel on demand and subscribe (the "open shop"
         // check is implicit: `receiver_count() > 0`). The owner tag is the
-        // verified caller (follow-up to issue #687): it lets a
+        // verified caller: it lets a
         // notification frame fan out to every open shop stream of its
         // recipient.
         Ok(self.core.subscribe_shop(shop_id, user_id).await)
@@ -380,7 +380,7 @@ where
     /// rescan is all-users maintenance that bypasses the executors (the
     /// spec §3/§6.4 carve-out), so no frame carries its effect: open
     /// streams end, and each client's native reconnect + catch-up snapshot
-    /// re-hydrates it (issue #446).
+    /// re-hydrates it.
     async fn rescan(&self, _session: Box<dyn Session>) -> TbResult<()> {
         let mut store = self.source.begin().await?;
         Activity::rescan_all(&mut store).await?;

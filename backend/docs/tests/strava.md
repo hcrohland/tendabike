@@ -11,7 +11,7 @@ All tests run in-memory (no database, no network); one `<name>_tests.rs` module 
 
 ## Key infrastructure
 
-- **`MockStravaDataStore`** (`strava/src/traits.rs`, via `#[automock]`) — a `mockall` `#[automock]` witness (`#[cfg(test)]`) of the `StravaDataStore` trait (14 methods: `stravauser_*` + `strava_event*`); the Strava-logic free functions take a bare `&mut impl StravaDataStore`, so no `Txn`. Domain operations go through `MockDomainFacade` (the `DomainFacade<C>` seam, `C` inferred as `MockStravaDataStore`). The Strava-logic tests (into_partid, activity sync, gear hydration, event processing, deauthorize) run the logic for real and assert on canned `automock` outcomes.
+- **`MockStravaDataStore`** (`strava/src/traits.rs`, via `#[automock]`) — the `StravaDataStore` automock: Strava-table I/O is canned, domain ops go through `MockDomainFacade` (`C` inferred as `MockStravaDataStore`). The Strava-logic tests (into_partid, activity sync, gear hydration, event processing, deauthorize) run the logic for real and assert on canned outcomes.
 - **`strava_session` / `strava_admin_session`** (`strava/src/test_support.rs`) — build a domain `MockSession` that seeds the `TokenCache` with a warm token (no refresh), so the thin free functions' refresh-token persistence is a no-op for it. The canned responses live in a **thread-local** map the free functions consult (each test runs on its own thread → per-test isolation); `strava_session` begins that scope. The canned-response surface is free functions (not methods on the session):
   - `queue(uri, json)` — script a JSON response body for an **exact** request URI (FIFO per URI)
   - `queue_error(uri, error)` — script an error for an exact URI; unscripted URIs yield `Error::BadRequest`
