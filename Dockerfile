@@ -8,7 +8,7 @@ ENV CARGO_INCREMENTAL=0 \
     CARGO_PROFILE_RELEASE_STRIP=symbols
 
 FROM rust-base AS chef
-RUN cargo install cargo-chef --locked
+RUN apk add cargo-chef
 WORKDIR /app
 
 FROM chef AS planner
