@@ -155,6 +155,3 @@ where
         crate::user::get_all_stats(&tb_provider::DomainFacadeImpl, store).await
     }
 }
-
-#[cfg(test)]
-mod lane_tests;

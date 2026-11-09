@@ -24,12 +24,12 @@ doctest = false
 
 [dev-dependencies]
 # `mockall` is a dev-dependency of `tb_exec` only: the `#[cfg(test)]`
-# witnesses (the `MockConn` and `MockLane` in `executor_tests`) are generated
-# by `mock!` and no production `pub` item depends on them. The optional
-# `test-support` feature (above) is what a dependent's test suite enables: it
-# gates the `pub` test doubles — the `MockDomainFacade` re-export
-# (`test_support`) and the `ServiceApi` / `ProviderService` automocks
-# (`api.rs`) — for the web layer's contract suite.
+# witnesses (the `MockConn` and `MockLane` in `executor_tests`, the
+# `MockDomainFacade` automock) are crate-internal test doubles and no
+# production `pub` item depends on them. The optional `test-support` feature
+# (above) is what a dependent's test suite enables: it gates the
+# `ServiceApi` / `ProviderService` automocks (`api.rs`) for the web layer's
+# contract suite.
 mockall = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -78,7 +78,7 @@ use std::time::Duration;
 use tb_domain::test_support::{
     mock_session, mock_session_admin, mock_session_with_shop, part_type_ids::CHAIN, sole_live,
 };
-use tb_domain::{ApiRead, ApiWrite, PartId, ReadOutcome, ShopId, Summary, UserId};
+use tb_domain::{ApiRead, ApiWrite, Part, PartId, ReadOutcome, ShopId, Summary, UsageId, UserId};
 use tb_exec::{
     DeliveryContext, DetachedBegin, DomainFacadeImpl, ExecutorStatus, FramePusher, LoopContext,
     ProviderService, Registry, Request, RequestReceiver, ServiceApi, request_channel,
@@ -1258,6 +1258,86 @@ async fn delete_user_removes_the_rows() {
         .expect("reading the parts");
     assert_eq!(n, 0, "the user's parts must be gone");
     drop(conn);
+}
+
+/// The shop-subscribe policy against the live adapter (issue #798): the
+/// `subscribe_shop` ownership read is a real store call on Postgres — a
+/// non-owner's connect is `Forbidden` (the web layer maps it to a 403), the
+/// owner's connect returns a stream receiver, and a shop-context `deliver`
+/// reaches the open shop stream.
+#[tokio::test]
+#[ignore]
+async fn shop_subscribe_policy() {
+    let seam = ready().await;
+    let shop = ShopId::from(1);
+    // Seed a shop owned by the fixture user (the prepopulated fixture has
+    // no shops).
+    {
+        let mut conn = seam.pool.begin().await.expect("a transaction");
+        sqlx::query(
+            "INSERT INTO shops (id, owner, name, description) VALUES (1, 1, 'Seam Shop', '')",
+        )
+        .execute(&mut **conn)
+        .await
+        .expect("seeding the shop");
+        conn.commit().await.expect("committing the seed");
+    }
+    let registry = Registry::new(
+        DetachedBegin::new(seam.pool.clone()),
+        DomainFacadeImpl,
+        StravaLane::new(),
+        Duration::from_secs(3600),
+    );
+
+    // (a) A non-owner is forbidden: the ownership read runs against the
+    // shop row just seeded (owner 1), so user 2 is rejected.
+    let err = registry
+        .subscribe_shop(UserId::from(2), shop)
+        .await
+        .expect_err("a non-owner's subscribe must be forbidden");
+    assert!(
+        matches!(err, tb_domain::Error::Forbidden(_)),
+        "the non-owner's subscribe must be Forbidden, got {err:?}"
+    );
+
+    // (b) The owner subscribes and receives a stream receiver.
+    let mut rx = registry
+        .subscribe_shop(UserId::from(1), shop)
+        .await
+        .expect("the owner can subscribe");
+
+    // (c) A shop-context delivery reaches the open shop stream (the facade
+    // delegates the routing to the core).
+    let mut summary = Summary::default();
+    summary.parts.upsert(Part {
+        id: PartId::from(1),
+        owner: UserId::from(1),
+        what: CHAIN,
+        name: "Seam Part".to_string(),
+        vendor: "Seam Vendor".to_string(),
+        model: "Seam Model".to_string(),
+        purchase: datetime!(2024-01-01 00:00 UTC),
+        last_used: datetime!(2024-01-01 00:00 UTC),
+        disposed_at: None,
+        usage: UsageId::default(),
+        source: None,
+        shop: None,
+    });
+    registry
+        .deliver(
+            DeliveryContext {
+                user_id: UserId::from(1),
+                shop: Some(shop),
+                part_owner: None,
+            },
+            summary.clone(),
+        )
+        .await;
+    let got = tokio::time::timeout(TEST_TIMEOUT, rx.recv())
+        .await
+        .expect("the shop stream must deliver in time")
+        .expect("the shop stream must not end");
+    assert_eq!(got, summary);
 }
 
 // ---------------------------------------------------------------------------

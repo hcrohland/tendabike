@@ -36,7 +36,6 @@
 
 use std::collections::VecDeque;
 use std::future::Future;
-use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
@@ -49,9 +48,8 @@ use tb_domain::test_support::{
 use tb_domain::{
     ApiRead, ApiWrite, Error, Notification, NotificationId, NotificationKind,
     NotificationLifecycle, NotificationState, NotificationSubject, OnboardingStatus, Part, PartId,
-    PartTypeId, ReadOutcome, Service, ServiceId, Shop, ShopId, ShopStore, ShopSubscription,
-    SubscriptionId, SubscriptionStatus, Summary, TbResult, Usage, UsageId, User, UserId, UserStat,
-    UserState, WriteOutcome,
+    PartTypeId, ReadOutcome, Service, ServiceId, Shop, ShopId, SubscriptionId, Summary, TbResult,
+    Usage, UsageId, User, UserId, UserStat, UserState, WriteOutcome,
 };
 use tb_provider::{Probe, ProviderLane};
 use tb_strava::event::Event;
@@ -65,8 +63,8 @@ use super::{
 };
 use crate::message::{Request, push_frame};
 use crate::{
-    Action, DeliveryContext, ExecutorStatus, FramePusher, Message, MockDomainFacade, Registry, Txn,
-    TxnSource, request_channel,
+    Action, DeliveryContext, FramePusher, Message, MockDomainFacade, Txn, TxnSource,
+    request_channel,
 };
 
 // --- The `mock!` connection witness (issue #631) ---
@@ -130,220 +128,12 @@ impl Clone for MockLane {
     }
 }
 
-// --- The `subscribe_shop` witness: a `Store`-capable connection (issue #798) ---
-//
-// The registry's direct ops (the `subscribe_shop` ownership read, the `deliver`
-// routing) do their domain work directly in a transaction, so their connection
-// is a full [`Store`] (the entity sub-traits) plus [`Txn`] — not the executor's
-// [`MockConn`], which is `Txn`-only (its domain work rides the facade and the
-// lane). The `subscribe_shop` tests set the `shop_get` and `commit` expectations
-// on it; the rest of the `Store` surface is canned and never called.
-/// A `Store`-capable connection witness for the `subscribe_shop` tests: a
-/// [`ShopStore`] + [`Txn`] double with a canned `shop_get` (the ownership
-/// read) and a clean `commit`. The rest of the `ShopStore` surface is
-/// `unimplemented!` — the ops under test only call `shop_get` and `commit`.
-#[derive(Clone)]
-pub(crate) struct ShopConn {
-    shop: Shop,
-}
-
-impl ShopConn {
-    /// A conn whose `shop_get` returns `shop` and whose `commit` succeeds.
-    fn with_shop(shop: Shop) -> Self {
-        Self { shop }
-    }
-}
-
-#[async_trait::async_trait]
-impl ShopStore for ShopConn {
-    async fn shop_create(
-        &mut self,
-        _name: String,
-        _description: Option<String>,
-        _auto_approve: bool,
-        _owner: UserId,
-    ) -> TbResult<Shop> {
-        unimplemented!()
-    }
-    async fn shop_get(&mut self, _id: ShopId) -> TbResult<Shop> {
-        Ok(self.shop.clone())
-    }
-    async fn shop_update(
-        &mut self,
-        _id: ShopId,
-        _name: String,
-        _description: Option<String>,
-        _auto_approve: bool,
-    ) -> TbResult<Shop> {
-        unimplemented!()
-    }
-    async fn shop_delete(&mut self, _id: ShopId) -> TbResult<usize> {
-        unimplemented!()
-    }
-    async fn shops_get_all_for_user(&mut self, _user_id: UserId) -> TbResult<Vec<Shop>> {
-        unimplemented!()
-    }
-    async fn shops_search(&mut self, _query: &str) -> TbResult<Vec<Shop>> {
-        unimplemented!()
-    }
-    async fn subscription_create(
-        &mut self,
-        _shop_id: ShopId,
-        _user_id: UserId,
-    ) -> TbResult<ShopSubscription> {
-        unimplemented!()
-    }
-    async fn subscription_get(&mut self, _id: SubscriptionId) -> TbResult<ShopSubscription> {
-        unimplemented!()
-    }
-    async fn subscription_find_active(
-        &mut self,
-        _shop_id: ShopId,
-        _user_id: UserId,
-    ) -> TbResult<Option<ShopSubscription>> {
-        unimplemented!()
-    }
-    async fn subscription_find_pending(
-        &mut self,
-        _shop_id: ShopId,
-        _user_id: UserId,
-    ) -> TbResult<Option<ShopSubscription>> {
-        unimplemented!()
-    }
-    async fn subscription_update_status(
-        &mut self,
-        _id: SubscriptionId,
-        _status: SubscriptionStatus,
-    ) -> TbResult<ShopSubscription> {
-        unimplemented!()
-    }
-    async fn subscription_approve(
-        &mut self,
-        _id: SubscriptionId,
-        _status: SubscriptionStatus,
-    ) -> TbResult<ShopSubscription> {
-        unimplemented!()
-    }
-    async fn subscription_delete(&mut self, _id: SubscriptionId) -> TbResult<()> {
-        unimplemented!()
-    }
-    async fn subscriptions_for_shop(
-        &mut self,
-        _shop_id: ShopId,
-    ) -> TbResult<Vec<ShopSubscription>> {
-        unimplemented!()
-    }
-    async fn subscriptions_for_user(
-        &mut self,
-        _user_id: UserId,
-    ) -> TbResult<Vec<ShopSubscription>> {
-        unimplemented!()
-    }
-}
-
-#[async_trait::async_trait]
-impl Txn for ShopConn {
-    async fn commit(self) -> TbResult<()> {
-        Ok(())
-    }
-    async fn rollback(self) -> TbResult<()> {
-        Ok(())
-    }
-}
-
 // The `#[automock]` mock does not derive `Clone` (the `Registry` requires
-// `D: Clone`). The `subscribe_shop`/`deliver` tests never drive the facade,
-// so a `Clone` impl that returns a fresh mock (no expectations) is safe.
-impl Clone for MockDomainFacade<ShopConn> {
-    fn clone(&self) -> Self {
-        Self::new()
-    }
-}
+// `D: Clone`). The tests never drive the facade's expectations after the
+// clone, so a `Clone` impl that returns a fresh mock is safe.
 impl Clone for MockDomainFacade<MockConn> {
     fn clone(&self) -> Self {
         Self::new()
-    }
-}
-
-/// A no-op [`ProviderLane`] stub, generic over its store: the `subscribe_shop`
-/// and `deliver` tests construct a [`Registry`] (which requires a lane tied to
-/// the connection) but never drive the lane — the ops under test do their work
-/// through the connection and the core's frame routing, not the provider's
-/// queue. `Clone` + `Copy` (the registry clones the lane per spawn).
-#[derive(Clone, Copy)]
-struct StubLane<S>(PhantomData<S>);
-
-impl<S> StubLane<S> {
-    const fn new() -> Self {
-        Self(PhantomData)
-    }
-}
-
-#[async_trait::async_trait]
-impl<S: Send + Sync> ProviderLane for StubLane<S> {
-    type Event = Event;
-    type Store = S;
-    async fn probe(&self, _user_id: UserId, _store: &mut S) -> Probe<Event> {
-        Probe::Empty
-    }
-    async fn process(&self, _user_id: UserId, _store: &mut S) -> Option<Summary> {
-        None
-    }
-    async fn insert_sync(
-        &self,
-        _user_id: UserId,
-        _time: i64,
-        _auto: bool,
-        _store: &mut S,
-    ) -> TbResult<()> {
-        Ok(())
-    }
-    async fn update_gear(&self, _user_id: UserId, _store: &mut S) -> TbResult<Vec<PartId>> {
-        Ok(Vec::new())
-    }
-    async fn all_stats(&self, _store: &mut S) -> TbResult<Vec<UserStat>> {
-        Ok(Vec::new())
-    }
-}
-
-/// A [`TxnSource`] over the [`ShopConn`] (the `subscribe_shop` tests'
-/// `Store`-capable connection): `begin` hands out the test's configured conns
-/// in order (one per call), or fails when none are left.
-#[derive(Clone)]
-pub(crate) struct ShopSource {
-    conns: Arc<Mutex<VecDeque<ShopConn>>>,
-}
-
-impl ShopSource {
-    /// A source whose `begin` fails (no conns configured): the ops under test
-    /// never `begin`, so this stands in for a source that is never reached.
-    pub(crate) fn failing() -> Self {
-        Self {
-            conns: Arc::new(Mutex::new(VecDeque::new())),
-        }
-    }
-
-    /// A source that hands out `conn` on its (single) `begin`.
-    fn with(conn: ShopConn) -> Self {
-        Self::with_conns(vec![conn])
-    }
-
-    /// A source that hands out the given conns in order (one per `begin`).
-    fn with_conns(conns: Vec<ShopConn>) -> Self {
-        Self {
-            conns: Arc::new(Mutex::new(conns.into_iter().collect())),
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl TxnSource for ShopSource {
-    type Conn = ShopConn;
-
-    async fn begin(&self) -> TbResult<ShopConn> {
-        self.conns.lock().unwrap().pop_front().ok_or_else(|| {
-            Error::DatabaseFailure(anyhow::anyhow!("begin was called more than once"))
-        })
     }
 }
 
@@ -904,6 +694,13 @@ fn user_record(id: UserId) -> User {
     }
 }
 
+/// A non-empty `Summary` (a frame the shop/user streams should deliver).
+pub(crate) fn non_empty_summary() -> Summary {
+    let mut summary = Summary::default();
+    summary.usages.upsert(Usage::default());
+    summary
+}
+
 /// A canned `Shop` owned by `owner` (the `subscribe_shop` ownership read).
 pub(crate) fn shop_owned_by(owner: UserId) -> Shop {
     Shop {
@@ -914,6 +711,23 @@ pub(crate) fn shop_owned_by(owner: UserId) -> Shop {
         auto_approve: true,
         created_at: OffsetDateTime::UNIX_EPOCH,
     }
+}
+
+/// A `Summary` carrying a notification for `recipient`.
+pub(crate) fn summary_with_notification(recipient: UserId) -> Summary {
+    let notification = Notification {
+        id: NotificationId::from(Uuid::now_v7()),
+        recipient,
+        lifecycle: NotificationLifecycle::Persistent,
+        kind: NotificationKind::SubRequest,
+        subject: NotificationSubject::Subscription(SubscriptionId::from(1)),
+        message: None,
+        state: NotificationState::New,
+        created_at: sample_purchase_date(),
+    };
+    let mut summary = Summary::default();
+    summary.notifications.upsert(notification);
+    summary
 }
 
 /// A non-empty `Summary` with a single part owned by `owner`: the frame a
@@ -942,23 +756,6 @@ pub(crate) fn summary_with_service() -> Summary {
     };
     let mut summary = Summary::default();
     summary.services.upsert(service);
-    summary
-}
-
-/// A `Summary` carrying a notification for `recipient`.
-pub(crate) fn summary_with_notification(recipient: UserId) -> Summary {
-    let notification = Notification {
-        id: NotificationId::from(Uuid::now_v7()),
-        recipient,
-        lifecycle: NotificationLifecycle::Persistent,
-        kind: NotificationKind::SubRequest,
-        subject: NotificationSubject::Subscription(SubscriptionId::from(1)),
-        message: None,
-        state: NotificationState::New,
-        created_at: sample_purchase_date(),
-    };
-    let mut summary = Summary::default();
-    summary.notifications.upsert(notification);
     summary
 }
 
@@ -1493,286 +1290,5 @@ async fn personal_write_delivers_the_personal_delivery_context() {
     assert_eq!(
         calls[0].summary, summary,
         "the delivered summary is the write's summary"
-    );
-}
-
-// --- Shop stream infrastructure (spec #517, ticket #582) ---
-//
-// The `Registry` owns a per-shop `broadcast` channel map (the shop streams)
-// and the [`FramePusher`] surface (a single `deliver`, spec #706). The tests
-// drive the `Registry` through its public surface (`subscribe_shop`,
-// `deliver`, `shop_open`); the store is a canned [`ShopConn`] (a `Store`-
-// capable connection) whose `shop_get` reports the shop's owner (the
-// `subscribe_shop` ownership read).
-
-/// The canned ownership-read conn: the store reports `shop_get` → a shop
-/// owned by `owner`, so an owner's subscribe succeeds and a non-owner's is
-/// `Forbidden`.
-fn shop_conn(owner: UserId) -> ShopConn {
-    ShopConn::with_shop(shop_owned_by(owner))
-}
-
-/// A `TxnSource` whose `subscribe_shop` ownership read is canned (one
-/// conn — one ownership read).
-fn shop_source(owner: UserId) -> ShopSource {
-    ShopSource::with(shop_conn(owner))
-}
-
-/// A non-empty `Summary` (a frame the shop/user streams should deliver).
-pub(crate) fn non_empty_summary() -> Summary {
-    let mut summary = Summary::default();
-    summary.usages.upsert(Usage::default());
-    summary
-}
-
-#[tokio::test]
-async fn subscribe_shop_rejects_a_non_owner() {
-    // A non-owner is forbidden (the web layer maps this to a 403): the canned
-    // store reports the shop's owner as 1, so user 2 is rejected.
-    let registry = Registry::new(
-        shop_source(UserId::from(1)),
-        MockDomainFacade::<ShopConn>::new(),
-        StubLane::<ShopConn>::new(),
-        Duration::from_secs(60),
-    );
-
-    let result = registry
-        .subscribe_shop(UserId::from(2), ShopId::from(7))
-        .await;
-    assert!(
-        matches!(result, Err(Error::Forbidden(_))),
-        "a non-owner is forbidden, got {result:?}"
-    );
-}
-
-#[tokio::test]
-async fn shop_stream_lifecycle_create_receive_drop() {
-    let registry = Registry::new(
-        shop_source(UserId::from(1)),
-        MockDomainFacade::<ShopConn>::new(),
-        StubLane::<ShopConn>::new(),
-        Duration::from_secs(60),
-    );
-    let shop_id = ShopId::from(7);
-
-    // Created on demand: no stream before the owner's first connect.
-    assert!(
-        !registry.shop_open(shop_id).await,
-        "no shop stream before a connect"
-    );
-
-    // The owner's connect opens the channel (the canned store reports the
-    // owner as the session user).
-    let mut rx = registry
-        .subscribe_shop(UserId::from(1), shop_id)
-        .await
-        .expect("the owner can subscribe");
-    assert!(
-        registry.shop_open(shop_id).await,
-        "the channel is open while a receiver is attached"
-    );
-
-    // A shop-context delivery reaches the open shop stream (the facade
-    // delegates the routing to the core).
-    let summary = non_empty_summary();
-    registry
-        .deliver(
-            DeliveryContext {
-                user_id: UserId::from(1),
-                shop: Some(shop_id),
-                part_owner: None,
-            },
-            summary.clone(),
-        )
-        .await;
-    let got = rx.recv().await.expect("the subscriber receives the frame");
-    assert_eq!(got, summary);
-
-    // Dropping the last receiver closes the channel: the "open shop" check
-    // (receiver_count() > 0) is no longer met, so the entry is reaped.
-    drop(rx);
-    assert!(
-        !registry.shop_open(shop_id).await,
-        "the channel is dropped when the last receiver disconnects"
-    );
-}
-
-/// `deliver` fans a notification out to every open shop stream its recipient
-/// owns (follow-up to issue #687): the recipient's shop views show all their
-/// notifications, like the hydration snapshot.
-#[tokio::test]
-async fn deliver_reaches_the_recipients_open_shop_streams() {
-    let registry = Registry::new(
-        ShopSource::with_conns(vec![shop_conn(UserId::from(1)), shop_conn(UserId::from(1))]),
-        MockDomainFacade::<ShopConn>::new(),
-        StubLane::<ShopConn>::new(),
-        Duration::from_secs(60),
-    );
-    let shop_a = ShopId::from(7);
-    let shop_b = ShopId::from(8);
-    let recipient = UserId::from(1);
-
-    // Two open shop streams, both owned by the recipient (the canned store
-    // reports the recipient as the owner of every shop).
-    let mut rx_a = registry
-        .subscribe_shop(recipient, shop_a)
-        .await
-        .expect("the owner can subscribe to A");
-    let mut rx_b = registry
-        .subscribe_shop(recipient, shop_b)
-        .await
-        .expect("the owner can subscribe to B");
-
-    let summary = summary_with_notification(recipient);
-    registry
-        .deliver(
-            DeliveryContext {
-                user_id: recipient,
-                shop: None,
-                part_owner: None,
-            },
-            summary.clone(),
-        )
-        .await;
-
-    assert_eq!(
-        rx_a.recv().await.expect("shop A receives the frame"),
-        summary
-    );
-    assert_eq!(
-        rx_b.recv().await.expect("shop B receives the frame"),
-        summary
-    );
-}
-
-/// `deliver` skips the session's own shop in the recipient fan-out (the
-/// session's shop is already delivered by the normal routing) — no double
-/// frame on the same channel.
-#[tokio::test]
-async fn deliver_skips_the_session_shop_in_the_fan_out() {
-    let registry = Registry::new(
-        ShopSource::with_conns(vec![shop_conn(UserId::from(1)), shop_conn(UserId::from(1))]),
-        MockDomainFacade::<ShopConn>::new(),
-        StubLane::<ShopConn>::new(),
-        Duration::from_secs(60),
-    );
-    let session_shop = ShopId::from(7);
-    let other_shop = ShopId::from(8);
-    let user = UserId::from(1);
-    let mut rx_a = registry
-        .subscribe_shop(user, session_shop)
-        .await
-        .expect("the owner can subscribe to the session's shop");
-    let mut rx_b = registry
-        .subscribe_shop(user, other_shop)
-        .await
-        .expect("the owner can subscribe to the other shop");
-
-    let summary = summary_with_notification(user);
-    registry
-        .deliver(
-            DeliveryContext {
-                user_id: user,
-                shop: Some(session_shop),
-                part_owner: None,
-            },
-            summary.clone(),
-        )
-        .await;
-
-    // The session's shop receives the normal shop-context frame — exactly
-    // once (the fan-out skips it).
-    let got_a = rx_a
-        .recv()
-        .await
-        .expect("the session's shop receives the frame");
-    assert_eq!(got_a, summary);
-    assert!(
-        rx_a.try_recv().is_err(),
-        "the session's shop gets no double frame"
-    );
-    // The other shop stream receives the fan-out frame.
-    assert_eq!(
-        rx_b.recv()
-            .await
-            .expect("the other shop receives the frame"),
-        summary
-    );
-}
-
-/// `deliver` is a no-op for a user with no open shop stream (a
-/// not-yet-connected client catches up on hydration, spec §4.5), and a
-/// delivery for one user never reaches a shop stream owned by another.
-#[tokio::test]
-async fn deliver_never_reaches_a_foreign_owners_shop_streams() {
-    let registry = Registry::new(
-        shop_source(UserId::from(1)),
-        MockDomainFacade::<ShopConn>::new(),
-        StubLane::<ShopConn>::new(),
-        Duration::from_secs(60),
-    );
-    // Shop 7 is owned by user 1; user 2's delivery has no business there.
-    let mut rx = registry
-        .subscribe_shop(UserId::from(1), ShopId::from(7))
-        .await
-        .expect("the owner can subscribe");
-
-    registry
-        .deliver(
-            DeliveryContext {
-                user_id: UserId::from(2),
-                shop: None,
-                part_owner: None,
-            },
-            summary_with_notification(UserId::from(2)),
-        )
-        .await;
-
-    assert!(
-        rx.try_recv().is_err(),
-        "a delivery for a non-owner never reaches the owner's stream"
-    );
-}
-
-#[tokio::test]
-async fn deliver_is_a_noop_without_a_running_executor() {
-    // No store is involved: a personal delivery to a user with no (or a
-    // reaped) executor is a no-op, so the source's mock is never `begin`-ed.
-    let registry = Registry::new(
-        ShopSource::failing(),
-        MockDomainFacade::<ShopConn>::new(),
-        StubLane::<ShopConn>::new(),
-        Duration::from_secs(60),
-    );
-
-    // No executor for the user: a no-op (no panic, no receiver).
-    registry
-        .deliver(
-            DeliveryContext {
-                user_id: UserId::from(1),
-                shop: None,
-                part_owner: None,
-            },
-            non_empty_summary(),
-        )
-        .await;
-
-    // A reaped executor: a no-op (the frame channel is not fed).
-    let mut frame_rx = registry
-        .install_executor_for_test(UserId::from(2), ExecutorStatus::Reaped)
-        .await;
-    registry
-        .deliver(
-            DeliveryContext {
-                user_id: UserId::from(2),
-                shop: None,
-                part_owner: None,
-            },
-            non_empty_summary(),
-        )
-        .await;
-    assert!(
-        frame_rx.try_recv().is_err(),
-        "a reaped executor receives no frame"
     );
 }

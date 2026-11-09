@@ -24,9 +24,10 @@
 //! domain: the four dispatch-level operations the executor needs, each a
 //! one-line forward to the corresponding `tb_domain` function, generic over
 //! the store. The executor is generic over `D: DomainFacade` (static
-//! dispatch); tests swap in the [`MockDomainFacade`] (under `test-support`).
+//! dispatch); the crate's own tests swap in the [`MockDomainFacade`] (a
+//! crate-internal `cfg(test)` double).
 //!
-//! [`MockDomainFacade`]: crate::test_support::MockDomainFacade
+//! [`MockDomainFacade`]: crate::MockDomainFacade
 
 use tb_domain::{
     ApiRead, ApiWrite, Part, PartId, ReadOutcome, Session, Store, TbResult, UserId, WriteOutcome,
@@ -37,13 +38,13 @@ use tb_domain::{
 /// `tb_domain` function, generic over the store.
 ///
 /// Dispatch is static — the executor is generic over `D: DomainFacade`.
-/// Under `test-support`, `mockall`'s `#[automock]` generates
-/// [`MockDomainFacade`]; tests set expectations with the store type as a
-/// turbofish, e.g. `expect_part_owner::<MyStore>()`.
+/// Under `cfg(test)`, `mockall`'s `#[automock]` generates
+/// [`MockDomainFacade`]; the crate's own tests set expectations with the
+/// store type as a turbofish, e.g. `expect_part_owner::<MyStore>()`.
 ///
-/// [`MockDomainFacade`]: crate::test_support::MockDomainFacade
+/// [`MockDomainFacade`]: crate::MockDomainFacade
 #[async_trait::async_trait]
-#[cfg_attr(any(test, feature = "test-support"), mockall::automock)]
+#[cfg_attr(test, mockall::automock)]
 pub trait DomainFacade<C: Send + Sync>: Send + Sync {
     /// Dispatch an [`ApiWrite`] (the domain's `exec`).
     async fn exec(

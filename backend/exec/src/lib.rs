@@ -50,9 +50,6 @@ mod message;
 mod registry;
 mod txn;
 
-#[cfg(any(test, feature = "test-support"))]
-pub mod test_support;
-
 pub use api::*;
 pub use executor::*;
 pub use facade::*;
