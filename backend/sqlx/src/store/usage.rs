@@ -6,7 +6,7 @@ use crate::{SqlxConn, into_domain, option_into};
 use tb_domain::{TbResult, Usage, UsageId, UsageStore};
 
 #[derive(Clone, Debug, PartialEq, Default, FromRow)]
-pub(crate) struct DbUsage {
+struct DbUsage {
     // id for referencing
     id: Uuid,
     // usage time

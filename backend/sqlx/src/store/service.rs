@@ -5,7 +5,7 @@ use tb_domain::{PartId, Service, ServiceId, TbResult};
 use uuid::Uuid;
 
 #[derive(Clone, Debug, FromRow, PartialEq, Eq)]
-pub(crate) struct DbService {
+struct DbService {
     id: Uuid,
     /// the part serviced
     part_id: i32,

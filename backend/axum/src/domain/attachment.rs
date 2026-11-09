@@ -87,7 +87,7 @@ async fn detach_rt(
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
-pub(crate) struct Dispose {
+struct Dispose {
     part_id: PartId,
     #[serde(with = "time::serde::rfc3339")]
     time: OffsetDateTime,

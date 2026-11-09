@@ -95,11 +95,7 @@ impl ShopId {
     }
 
     /// Check if the user has read access to this shop (owner, or active subscriber)
-    pub(crate) async fn check_read_access(
-        self,
-        user: UserId,
-        store: &mut impl ShopStore,
-    ) -> TbResult<ShopId> {
+    async fn check_read_access(self, user: UserId, store: &mut impl ShopStore) -> TbResult<ShopId> {
         let shop = store.shop_get(self).await?;
         let is_owner = shop.owner == user;
 

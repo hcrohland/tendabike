@@ -271,7 +271,7 @@ impl ShopSubscription {
         }
     }
 
-    pub(crate) fn add_shop(self, shop: Shop) -> ShopSubscriptionWithDetails {
+    fn add_shop(self, shop: Shop) -> ShopSubscriptionWithDetails {
         ShopSubscriptionWithDetails {
             id: self.id,
             shop_id: self.shop_id,

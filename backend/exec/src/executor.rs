@@ -53,7 +53,7 @@ use crate::{DeliveryContext, FramePusher, Txn, TxnSource};
 /// rate limit's, global in the DB). A broken database must not hot-spin the
 /// loop, and a recovering one is probed at human pace. Pure, so the state
 /// machine is unit-testable without a store.
-pub(crate) struct DbBackoff {
+struct DbBackoff {
     next: Duration,
 }
 
@@ -70,7 +70,7 @@ impl DbBackoff {
 
     /// Records a DB failure and returns the pause to sleep: 1s, 2s, 4s, …,
     /// capped at 30s.
-    pub(crate) fn record_failure(&mut self) -> Duration {
+    fn record_failure(&mut self) -> Duration {
         let pause = self.next;
         self.next = (self.next * 2).min(Self::CAP);
         pause
@@ -78,7 +78,7 @@ impl DbBackoff {
 
     /// A healthy database (any committed transaction, including a successful
     /// probe) restarts the backoff at its base.
-    pub(crate) fn reset(&mut self) {
+    fn reset(&mut self) {
         self.next = Self::BASE;
     }
 }
@@ -87,7 +87,7 @@ impl DbBackoff {
 /// measured against `now` (unix seconds): saturating at zero, so an expired
 /// deadline sleeps nothing and the next probe deletes the Stop and reads on.
 /// Pure, so the deadline arithmetic is unit-testable without a clock.
-pub(crate) fn stop_remaining(until_unix: i64, now_unix: i64) -> Duration {
+fn stop_remaining(until_unix: i64, now_unix: i64) -> Duration {
     let secs = (until_unix as i128 - now_unix as i128).max(0);
     Duration::from_secs(secs as u64)
 }
@@ -95,7 +95,7 @@ pub(crate) fn stop_remaining(until_unix: i64, now_unix: i64) -> Duration {
 /// The current unix time in seconds (the clock `Stop` deadlines are written
 /// in — `tb_strava`'s `get_time`): saturating at zero, since the deadline
 /// arithmetic is what matters, not a pre-1970 clock.
-pub(crate) fn now_unix() -> i64 {
+fn now_unix() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
@@ -130,11 +130,7 @@ pub(crate) enum Action {
 ///   re-probes the `strava_events` queue, not a reap trigger — the stream's
 ///   TCP death is what ends it (its heartbeat write fails, the receiver
 ///   drops, and the no-streams rule reaps the loop).
-pub(crate) fn next_action(
-    pending_write: bool,
-    queued_event: bool,
-    active_streams: usize,
-) -> Action {
+fn next_action(pending_write: bool, queued_event: bool, active_streams: usize) -> Action {
     if pending_write {
         return Action::ProcessWrite;
     }
@@ -151,7 +147,7 @@ pub(crate) fn next_action(
 /// One outcome of the biased select: which branch resolved, if any branch
 /// resolved with work. Crate-internal. Generic over the provider's event
 /// type so the loop's select is provider-agnostic.
-pub(crate) enum Select<E> {
+enum Select<E> {
     /// An API request (write, read, hydration, admin stats) arrived on the
     /// channel.
     Request(Request),
@@ -200,7 +196,7 @@ impl<E: std::fmt::Debug> std::fmt::Debug for Select<E> {
 /// `notified()` future — created before the select, so a notify that fired
 /// just before is not lost (the permit semantics) — survives the select and
 /// can serve the loop's next parking spot (the idle sleep).
-pub(crate) async fn select_message<E>(
+async fn select_message<E>(
     api: impl Future<Output = Option<Request>>,
     lane: impl Future<Output = Option<Probe<E>>>,
     wake: &mut (impl Future<Output = ()> + Unpin),
@@ -579,7 +575,7 @@ where
 /// §4.4/§4.6) interrupts the sleep with `None`, so the loop falls through
 /// to the top and re-probes the queue at once; the sleep expiring (or the
 /// channel closing — `None`, the shutdown corner) resolves with `None`.
-pub(crate) async fn sleep_or_take_request(
+async fn sleep_or_take_request(
     rx: &mut RequestReceiver,
     remaining: Duration,
     wake: &mut (impl Future<Output = ()> + Unpin),
@@ -655,10 +651,7 @@ where
 /// the reads never arm the backoff, spec #558 §3.7). The oneshot always
 /// resolves and the message is consumed; only a failed `rollback` ends the
 /// loop (the sub-dispatchers' `Err` return).
-pub(crate) async fn run_request<T, P>(
-    ctx: &mut LoopContext<T, P>,
-    request: Request,
-) -> Result<(), Error>
+async fn run_request<T, P>(ctx: &mut LoopContext<T, P>, request: Request) -> Result<(), Error>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
     P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,

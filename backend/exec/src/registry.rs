@@ -74,7 +74,7 @@ pub use core::{DeliveryContext, ExecutorStatus};
 /// (it is reaped only when no stream is attached), so the window sets how
 /// often the idle loop re-probes the `strava_events` queue. A stream-less
 /// executor (a write-only spawn) reaps immediately after its work.
-pub(crate) const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 /// The SSE heartbeat cadence (spec §4.5): a `: ping` comment keeps the
 /// connection alive (and proxies) while the executor is idle (or reaped).
 /// The web layer's SSE `KeepAlive` wiring uses this constant.

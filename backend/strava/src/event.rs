@@ -36,7 +36,7 @@ impl InEvent {
     /// # Returns
     ///
     /// Returns a `Result` containing an `Event` struct if the conversion is successful, or an `anyhow::Error` if it fails.
-    pub(crate) async fn into_event(self, store: &mut impl StravaDataStore) -> TbResult<Event> {
+    async fn into_event(self, store: &mut impl StravaDataStore) -> TbResult<Event> {
         if StravaId::read(&self.owner_id.into(), store)
             .await?
             .is_none()

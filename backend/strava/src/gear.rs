@@ -8,7 +8,7 @@ use crate::*;
 use tb_provider::DomainFacade;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct StravaGear {
+struct StravaGear {
     id: String,
     name: String,
     brand_name: Option<String>,

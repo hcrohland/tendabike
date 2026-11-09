@@ -34,7 +34,7 @@ impl<'c> SqlxConn<'c> {
         &mut self.0
     }
 
-    pub(crate) fn into_inner(self) -> PgTransaction<'c> {
+    fn into_inner(self) -> PgTransaction<'c> {
         self.0
     }
 
