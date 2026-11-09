@@ -42,14 +42,14 @@ use tb_domain::{
 /// turbofish, e.g. `expect_part_owner::<MyStore>()`.
 ///
 /// [`MockDomainFacade`]: crate::test_support::MockDomainFacade
-#[cfg_attr(any(test, feature = "test-support"), mockall::automock)]
 #[async_trait::async_trait]
+#[cfg_attr(any(test, feature = "test-support"), mockall::automock)]
 pub trait DomainFacade<C: Send + Sync>: Send + Sync {
     /// Dispatch an [`ApiWrite`] (the domain's `exec`).
     async fn exec(
         &self,
         write: ApiWrite,
-        session: Box<dyn Session>,
+        session: &dyn Session,
         store: &mut C,
     ) -> TbResult<WriteOutcome>;
 
@@ -57,7 +57,7 @@ pub trait DomainFacade<C: Send + Sync>: Send + Sync {
     async fn read(
         &self,
         read: ApiRead,
-        session: Box<dyn Session>,
+        session: &dyn Session,
         store: &mut C,
     ) -> TbResult<ReadOutcome>;
 
@@ -66,7 +66,7 @@ pub trait DomainFacade<C: Send + Sync>: Send + Sync {
     async fn part_owner(&self, id: PartId, store: &mut C) -> TbResult<UserId>;
 
     /// Read a part by id with ownership check (the domain's `PartId::part`).
-    async fn part(&self, id: PartId, session: Box<dyn Session>, store: &mut C) -> TbResult<Part>;
+    async fn part(&self, id: PartId, session: &dyn Session, store: &mut C) -> TbResult<Part>;
 }
 
 /// The concrete [`DomainFacade`]: a stateless unit struct that forwards each
@@ -79,27 +79,27 @@ impl<C: Store + Sync + 'static> DomainFacade<C> for DomainFacadeImpl {
     async fn exec(
         &self,
         write: ApiWrite,
-        session: Box<dyn Session>,
+        session: &dyn Session,
         store: &mut C,
     ) -> TbResult<WriteOutcome> {
-        tb_domain::exec(write, &*session, store).await
+        tb_domain::exec(write, session, store).await
     }
 
     async fn read(
         &self,
         read: ApiRead,
-        session: Box<dyn Session>,
+        session: &dyn Session,
         store: &mut C,
     ) -> TbResult<ReadOutcome> {
-        tb_domain::read(read, &*session, store).await
+        tb_domain::read(read, session, store).await
     }
 
     async fn part_owner(&self, id: PartId, store: &mut C) -> TbResult<UserId> {
         id.owner(store).await
     }
 
-    async fn part(&self, id: PartId, session: Box<dyn Session>, store: &mut C) -> TbResult<Part> {
-        id.part(&*session, store).await
+    async fn part(&self, id: PartId, session: &dyn Session, store: &mut C) -> TbResult<Part> {
+        id.part(session, store).await
     }
 }
 
@@ -164,7 +164,7 @@ mod tests {
             .returning(move |_id| Ok(part_val.clone()));
         let facade = DomainFacadeImpl;
         let session: Box<dyn Session> = Box::new(mock_session(owner));
-        let result = facade.part(PartId::from(1), session, &mut store).await?;
+        let result = facade.part(PartId::from(1), &*session, &mut store).await?;
         assert_eq!(result.id, PartId::from(1));
         Ok(())
     }
@@ -178,7 +178,7 @@ mod tests {
         let facade = DomainFacadeImpl;
         let session: Box<dyn Session> = Box::new(mock_session(UserId::from(1)));
         let outcome = facade
-            .exec(ApiWrite::NotificationReadAll, session, &mut store)
+            .exec(ApiWrite::NotificationReadAll, &*session, &mut store)
             .await?;
         assert!(matches!(outcome, WriteOutcome::Summary(_)));
         Ok(())
@@ -194,7 +194,7 @@ mod tests {
         let facade = DomainFacadeImpl;
         let session: Box<dyn Session> = Box::new(mock_session(UserId::from(1)));
         let outcome = facade
-            .read(ApiRead::UserRecord, session, &mut store)
+            .read(ApiRead::UserRecord, &*session, &mut store)
             .await?;
         assert_eq!(outcome, ReadOutcome::UserRecord(user(UserId::from(1))));
         Ok(())
@@ -207,7 +207,7 @@ mod tests {
     async fn mock_domain_facade_serves_canned_outcome() -> TbResult<()> {
         let mut mock = MockDomainFacade::new();
         mock.expect_part_owner()
-            .returning(|_id, _store| Ok(UserId::from(99)));
+            .returning(|_id, _store| Box::pin(async { Ok(UserId::from(99)) }));
         let mut store = MockStore::new();
         let result = mock.part_owner(PartId::from(1), &mut store).await?;
         assert_eq!(result, UserId::from(99));

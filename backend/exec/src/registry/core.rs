@@ -54,10 +54,9 @@ use tokio::sync::{Mutex, Notify, broadcast, watch};
 use tb_domain::{ShopId, Summary, TbResult, UserId};
 use tb_provider::ProviderLane;
 
-use crate::LoopContext;
-use crate::TxnSource;
 use crate::message::RequestSender;
-use crate::{registry::FramePusher, request_channel};
+use crate::registry::FramePusher;
+use crate::{DomainFacade, LoopContext, TxnSource, request_channel};
 
 /// The per-user frame channel's capacity: a burst of frames for a lagged
 /// stream is dropped (the client's reconnect + full refresh covers it), so a
@@ -232,18 +231,20 @@ where
     /// (spec §6.4): spawning the executor if it is not running. The admin
     /// sync subscribes **before** it enqueues its event, so the completion
     /// signal cannot be missed.
-    pub(super) async fn events<S>(
+    pub(super) async fn events<S, D>(
         &self,
         source: &S,
+        facade: &D,
         lane: &P,
         user_id: UserId,
         pusher: Box<dyn FramePusher>,
     ) -> TbResult<broadcast::Receiver<P::Event>>
     where
         S: TxnSource + Clone + 'static,
+        D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
         P: ProviderLane<Store = S::Conn>,
     {
-        self.exec_field(source, lane, user_id, pusher, |exec| {
+        self.exec_field(source, facade, lane, user_id, pusher, |exec| {
             exec.events.subscribe()
         })
         .await
@@ -473,9 +474,10 @@ where
     /// `Box<dyn FramePusher>` the loop routes committed `Summary`s through
     /// are the facade's (the core is source-agnostic and does not own a
     /// pusher).
-    pub(super) async fn exec_field<S, R>(
+    pub(super) async fn exec_field<S, D, R>(
         &self,
         source: &S,
+        facade: &D,
         lane: &P,
         user_id: UserId,
         pusher: Box<dyn FramePusher>,
@@ -483,11 +485,20 @@ where
     ) -> TbResult<R>
     where
         S: TxnSource + Clone + 'static,
+        D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
         P: ProviderLane<Store = S::Conn>,
     {
         let mut map = self.executors.lock().await;
-        let exec = Self::ensure_running(&mut map, source, lane, user_id, self.idle_timeout, pusher)
-            .await?;
+        let exec = Self::ensure_running(
+            &mut map,
+            source,
+            facade,
+            lane,
+            user_id,
+            self.idle_timeout,
+            pusher,
+        )
+        .await?;
         Ok(f(&exec))
     }
 
@@ -496,9 +507,10 @@ where
     /// shop is irrelevant — the per-request shop rides on each request), open
     /// a fresh request channel and frame channel, and spawn the `tb_exec`
     /// loop.
-    async fn ensure_running<S>(
+    async fn ensure_running<S, D>(
         map: &mut HashMap<UserId, Executor<P>>,
         source: &S,
+        facade: &D,
         lane: &P,
         user_id: UserId,
         idle_timeout: Duration,
@@ -506,6 +518,7 @@ where
     ) -> TbResult<Executor<P>>
     where
         S: TxnSource + Clone + 'static,
+        D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
         P: ProviderLane<Store = S::Conn>,
     {
         if let Some(exec) = map.get(&user_id)
@@ -528,6 +541,7 @@ where
         // clones: the `async move` block needs `'static` values, not the
         // `&S`/`&P` references.
         let owned_source = source.clone();
+        let owned_facade = facade.clone();
         let owned_lane = lane.clone();
         let frames_for_run = frames.clone();
         let events_for_run = events.clone();
@@ -536,6 +550,7 @@ where
         let join = tokio::spawn(async move {
             let result = LoopContext::new(
                 owned_source,
+                owned_facade,
                 user_id,
                 frames_for_run,
                 pusher,
@@ -596,21 +611,21 @@ mod tests {
     use std::time::Duration;
 
     use tb_domain::{NotificationId, ShopId, Summary, TbResult, UserId};
-    use tb_strava::StravaLane;
     use uuid::Uuid;
 
     use super::{Core, DeliveryContext, ExecutorStatus};
+    use crate::MockDomainFacade;
     use crate::executor::executor_tests::{
-        FakeSource, MockConn, RecordingPusher, non_empty_summary, notification_part_registered,
-        part_owned_by, shop_owned_by, summary_owned_by, summary_with_notification,
-        summary_with_service,
+        FakeSource, MockConn, MockLane, RecordingPusher, non_empty_summary,
+        notification_part_registered, part_owned_by, shop_owned_by, summary_owned_by,
+        summary_with_notification, summary_with_service,
     };
     use crate::registry::FramePusher;
 
-    /// The core's test lane: the Strava lane over the unit-test store double
+    /// The core's test lane: the `mock!` lane over the unit-test store double
     /// (`MockConn` — the `FakeSource`'s `Conn`), so the core's spawn ties the
     /// `FakeSource`'s connection to the lane's store.
-    type Lane = StravaLane<MockConn>;
+    type Lane = MockLane;
 
     /// A canned `FramePusher` for the core's spawn (the `RecordingPusher`
     /// double): the core is source-agnostic and takes the pusher as a
@@ -629,8 +644,9 @@ mod tests {
         let core = Core::<Lane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let source = FakeSource::failing();
+        let facade = MockDomainFacade::<MockConn>::new();
 
-        core.exec_field(&source, &Lane::new(), user_id, pusher(), |_| ())
+        core.exec_field(&source, &facade, &Lane::new(), user_id, pusher(), |_| ())
             .await?;
 
         assert_eq!(
@@ -649,9 +665,11 @@ mod tests {
     async fn stop_all_tears_down_and_the_next_demand_respawns() -> TbResult<()> {
         let core = Core::<Lane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
+        let facade = MockDomainFacade::<MockConn>::new();
 
         core.exec_field(
             &FakeSource::failing(),
+            &facade,
             &Lane::new(),
             user_id,
             pusher(),
@@ -670,6 +688,7 @@ mod tests {
         // The next demand respawns fresh.
         core.exec_field(
             &FakeSource::failing(),
+            &facade,
             &Lane::new(),
             user_id,
             pusher(),
@@ -710,8 +729,9 @@ mod tests {
         let core = Core::<Lane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let source = FakeSource::failing();
+        let facade = MockDomainFacade::<MockConn>::new();
 
-        core.exec_field(&source, &Lane::new(), user_id, pusher(), |_| ())
+        core.exec_field(&source, &facade, &Lane::new(), user_id, pusher(), |_| ())
             .await?;
         core.wake(user_id).await;
 

@@ -36,6 +36,7 @@
 
 use std::collections::VecDeque;
 use std::future::Future;
+use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
@@ -46,17 +47,14 @@ use tb_domain::test_support::{
     sole_live,
 };
 use tb_domain::{
-    ActTypeId, Activity, ActivityId, ActivityStore, ApiRead, ApiWrite, Attachment, AttachmentStore,
-    Error, Notification, NotificationId, NotificationKind, NotificationLifecycle,
-    NotificationState, NotificationStore, NotificationSubject, OnboardingStatus, Part, PartId,
-    PartNote, PartNoteId, PartNoteStore, PartStore, PartTypeId, ReadOutcome, Service, ServiceId,
-    ServicePlan, ServicePlanId, ServicePlanStore, ServiceStore, Shop, ShopId, ShopStore,
-    ShopSubscription, Store, SubscriptionId, SubscriptionStatus, Summary, TbResult, Usage, UsageId,
-    UsageStore, User, UserId, UserStore, WriteOutcome,
+    ApiRead, ApiWrite, Error, Notification, NotificationId, NotificationKind,
+    NotificationLifecycle, NotificationState, NotificationSubject, OnboardingStatus, Part, PartId,
+    PartTypeId, ReadOutcome, Service, ServiceId, Shop, ShopId, ShopStore, ShopSubscription,
+    SubscriptionId, SubscriptionStatus, Summary, TbResult, Usage, UsageId, User, UserId, UserStat,
+    UserState, WriteOutcome,
 };
-use tb_provider::Probe;
+use tb_provider::{Probe, ProviderLane};
 use tb_strava::event::Event;
-use tb_strava::{StravaDataStore, StravaId, StravaLane, StravaStore, StravaUser};
 use time::OffsetDateTime;
 use tokio::sync::{broadcast, oneshot};
 use uuid::Uuid;
@@ -67,28 +65,27 @@ use super::{
 };
 use crate::message::{Request, push_frame};
 use crate::{
-    Action, DeliveryContext, ExecutorStatus, FramePusher, Message, ProviderService, Registry, Txn,
+    Action, DeliveryContext, ExecutorStatus, FramePusher, Message, MockDomainFacade, Registry, Txn,
     TxnSource, request_channel,
 };
 
 // --- The `mock!` connection witness (issue #631) ---
+// --- The test doubles for the executor's seams (issue #631, spec #795) ---
 //
-// A single type accumulating the full `Store` seam (the nine sub-traits plus
-// the method-free [`Store`] marker) *and* the Strava surface ([`StravaDataStore`]
-// plus the method-free [`StravaStore`] marker) *and* the transaction lifecycle
-// ([`Txn`]) — i.e. the `TxnSource::Conn: StravaStore + Txn` bound.
+// [`MockConn`] is a `mockall` `mock!` witness carrying **only** the [`Txn`]
+// lifecycle (commit/rollback) — the `TxnSource::Conn` bound. The domain and
+// provider seams are mocked separately (the [`MockDomainFacade`] and the
+// [`MockLane`]), so the connection is just the transaction the loop opens,
+// works in, and closes.
+//
+// [`MockLane`] is the `mockall` `mock!` witness for the [`ProviderLane`]
+// seam: the executor's door into the provider ops (`probe`, `process`,
+// `insert_sync`, `update_gear`, `all_stats`). Its `Store` is [`MockConn`]
+// (the `FakeSource`'s connection), so the loop's transaction ties to it.
 //
 // `#[async_trait]` on each impl block is the trick that makes the `async fn`
 // methods desugar correctly in the generated code (see
-// `docs/research/mockall-conn-witness.md` §1). The seam is collision-free
-// (post-recipe: renamed methods, `usages_update(&[Usage])`, `stravauser_update_token`
-// owning its token), so `mock!`'s flat `expect_<name>` API can express every
-// method on one type.
-//
-// The declared struct name is `Conn`, so `mock!` emits [`MockConn`]; the impl
-// blocks reference `Conn` (the macro rewrites it to `MockConn`), and the
-// method-free markers `impl Store for Conn` / `impl StravaStore for Conn`
-// become `impl … for MockConn`.
+// `docs/research/mockall-conn-witness.md` §1).
 //
 // Test-support only: this module is `#[cfg(test)]`, so no production `pub`
 // surface is widened. `mockall` is a dev-dependency of `tb_exec` only.
@@ -97,311 +94,256 @@ mockall::mock! {
     pub Conn {}
 
     #[async_trait::async_trait]
-    impl PartStore for Conn {
-        async fn partid_get_part(&mut self, pid: PartId) -> TbResult<Part>;
-        async fn part_get_all_for_userid(&mut self, uid: &UserId) -> TbResult<Vec<Part>>;
-        async fn part_create(
-            &mut self,
-            what: PartTypeId,
-            name: String,
-            vendor: String,
-            model: String,
-            purchase: OffsetDateTime,
-            source: Option<String>,
-            usage: UsageId,
-            owner: UserId,
-            shop: Option<ShopId>,
-        ) -> TbResult<Part>;
-        async fn part_update(&mut self, part: Part) -> TbResult<Part>;
-        async fn part_delete(&mut self, part: PartId) -> TbResult<PartId>;
-        async fn parts_delete(&mut self, parts: &[Part]) -> TbResult<usize>;
-        async fn partid_get_by_source(&mut self, source: &str) -> TbResult<Option<PartId>>;
-        async fn parts_register_shop(
-            &mut self,
-            shop_id: ShopId,
-            part_id: Vec<PartId>,
-        ) -> TbResult<Vec<Part>>;
-        async fn parts_unregister_shop(&mut self, part_ids: Vec<PartId>) -> TbResult<Vec<Part>>;
-        async fn part_get_for_shop(&mut self, shop_id: ShopId) -> TbResult<Vec<Part>>;
-    }
-
-    #[async_trait::async_trait]
-    impl UserStore for Conn {
-        async fn user_get(&mut self, uid: UserId) -> TbResult<User>;
-        async fn user_create(
-            &mut self,
-            firstname: &str,
-            lastname: &str,
-            avatar: &Option<String>,
-        ) -> TbResult<User>;
-        async fn user_update(
-            &mut self,
-            uid: &UserId,
-            firstname: &str,
-            lastname: &str,
-            avatar: &Option<String>,
-        ) -> TbResult<User>;
-        async fn user_delete(&mut self, user: &UserId) -> TbResult<usize>;
-        async fn update_onboarding_status(
-            &mut self,
-            uid: &UserId,
-            status: OnboardingStatus,
-        ) -> TbResult<User>;
-    }
-
-    #[async_trait::async_trait]
-    impl ShopStore for Conn {
-        async fn shop_create(
-            &mut self,
-            name: String,
-            description: Option<String>,
-            auto_approve: bool,
-            owner: UserId,
-        ) -> TbResult<Shop>;
-        async fn shop_get(&mut self, id: ShopId) -> TbResult<Shop>;
-        async fn shop_update(
-            &mut self,
-            id: ShopId,
-            name: String,
-            description: Option<String>,
-            auto_approve: bool,
-        ) -> TbResult<Shop>;
-        async fn shop_delete(&mut self, id: ShopId) -> TbResult<usize>;
-        async fn shops_get_all_for_user(&mut self, user_id: UserId) -> TbResult<Vec<Shop>>;
-        async fn shops_search(&mut self, query: &str) -> TbResult<Vec<Shop>>;
-        async fn subscription_create(
-            &mut self,
-            shop_id: ShopId,
-            user_id: UserId,
-        ) -> TbResult<ShopSubscription>;
-        async fn subscription_get(&mut self, id: SubscriptionId) -> TbResult<ShopSubscription>;
-        async fn subscription_find_active(
-            &mut self,
-            shop_id: ShopId,
-            user_id: UserId,
-        ) -> TbResult<Option<ShopSubscription>>;
-        async fn subscription_find_pending(
-            &mut self,
-            shop_id: ShopId,
-            user_id: UserId,
-        ) -> TbResult<Option<ShopSubscription>>;
-        async fn subscription_update_status(
-            &mut self,
-            id: SubscriptionId,
-            status: SubscriptionStatus,
-        ) -> TbResult<ShopSubscription>;
-        async fn subscription_approve(
-            &mut self,
-            id: SubscriptionId,
-            status: SubscriptionStatus,
-        ) -> TbResult<ShopSubscription>;
-        async fn subscription_delete(&mut self, id: SubscriptionId) -> TbResult<()>;
-        async fn subscriptions_for_shop(&mut self, shop_id: ShopId) -> TbResult<Vec<ShopSubscription>>;
-        async fn subscriptions_for_user(&mut self, user_id: UserId) -> TbResult<Vec<ShopSubscription>>;
-    }
-
-    #[async_trait::async_trait]
-    impl ActivityStore for Conn {
-        async fn activity_create(&mut self, act: Activity) -> TbResult<Activity>;
-        async fn activity_read_by_id(&mut self, aid: &ActivityId) -> TbResult<Option<Activity>>;
-        async fn activity_update(&mut self, act: Activity) -> TbResult<Activity>;
-        async fn activity_delete(&mut self, aid: &ActivityId) -> TbResult<usize>;
-        async fn activities_delete(&mut self, activities: &[Activity]) -> TbResult<usize>;
-        async fn activity_get_all(&mut self, uid: &UserId) -> TbResult<Vec<Activity>>;
-        async fn activities_find_by_gear_and_time(
-            &mut self,
-            part: PartId,
-            begin: OffsetDateTime,
-            end: OffsetDateTime,
-        ) -> TbResult<Vec<Activity>>;
-        async fn get_by_user_and_time(
-            &mut self,
-            uid: UserId,
-            rstart: OffsetDateTime,
-        ) -> TbResult<Activity>;
-        async fn activity_set_gear_if_null(
-            &mut self,
-            user: UserId,
-            types: Vec<ActTypeId>,
-            partid: &PartId,
-        ) -> TbResult<Vec<Activity>>;
-        async fn activity_get_really_all(&mut self) -> TbResult<Vec<Activity>>;
-    }
-
-    #[async_trait::async_trait]
-    impl AttachmentStore for Conn {
-        async fn attachment_create(&mut self, att: Attachment) -> TbResult<Attachment>;
-        async fn attachment_delete(&mut self, att: Attachment) -> TbResult<Attachment>;
-        async fn attachments_delete_by_parts(&mut self, parts: &[Part]) -> TbResult<usize>;
-        async fn attachment_get_by_gear_and_time(
-            &mut self,
-            act_gear: PartId,
-            start: OffsetDateTime,
-        ) -> TbResult<Vec<Attachment>>;
-        async fn attachments_all_by_part(&mut self, id: PartId) -> TbResult<Vec<Attachment>>;
-        async fn attachment_get_by_part_and_time(
-            &mut self,
-            pid: PartId,
-            time: OffsetDateTime,
-        ) -> TbResult<Option<Attachment>>;
-        async fn assembly_get_by_types_time_and_gear(
-            &mut self,
-            types: Vec<PartTypeId>,
-            gear: PartId,
-            time: OffsetDateTime,
-        ) -> TbResult<Vec<Attachment>>;
-        async fn attachment_find_part_of_type_at_hook_and_time(
-            &mut self,
-            what: PartTypeId,
-            gear: PartId,
-            hook: PartTypeId,
-            time: OffsetDateTime,
-        ) -> TbResult<Option<Attachment>>;
-        async fn attachment_find_successor(
-            &mut self,
-            part_id: PartId,
-            gear: PartId,
-            hook: PartTypeId,
-            time: OffsetDateTime,
-            what: PartTypeId,
-        ) -> TbResult<Option<Attachment>>;
-        async fn attachment_find_later_attachment_for_part(
-            &mut self,
-            part_id: PartId,
-            time: OffsetDateTime,
-        ) -> TbResult<Option<Attachment>>;
-        async fn attachment_find_part_attached_already(
-            &mut self,
-            part_id: PartId,
-            gear: PartId,
-            hook: PartTypeId,
-            time: OffsetDateTime,
-        ) -> TbResult<Option<Attachment>>;
-    }
-
-    #[async_trait::async_trait]
-    impl PartNoteStore for Conn {
-        async fn partnote_create_text(
-            &mut self,
-            part: PartId,
-            name: String,
-            created: OffsetDateTime,
-        ) -> TbResult<PartNote>;
-        async fn partnote_create_file(
-            &mut self,
-            part: PartId,
-            name: String,
-            mime: String,
-            filename: Option<String>,
-            size: i64,
-            data: Vec<u8>,
-            created: OffsetDateTime,
-        ) -> TbResult<PartNote>;
-        async fn partnote_all_by_part(&mut self, part: PartId) -> TbResult<Vec<PartNote>>;
-        async fn partnote_get(&mut self, id: PartNoteId) -> TbResult<PartNote>;
-        async fn partnote_file(&mut self, id: PartNoteId) -> TbResult<Vec<u8>>;
-        async fn partnote_update_text(&mut self, id: PartNoteId, name: String) -> TbResult<PartNote>;
-        async fn partnote_update_file(
-            &mut self,
-            id: PartNoteId,
-            name: String,
-            mime: String,
-            filename: Option<String>,
-            size: i64,
-            data: Vec<u8>,
-        ) -> TbResult<PartNote>;
-        async fn partnote_remove_file(&mut self, id: PartNoteId) -> TbResult<PartNote>;
-        async fn partnote_delete(&mut self, id: PartNoteId) -> TbResult<PartNoteId>;
-    }
-
-    #[async_trait::async_trait]
-    impl UsageStore for Conn {
-        async fn usage_get(&mut self, uid: UsageId) -> TbResult<Option<Usage>>;
-        async fn usages_update(&mut self, usage: &[Usage]) -> TbResult<usize>;
-        async fn usage_delete(&mut self, usage: UsageId) -> TbResult<Usage>;
-        async fn usages_delete(&mut self, usages: &[Usage]) -> TbResult<usize>;
-        async fn usage_delete_all(&mut self) -> TbResult<usize>;
-    }
-
-    #[async_trait::async_trait]
-    impl ServiceStore for Conn {
-        async fn service_create(&mut self, service: Service) -> TbResult<Service>;
-        async fn service_get(&mut self, service: ServiceId) -> TbResult<Service>;
-        async fn service_update(&mut self, service: Service) -> TbResult<Service>;
-        async fn service_delete(&mut self, service: ServiceId) -> TbResult<usize>;
-        async fn services_delete(&mut self, services: &[Service]) -> TbResult<usize>;
-        async fn services_by_part(&mut self, part: PartId) -> TbResult<Vec<Service>>;
-    }
-
-    #[async_trait::async_trait]
-    impl ServicePlanStore for Conn {
-        async fn serviceplan_create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
-        async fn serviceplan_get(&mut self, plan: ServicePlanId) -> TbResult<ServicePlan>;
-        async fn serviceplan_update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
-        async fn serviceplan_delete(&mut self, plan: ServicePlanId) -> TbResult<usize>;
-        async fn serviceplans_delete(&mut self, serviceplans: &[ServicePlan]) -> TbResult<usize>;
-        async fn by_part(&mut self, part: PartId) -> TbResult<Vec<ServicePlan>>;
-        async fn by_user(&mut self, uid: UserId) -> TbResult<Vec<ServicePlan>>;
-    }
-
-    #[async_trait::async_trait]
-    impl NotificationStore for Conn {
-        async fn notification_create(
-            &mut self,
-            recipient: UserId,
-            lifecycle: NotificationLifecycle,
-            kind: NotificationKind,
-            subject: NotificationSubject,
-            message: Option<String>,
-        ) -> TbResult<Notification>;
-        async fn notification_read(
-            &mut self,
-            id: NotificationId,
-            recipient: UserId,
-        ) -> TbResult<Option<Notification>>;
-        async fn notification_read_all(&mut self, recipient: UserId) -> TbResult<Vec<Notification>>;
-        async fn notification_all_for_user(&mut self, recipient: UserId) -> TbResult<Vec<Notification>>;
-        async fn notification_delete(
-            &mut self,
-            id: NotificationId,
-            recipient: UserId,
-        ) -> TbResult<Option<NotificationId>>;
-    }
-
-    impl Store for Conn {}
-
-    #[async_trait::async_trait]
-    impl StravaDataStore for Conn {
-        async fn stravauser_get_all(&mut self) -> TbResult<Vec<StravaUser>>;
-        async fn stravauser_get_by_tbid(&mut self, id: UserId) -> TbResult<StravaUser>;
-        async fn stravauser_get_by_stravaid(&mut self, id: &StravaId) -> TbResult<Option<StravaUser>>;
-        async fn stravauser_create(&mut self, user: StravaUser) -> TbResult<StravaUser>;
-        async fn stravauser_update_token(
-            &mut self,
-            stravaid: StravaId,
-            refresh: Option<String>,
-        ) -> TbResult<StravaUser>;
-        async fn stravauser_delete(&mut self, user: UserId) -> TbResult<usize>;
-        async fn strava_event_create(&mut self, e: Event) -> TbResult<()>;
-        async fn strava_event_delete(&mut self, event_id: Option<i32>) -> TbResult<()>;
-        async fn strava_event_set_time(&mut self, e_id: Option<i32>, e_time: i64) -> TbResult<()>;
-        async fn strava_event_get_next_for_user(&mut self, user: StravaId) -> TbResult<Option<Event>>;
-        async fn strava_event_get_later(
-            &mut self,
-            obj_id: i64,
-            oid: StravaId,
-        ) -> TbResult<Vec<Event>>;
-        async fn strava_events_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()>;
-        async fn strava_events_get_count_for_user(&mut self, user: &StravaId) -> TbResult<i64>;
-        async fn strava_events_delete_for_user(&mut self, user: &StravaId) -> TbResult<usize>;
-    }
-
-    impl StravaStore for Conn {}
-
-    #[async_trait::async_trait]
     impl Txn for Conn {
         async fn commit(self) -> TbResult<()>;
         async fn rollback(self) -> TbResult<()>;
+    }
+}
+
+mockall::mock! {
+    pub Lane {}
+
+    #[async_trait::async_trait]
+    impl ProviderLane for Lane {
+        type Event = Event;
+        type Store = MockConn;
+        async fn probe(&self, user_id: UserId, store: &mut MockConn) -> Probe<Event>;
+        async fn process(&self, user_id: UserId, store: &mut MockConn) -> Option<Summary>;
+        async fn insert_sync(
+            &self,
+            user_id: UserId,
+            time: i64,
+            auto: bool,
+            store: &mut MockConn,
+        ) -> TbResult<()>;
+        async fn update_gear(&self, user_id: UserId, store: &mut MockConn) -> TbResult<Vec<PartId>>;
+        async fn all_stats(&self, store: &mut MockConn) -> TbResult<Vec<UserStat>>;
+    }
+}
+
+// The `mockall::mock!` macro does not derive `Clone` (the `Core` requires
+// `P: Clone`). The `Core` tests never drive the lane, so a `Clone` impl
+// that returns a fresh mock (no expectations) is safe.
+impl Clone for MockLane {
+    fn clone(&self) -> Self {
+        Self::new()
+    }
+}
+
+// --- The `subscribe_shop` witness: a `Store`-capable connection (issue #798) ---
+//
+// The registry's direct ops (the `subscribe_shop` ownership read, the `deliver`
+// routing) do their domain work directly in a transaction, so their connection
+// is a full [`Store`] (the entity sub-traits) plus [`Txn`] — not the executor's
+// [`MockConn`], which is `Txn`-only (its domain work rides the facade and the
+// lane). The `subscribe_shop` tests set the `shop_get` and `commit` expectations
+// on it; the rest of the `Store` surface is canned and never called.
+/// A `Store`-capable connection witness for the `subscribe_shop` tests: a
+/// [`ShopStore`] + [`Txn`] double with a canned `shop_get` (the ownership
+/// read) and a clean `commit`. The rest of the `ShopStore` surface is
+/// `unimplemented!` — the ops under test only call `shop_get` and `commit`.
+#[derive(Clone)]
+pub(crate) struct ShopConn {
+    shop: Shop,
+}
+
+impl ShopConn {
+    /// A conn whose `shop_get` returns `shop` and whose `commit` succeeds.
+    fn with_shop(shop: Shop) -> Self {
+        Self { shop }
+    }
+}
+
+#[async_trait::async_trait]
+impl ShopStore for ShopConn {
+    async fn shop_create(
+        &mut self,
+        _name: String,
+        _description: Option<String>,
+        _auto_approve: bool,
+        _owner: UserId,
+    ) -> TbResult<Shop> {
+        unimplemented!()
+    }
+    async fn shop_get(&mut self, _id: ShopId) -> TbResult<Shop> {
+        Ok(self.shop.clone())
+    }
+    async fn shop_update(
+        &mut self,
+        _id: ShopId,
+        _name: String,
+        _description: Option<String>,
+        _auto_approve: bool,
+    ) -> TbResult<Shop> {
+        unimplemented!()
+    }
+    async fn shop_delete(&mut self, _id: ShopId) -> TbResult<usize> {
+        unimplemented!()
+    }
+    async fn shops_get_all_for_user(&mut self, _user_id: UserId) -> TbResult<Vec<Shop>> {
+        unimplemented!()
+    }
+    async fn shops_search(&mut self, _query: &str) -> TbResult<Vec<Shop>> {
+        unimplemented!()
+    }
+    async fn subscription_create(
+        &mut self,
+        _shop_id: ShopId,
+        _user_id: UserId,
+    ) -> TbResult<ShopSubscription> {
+        unimplemented!()
+    }
+    async fn subscription_get(&mut self, _id: SubscriptionId) -> TbResult<ShopSubscription> {
+        unimplemented!()
+    }
+    async fn subscription_find_active(
+        &mut self,
+        _shop_id: ShopId,
+        _user_id: UserId,
+    ) -> TbResult<Option<ShopSubscription>> {
+        unimplemented!()
+    }
+    async fn subscription_find_pending(
+        &mut self,
+        _shop_id: ShopId,
+        _user_id: UserId,
+    ) -> TbResult<Option<ShopSubscription>> {
+        unimplemented!()
+    }
+    async fn subscription_update_status(
+        &mut self,
+        _id: SubscriptionId,
+        _status: SubscriptionStatus,
+    ) -> TbResult<ShopSubscription> {
+        unimplemented!()
+    }
+    async fn subscription_approve(
+        &mut self,
+        _id: SubscriptionId,
+        _status: SubscriptionStatus,
+    ) -> TbResult<ShopSubscription> {
+        unimplemented!()
+    }
+    async fn subscription_delete(&mut self, _id: SubscriptionId) -> TbResult<()> {
+        unimplemented!()
+    }
+    async fn subscriptions_for_shop(
+        &mut self,
+        _shop_id: ShopId,
+    ) -> TbResult<Vec<ShopSubscription>> {
+        unimplemented!()
+    }
+    async fn subscriptions_for_user(
+        &mut self,
+        _user_id: UserId,
+    ) -> TbResult<Vec<ShopSubscription>> {
+        unimplemented!()
+    }
+}
+
+#[async_trait::async_trait]
+impl Txn for ShopConn {
+    async fn commit(self) -> TbResult<()> {
+        Ok(())
+    }
+    async fn rollback(self) -> TbResult<()> {
+        Ok(())
+    }
+}
+
+// The `#[automock]` mock does not derive `Clone` (the `Registry` requires
+// `D: Clone`). The `subscribe_shop`/`deliver` tests never drive the facade,
+// so a `Clone` impl that returns a fresh mock (no expectations) is safe.
+impl Clone for MockDomainFacade<ShopConn> {
+    fn clone(&self) -> Self {
+        Self::new()
+    }
+}
+impl Clone for MockDomainFacade<MockConn> {
+    fn clone(&self) -> Self {
+        Self::new()
+    }
+}
+
+/// A no-op [`ProviderLane`] stub, generic over its store: the `subscribe_shop`
+/// and `deliver` tests construct a [`Registry`] (which requires a lane tied to
+/// the connection) but never drive the lane — the ops under test do their work
+/// through the connection and the core's frame routing, not the provider's
+/// queue. `Clone` + `Copy` (the registry clones the lane per spawn).
+#[derive(Clone, Copy)]
+struct StubLane<S>(PhantomData<S>);
+
+impl<S> StubLane<S> {
+    const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+#[async_trait::async_trait]
+impl<S: Send + Sync> ProviderLane for StubLane<S> {
+    type Event = Event;
+    type Store = S;
+    async fn probe(&self, _user_id: UserId, _store: &mut S) -> Probe<Event> {
+        Probe::Empty
+    }
+    async fn process(&self, _user_id: UserId, _store: &mut S) -> Option<Summary> {
+        None
+    }
+    async fn insert_sync(
+        &self,
+        _user_id: UserId,
+        _time: i64,
+        _auto: bool,
+        _store: &mut S,
+    ) -> TbResult<()> {
+        Ok(())
+    }
+    async fn update_gear(&self, _user_id: UserId, _store: &mut S) -> TbResult<Vec<PartId>> {
+        Ok(Vec::new())
+    }
+    async fn all_stats(&self, _store: &mut S) -> TbResult<Vec<UserStat>> {
+        Ok(Vec::new())
+    }
+}
+
+/// A [`TxnSource`] over the [`ShopConn`] (the `subscribe_shop` tests'
+/// `Store`-capable connection): `begin` hands out the test's configured conns
+/// in order (one per call), or fails when none are left.
+#[derive(Clone)]
+pub(crate) struct ShopSource {
+    conns: Arc<Mutex<VecDeque<ShopConn>>>,
+}
+
+impl ShopSource {
+    /// A source whose `begin` fails (no conns configured): the ops under test
+    /// never `begin`, so this stands in for a source that is never reached.
+    pub(crate) fn failing() -> Self {
+        Self {
+            conns: Arc::new(Mutex::new(VecDeque::new())),
+        }
+    }
+
+    /// A source that hands out `conn` on its (single) `begin`.
+    fn with(conn: ShopConn) -> Self {
+        Self::with_conns(vec![conn])
+    }
+
+    /// A source that hands out the given conns in order (one per `begin`).
+    fn with_conns(conns: Vec<ShopConn>) -> Self {
+        Self {
+            conns: Arc::new(Mutex::new(conns.into_iter().collect())),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl TxnSource for ShopSource {
+    type Conn = ShopConn;
+
+    async fn begin(&self) -> TbResult<ShopConn> {
+        self.conns.lock().unwrap().pop_front().ok_or_else(|| {
+            Error::DatabaseFailure(anyhow::anyhow!("begin was called more than once"))
+        })
     }
 }
 
@@ -485,21 +427,24 @@ fn request() -> (Request, oneshot::Receiver<TbResult<WriteOutcome>>) {
 }
 
 /// The context the per-request tests drive: the loop's wiring (source,
-/// frames, pusher) with the context's starting state (a fresh backoff, the
-/// first-idle flag set). The consumed-event channel, the re-probe cadence,
-/// and the wake signal are never touched by `run_request`, so they are fresh
-/// dummies.
+/// facade, lane, frames, pusher) with the context's starting state (a fresh
+/// backoff, the first-idle flag set). The consumed-event channel, the
+/// re-probe cadence, and the wake signal are never touched by `run_request`,
+/// so they are fresh dummies.
 fn test_context(
     source: FakeSource,
+    facade: MockDomainFacade<MockConn>,
+    lane: MockLane,
     frames: broadcast::Sender<Summary>,
     pusher: Box<dyn FramePusher>,
-) -> LoopContext<FakeSource, StravaLane<MockConn>> {
+) -> LoopContext<FakeSource, MockLane, MockDomainFacade<MockConn>> {
     LoopContext::new(
         source,
+        facade,
         UserId::from(1),
         frames,
         pusher,
-        StravaLane::<MockConn>::new(),
+        lane,
         broadcast::channel(64).0,
         Duration::from_secs(300),
         Arc::new(tokio::sync::Notify::new()),
@@ -1115,7 +1060,13 @@ async fn failed_read_never_arms_the_backoff_and_the_loop_survives() {
         ApiRead::PartCategories,
     );
     let pusher = RecordingPusher::new();
-    let mut ctx = test_context(source, frames, Box::new(pusher));
+    let mut ctx = test_context(
+        source,
+        MockDomainFacade::new(),
+        MockLane::new(),
+        frames,
+        Box::new(pusher),
+    );
     ctx.backoff.record_failure();
     ctx.backoff.record_failure(); // prime: the next pause would be 4s
     let result = run_request(&mut ctx, request).await;
@@ -1139,8 +1090,6 @@ async fn domain_failed_read_resets_the_backoff_and_the_loop_survives() {
     // loop survives. The canned store reports the part as missing (the domain
     // error); the executor rolls the transaction back and 500s the read.
     let mut conn = MockConn::new();
-    conn.expect_partid_get_part()
-        .returning(|_pid| Err(Error::NotFound("the part does not exist".to_string())));
     conn.expect_rollback().returning(|| Ok(()));
     let source = FakeSource::with(conn);
     let (frames, _frame_rx) = broadcast::channel(4);
@@ -1148,8 +1097,14 @@ async fn domain_failed_read_resets_the_backoff_and_the_loop_survives() {
         Box::new(mock_session(UserId::from(1))),
         ApiRead::Part(PartId::from(999_999)),
     );
+    // The domain reports the part as missing (the domain error): the executor
+    // rolls the transaction back and 500s the read.
+    let mut facade = MockDomainFacade::new();
+    facade.expect_read().returning(|_r, _s, _st| {
+        Box::pin(async { Err(Error::NotFound("the part does not exist".to_string())) })
+    });
     let pusher = RecordingPusher::new();
-    let mut ctx = test_context(source, frames, Box::new(pusher));
+    let mut ctx = test_context(source, facade, MockLane::new(), frames, Box::new(pusher));
     ctx.backoff.record_failure();
     ctx.backoff.record_failure(); // prime: the next pause would be 4s
     let result = run_request(&mut ctx, request).await;
@@ -1175,24 +1130,26 @@ async fn cleanly_committed_read_resets_the_backoff() {
     // canned outcomes — the executor's handling (commit + backoff reset) is
     // what is asserted, not the store's behavior.
     let mut conn = MockConn::new();
-    conn.expect_user_get()
-        .returning(move |_| Ok(user_record(UserId::from(1))));
-    conn.expect_activity_get_all()
-        .returning(|_uid| Ok(Vec::new()));
-    conn.expect_shops_get_all_for_user()
-        .returning(|_uid| Ok(Vec::new()));
-    conn.expect_part_get_all_for_userid()
-        .returning(|_uid| Ok(Vec::new()));
-    conn.expect_by_user().returning(|_uid| Ok(Vec::new()));
-    conn.expect_notification_all_for_user()
-        .returning(|_uid| Ok(Vec::new()));
     conn.expect_commit().returning(|| Ok(()));
     let source = FakeSource::with(conn);
     let (frames, _frame_rx) = broadcast::channel(4);
     let (request, reply) =
         Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
+    // The canned domain read returns a user and an empty state (no
+    // parts/activities/shops): the `UserState` composite is the canned
+    // outcome — the executor's handling (commit + backoff reset) is what is
+    // asserted, not the domain's behavior.
+    let state = UserState {
+        user: user_record(UserId::from(1)),
+        summary: Summary::default(),
+    };
+    let mut facade = MockDomainFacade::new();
+    facade.expect_read().returning(move |_r, _s, _st| {
+        let state = state.clone();
+        Box::pin(async move { Ok(ReadOutcome::User(Box::new(state))) })
+    });
     let pusher = RecordingPusher::new();
-    let mut ctx = test_context(source, frames, Box::new(pusher));
+    let mut ctx = test_context(source, facade, MockLane::new(), frames, Box::new(pusher));
     ctx.backoff.record_failure();
     ctx.backoff.record_failure(); // prime: the next pause would be 4s
     let result = run_request(&mut ctx, request).await;
@@ -1225,14 +1182,21 @@ async fn all_stats_round_trips_through_the_loop_transaction() {
     // after the commit. The canned store has no Strava users, so the stats are
     // empty.
     let mut conn = MockConn::new();
-    conn.expect_stravauser_get_all()
-        .returning(|| Ok(Vec::new()));
     conn.expect_commit().returning(|| Ok(()));
     let source = FakeSource::with(conn);
     let (frames, _frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_all_stats(Box::new(mock_session(UserId::from(1))));
+    // The canned lane has no Strava users, so the stats are empty.
+    let mut lane = MockLane::new();
+    lane.expect_all_stats().returning(|_st| Ok(Vec::new()));
     let pusher = RecordingPusher::new();
-    let mut ctx = test_context(source, frames, Box::new(pusher));
+    let mut ctx = test_context(
+        source,
+        MockDomainFacade::new(),
+        lane,
+        frames,
+        Box::new(pusher),
+    );
     let result = run_request(&mut ctx, request).await;
     assert!(
         result.is_ok(),
@@ -1249,39 +1213,25 @@ async fn all_stats_round_trips_through_the_loop_transaction() {
 async fn gear_hydration_delivers_the_created_parts_frame() {
     // The hydration write is dispatched loop-side (spec #558 §4): the
     // created parts' union is the frame (delivered on commit, before the
-    // oneshot reply) and the reply carries the same summary. The Strava API is
-    // canned in the thread-local map the thin free functions consult (one
-    // bike); the store is canned on the `MockConn` (no existing part for the
-    // source, the create, the read-back).
-    tb_strava::test_support::begin_test();
-    tb_strava::test_support::seed_token_cache(
-        UserId::from(1),
-        StravaId::from(42),
-        "test-access-token",
-    );
-    tb_strava::test_support::queue("/athlete", r#"{"bikes":[{"id":"b123"}],"shoes":[]}"#);
-    tb_strava::test_support::queue(
-        "/gear/b123",
-        r#"{"id":"b123","name":"Test Bike","brand_name":"TestBrand","model_name":"M1","frame_type":1}"#,
-    );
+    // oneshot reply) and the reply carries the same summary. The lane is
+    // canned to import one bike (returning its created part id); the facade
+    // is canned to read the created part back (the frame's entry).
     let mut conn = MockConn::new();
-    // The part is not yet imported (twice: before and after the Strava gear
-    // fetch), so `into_partid` creates it; the read-back returns the created
-    // part (the frame's entry).
-    conn.expect_partid_get_by_source().returning(|_s| Ok(None));
-    conn.expect_part_create().returning(
-        move |_what, _name, _vendor, _model, _purchase, _source, _usage, _owner, _shop| {
-            Ok(part_test_bike())
-        },
-    );
-    conn.expect_partid_get_part()
-        .returning(move |_pid| Ok(part_test_bike()));
     conn.expect_commit().returning(|| Ok(()));
     let source = FakeSource::with(conn);
     let (frames, _frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_gear(Box::new(mock_session(UserId::from(1))));
+    // The lane imports one bike (the created part id); the facade reads the
+    // created part back (the frame's entry).
+    let mut lane = MockLane::new();
+    lane.expect_update_gear()
+        .returning(|_uid, _st| Ok(vec![PartId::from(1)]));
+    let mut facade = MockDomainFacade::new();
+    facade
+        .expect_part()
+        .returning(move |_id, _s, _st| Box::pin(async move { Ok(part_test_bike()) }));
     let pusher = RecordingPusher::new();
-    let mut ctx = test_context(source, frames, Box::new(pusher.clone()));
+    let mut ctx = test_context(source, facade, lane, frames, Box::new(pusher.clone()));
     let result = run_request(&mut ctx, request).await;
     assert!(
         result.is_ok(),
@@ -1332,7 +1282,13 @@ async fn failed_gear_arms_the_backoff_like_a_write() {
     let (frames, _frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_gear(Box::new(mock_session(UserId::from(1))));
     let pusher = RecordingPusher::new();
-    let mut ctx = test_context(source, frames, Box::new(pusher));
+    let mut ctx = test_context(
+        source,
+        MockDomainFacade::new(),
+        MockLane::new(),
+        frames,
+        Box::new(pusher),
+    );
     ctx.backoff.record_failure(); // prime: the next pause would be 2s
     let result = run_request(&mut ctx, request).await;
     assert!(result.is_ok(), "a failed hydration must not end the loop");
@@ -1354,23 +1310,25 @@ async fn gear_hydration_without_new_gear_delivers_an_empty_summary() {
     // no new gear — `update_gear` creates nothing and the `Summary` is empty.
     // The loop delivers it through the pusher as-is — the empty-`Summary`
     // guard (which pushes nothing) is the pusher's, not the loop's (spec
-    // #706). The oneshot resolves with the empty summary. The Strava API is
-    // canned in the thread-local map (an empty athlete); the store only
-    // commits.
-    tb_strava::test_support::begin_test();
-    tb_strava::test_support::seed_token_cache(
-        UserId::from(1),
-        StravaId::from(42),
-        "test-access-token",
-    );
-    tb_strava::test_support::queue("/athlete", r#"{"bikes":[],"shoes":[]}"#);
+    // #706). The oneshot resolves with the empty summary. The lane is canned
+    // to create nothing; the store only commits.
     let mut conn = MockConn::new();
     conn.expect_commit().returning(|| Ok(()));
     let source = FakeSource::with(conn);
     let (frames, _frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_gear(Box::new(mock_session(UserId::from(1))));
+    // The lane creates nothing (no new gear): the summary is empty.
+    let mut lane = MockLane::new();
+    lane.expect_update_gear()
+        .returning(|_uid, _st| Ok(Vec::new()));
     let pusher = RecordingPusher::new();
-    let mut ctx = test_context(source, frames, Box::new(pusher.clone()));
+    let mut ctx = test_context(
+        source,
+        MockDomainFacade::new(),
+        lane,
+        frames,
+        Box::new(pusher.clone()),
+    );
     let result = run_request(&mut ctx, request).await;
     assert!(
         result.is_ok(),
@@ -1403,16 +1361,10 @@ async fn run_request_shop_context_delivers_the_shop_delivery_context() {
     // committed `Summary` through the pusher with the shop's
     // [`DeliveryContext`] — the session's shop and the part owner resolved in
     // the loop's transaction (pre-commit). The routing itself is the
-    // pusher's (`Core::deliver`'s tests). The canned store creates the part
-    // (owned by the session user, 1) and resolves the part owner.
+    // pusher's (`Core::deliver`'s tests). The canned domain write returns a
+    // summary referencing a part (owned by the session user, 1); the facade
+    // resolves that part's owner.
     let mut conn = MockConn::new();
-    conn.expect_part_create().returning(
-        move |_what, _name, _vendor, _model, _purchase, _source, _usage, _owner, _shop| {
-            Ok(part_owned_by(UserId::from(1)))
-        },
-    );
-    conn.expect_partid_get_part()
-        .returning(move |_pid| Ok(part_owned_by(UserId::from(1))));
     conn.expect_commit().returning(|| Ok(()));
     let source = FakeSource::with(conn);
     let (frames, _frame_rx) = broadcast::channel(4);
@@ -1428,8 +1380,23 @@ async fn run_request_shop_context_delivers_the_shop_delivery_context() {
             purchase: sample_purchase_date(),
         },
     );
+    // The canned domain write returns a summary referencing a part; the
+    // facade resolves that part's owner (the shop context's delivery input).
+    let mut facade = MockDomainFacade::new();
+    facade.expect_exec().returning(move |_w, _s, _st| {
+        Box::pin(async move { Ok(WriteOutcome::Summary(summary_owned_by(UserId::from(1)))) })
+    });
+    facade
+        .expect_part_owner()
+        .returning(|_id, _st| Box::pin(async { Ok(UserId::from(1)) }));
 
-    let mut ctx = test_context(source, frames, Box::new(pusher.clone()));
+    let mut ctx = test_context(
+        source,
+        facade,
+        MockLane::new(),
+        frames,
+        Box::new(pusher.clone()),
+    );
     let result = run_request(&mut ctx, request).await;
     assert!(result.is_ok(), "a committed write must not end the loop");
     let outcome = reply
@@ -1466,13 +1433,9 @@ async fn personal_write_delivers_the_personal_delivery_context() {
     // A write whose **request** session is personal delivers the committed
     // `Summary` through the pusher with a personal [`DeliveryContext`] (no
     // shop, no part owner) — the routing itself is the pusher's. The canned
-    // store creates the part (owned by the session user, 1).
+    // domain write returns a summary referencing a part (owned by the session
+    // user, 1); no part owner is resolved (the session has no shop).
     let mut conn = MockConn::new();
-    conn.expect_part_create().returning(
-        move |_what, _name, _vendor, _model, _purchase, _source, _usage, _owner, _shop| {
-            Ok(part_owned_by(UserId::from(1)))
-        },
-    );
     conn.expect_commit().returning(|| Ok(()));
     let source = FakeSource::with(conn);
     let (frames, _frame_rx) = broadcast::channel(4);
@@ -1488,8 +1451,20 @@ async fn personal_write_delivers_the_personal_delivery_context() {
             purchase: sample_purchase_date(),
         },
     );
+    // The canned domain write returns a summary referencing a part; no part
+    // owner is resolved (the session has no shop).
+    let mut facade = MockDomainFacade::new();
+    facade.expect_exec().returning(move |_w, _s, _st| {
+        Box::pin(async move { Ok(WriteOutcome::Summary(summary_owned_by(UserId::from(1)))) })
+    });
 
-    let mut ctx = test_context(source, frames, Box::new(pusher.clone()));
+    let mut ctx = test_context(
+        source,
+        facade,
+        MockLane::new(),
+        frames,
+        Box::new(pusher.clone()),
+    );
     let result = run_request(&mut ctx, request).await;
     assert!(result.is_ok(), "a committed write must not end the loop");
     let outcome = reply
@@ -1526,24 +1501,21 @@ async fn personal_write_delivers_the_personal_delivery_context() {
 // The `Registry` owns a per-shop `broadcast` channel map (the shop streams)
 // and the [`FramePusher`] surface (a single `deliver`, spec #706). The tests
 // drive the `Registry` through its public surface (`subscribe_shop`,
-// `deliver`, `shop_open`); the store is a canned [`MockConn`] whose
-// `shop_get` reports the shop's owner (the `subscribe_shop` ownership read).
+// `deliver`, `shop_open`); the store is a canned [`ShopConn`] (a `Store`-
+// capable connection) whose `shop_get` reports the shop's owner (the
+// `subscribe_shop` ownership read).
 
 /// The canned ownership-read conn: the store reports `shop_get` → a shop
 /// owned by `owner`, so an owner's subscribe succeeds and a non-owner's is
 /// `Forbidden`.
-fn shop_conn(owner: UserId) -> MockConn {
-    let mut conn = MockConn::new();
-    conn.expect_shop_get()
-        .returning(move |_id| Ok(shop_owned_by(owner)));
-    conn.expect_commit().returning(|| Ok(()));
-    conn
+fn shop_conn(owner: UserId) -> ShopConn {
+    ShopConn::with_shop(shop_owned_by(owner))
 }
 
 /// A `TxnSource` whose `subscribe_shop` ownership read is canned (one
 /// conn — one ownership read).
-fn shop_source(owner: UserId) -> FakeSource {
-    FakeSource::with(shop_conn(owner))
+fn shop_source(owner: UserId) -> ShopSource {
+    ShopSource::with(shop_conn(owner))
 }
 
 /// A non-empty `Summary` (a frame the shop/user streams should deliver).
@@ -1559,7 +1531,8 @@ async fn subscribe_shop_rejects_a_non_owner() {
     // store reports the shop's owner as 1, so user 2 is rejected.
     let registry = Registry::new(
         shop_source(UserId::from(1)),
-        StravaLane::new(),
+        MockDomainFacade::<ShopConn>::new(),
+        StubLane::<ShopConn>::new(),
         Duration::from_secs(60),
     );
 
@@ -1576,7 +1549,8 @@ async fn subscribe_shop_rejects_a_non_owner() {
 async fn shop_stream_lifecycle_create_receive_drop() {
     let registry = Registry::new(
         shop_source(UserId::from(1)),
-        StravaLane::new(),
+        MockDomainFacade::<ShopConn>::new(),
+        StubLane::<ShopConn>::new(),
         Duration::from_secs(60),
     );
     let shop_id = ShopId::from(7);
@@ -1629,8 +1603,9 @@ async fn shop_stream_lifecycle_create_receive_drop() {
 #[tokio::test]
 async fn deliver_reaches_the_recipients_open_shop_streams() {
     let registry = Registry::new(
-        FakeSource::with_conns(vec![shop_conn(UserId::from(1)), shop_conn(UserId::from(1))]),
-        StravaLane::new(),
+        ShopSource::with_conns(vec![shop_conn(UserId::from(1)), shop_conn(UserId::from(1))]),
+        MockDomainFacade::<ShopConn>::new(),
+        StubLane::<ShopConn>::new(),
         Duration::from_secs(60),
     );
     let shop_a = ShopId::from(7);
@@ -1676,8 +1651,9 @@ async fn deliver_reaches_the_recipients_open_shop_streams() {
 #[tokio::test]
 async fn deliver_skips_the_session_shop_in_the_fan_out() {
     let registry = Registry::new(
-        FakeSource::with_conns(vec![shop_conn(UserId::from(1)), shop_conn(UserId::from(1))]),
-        StravaLane::new(),
+        ShopSource::with_conns(vec![shop_conn(UserId::from(1)), shop_conn(UserId::from(1))]),
+        MockDomainFacade::<ShopConn>::new(),
+        StubLane::<ShopConn>::new(),
         Duration::from_secs(60),
     );
     let session_shop = ShopId::from(7);
@@ -1731,7 +1707,8 @@ async fn deliver_skips_the_session_shop_in_the_fan_out() {
 async fn deliver_never_reaches_a_foreign_owners_shop_streams() {
     let registry = Registry::new(
         shop_source(UserId::from(1)),
-        StravaLane::new(),
+        MockDomainFacade::<ShopConn>::new(),
+        StubLane::<ShopConn>::new(),
         Duration::from_secs(60),
     );
     // Shop 7 is owned by user 1; user 2's delivery has no business there.
@@ -1762,8 +1739,9 @@ async fn deliver_is_a_noop_without_a_running_executor() {
     // No store is involved: a personal delivery to a user with no (or a
     // reaped) executor is a no-op, so the source's mock is never `begin`-ed.
     let registry = Registry::new(
-        FakeSource::failing(),
-        StravaLane::new(),
+        ShopSource::failing(),
+        MockDomainFacade::<ShopConn>::new(),
+        StubLane::<ShopConn>::new(),
         Duration::from_secs(60),
     );
 

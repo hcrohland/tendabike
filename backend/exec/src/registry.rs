@@ -49,12 +49,12 @@ use oauth2::RefreshToken;
 use tokio::sync::{broadcast, oneshot, watch};
 
 use tb_domain::{
-    Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, Summary,
-    TbResult, UserId, UserStat, WriteOutcome,
+    Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, Store,
+    Summary, TbResult, UserId, UserStat, WriteOutcome,
 };
 use tb_provider::ProviderLane;
 use tb_strava::{
-    StravaUser, activity,
+    StravaStore, StravaUser, activity,
     client::StravaAthleteInfo,
     event::{InEvent, insert_sync, is_sync_for_user, sync_queued_for_user, sync_users},
     gear,
@@ -62,7 +62,7 @@ use tb_strava::{
 
 use crate::api::{ProviderService, ServiceApi};
 use crate::message::Request;
-use crate::{Txn, TxnSource};
+use crate::{DomainFacade, Txn, TxnSource};
 
 mod core;
 
@@ -93,12 +93,17 @@ pub const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 /// suite's doubles in the tests) — the seam is injected at construction and
 /// every method uses it, so the presentation layer never names it.
 #[derive(Clone)]
-pub struct Registry<S, P>
+pub struct Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     source: S,
+    /// The domain facade: the executor's door into the domain (spec #795).
+    /// Owned by the registry and handed to the core's spawn (a clone per
+    /// executor).
+    facade: D,
     /// The provider lane: the narrow seam the loop calls through to probe
     /// and process the provider's event queue. The registry owns it and
     /// passes a clone to the core's spawn.
@@ -128,18 +133,20 @@ pub trait FramePusher: Send + Sync {
     async fn deliver(&self, context: DeliveryContext, summary: Summary);
 }
 
-impl<S, P> Registry<S, P>
+impl<S, P, D> Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     /// The registry with an explicit idle cadence (test ergonomics: a
     /// short idle cadence makes the executor's lifecycle observable).
     /// The SSE heartbeat cadence is the crate constant
     /// [`HEARTBEAT_INTERVAL`] — the `KeepAlive` wiring uses it directly.
-    pub fn new(source: S, lane: P, idle_timeout: Duration) -> Self {
+    pub fn new(source: S, facade: D, lane: P, idle_timeout: Duration) -> Self {
         Self {
             source,
+            facade,
             lane,
             core: Core::new(idle_timeout),
         }
@@ -147,8 +154,8 @@ where
 
     /// The registry with the production default (the 60s idle re-probe
     /// cadence).
-    pub fn with_defaults(source: S, lane: P) -> Self {
-        Self::new(source, lane, IDLE_TIMEOUT)
+    pub fn with_defaults(source: S, facade: D, lane: P) -> Self {
+        Self::new(source, facade, lane, IDLE_TIMEOUT)
     }
 
     /// Fire the wake signal for the user's executor (spec §4.4/§4.6): a
@@ -178,7 +185,7 @@ where
     pub async fn events(&self, user_id: UserId) -> TbResult<broadcast::Receiver<P::Event>> {
         let pusher: Box<dyn FramePusher> = Box::new(self.clone());
         self.core
-            .events(&self.source, &self.lane, user_id, pusher)
+            .events(&self.source, &self.facade, &self.lane, user_id, pusher)
             .await
     }
 
@@ -228,8 +235,49 @@ where
     ) -> TbResult<R> {
         let pusher: Box<dyn FramePusher> = Box::new(self.clone());
         self.core
-            .exec_field(&self.source, &self.lane, user_id, pusher, f)
+            .exec_field(&self.source, &self.facade, &self.lane, user_id, pusher, f)
             .await
+    }
+}
+
+/// The shop-stream subscription (spec #517, ticket #582): the inherent
+/// surface with the narrow `ShopStore + Txn` bound (the ownership read
+/// needs only the shop sub-trait). The [`ProviderService`] impl delegates
+/// to this; the web layer calls it through the trait (which carries the
+/// full `Store + StravaStore` bound for the other direct ops).
+impl<S, P, D> Registry<S, P, D>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: tb_domain::ShopStore + Txn,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
+{
+    /// Register a shop stream for `shop_id` (spec #517, ticket #582): verify
+    /// the caller is the shop owner in a transaction (a non-owner is
+    /// `Forbidden`, mapped to a 403 by the web layer), then create the shop
+    /// channel on demand and return a subscription to it.
+    pub async fn subscribe_shop(
+        &self,
+        user_id: UserId,
+        shop_id: ShopId,
+    ) -> TbResult<broadcast::Receiver<Summary>> {
+        // Verify ownership in a transaction (the web layer maps `Forbidden`
+        // to a 403).
+        let mut store = self.source.begin().await?;
+        let shop = shop_id.read(&mut store).await?;
+        store.commit().await?;
+        if shop.owner != user_id {
+            return Err(Error::Forbidden(
+                "You must be the shop owner to open this shop's stream".into(),
+            ));
+        }
+
+        // Create the shop channel on demand and subscribe (the "open shop"
+        // check is implicit: `receiver_count() > 0`). The owner tag is the
+        // verified caller (follow-up to issue #687): it lets a
+        // notification frame fan out to every open shop stream of its
+        // recipient.
+        Ok(self.core.subscribe_shop(shop_id, user_id).await)
     }
 }
 
@@ -240,10 +288,11 @@ where
 /// stream map, the executor map) — the two are independent, so a push never
 /// holds both locks.
 #[async_trait::async_trait]
-impl<S, P> FramePusher for Registry<S, P>
+impl<S, P, D> FramePusher for Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     /// Delegate the routing to the core (the complete frame-routing policy).
     async fn deliver(&self, context: DeliveryContext, summary: Summary) {
@@ -255,10 +304,11 @@ where
 /// channel ops ride [`Self::send_request`] (spawn-or-join the executor,
 /// enqueue, await the oneshot).
 #[async_trait::async_trait]
-impl<S, P> ServiceApi for Registry<S, P>
+impl<S, P, D> ServiceApi for Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     /// Enqueue one [`ApiRead`] on the user's executor and await its data
     /// (spec #558 §3): the loop runs the read in its own transaction
@@ -336,10 +386,19 @@ where
 /// `P::Event = StravaEvent` constraint is valid for the Strava provider (the
 /// `sync` op correlates by the Strava event's identity).
 #[async_trait::async_trait]
-impl<S, P> ProviderService for Registry<S, P>
+impl<S, P, D> ProviderService for Registry<S, P, D>
 where
+    // The direct ops own their own transactions and do their domain work
+    // directly (the `subscribe_shop` ownership read, the `rescan`, the
+    // `sync`/`trigger` queue ops, the login upsert, the deauthorize/delete)
+    // — so their connection is a full `Store` (the entity sub-traits) plus
+    // `StravaStore` (the provider's queue and token ops). The executor loop
+    // needs only `Txn` (its domain work rides the facade and the lane); this
+    // bound is the registry's direct surface, not the loop's.
     S: TxnSource + Clone + 'static,
+    S::Conn: Store + StravaStore,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
     P::Event: Into<tb_strava::event::Event>,
 {
     /// Register a shop stream for `shop_id` (spec #517, ticket #582): verify
@@ -356,23 +415,7 @@ where
         user_id: UserId,
         shop_id: ShopId,
     ) -> TbResult<broadcast::Receiver<Summary>> {
-        // Verify ownership in a transaction (the web layer maps `Forbidden`
-        // to a 403).
-        let mut store = self.source.begin().await?;
-        let shop = shop_id.read(&mut store).await?;
-        store.commit().await?;
-        if shop.owner != user_id {
-            return Err(Error::Forbidden(
-                "You must be the shop owner to open this shop's stream".into(),
-            ));
-        }
-
-        // Create the shop channel on demand and subscribe (the "open shop"
-        // check is implicit: `receiver_count() > 0`). The owner tag is the
-        // verified caller (follow-up to issue #687): it lets a
-        // notification frame fan out to every open shop stream of its
-        // recipient.
-        Ok(self.core.subscribe_shop(shop_id, user_id).await)
+        self.subscribe_shop(user_id, shop_id).await
     }
 
     /// The admin rescan (spec #558 §5.2): one transaction
@@ -615,10 +658,11 @@ where
 /// error ("read", "hydration", "stats read", "write"). `exec_field`
 /// drops the registry lock on return, so the unbounded reply await
 /// runs without it.
-impl<S, P> Registry<S, P>
+impl<S, P, D> Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     async fn send_request<Out>(
         &self,
