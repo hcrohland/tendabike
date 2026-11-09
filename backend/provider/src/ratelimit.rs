@@ -11,7 +11,7 @@ use http::{HeaderMap, HeaderName, HeaderValue};
 /// A single rate-limit window: the limit and the current usage.
 /// `None` until the first response populates the values.
 #[derive(Debug, Clone, Default, PartialEq)]
-pub struct Window {
+pub(crate) struct Window {
     pub limit: Option<u32>,
     pub usage: Option<u32>,
 }
@@ -91,7 +91,8 @@ impl RateLimiter {
     }
 
     /// The current window states, in spec order.
-    pub fn windows(&self) -> &[Window] {
+    #[cfg(test)]
+    pub(crate) fn windows(&self) -> &[Window] {
         &self.windows
     }
 
@@ -159,7 +160,7 @@ impl RateLimiter {
 }
 
 /// Parses a `"15min,daily"` comma-separated header value into a pair.
-pub fn parse_pair(header: Option<&HeaderValue>) -> Option<(u32, u32)> {
+pub(crate) fn parse_pair(header: Option<&HeaderValue>) -> Option<(u32, u32)> {
     let s = header?.to_str().ok()?;
     let mut parts = s.split(',');
     let first = parts.next()?.trim().parse::<u32>().ok()?;
@@ -176,12 +177,12 @@ fn now_unix() -> i64 {
 }
 
 /// The next 15-minute window boundary (:00, :15, :30, :45) in unix seconds.
-pub fn next_15min_boundary() -> i64 {
+pub(crate) fn next_15min_boundary() -> i64 {
     (now_unix() / 900 + 1) * 900
 }
 
 /// The next midnight UTC in unix seconds.
-pub fn next_midnight_utc() -> i64 {
+pub(crate) fn next_midnight_utc() -> i64 {
     (now_unix() / 86400 + 1) * 86400
 }
 
