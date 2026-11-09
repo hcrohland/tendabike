@@ -19,9 +19,9 @@
 */
 
 //! The Strava provider lane: the [`ProviderLane`] impl for the Strava driver.
-//! Lives in `tb_strava` because the lane bridges the loop's [`ProviderLane`]
-//! seam (in `tb_provider`) to `tb_strava`'s `get_event`/`process` ops — the
-//! crate that owns those ops owns the lane. `probe` delegates to
+//! Lives in the Strava module because the lane bridges the loop's
+//! [`ProviderLane`] seam to the module's `get_event`/`process` ops — the code
+//! that owns those ops owns the lane. `probe` delegates to
 //! [`crate::event::get_event`] and `process` to [`crate::event::process`]. The
 //! lane is generic over the store type `S` (the provider's full store — the
 //! transaction's connection): `type Store = S`, so the loop's transaction

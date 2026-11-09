@@ -5,7 +5,6 @@ members = [
     "backend/app",
     "backend/domain",
     "backend/axum",
-    "backend/strava",
     "backend/sqlx",
     "backend/exec",
     "backend/provider",
@@ -15,7 +14,6 @@ members = [
 
 tb_domain = { path = "./backend/domain" }
 tb_axum = { path = "./backend/axum" }
-tb_strava = { path = "./backend/strava" }
 tb_sqlx = { path = "./backend/sqlx" }
 tb_exec = { path = "./backend/exec" }
 tb_provider = { path = "./backend/provider" }

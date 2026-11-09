@@ -3037,13 +3037,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tb_strava"
-version = "0.9.0"
-dependencies = [
- "tb_provider",
-]
-
-[[package]]
 name = "tendabike"
 version = "0.9.0"
 dependencies = [

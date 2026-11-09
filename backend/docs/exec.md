@@ -8,8 +8,8 @@ the **Registry**, the manager that decides when an executor exists, and the
 any future driver, e.g. the CLI) calls.
 
 The crate computes no domain state of its own: it drives the existing
-`tb_domain` operations and `tb_strava` event processing inside transactions
-it owns.
+`tb_domain` operations and the Strava driver's event processing inside
+transactions it owns.
 
 The design assumes a **single node**: one process owns a user's executor and
 their streams. Multi-node delivery is out of scope.
@@ -56,7 +56,7 @@ never waits):
 
 - An API write dispatches through the domain's `exec(ApiWrite, …)` with the
   request's acting session.
-- A Strava event drives `tb_strava`'s `process` with the user's id — the
+- A Strava event drives the Strava driver's `process` with the user's id — the
   event lane has no acting session (the queue is per-user, the data is the
   user's own, no shop applies, per [ADR-0009](../../docs/adr/0009-the-active-shop-is-per-request-not-per-browser.md)).
 
@@ -137,11 +137,11 @@ because managing the pool's lifecycle is an executor-level concern.
 | Loop, `Registry`, `ServiceApi`, the seams | `tb_exec` |
 | The Postgres half of `TxnSource`/`Txn` | `tb_sqlx` (depends on `tb_exec`) |
 | The domain ops the loop drives (`exec`, `ApiRead`, `Summary`) | `tb_domain` |
-| Strava event processing (`process`, the queue) | `tb_strava` |
+| Strava event processing (`process`, the queue) | `tb_provider` (the Strava module) |
 | The web layer (routes, SSE) | `tb_axum` (depends on `tb_exec`, **never** `tb_sqlx`) |
 | The composition root (builds the `Registry` over the `DbPool`) | `app` |
 
-Dependency direction: `tb_exec → tb_domain + tb_strava`; `tb_sqlx →
+Dependency direction: `tb_exec → tb_domain + tb_provider`; `tb_sqlx →
 tb_exec`; `tb_axum → tb_exec`.
 
 ## History
