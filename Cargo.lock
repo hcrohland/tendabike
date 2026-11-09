@@ -3052,8 +3052,8 @@ dependencies = [
  "mimalloc",
  "tb_axum",
  "tb_exec",
+ "tb_provider",
  "tb_sqlx",
- "tb_strava",
  "tokio",
 ]
 

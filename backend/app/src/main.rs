@@ -43,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
     let registry = tb_exec::Registry::with_defaults(
         tb_exec::DetachedBegin::new(pool),
         tb_exec::DomainFacadeImpl,
-        tb_strava::StravaLane::new(),
+        tb_provider::strava::StravaLane::new(),
     );
     let api = std::sync::Arc::new(registry.clone()) as std::sync::Arc<dyn tb_exec::ServiceApi>;
     let provider = std::sync::Arc::new(registry) as std::sync::Arc<dyn tb_exec::ProviderService>;
