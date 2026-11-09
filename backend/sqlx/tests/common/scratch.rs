@@ -14,8 +14,8 @@
 // along with TendaBike. If not, see <https://www.gnu.org/licenses/>.
 
 //! The scratch-database plumbing shared by the `tb_sqlx` integration
-//! suites: the store seam suite (`store_seam.rs`, issue #406/#411) and the
-//! per-user executor suite (`executor_seam.rs`, issue #453).
+//! suites: the store seam suite (`store_seam.rs`) and the
+//! per-user executor suite (`executor_seam.rs`).
 //!
 //! Each suite pulls this module in with `#[path = "common/scratch.rs"]`
 //! (a test binary cannot pull a file outside its own directory tree any
@@ -361,7 +361,7 @@ pub async fn reset_sequences(
     Ok(())
 }
 
-/// The executor suite's per-test reset (issue #453): truncate every table
+/// The executor suite's per-test reset: truncate every table
 /// in the schema and re-seed the standard fixture in one committed
 /// transaction.
 ///
@@ -418,7 +418,7 @@ pub async fn fresh_fixture(pool: &DbPool) -> tb_domain::TbResult<()> {
     Ok(())
 }
 
-/// The fixture builder (issue #647): seeds a scratch Postgres DB from the
+/// The fixture builder: seeds a scratch Postgres DB from the
 /// relocated `StoreSnapshot` fixture and returns a `Store` over that
 /// Postgres connection.
 ///

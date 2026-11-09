@@ -1,4 +1,4 @@
-//! The `Service` entity tests over a canned [`MockStore`] (issue #643).
+//! The `Service` entity tests over a canned [`MockStore`].
 //!
 //! Each test runs the real service domain logic — the usage aggregation and
 //! computation from canned activity data (a main part aggregates all of its

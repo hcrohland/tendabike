@@ -4,7 +4,7 @@ import { Due } from "../lib/serviceplan";
 import ServiceBadge from "./ServiceBadge.svelte";
 
 // The badge renders only from the plan module's per-limit NextDue value:
-// verdict → colour, remaining/limit → used percentage (issue #345).
+// verdict → colour, remaining/limit → used percentage.
 // The severity thresholds are unit-tested in lib/serviceplan-doors.test.ts.
 
 describe("ServiceBadge", () => {

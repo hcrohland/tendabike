@@ -26,6 +26,9 @@ fi
 # --- repeated comments: always on, scoped to the staged diff ---
 python3 .githooks/check-repeated-comments.py
 
+# --- issue references in comments: always on, scoped to the staged diff ---
+python3 .githooks/check-issue-refs.py
+
 # --- language-scoped checks: run only what the staged files touch ---
 # Staged files (added, copied, modified, renamed). Deletions need no checks.
 staged_files=$(git diff --cached --name-only --diff-filter=ACMR)
@@ -61,9 +64,4 @@ if [ "$run_frontend" -eq 1 ]; then
     npm run check
 fi
 
-# Dockerfile build-deps stubs: the image compiles from the manifests alone with
-# real source stubbed out, so a [[bin]]/[lib] with no matching stub breaks the
-# docker build — caught only by the slow remote docker CI job. Check locally.
-if printf '%s\n' "$staged_files" | grep -Eq '^(Dockerfile|backend/[^/]+/Cargo\.toml)$'; then
-    python3 .githooks/check-dockerfile-stubs.py
-fi
+

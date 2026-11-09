@@ -1,4 +1,4 @@
-//! The `Activity` entity tests over a canned [`MockStore`] (issue #644).
+//! The `Activity` entity tests over a canned [`MockStore`].
 //!
 //! Each test runs the real activity domain logic over a [`MockStore`] whose
 //! methods return canned rows. Two kinds of logic live here:

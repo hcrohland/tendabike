@@ -191,7 +191,7 @@ impl ActivityId {
             .await?;
         store.activity_delete(&self).await?;
         // The deleted activity is reported as a None tombstone, so the
-        // client's merge drops its row (issue #462).
+        // client's merge drops its row.
         res.activities.tombstone(self);
         Ok(res)
     }

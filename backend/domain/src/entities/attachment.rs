@@ -229,7 +229,7 @@ impl Attachment {
         Usage::update_vec(&usages, store).await?;
 
         // the deleted attachment is reported as a None tombstone under its
-        // idx key, so the client's merge drops its row (issue #462)
+        // idx key, so the client's merge drops its row
         let detail = att.add_details("", 0.into());
         let mut summary = Summary::default();
         summary.usages.upsert_all(usages);

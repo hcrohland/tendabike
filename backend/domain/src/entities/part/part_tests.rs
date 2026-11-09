@@ -1,4 +1,4 @@
-//! The `Part`/`PartId` domain logic over a canned [`MockStore`] (issue #640).
+//! The `Part`/`PartId` domain logic over a canned [`MockStore`].
 //!
 //! Each mock-runnable test runs the real domain operation — dispose/restore,
 //! `by_source` lookup, `is_main` derivation from the static `PARTTYPES` table,

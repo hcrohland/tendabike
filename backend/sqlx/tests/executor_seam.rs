@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with TendaBike. If not, see <https://www.gnu.org/licenses/>.
 
-//! The per-user executor loop integration suite (issue #453).
+//! The per-user executor loop integration suite.
 //!
 //! Drives the real executor loop — `tb_exec::LoopContext` over the real
 //! `DbPool` (`TxnSource`/`Txn` implemented on the live `SqlxConn`, the seam
@@ -78,10 +78,10 @@ use std::time::Duration;
 use tb_domain::test_support::{
     mock_session, mock_session_admin, mock_session_with_shop, part_type_ids::CHAIN, sole_live,
 };
-use tb_domain::{ApiRead, ApiWrite, PartId, ReadOutcome, ShopId, Summary, UserId};
+use tb_domain::{ApiRead, ApiWrite, Part, PartId, ReadOutcome, ShopId, Summary, UsageId, UserId};
 use tb_exec::{
-    DeliveryContext, DetachedBegin, ExecutorStatus, FramePusher, LoopContext, ProviderService,
-    Registry, Request, RequestReceiver, ServiceApi, request_channel,
+    DeliveryContext, DetachedBegin, DomainFacadeImpl, ExecutorStatus, FramePusher, LoopContext,
+    ProviderService, Registry, Request, RequestReceiver, ServiceApi, request_channel,
 };
 use tb_provider::ProviderLane;
 use tb_sqlx::{DbPool, SNAPSHOT_JSON, SqlxConn};
@@ -136,6 +136,7 @@ fn loop_ctx(
 ) -> impl std::future::Future<Output = tb_domain::TbResult<()>> {
     LoopContext::new(
         DetachedBegin::new(pool),
+        DomainFacadeImpl,
         UserId::from(1),
         frames,
         Box::new(NoopPusher),
@@ -395,8 +396,8 @@ async fn read_as_message_round_trip() {
     outcome.expect("a reaped loop returns Ok");
 }
 
-/// The shop-scoping fix end to end on the live adapter (issue #600 / ticket
-/// #610): a `User` read whose **request** session is in a shop context returns
+/// The shop-scoping fix end to end on the live adapter: a `User` read whose
+/// **request** session is in a shop context returns
 /// only the shop's parts (not the user's whole state), even when the executor
 /// was spawned in a personal context — and a personal read enqueued after it
 /// returns the full state. The loop runs the read against the request's
@@ -480,7 +481,7 @@ async fn shop_context_read_is_scoped_to_the_request_session() {
     outcome.expect("a reaped loop returns Ok");
 }
 
-/// The sticky-shop fix, read side, end to end (issue #600 / ticket #610): a
+/// The sticky-shop fix, read side, end to end: a
 /// `User` read whose **request** session is personal returns the user's full
 /// state — not a shop's subset — even when the user owns a shop with
 /// registered parts. The loop is identity-only (a `user_id`, no shop), so the
@@ -850,6 +851,7 @@ async fn sync_enqueues_wakes_and_awaits() {
     // mechanism intact for a running, idle-waiting executor.
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
+        DomainFacadeImpl,
         StravaLane::new(),
         Duration::from_secs(3600),
     );
@@ -915,6 +917,7 @@ async fn trigger_processing_drains_each_queued_user() {
     canned_strava("/activities?after=200&per_page=25", "[]");
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
+        DomainFacadeImpl,
         StravaLane::new(),
         Duration::from_secs(3600),
     );
@@ -997,9 +1000,12 @@ async fn seed_strava_user(pool: &DbPool, queue_event: bool) {
 /// One test's registry over the live pool (the direct ops' shape): the
 /// suite's short idle cadence; the ops under test never rely on the
 /// re-probe.
-fn registry(pool: &DbPool) -> Registry<DetachedBegin<DbPool>, StravaLane<SqlxConn<'static>>> {
+fn registry(
+    pool: &DbPool,
+) -> Registry<DetachedBegin<DbPool>, StravaLane<SqlxConn<'static>>, DomainFacadeImpl> {
     Registry::new(
         DetachedBegin::new(pool.clone()),
+        DomainFacadeImpl,
         StravaLane::new(),
         IDLE_TIMEOUT,
     )
@@ -1254,6 +1260,86 @@ async fn delete_user_removes_the_rows() {
     drop(conn);
 }
 
+/// The shop-subscribe policy against the live adapter: the
+/// `subscribe_shop` ownership read is a real store call on Postgres — a
+/// non-owner's connect is `Forbidden` (the web layer maps it to a 403), the
+/// owner's connect returns a stream receiver, and a shop-context `deliver`
+/// reaches the open shop stream.
+#[tokio::test]
+#[ignore]
+async fn shop_subscribe_policy() {
+    let seam = ready().await;
+    let shop = ShopId::from(1);
+    // Seed a shop owned by the fixture user (the prepopulated fixture has
+    // no shops).
+    {
+        let mut conn = seam.pool.begin().await.expect("a transaction");
+        sqlx::query(
+            "INSERT INTO shops (id, owner, name, description) VALUES (1, 1, 'Seam Shop', '')",
+        )
+        .execute(&mut **conn)
+        .await
+        .expect("seeding the shop");
+        conn.commit().await.expect("committing the seed");
+    }
+    let registry = Registry::new(
+        DetachedBegin::new(seam.pool.clone()),
+        DomainFacadeImpl,
+        StravaLane::new(),
+        Duration::from_secs(3600),
+    );
+
+    // (a) A non-owner is forbidden: the ownership read runs against the
+    // shop row just seeded (owner 1), so user 2 is rejected.
+    let err = registry
+        .subscribe_shop(UserId::from(2), shop)
+        .await
+        .expect_err("a non-owner's subscribe must be forbidden");
+    assert!(
+        matches!(err, tb_domain::Error::Forbidden(_)),
+        "the non-owner's subscribe must be Forbidden, got {err:?}"
+    );
+
+    // (b) The owner subscribes and receives a stream receiver.
+    let mut rx = registry
+        .subscribe_shop(UserId::from(1), shop)
+        .await
+        .expect("the owner can subscribe");
+
+    // (c) A shop-context delivery reaches the open shop stream (the facade
+    // delegates the routing to the core).
+    let mut summary = Summary::default();
+    summary.parts.upsert(Part {
+        id: PartId::from(1),
+        owner: UserId::from(1),
+        what: CHAIN,
+        name: "Seam Part".to_string(),
+        vendor: "Seam Vendor".to_string(),
+        model: "Seam Model".to_string(),
+        purchase: datetime!(2024-01-01 00:00 UTC),
+        last_used: datetime!(2024-01-01 00:00 UTC),
+        disposed_at: None,
+        usage: UsageId::default(),
+        source: None,
+        shop: None,
+    });
+    registry
+        .deliver(
+            DeliveryContext {
+                user_id: UserId::from(1),
+                shop: Some(shop),
+                part_owner: None,
+            },
+            summary.clone(),
+        )
+        .await;
+    let got = tokio::time::timeout(TEST_TIMEOUT, rx.recv())
+        .await
+        .expect("the shop stream must deliver in time")
+        .expect("the shop stream must not end");
+    assert_eq!(got, summary);
+}
+
 // ---------------------------------------------------------------------------
 // The executor lifecycle (spec #558 §4.4/§4.5)
 // ---------------------------------------------------------------------------
@@ -1263,10 +1349,11 @@ async fn delete_user_removes_the_rows() {
 /// lifecycle tests' observables. The map's entry outlives a clean reap —
 /// the watchdog records `Reaped` on the fate watch, it does not remove the
 /// entry (only `stop_all` clears the map).
-async fn wait_for_status<S, P>(reg: &Registry<S, P>, user: UserId, want: ExecutorStatus)
+async fn wait_for_status<S, P, D>(reg: &Registry<S, P, D>, user: UserId, want: ExecutorStatus)
 where
     S: tb_exec::TxnSource + Clone,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: tb_exec::DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     let deadline = tokio::time::Instant::now() + TEST_TIMEOUT;
     loop {
@@ -1301,6 +1388,7 @@ async fn attached_stream_keeps_the_executor_alive() {
     // reap-on-idle policy would have reclaimed this executor quickly.
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
+        DomainFacadeImpl,
         StravaLane::new(),
         Duration::from_millis(300),
     );
@@ -1353,6 +1441,7 @@ async fn stream_survives_executor_reap() {
     // spawn reaps quickly.
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
+        DomainFacadeImpl,
         StravaLane::new(),
         Duration::from_millis(300),
     );

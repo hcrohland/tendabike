@@ -1,4 +1,4 @@
-//! The `ApiRead` dispatch over a canned [`MockStore`] (issue #639).
+//! The `ApiRead` dispatch over a canned [`MockStore`].
 //!
 //! Each test runs the real `read` dispatch — the `ReadOutcome`/projections/
 //! filters/access-checks the read handlers rely on — over a [`MockStore`]
@@ -245,7 +245,7 @@ async fn user_read_shop_filter_limits_parts() -> TbResult<()> {
         .expect_notification_all_for_user()
         .returning(|_| Ok(vec![]));
 
-    // The acting session carries the shop (spec #517, ticket #588): the read
+    // The acting session carries the shop (spec #517): the read
     // filters the summary to the session's shop, not an in-message parameter.
     let shop_session = mock_session_with_shop(me, shop);
     let outcome = read(ApiRead::User, &shop_session, &mut store).await?;

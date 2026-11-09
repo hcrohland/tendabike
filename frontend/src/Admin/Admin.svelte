@@ -29,7 +29,7 @@
   let deleteuser = { start: (_: User) => {} };
 
   function rescan() {
-    // The rescan stops every live stream after its commit (issue #446): each
+    // The rescan stops every live stream after its commit: each
     // client — this one included — re-hydrates via the native reconnect +
     // catch-up snapshot, so no manual refresh is needed here.
     promise = myfetch("/api/activ/rescan").catch(handleError);

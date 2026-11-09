@@ -9,7 +9,7 @@ pub trait NotificationStore {
     /// Creates a new `Notification`.
     ///
     /// Used by domain operations as a side effect — never called directly by
-    /// the user (issue #586).
+    /// the user.
     async fn notification_create(
         &mut self,
         recipient: UserId,

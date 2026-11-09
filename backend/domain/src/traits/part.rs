@@ -19,7 +19,7 @@ pub trait PartStore {
 
     /// Retrieves all `Part` objects for a given user ID.
     ///
-    /// **Ordering (one rule on both stores, issue #405):** ascending by
+    /// **Ordering (one rule on both stores):** ascending by
     /// `last_used` — the database's `ORDER BY last_used`. Ties (parts that
     /// share a `last_used`) have no defined order.
     ///

@@ -38,15 +38,13 @@ use std::time::Duration;
 use log::{debug, error, warn};
 use tb_domain::{
     ApiRead, ApiWrite, Error, ReadOutcome, Session, ShopId, Summary, TbResult, UserId, UserStat,
-    WriteOutcome, exec,
+    WriteOutcome,
 };
 use tb_provider::{Probe, ProviderLane};
-use tb_strava::event::insert_sync;
-use tb_strava::{StravaUser, get_all_stats};
 use tokio::sync::{broadcast, oneshot};
 
 use crate::message::{Request, RequestReceiver};
-use crate::{DeliveryContext, FramePusher, Txn, TxnSource};
+use crate::{DeliveryContext, DomainFacade, FramePusher, Txn, TxnSource};
 
 /// The per-executor in-memory backoff for database failures (spec #446
 /// §4.6): exponential, capped at 30s, no `Stop` row (that is the Strava
@@ -222,7 +220,7 @@ async fn select_message<E>(
     }
 }
 
-/// The per-user executor loop's context (issue #661): the loop's wiring and
+/// The per-user executor loop's context: the loop's wiring and
 /// its mutable state in one type, so the loop's full set of dependencies is
 /// readable from one struct definition and its stateful behavior has a
 /// single home.
@@ -287,13 +285,16 @@ async fn select_message<E>(
 /// Public (with a public constructor) because the integration (seam) suite
 /// — a separate crate — constructs it to drive the loop over a real
 /// transaction source, the same single construction path as production.
-pub struct LoopContext<T, P>
+pub struct LoopContext<T, P, D>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Send + Sync + 'static,
+    D: DomainFacade<T::Conn> + Send + Sync + 'static,
 {
     /// The transaction source (`DbPool` in production).
     source: T,
+    /// The domain facade: the executor's door into the domain (spec #795).
+    facade: D,
     /// The user the loop serves.
     user_id: UserId,
     /// The user's SSE frame sink (`broadcast`).
@@ -318,10 +319,11 @@ where
     first_idle: bool,
 }
 
-impl<T, P> LoopContext<T, P>
+impl<T, P, D> LoopContext<T, P, D>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Send + Sync + 'static,
+    D: DomainFacade<T::Conn> + Send + Sync + 'static,
 {
     /// Assemble the loop's wiring, starting its mutable state (the backoff
     /// at its base, the first-idle flag set) — the two state locals the
@@ -329,6 +331,7 @@ where
     #[allow(clippy::too_many_arguments)] // the loop's full wiring, one field each
     pub fn new(
         source: T,
+        facade: D,
         user_id: UserId,
         frames: broadcast::Sender<Summary>,
         pusher: Box<dyn FramePusher>,
@@ -339,6 +342,7 @@ where
     ) -> Self {
         Self {
             source,
+            facade,
             user_id,
             frames,
             pusher,
@@ -602,10 +606,11 @@ async fn sleep_or_take_request(
 /// a DB failure and returns [`Probe::Error`], which the loop answers with the
 /// in-memory backoff (the housekeeping rolled back, so the queue's state is
 /// unknown — the re-probe after the pause settles it).
-async fn queue_probe<T, P>(ctx: &mut LoopContext<T, P>) -> Option<Probe<P::Event>>
+async fn queue_probe<T, P, D>(ctx: &mut LoopContext<T, P, D>) -> Option<Probe<P::Event>>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Send + Sync + 'static,
+    D: DomainFacade<T::Conn> + Send + Sync + 'static,
 {
     let user_id = ctx.user_id;
     let mut conn = match ctx.source.begin().await {
@@ -651,30 +656,25 @@ where
 /// the reads never arm the backoff, spec #558 §3.7). The oneshot always
 /// resolves and the message is consumed; only a failed `rollback` ends the
 /// loop (the sub-dispatchers' `Err` return).
-async fn run_request<T, P>(ctx: &mut LoopContext<T, P>, request: Request) -> Result<(), Error>
+async fn run_request<T, P, D>(ctx: &mut LoopContext<T, P, D>, request: Request) -> Result<(), Error>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Send + Sync + 'static,
+    D: DomainFacade<T::Conn> + Send + Sync + 'static,
 {
     match request {
         Request::Write {
             write,
-            session: mut req_session,
+            session,
             reply,
-        } => run_write(ctx, &mut *req_session, write, reply).await,
+        } => run_write(ctx, session, write, reply).await,
         Request::Read {
             read,
-            session: mut req_session,
+            session,
             reply,
-        } => run_read(ctx, &mut *req_session, read, reply).await,
-        Request::Gear {
-            session: mut req_session,
-            reply,
-        } => run_gear(ctx, &mut *req_session, reply).await,
-        Request::AllStats {
-            session: mut req_session,
-            reply,
-        } => run_all_stats(ctx, &mut *req_session, reply).await,
+        } => run_read(ctx, session, read, reply).await,
+        Request::Gear { session, reply } => run_gear(ctx, session, reply).await,
+        Request::AllStats { session, reply } => run_all_stats(ctx, session, reply).await,
     }
 }
 
@@ -703,20 +703,26 @@ where
 /// outcome, so the commit/rollback (which consume the connection) stay in
 /// this helper.
 #[allow(clippy::too_many_arguments)] // the shape's eight degrees of freedom
-async fn run_message<T, P, Out, Fut>(
-    ctx: &mut LoopContext<T, P>,
+async fn run_message<T, P, D, Out>(
+    ctx: &mut LoopContext<T, P, D>,
     noun: &str,
     what: &str,
     reply: oneshot::Sender<TbResult<Out>>,
     record_db_failure: bool,
     shop: Option<ShopId>,
     frame: impl for<'a> Fn(&'a Out) -> Option<&'a Summary>,
-    work: impl FnOnce(T::Conn) -> Fut,
+    work: impl for<'a> FnOnce(
+        T::Conn,
+        &'a D,
+        &'a P,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = (TbResult<Out>, T::Conn, Option<UserId>)> + Send + 'a>,
+    >,
 ) -> Result<(), Error>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
-    Fut: Future<Output = (TbResult<Out>, T::Conn, Option<UserId>)>,
+    P: ProviderLane<Store = T::Conn> + Send + Sync + 'static,
+    D: DomainFacade<T::Conn> + Send + Sync + 'static,
 {
     let conn = match ctx.source.begin().await {
         Ok(conn) => conn,
@@ -733,7 +739,7 @@ where
         }
     };
 
-    let (outcome, conn, part_owner) = work(conn).await;
+    let (outcome, conn, part_owner) = work(conn, &ctx.facade, &ctx.lane).await;
     let outcome: TbResult<Out> = match outcome {
         Ok(outcome) => match conn.commit().await {
             Ok(()) => {
@@ -810,15 +816,16 @@ where
 /// failed `rollback` ends the loop with `Err` (the transaction's fate is not
 /// ours to reason about); any other continued path proves the database
 /// healthy and resets the backoff.
-async fn run_write<T, P>(
-    ctx: &mut LoopContext<T, P>,
-    session: &mut dyn Session,
+async fn run_write<T, P, D>(
+    ctx: &mut LoopContext<T, P, D>,
+    session: Box<dyn Session>,
     write: ApiWrite,
     reply: oneshot::Sender<TbResult<WriteOutcome>>,
 ) -> Result<(), Error>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Send + Sync + 'static,
+    D: DomainFacade<T::Conn> + Send + Sync + 'static,
 {
     debug!("user {}: Processing {write:?}", session.user_id());
     // The onboarding cutover's Strava side (spec #558 §5.1): extracted
@@ -827,6 +834,7 @@ where
         ApiWrite::UserOnboardingSync { time } => Some(*time),
         _ => None,
     };
+    let user_id = session.user_id();
     let shop = session.shop();
     run_message(
         ctx,
@@ -838,33 +846,35 @@ where
         // The frame is the write's `Summary` (the descend's report is the
         // response body, not state — it never rides the frame).
         |outcome| Some(outcome.summary()),
-        |mut conn| async move {
-            let outcome = async {
-                let outcome = exec(write, session, &mut conn).await?;
-                if let Some(time) = onboarding_time {
-                    insert_sync(session.user_id(), time, false, &mut conn).await?;
+        |mut conn, facade, lane| {
+            Box::pin(async move {
+                let outcome = async {
+                    let outcome = facade.exec(write, &*session, &mut conn).await?;
+                    if let Some(time) = onboarding_time {
+                        lane.insert_sync(user_id, time, false, &mut conn).await?;
+                    }
+                    Ok(outcome)
                 }
-                Ok(outcome)
-            }
-            .await;
-            // In a shop context, resolve the part owner for the delivery
-            // context (the rare case: only shop operations need it). The
-            // lookup runs in the same transaction (before commit), so it
-            // sees the operation's effects.
-            let part_owner = if shop.is_some() {
-                if let Some(part_id) = outcome
-                    .as_ref()
-                    .ok()
-                    .and_then(|o| o.summary().referenced_part())
-                {
-                    part_id.owner(&mut conn).await.ok()
+                .await;
+                // In a shop context, resolve the part owner for the delivery
+                // context (the rare case: only shop operations need it). The
+                // lookup runs in the same transaction (before commit), so it
+                // sees the operation's effects.
+                let part_owner = if shop.is_some() {
+                    if let Some(part_id) = outcome
+                        .as_ref()
+                        .ok()
+                        .and_then(|o| o.summary().referenced_part())
+                    {
+                        facade.part_owner(part_id, &mut conn).await.ok()
+                    } else {
+                        None
+                    }
                 } else {
                     None
-                }
-            } else {
-                None
-            };
-            (outcome, conn, part_owner)
+                };
+                (outcome, conn, part_owner)
+            })
         },
     )
     .await
@@ -886,15 +896,16 @@ where
 /// transaction that completes cleanly (committed, or rolled back after a
 /// domain error) **resets** the backoff, per the existing "any healthy
 /// transaction resets" rule. Only a failed `rollback` ends the loop.
-async fn run_read<T, P>(
-    ctx: &mut LoopContext<T, P>,
-    session: &mut dyn Session,
+async fn run_read<T, P, D>(
+    ctx: &mut LoopContext<T, P, D>,
+    session: Box<dyn Session>,
     read: ApiRead,
     reply: oneshot::Sender<TbResult<ReadOutcome>>,
 ) -> Result<(), Error>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Send + Sync + 'static,
+    D: DomainFacade<T::Conn> + Send + Sync + 'static,
 {
     debug!("user {}: Reading {read:?}", session.user_id());
     run_message(
@@ -905,9 +916,11 @@ where
         false,          // a failed read never arms the backoff (spec #558 §3.7)
         session.shop(), // a read pushes no frame; the context is unused
         |_| None,       // a read pushes no frame (spec #558 §3.6)
-        |mut conn| async move {
-            let outcome = tb_domain::read(read, session, &mut conn).await;
-            (outcome, conn, None)
+        |mut conn, facade, _lane| {
+            Box::pin(async move {
+                let outcome = facade.read(read, &*session, &mut conn).await;
+                (outcome, conn, None)
+            })
         },
     )
     .await
@@ -928,14 +941,15 @@ where
 /// write's: a `begin`/`commit` failure records it, a completed transaction
 /// (committed, or rolled back after an error) resets it, and only a failed
 /// `rollback` ends the loop.
-async fn run_gear<T, P>(
-    ctx: &mut LoopContext<T, P>,
-    session: &mut dyn Session,
+async fn run_gear<T, P, D>(
+    ctx: &mut LoopContext<T, P, D>,
+    session: Box<dyn Session>,
     reply: oneshot::Sender<TbResult<Summary>>,
 ) -> Result<(), Error>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Send + Sync + 'static,
+    D: DomainFacade<T::Conn> + Send + Sync + 'static,
 {
     debug!("user {}: Hydrating the user's gear", session.user_id());
     // The hydration's work in the loop's transaction: import the Strava
@@ -943,6 +957,7 @@ where
     // (one entry per part, empty when nothing is new, spec #558 §4).
     let mut summary = Summary::default();
     let shop = session.shop();
+    let user_id = session.user_id();
     run_message(
         ctx,
         "hydration",
@@ -951,21 +966,20 @@ where
         true,
         shop,
         |summary| Some(summary),
-        |mut conn| async move {
-            let outcome = async {
-                let created = StravaUser::update_gear(
-                    session.user_id(),
-                    &tb_provider::DomainFacadeImpl,
-                    &mut conn,
-                )
-                .await?;
-                for id in created {
-                    summary.parts.upsert(id.part(session, &mut conn).await?);
+        |mut conn, facade, lane| {
+            Box::pin(async move {
+                let outcome = async {
+                    let created = lane.update_gear(user_id, &mut conn).await?;
+                    for id in created {
+                        summary
+                            .parts
+                            .upsert(facade.part(id, &*session, &mut conn).await?);
+                    }
+                    Ok(())
                 }
-                Ok(())
-            }
-            .await;
-            (outcome.map(|()| summary), conn, None)
+                .await;
+                (outcome.map(|()| summary), conn, None)
+            })
         },
     )
     .await
@@ -978,14 +992,15 @@ where
 /// get — riding the admin user's channel. The backoff discipline is the
 /// read's (spec #558 §3.7): a failure resolves the oneshot with the `Err`
 /// and never arms the backoff; a cleanly committed read resets it.
-async fn run_all_stats<T, P>(
-    ctx: &mut LoopContext<T, P>,
-    session: &mut dyn Session,
+async fn run_all_stats<T, P, D>(
+    ctx: &mut LoopContext<T, P, D>,
+    session: Box<dyn Session>,
     reply: oneshot::Sender<TbResult<Vec<UserStat>>>,
 ) -> Result<(), Error>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Send + Sync + 'static,
+    D: DomainFacade<T::Conn> + Send + Sync + 'static,
 {
     debug!("user {}: Reading the all-user stats", session.user_id());
     let shop = session.shop();
@@ -997,9 +1012,11 @@ where
         false, // a failed read never arms the backoff (spec #558 §3.7)
         shop,
         |_| None, // the stats read pushes no frame (spec #558 §3.7)
-        |mut conn| async move {
-            let outcome = get_all_stats(&tb_provider::DomainFacadeImpl, &mut conn).await;
-            (outcome, conn, None)
+        |mut conn, _facade, lane| {
+            Box::pin(async move {
+                let outcome = lane.all_stats(&mut conn).await;
+                (outcome, conn, None)
+            })
         },
     )
     .await
@@ -1036,10 +1053,11 @@ fn lifecycle_error(what: impl std::fmt::Display) -> Error {
 /// `commit` failure is the same DB failure. Only a failed `rollback` ends
 /// the loop with `Err` (the event is either still queued or already
 /// processed — the respawn settles it on the next queue read).
-async fn run_event<T, P>(ctx: &mut LoopContext<T, P>, event: &P::Event) -> Result<(), Error>
+async fn run_event<T, P, D>(ctx: &mut LoopContext<T, P, D>, event: &P::Event) -> Result<(), Error>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane<Store = T::Conn> + Clone + Send + Sync + 'static,
+    P: ProviderLane<Store = T::Conn> + Send + Sync + 'static,
+    D: DomainFacade<T::Conn> + Send + Sync + 'static,
 {
     debug!("user {}: Processing event", ctx.user_id);
 

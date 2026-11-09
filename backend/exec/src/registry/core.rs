@@ -54,10 +54,9 @@ use tokio::sync::{Mutex, Notify, broadcast, watch};
 use tb_domain::{ShopId, Summary, TbResult, UserId};
 use tb_provider::ProviderLane;
 
-use crate::LoopContext;
-use crate::TxnSource;
 use crate::message::RequestSender;
-use crate::{registry::FramePusher, request_channel};
+use crate::registry::FramePusher;
+use crate::{DomainFacade, LoopContext, TxnSource, request_channel};
 
 /// The per-user frame channel's capacity: a burst of frames for a lagged
 /// stream is dropped (the client's reconnect + full refresh covers it), so a
@@ -94,7 +93,7 @@ pub enum ExecutorStatus {
 /// consumed-Strava-event channel the admin sync awaits (spec §6.4), the
 /// in-memory wake signal the webhook fires after queueing a Strava event
 /// (spec §4.4/§4.6), and the task's abort handle (the core's `stop_all`
-/// tears the executor down — rescan, issue #446). The `AbortHandle` (not
+/// tears the executor down — rescan). The `AbortHandle` (not
 /// the `JoinHandle`) is stored: the watchdog keeps the original handle to
 /// `await` and record `Dead` on a panic **or** the abort `JoinError`. The
 /// fields the [`super::Registry`] facade's `exec_field` closures reach into
@@ -122,12 +121,12 @@ where
     task: tokio::task::AbortHandle,
 }
 
-/// The per-shop frame channel with its owner (the shop stream is owner-only,
-/// ticket #583). The owner is the caller `subscribe_shop` just verified as
+/// The per-shop frame channel with its owner (the shop stream is owner-only).
+/// The owner is the caller `subscribe_shop` just verified as
 /// the shop's owner, so the tag is never stale: a stream exists only while
 /// a receiver is attached, and every subscription re-verifies. The tag is
 /// what lets a notification frame fan out to every open shop stream of its
-/// recipient (follow-up to issue #687) — the recipient's shop views show
+/// recipient — the recipient's shop views show
 /// all their notifications (the shop-scoped hydration snapshot loads them
 /// all), so a dismiss in one tab must clear the others.
 struct ShopStream {
@@ -165,7 +164,7 @@ where
     P: ProviderLane + Clone + Send + Sync + 'static,
 {
     executors: Arc<Mutex<HashMap<UserId, Executor<P>>>>,
-    /// The per-shop frame channels (spec #517, ticket #582): a standalone
+    /// The per-shop frame channels (spec #517): a standalone
     /// `broadcast` channel per shop, created on demand by `subscribe_shop`
     /// and reaped when its last receiver disconnects (the "open shop" check
     /// is implicit: `receiver_count() > 0`). A separate mutex from the
@@ -209,8 +208,8 @@ where
         }
     }
 
-    /// Stop every live executor (the admin rescan's global re-hydration,
-    /// issue #446): for each executor, abort the task (the watchdog records
+    /// Stop every live executor (the admin rescan's global re-hydration):
+    /// for each executor, abort the task (the watchdog records
     /// `Dead` on the abort `JoinError`, like a panic) — the aborted task
     /// drops its clones of the frame and consumed-event senders, and
     /// clearing the map drops the core's, so both channels close and
@@ -232,18 +231,20 @@ where
     /// (spec §6.4): spawning the executor if it is not running. The admin
     /// sync subscribes **before** it enqueues its event, so the completion
     /// signal cannot be missed.
-    pub(super) async fn events<S>(
+    pub(super) async fn events<S, D>(
         &self,
         source: &S,
+        facade: &D,
         lane: &P,
         user_id: UserId,
         pusher: Box<dyn FramePusher>,
     ) -> TbResult<broadcast::Receiver<P::Event>>
     where
         S: TxnSource + Clone + 'static,
+        D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
         P: ProviderLane<Store = S::Conn>,
     {
-        self.exec_field(source, lane, user_id, pusher, |exec| {
+        self.exec_field(source, facade, lane, user_id, pusher, |exec| {
             exec.events.subscribe()
         })
         .await
@@ -307,10 +308,10 @@ where
     }
 
     /// Create the shop channel on demand and return a subscription to it
-    /// (spec #517, ticket #582; the "open shop" check is implicit:
+    /// (spec #517; the "open shop" check is implicit:
     /// `receiver_count() > 0`). The owner tag is the caller the facade's
-    /// `subscribe_shop` just verified as the shop's owner (follow-up to
-    /// issue #687): it lets a notification frame fan out to every open shop
+    /// `subscribe_shop` just verified as the shop's owner: it lets a
+    /// notification frame fan out to every open shop
     /// stream of its recipient. This method does only the channel creation
     /// (no store call — the ownership read stays in the facade, ADR-0010).
     pub(super) async fn subscribe_shop(
@@ -391,7 +392,7 @@ where
                 }
             }
         }
-        // Shops the operation touched (issue #687): routed by the summary's
+        // Shops the operation touched: routed by the summary's
         // content, not the session's context. The session's own shop was
         // already delivered above.
         for shop_entry in summary.shops.live() {
@@ -399,7 +400,7 @@ where
                 self.push_to_shop(shop_entry.id, summary.clone()).await;
             }
         }
-        // Cross-recipient notification routing (issue #677): a
+        // Cross-recipient notification routing: a
         // notifications-only frame to each other recipient's personal stream
         // (and the shop stream, for a recipient "in" the shop).
         for notification in summary.notifications.live() {
@@ -420,7 +421,7 @@ where
                 self.push_to_shop(shop_id, recipient_summary).await;
             }
         }
-        // The recipient's shop streams (follow-up to issue #687): each
+        // The recipient's shop streams: each
         // recipient's open shop streams get a notifications-only frame — the
         // shop-scoped snapshot filters parts to the current shop, so a full
         // summary would pollute the other tabs' parts maps. A tombstone is
@@ -473,9 +474,10 @@ where
     /// `Box<dyn FramePusher>` the loop routes committed `Summary`s through
     /// are the facade's (the core is source-agnostic and does not own a
     /// pusher).
-    pub(super) async fn exec_field<S, R>(
+    pub(super) async fn exec_field<S, D, R>(
         &self,
         source: &S,
+        facade: &D,
         lane: &P,
         user_id: UserId,
         pusher: Box<dyn FramePusher>,
@@ -483,11 +485,20 @@ where
     ) -> TbResult<R>
     where
         S: TxnSource + Clone + 'static,
+        D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
         P: ProviderLane<Store = S::Conn>,
     {
         let mut map = self.executors.lock().await;
-        let exec = Self::ensure_running(&mut map, source, lane, user_id, self.idle_timeout, pusher)
-            .await?;
+        let exec = Self::ensure_running(
+            &mut map,
+            source,
+            facade,
+            lane,
+            user_id,
+            self.idle_timeout,
+            pusher,
+        )
+        .await?;
         Ok(f(&exec))
     }
 
@@ -496,9 +507,10 @@ where
     /// shop is irrelevant — the per-request shop rides on each request), open
     /// a fresh request channel and frame channel, and spawn the `tb_exec`
     /// loop.
-    async fn ensure_running<S>(
+    async fn ensure_running<S, D>(
         map: &mut HashMap<UserId, Executor<P>>,
         source: &S,
+        facade: &D,
         lane: &P,
         user_id: UserId,
         idle_timeout: Duration,
@@ -506,6 +518,7 @@ where
     ) -> TbResult<Executor<P>>
     where
         S: TxnSource + Clone + 'static,
+        D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
         P: ProviderLane<Store = S::Conn>,
     {
         if let Some(exec) = map.get(&user_id)
@@ -528,6 +541,7 @@ where
         // clones: the `async move` block needs `'static` values, not the
         // `&S`/`&P` references.
         let owned_source = source.clone();
+        let owned_facade = facade.clone();
         let owned_lane = lane.clone();
         let frames_for_run = frames.clone();
         let events_for_run = events.clone();
@@ -536,6 +550,7 @@ where
         let join = tokio::spawn(async move {
             let result = LoopContext::new(
                 owned_source,
+                owned_facade,
                 user_id,
                 frames_for_run,
                 pusher,
@@ -559,7 +574,7 @@ where
         // it). The watchdog lives exactly as long as the executor task.
         //
         // The abort handle is taken before the watchdog moves `join`: it is
-        // how `stop_all` tears the task down (rescan, issue #446) — the
+        // how `stop_all` tears the task down (rescan) — the
         // watchdog's `join.await` then sees the abort `JoinError` and
         // records `Dead`, exactly like a panic.
         let task = join.abort_handle();
@@ -584,7 +599,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    //! The lifecycle core's own tests (spec #697, ticket #699): the core is
+    //! The lifecycle core's own tests (spec #697): the core is
     //! constructed **directly** (no `Registry` facade, no `ServiceApi` in the
     //! way) and its lifecycle methods are driven at the single
     //! transaction-witness seam (the `MockConn`-backed `FakeSource`) — "how
@@ -596,21 +611,21 @@ mod tests {
     use std::time::Duration;
 
     use tb_domain::{NotificationId, ShopId, Summary, TbResult, UserId};
-    use tb_strava::StravaLane;
     use uuid::Uuid;
 
     use super::{Core, DeliveryContext, ExecutorStatus};
+    use crate::MockDomainFacade;
     use crate::executor::executor_tests::{
-        FakeSource, MockConn, RecordingPusher, non_empty_summary, notification_part_registered,
-        part_owned_by, shop_owned_by, summary_owned_by, summary_with_notification,
-        summary_with_service,
+        FakeSource, MockConn, MockLane, RecordingPusher, non_empty_summary,
+        notification_part_registered, part_owned_by, shop_owned_by, summary_owned_by,
+        summary_with_notification, summary_with_service,
     };
     use crate::registry::FramePusher;
 
-    /// The core's test lane: the Strava lane over the unit-test store double
+    /// The core's test lane: the `mock!` lane over the unit-test store double
     /// (`MockConn` — the `FakeSource`'s `Conn`), so the core's spawn ties the
     /// `FakeSource`'s connection to the lane's store.
-    type Lane = StravaLane<MockConn>;
+    type Lane = MockLane;
 
     /// A canned `FramePusher` for the core's spawn (the `RecordingPusher`
     /// double): the core is source-agnostic and takes the pusher as a
@@ -629,8 +644,9 @@ mod tests {
         let core = Core::<Lane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let source = FakeSource::failing();
+        let facade = MockDomainFacade::<MockConn>::new();
 
-        core.exec_field(&source, &Lane::new(), user_id, pusher(), |_| ())
+        core.exec_field(&source, &facade, &Lane::new(), user_id, pusher(), |_| ())
             .await?;
 
         assert_eq!(
@@ -649,9 +665,11 @@ mod tests {
     async fn stop_all_tears_down_and_the_next_demand_respawns() -> TbResult<()> {
         let core = Core::<Lane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
+        let facade = MockDomainFacade::<MockConn>::new();
 
         core.exec_field(
             &FakeSource::failing(),
+            &facade,
             &Lane::new(),
             user_id,
             pusher(),
@@ -670,6 +688,7 @@ mod tests {
         // The next demand respawns fresh.
         core.exec_field(
             &FakeSource::failing(),
+            &facade,
             &Lane::new(),
             user_id,
             pusher(),
@@ -710,8 +729,9 @@ mod tests {
         let core = Core::<Lane>::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let source = FakeSource::failing();
+        let facade = MockDomainFacade::<MockConn>::new();
 
-        core.exec_field(&source, &Lane::new(), user_id, pusher(), |_| ())
+        core.exec_field(&source, &facade, &Lane::new(), user_id, pusher(), |_| ())
             .await?;
         core.wake(user_id).await;
 
@@ -1019,7 +1039,7 @@ mod tests {
 
     /// A user-context write (the acting session has no shop) whose summary
     /// carries a part registered in a shop pushes the frame to that shop's
-    /// stream (issue #687): the shop owner's open shop view listens on the
+    /// stream: the shop owner's open shop view listens on the
     /// shop stream, and the session's context is the actor's, not the shop's.
     #[tokio::test]
     async fn deliver_cross_recipient_notification_to_shop_stream_without_shop_context()
@@ -1200,7 +1220,7 @@ mod tests {
     /// no live entry) reaches the acting user's personal stream and fans out
     /// to their open shop streams (the ones other than the session's shop): a
     /// dismiss in the shop tab must clear the private tab and the other shop
-    /// tabs (follow-up to issue #687).
+    /// tabs.
     #[tokio::test]
     async fn deliver_shop_context_transient_read_to_personal_stream() -> TbResult<()> {
         let core = Core::<Lane>::new(Duration::from_secs(60));
@@ -1271,7 +1291,7 @@ mod tests {
 
     /// A user-context read (a dismiss in the private tab) fans the frame out
     /// to the acting user's open shop streams: a dismiss in the private tab
-    /// must clear the shop tabs (follow-up to issue #687). The personal stream
+    /// must clear the shop tabs. The personal stream
     /// gets the frame via the normal user-context delivery.
     #[tokio::test]
     async fn deliver_user_context_read_fans_out_to_shop_streams() -> TbResult<()> {
@@ -1298,9 +1318,9 @@ mod tests {
         Ok(())
     }
 
-    /// A user-context write whose summary carries a shop (issue #687) fans the
-    /// frame out to the notification recipient's open shop streams (follow-up
-    /// to issue #687): the recipient's shop views show all their
+    /// A user-context write whose summary carries a shop fans the
+    /// frame out to the notification recipient's open shop streams: the
+    /// recipient's shop views show all their
     /// notifications, like the hydration snapshot — a new notification must
     /// appear live in their other open shop tabs, not only on the next
     /// hydration. The fan-out frame carries only the notifications.
