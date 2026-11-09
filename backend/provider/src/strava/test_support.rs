@@ -1,7 +1,7 @@
 //! Test support for the Strava driver.
 //!
-//! - `test-support` feature → exposes [`seam`] to consumer crates (`tb_exec`, `tb_sqlx`).
-//! - `#[cfg(test)]` → additionally exposes [`MockStravaDataStore`] (the `automock` witness, the Strava module's own tests only).
+//! - `test-support` feature → exposes [`seam`] and [`MockStravaDataStore`] to consumer crates (`tb_exec`, `tb_sqlx`).
+//! - `#[cfg(test)]` → exposes [`MockStravaDataStore`] (the `automock` witness) to the Strava module's own tests.
 
 pub mod seam;
 

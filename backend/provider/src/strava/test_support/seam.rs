@@ -60,7 +60,7 @@ pub fn begin_test() {
 
 /// Seed the `TokenCache` with a warm token for `user_id` (test-only): prevents
 /// the `get_token` free function from forcing a (network) refresh on the first
-/// request (spec #602: the token source moved to the Strava driver).
+/// request.
 pub fn seed_token_cache(user_id: UserId, strava_id: StravaId, access_token: &str) {
     super::super::session::TOKEN_CACHE
         .lock()
