@@ -80,11 +80,8 @@ impl ShopId {
         ShopId(id).check_read_access(user, store).await
     }
 
-    pub(crate) async fn check_owner(
-        &self,
-        user: UserId,
-        store: &mut impl ShopStore,
-    ) -> TbResult<Shop> {
+    /// Check that the user is the shop's owner (a non-owner is `Forbidden`); returns the shop
+    pub async fn check_owner(&self, user: UserId, store: &mut impl ShopStore) -> TbResult<Shop> {
         let shop = store.shop_get(*self).await?;
         if user != shop.owner {
             return Err(Error::Forbidden(
