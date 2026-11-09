@@ -35,7 +35,7 @@ WORKDIR /build
 
 COPY package.json package-lock.json /build/
 COPY frontend/package.json /build/frontend/
-RUN npm update rollup
+RUN npm ci
 
 COPY frontend/ /build/frontend
 RUN npm run build
