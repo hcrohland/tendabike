@@ -42,6 +42,9 @@ RUN mkdir -p backend/app/src \
                 backend/provider/src/lib.rs; do \
         echo '// stub' > $f; \
     done
+ENV CARGO_INCREMENTAL=0 \
+    CARGO_PROFILE_RELEASE_DEBUG=0 \
+    CARGO_PROFILE_RELEASE_STRIP=symbols
 RUN cargo build --release
 
 # Build stage: starts from the pre-compiled target directory, so cargo
