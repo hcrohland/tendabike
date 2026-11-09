@@ -67,7 +67,7 @@ fn getpath(state: String) -> TbResult<String> {
 }
 
 #[derive(Deserialize)]
-pub struct PathParam {
+pub(crate) struct PathParam {
     inner: Option<String>,
 }
 

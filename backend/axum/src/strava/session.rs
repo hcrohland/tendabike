@@ -180,7 +180,7 @@ where
 /// checked `is_admin()`. It carries the acting session through, so the admin
 /// handlers can hand it to the registry (which verifies admin in a later
 /// `tb_strava` ticket) rather than rebuilding an identity-only one.
-pub struct AxumAdmin {
+pub(crate) struct AxumAdmin {
     session: RequestSession,
 }
 

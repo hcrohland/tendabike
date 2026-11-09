@@ -49,7 +49,7 @@ use error::*;
 
 mod stream;
 
-pub fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> Router {
+pub(crate) fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> Router {
     let mut router = Router::new()
         .nest("/api", domain::router())
         .nest("/source", source::router())

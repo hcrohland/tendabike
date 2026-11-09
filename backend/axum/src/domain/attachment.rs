@@ -18,7 +18,7 @@ use tb_domain::{ApiWrite, PartId, PartTypeId};
 /// Description of an Attach or Detach request
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
-pub struct Event {
+pub(crate) struct Event {
     /// the part which should be change
     part_id: PartId,
     /// when it the change happens
@@ -87,7 +87,7 @@ async fn detach_rt(
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
-pub struct Dispose {
+pub(crate) struct Dispose {
     part_id: PartId,
     #[serde(with = "time::serde::rfc3339")]
     time: OffsetDateTime,

@@ -35,32 +35,32 @@ use tb_domain::{
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct NewShop {
+pub(crate) struct NewShop {
     pub name: String,
     pub description: Option<String>,
     pub auto_approve: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct UpdateShop {
+pub(crate) struct UpdateShop {
     pub name: String,
     pub description: Option<String>,
     pub auto_approve: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct NewSubscriptionRequest {
+pub(crate) struct NewSubscriptionRequest {
     pub shop_id: i32,
     pub message: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SubscriptionResponseRequest {
+pub(crate) struct SubscriptionResponseRequest {
     pub message: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RegisterPartRequest {
+pub(crate) struct RegisterPartRequest {
     pub part_id: i32,
 }
 
