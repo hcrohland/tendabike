@@ -5,47 +5,17 @@ FROM rust:alpine AS rust-base
 RUN apk add  musl-dev
 RUN rustup set profile minimal
 
-# Dependency stage: compiles the full dependency graph from the
-# workspace manifests alone. Its cache key is a function of the
-# manifests, Cargo.lock and the rust base image, so it stays warm
-# across source-only commits. The compiled /app/target is a regular
-# layer (not a cache mount), which is what lets the remote cache in
-# .github/workflows/docker-image.yml (cache-from/cache-to type=gha)
-# share it across runners. Workspace members are stubbed below so no
-# real source feeds this stage; a lockfile change is the only thing
-# that forces a full rebuild here.
-FROM rust-base AS build-deps
-
+FROM rust-base AS chef
+RUN apk add cargo-chef   # or: cargo install cargo-chef --locked
 WORKDIR /app
-COPY Cargo.toml Cargo.lock ./
-COPY backend/app/Cargo.toml backend/app/
-COPY backend/domain/Cargo.toml backend/domain/
-COPY backend/axum/Cargo.toml backend/axum/
-COPY backend/strava/Cargo.toml backend/strava/
-COPY backend/sqlx/Cargo.toml backend/sqlx/
-COPY backend/exec/Cargo.toml backend/exec/
-COPY backend/provider/Cargo.toml backend/provider/
-RUN mkdir -p backend/app/src \
-             backend/domain/src \
-             backend/axum/src \
-             backend/strava/src \
-             backend/sqlx/src/bin \
-             backend/exec/src \
-             backend/provider/src \
-    && printf 'fn main() {}\n' > backend/app/src/main.rs \
-    && printf 'fn main() {}\n' > backend/sqlx/src/bin/build_snapshot.rs \
-    && for f in backend/domain/src/lib.rs \
-                backend/axum/src/lib.rs \
-                backend/strava/src/lib.rs \
-                backend/sqlx/src/lib.rs \
-                backend/exec/src/lib.rs \
-                backend/provider/src/lib.rs; do \
-        echo '// stub' > $f; \
-    done
-ENV CARGO_INCREMENTAL=0 \
-    CARGO_PROFILE_RELEASE_DEBUG=0 \
-    CARGO_PROFILE_RELEASE_STRIP=symbols
-RUN cargo build --release
+
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS build-deps
+COPY --from=planner /app/recipe.json .
+RUN cargo chef cook --release --recipe-path recipe.json
 
 # Build stage: starts from the pre-compiled target directory, so cargo
 # recompiles only the seven real workspace crates.
