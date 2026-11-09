@@ -27,8 +27,6 @@
 //! Most operations are done on the ActivityId though
 //!
 
-use std::collections::HashSet;
-
 use anyhow::Context;
 use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
@@ -242,7 +240,7 @@ impl Activity {
     ///
     /// returns all affected parts  
     /// checks authorization  
-    pub async fn update(
+    pub(crate) async fn update(
         self,
         user: &dyn Session,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
@@ -332,31 +330,14 @@ impl Activity {
     ///
     /// A `Vec` of `Activity` objects representing all activities for the given user.
     ///
-    pub async fn get_all(user: &UserId, store: &mut impl ActivityStore) -> TbResult<Vec<Activity>> {
+    pub(crate) async fn get_all(
+        user: &UserId,
+        store: &mut impl ActivityStore,
+    ) -> TbResult<Vec<Activity>> {
         store.activity_get_all(user).await
     }
 
-    pub async fn categories(
-        user: &dyn Session,
-        store: &mut impl ActivityStore,
-    ) -> TbResult<HashSet<PartTypeId>> {
-        let act_types = store
-            .activity_get_all(&user.user_id())
-            .await?
-            .into_iter()
-            .map(|a| a.what)
-            .collect::<HashSet<_>>();
-
-        let p_types = ActivityType::all_ordered()
-            .into_iter()
-            .filter(|t| act_types.contains(&t.id))
-            .map(|t| t.gear_type)
-            .collect::<HashSet<_>>();
-
-        Ok(p_types)
-    }
-
-    pub async fn csv2descend(
+    pub(crate) async fn csv2descend(
         data: impl std::io::Read,
         user: &dyn Session,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
@@ -421,7 +402,7 @@ impl Activity {
         Ok((summary, report))
     }
 
-    pub async fn set_default_part(
+    pub(crate) async fn set_default_part(
         gear_id: PartId,
         user: &dyn Session,
         store: &mut (

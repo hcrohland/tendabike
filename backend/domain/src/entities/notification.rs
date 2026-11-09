@@ -100,7 +100,7 @@ impl NotificationId {
     ///
     /// A persistent notification is upserted into the summary (now `seen`);
     /// a transient notification is deleted and its id tombstoned.
-    pub async fn read(
+    pub(crate) async fn read(
         self,
         recipient: UserId,
         store: &mut impl NotificationStore,
@@ -128,7 +128,7 @@ impl NotificationId {
     /// non-recipient gets `None` → `NotFound` (no existence leak). Applies to
     /// any of the recipient's notifications, transient or persistent —
     /// `read` is the lifecycle-aware path, `delete` is the removal.
-    pub async fn delete(
+    pub(crate) async fn delete(
         self,
         recipient: UserId,
         store: &mut impl NotificationStore,
@@ -244,7 +244,7 @@ impl Notification {
     ///
     /// Persistent notifications are upserted (now `seen`); transient
     /// notifications are deleted and their ids tombstoned.
-    pub async fn read_all(
+    pub(crate) async fn read_all(
         recipient: UserId,
         store: &mut impl NotificationStore,
     ) -> TbResult<Summary> {
