@@ -36,27 +36,27 @@ async fn backfill_walks_all_windows_and_queues_activities() {
         .returning(|_id| Ok(None));
     // Six one-month windows, each with one activity.
     queue(
-        "/athlete/a1/activities?oldest=1684448000&newest=1687040000",
+        "/athlete/a1/activities?oldest=2023-05-18&newest=2023-06-17",
         &format!("[{}]", activity_json("10", "2023-05-18T10:00:00Z")),
     );
     queue(
-        "/athlete/a1/activities?oldest=1687040000&newest=1689632000",
+        "/athlete/a1/activities?oldest=2023-06-17&newest=2023-07-17",
         &format!("[{}]", activity_json("11", "2023-06-18T10:00:00Z")),
     );
     queue(
-        "/athlete/a1/activities?oldest=1689632000&newest=1692224000",
+        "/athlete/a1/activities?oldest=2023-07-17&newest=2023-08-16",
         &format!("[{}]", activity_json("12", "2023-07-18T10:00:00Z")),
     );
     queue(
-        "/athlete/a1/activities?oldest=1692224000&newest=1694816000",
+        "/athlete/a1/activities?oldest=2023-08-16&newest=2023-09-15",
         &format!("[{}]", activity_json("13", "2023-08-18T10:00:00Z")),
     );
     queue(
-        "/athlete/a1/activities?oldest=1694816000&newest=1697408000",
+        "/athlete/a1/activities?oldest=2023-09-15&newest=2023-10-15",
         &format!("[{}]", activity_json("14", "2023-09-18T10:00:00Z")),
     );
     queue(
-        "/athlete/a1/activities?oldest=1697408000&newest=1700000000",
+        "/athlete/a1/activities?oldest=2023-10-15&newest=2023-11-14",
         &format!("[{}]", activity_json("15", "2023-10-18T10:00:00Z")),
     );
     let created = Arc::new(Mutex::new(Vec::new()));
@@ -95,14 +95,14 @@ async fn backfill_resumes_from_newest_queued_event() {
         .returning(|_id| Ok(Some(1697408000)));
     // Only the final window is fetched (from the cursor to `now`).
     queue(
-        "/athlete/a1/activities?oldest=1697408000&newest=1700000000",
+        "/athlete/a1/activities?oldest=2023-10-15&newest=2023-11-14",
         &format!("[{}]", activity_json("15", "2023-10-18T10:00:00Z")),
     );
     store.expect_icu_event_create().returning(|_e| Ok(()));
     backfill(UserId::from(1), now, &mut store).await.unwrap();
     assert_eq!(
         requests(),
-        vec!["/athlete/a1/activities?oldest=1697408000&newest=1700000000".to_string()],
+        vec!["/athlete/a1/activities?oldest=2023-10-15&newest=2023-11-14".to_string()],
         "only the window after the cursor is fetched"
     );
 }
@@ -137,7 +137,7 @@ async fn backfill_stops_on_429_and_keeps_queued_events() {
     // The first window's fetch is rate-limited: the walk stops (Ok — the
     // events queued so far commit), and no further window is fetched.
     queue_error(
-        "/athlete/a1/activities?oldest=1684448000&newest=1687040000",
+        "/athlete/a1/activities?oldest=2023-05-18&newest=2023-06-17",
         Error::TryAgain("rate limited"),
     );
     backfill(UserId::from(1), now, &mut store).await.unwrap();
@@ -159,12 +159,12 @@ async fn backfill_queues_nothing_when_history_is_empty() {
         .returning(|_id| Ok(None));
     // Every window returns an empty list: nothing is queued.
     for (oldest, newest) in [
-        (1684448000i64, 1687040000i64),
-        (1687040000, 1689632000),
-        (1689632000, 1692224000),
-        (1692224000, 1694816000),
-        (1694816000, 1697408000),
-        (1697408000, 1700000000),
+        ("2023-05-18", "2023-06-17"),
+        ("2023-06-17", "2023-07-17"),
+        ("2023-07-17", "2023-08-16"),
+        ("2023-08-16", "2023-09-15"),
+        ("2023-09-15", "2023-10-15"),
+        ("2023-10-15", "2023-11-14"),
     ] {
         queue(
             &format!("/athlete/a1/activities?oldest={oldest}&newest={newest}"),

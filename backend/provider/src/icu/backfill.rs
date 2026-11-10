@@ -25,9 +25,15 @@ use super::http::request_json;
 use super::{IcuDataStore, IcuEvent};
 use tb_domain::{Error, TbResult, UserId};
 
-/// A one-month backfill window, in seconds. The icu API's `oldest`/`newest`
-/// are unix seconds; a fixed 30-day window keeps the walk simple and
-/// resumable (the exact calendar month is immaterial to the cursor).
+/// Format a unix timestamp as `yyyy-MM-dd` (the icu API's date param format).
+fn date_str(ts: i64) -> String {
+    let dt = OffsetDateTime::from_unix_timestamp(ts).unwrap();
+    format!("{:04}-{:02}-{:02}", dt.year(), dt.month() as u8, dt.day())
+}
+
+/// A one-month backfill window, in seconds. A fixed 30-day window keeps the
+/// walk simple and resumable (the exact calendar month is immaterial to the
+/// cursor).
 const MONTH: i64 = 30 * 24 * 3600;
 /// How far back the onboarding backfill reaches (the "oldest desired date").
 const BACKFILL_MONTHS: i64 = 6;
@@ -81,7 +87,11 @@ pub(crate) async fn backfill(
         let newest = (oldest + MONTH).min(now);
         let activities: Vec<BackfillActivity> = match request_json(
             user_id,
-            &format!("/athlete/{icu_id}/activities?oldest={oldest}&newest={newest}"),
+            &format!(
+                "/athlete/{icu_id}/activities?oldest={}&newest={}",
+                date_str(oldest),
+                date_str(newest)
+            ),
             store,
         )
         .await
