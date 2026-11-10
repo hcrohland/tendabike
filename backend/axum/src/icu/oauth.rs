@@ -48,7 +48,8 @@ pub(crate) enum AuthResponse {
     Request {
         code: String,
         state: String,
-        scope: String,
+        #[serde(default)]
+        scope: Option<String>,
     },
     Error {
         error: String,
@@ -67,7 +68,9 @@ pub(crate) async fn login_authorized(
             return Ok(Redirect::to("/"));
         }
         AuthResponse::Request { code, state, scope } => {
-            if scope != SCOPES {
+            if let Some(scope) = &scope
+                && scope != SCOPES
+            {
                 warn!("Insufficient authorization {scope}");
                 return Ok(Redirect::to("/"));
             }
