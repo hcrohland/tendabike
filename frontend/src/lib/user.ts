@@ -9,6 +9,7 @@ import { Shop, shops } from "./shop.svelte";
 import { notifications, type Notification } from "./notification.svelte";
 import { myfetch } from "./utils";
 import { mapableState, type StateMap } from "./mapable.svelte";
+import type { Provider } from "./provider";
 import { getUser, setUser } from "./user.svelte";
 
 export { getUser, setUser };
@@ -55,6 +56,9 @@ export type User = {
   avatar: string | undefined;
   is_admin: boolean;
   onboarding_status: OnboardingStatus;
+  /// The activity provider the user connected with (`'strava'` | `'icu'`),
+  /// set at signup, immutable — one provider per user (spec #760).
+  provider: Provider;
 };
 
 /// The wire shape of `GET /api/user`: the full user record plus the

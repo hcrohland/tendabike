@@ -53,6 +53,7 @@ use tb_domain::{
     Summary, TbResult, UserId, UserStat, WriteOutcome,
 };
 use tb_provider::ProviderLane;
+use tb_provider::icu::{IcuStore, client::IcuAthleteInfo, event::IcuEvent};
 use tb_provider::strava::{
     StravaStore, StravaUser, activity,
     client::StravaAthleteInfo,
@@ -60,7 +61,7 @@ use tb_provider::strava::{
     gear,
 };
 
-use crate::api::{ProviderService, ServiceApi};
+use crate::api::{IcuService, ProviderService, ServiceApi};
 use crate::message::Request;
 use crate::{DomainFacade, Txn, TxnSource};
 
@@ -394,7 +395,7 @@ where
     S::Conn: Store + StravaStore,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
-    P::Event: Into<tb_provider::strava::event::Event>,
+    P::Event: Into<Option<tb_provider::strava::event::Event>>,
 {
     /// Register a shop stream for `shop_id` (spec #517): verify
     /// the caller is the shop owner in a transaction (a non-owner is
@@ -466,16 +467,22 @@ where
             match done.recv().await {
                 Ok(event) => {
                     // The correlation is a `tb_provider::strava` concern (the queue is
-                    // keyed by the `strava_id`, resolved inside the crate).
-                    let strava_event: tb_provider::strava::event::Event = event.into();
-                    let mut store = self.source.begin().await?;
-                    let is_our_sync =
-                        is_sync_for_user(&strava_event, user_id, event_time, &mut store).await?;
-                    store.commit().await?;
-                    if is_our_sync {
-                        return Ok(());
+                    // keyed by the `strava_id`, resolved inside the crate). The admin
+                    // sync is Strava-only: only a Strava event correlates (an icu
+                    // event on this channel is impossible under one-provider-per-user,
+                    // but the unified lane's event type is shared, so a non-Strava
+                    // one is skipped).
+                    if let Some(strava_event) = event.into() {
+                        let mut store = self.source.begin().await?;
+                        let is_our_sync =
+                            is_sync_for_user(&strava_event, user_id, event_time, &mut store)
+                                .await?;
+                        store.commit().await?;
+                        if is_our_sync {
+                            return Ok(());
+                        }
+                        // Some other message completed; keep waiting for ours.
                     }
-                    // Some other message completed; keep waiting for ours.
                 }
                 Err(_) => {
                     // The channel closed (or lagged): the executor settled
@@ -598,8 +605,17 @@ where
     /// rejects a non-Strava id), then the Strava URL.
     async fn activity_url(&self, session: Box<dyn Session>, id: ActivityId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let uri =
-            activity::strava_url(id, session, &tb_provider::DomainFacadeImpl, &mut store).await?;
+        let uri = if id.to_string().starts_with("icu:") {
+            tb_provider::icu::activity::activity_url(
+                id,
+                session,
+                &tb_provider::DomainFacadeImpl,
+                &mut store,
+            )
+            .await?
+        } else {
+            activity::strava_url(id, session, &tb_provider::DomainFacadeImpl, &mut store).await?
+        };
         store.commit().await?;
         Ok(uri)
     }
@@ -641,6 +657,91 @@ where
         .await?;
         store.commit().await?;
         Ok(())
+    }
+}
+
+/// The icu-specific service API's impl for the registry: the icu direct ops
+/// own their own transaction(s). The connection is a full `Store` (the entity
+/// sub-traits) plus `IcuStore` (the icu queue and token ops).
+#[async_trait::async_trait]
+impl<S, P, D> IcuService for Registry<S, P, D>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: Store + IcuStore,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
+{
+    /// The icu login upsert: one transaction
+    /// (`IcuUser::upsert` + `is_admin`), returning the identity and the admin
+    /// flag. The web layer keeps the query-parse, the scope check, the HMAC
+    /// path, the outbound exchange, and the tower-session write — the
+    /// wire-shape parsing stays beside the exchange it feeds.
+    async fn icu_login_from_token(
+        &self,
+        athlete: IcuAthleteInfo,
+        access_token: String,
+    ) -> TbResult<(UserId, bool)> {
+        let IcuAthleteInfo { id, name, .. } = athlete;
+        let mut store = self.source.begin().await?;
+        let user = tb_provider::icu::IcuUser::upsert(
+            id,
+            &name,
+            &access_token,
+            &tb_provider::DomainFacadeImpl,
+            &mut store,
+        )
+        .await?;
+        let is_admin = user.user_id().is_admin(&mut store).await?;
+        store.commit().await?;
+        Ok((user.user_id(), is_admin))
+    }
+
+    /// The icu webhook accept: one transaction
+    /// (`IcuEvent::accept` — the athlete validation and the `icu_events`
+    /// queue insert), then wake the user's executor (fire-and-forget,
+    /// `200`). A failed ingest 500s to intervals.icu (its own retry policy
+    /// applies).
+    async fn icu_accept_event(&self, event: IcuEvent) -> TbResult<()> {
+        let mut store = self.source.begin().await?;
+        let user_id = event.accept(&mut store).await?;
+        store.commit().await?;
+        // Fire the in-memory wake signal (spec §4.4): a pure signal to a
+        // running executor — it never spawns one, and the DB queue is the
+        // source of truth, so a missed wake only delays the event to the
+        // next spawn.
+        self.wake(user_id).await;
+        Ok(())
+    }
+
+    /// The per-user icu sync: the onboarding sync. One
+    /// transaction — the lane's `insert_sync`, which imports the user's icu
+    /// gear and runs the activity backfill (the date-window walk that queues
+    /// the user's past activities as `icu_events` rows). The executor's
+    /// normal loop then imports the queued activities in the background
+    /// (non-blocking: this returns once the gear is imported and the
+    /// activities are queued).
+    async fn icu_sync(
+        &self,
+        _session: Box<dyn Session>,
+        user_id: UserId,
+        event_time: i64,
+    ) -> TbResult<()> {
+        let mut store = self.source.begin().await?;
+        self.lane
+            .insert_sync(user_id, event_time, false, &mut store)
+            .await?;
+        store.commit().await?;
+        Ok(())
+    }
+
+    /// The icu deauthorization.
+    async fn icu_deauthorize(&self, _session: Box<dyn Session>, _tbid: UserId) -> TbResult<()> {
+        todo!("icu_deauthorize")
+    }
+
+    /// The icu user delete.
+    async fn icu_delete_user(&self, _session: Box<dyn Session>, _tbid: UserId) -> TbResult<()> {
+        todo!("icu_delete_user")
     }
 }
 

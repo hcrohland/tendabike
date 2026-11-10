@@ -125,7 +125,7 @@ async fn build_workshop_snapshot(pool: &DbPool) -> tb_domain::TbResult<StoreSnap
     let s = TestSession;
 
     // Create user 1 (the customer who owns all workshop parts).
-    store.user_create("Tenda", "Bike", &None).await?;
+    store.user_create("Tenda", "Bike", &None, "strava").await?;
 
     // ─── Bike A: Main Bike ────────────────────────────────────────────
     let bike_a = Part::create(

@@ -1,5 +1,6 @@
 pub use tb_sqlx::{DbPool, SqlxConn};
 
+mod icustore;
 mod prepopulated_data;
 mod snapshot;
 mod store;

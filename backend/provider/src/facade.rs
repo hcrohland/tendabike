@@ -12,7 +12,8 @@
 use time::OffsetDateTime;
 
 use tb_domain::{
-    Activity, ActivityId, Part, PartId, PartTypeId, Session, Stat, Store, Summary, TbResult, UserId,
+    Activity, ActivityId, Notification, NotificationKind, NotificationLifecycle,
+    NotificationSubject, Part, PartId, PartTypeId, Session, Stat, Store, Summary, TbResult, UserId,
 };
 
 /// The provider's door into the domain (spec #781): the operations a provider
@@ -79,12 +80,15 @@ pub trait DomainFacade<C: Send + Sync>: Send + Sync {
     async fn part(&self, id: PartId, user: Box<dyn Session>, store: &mut C) -> TbResult<Part>;
 
     // ── User ─────────────────────────────────────────────────────────────
-    /// Create a user (the domain's `UserId::create`).
+    /// Create a user (the domain's `UserId::create`). `provider` is the
+    /// activity provider the user connected with (`'strava'` | `'icu'`), set
+    /// at signup and immutable (spec #763).
     async fn create_user(
         &self,
         firstname: &str,
         lastname: &str,
         avatar: &Option<String>,
+        provider: &str,
         store: &mut C,
     ) -> TbResult<UserId>;
 
@@ -104,6 +108,20 @@ pub trait DomainFacade<C: Send + Sync>: Send + Sync {
     /// Delete the user plus everything they own (the domain's
     /// `UserId::delete`).
     async fn delete_user(&self, id: &UserId, store: &mut C) -> TbResult<()>;
+
+    // ── Notification ─────────────────────────────────────────────────────
+    /// Create a notification (the domain's `Notification::create`): the
+    /// store assigns the id and timestamps it. The provider's only door to
+    /// mint a notification (e.g. the icu stub-skip notice, spec #764).
+    async fn create_notification(
+        &self,
+        recipient: UserId,
+        lifecycle: NotificationLifecycle,
+        kind: NotificationKind,
+        subject: NotificationSubject,
+        message: Option<String>,
+        store: &mut C,
+    ) -> TbResult<Notification>;
 }
 
 /// The concrete [`DomainFacade`]: a stateless unit struct that forwards each
@@ -167,9 +185,10 @@ impl<C: Store + Sync + 'static> DomainFacade<C> for DomainFacadeImpl {
         firstname: &str,
         lastname: &str,
         avatar: &Option<String>,
+        provider: &str,
         store: &mut C,
     ) -> TbResult<UserId> {
-        UserId::create(firstname, lastname, avatar, store).await
+        UserId::create(firstname, lastname, avatar, provider, store).await
     }
 
     async fn update_user(
@@ -190,6 +209,18 @@ impl<C: Store + Sync + 'static> DomainFacade<C> for DomainFacadeImpl {
     async fn delete_user(&self, id: &UserId, store: &mut C) -> TbResult<()> {
         id.delete(store).await
     }
+
+    async fn create_notification(
+        &self,
+        recipient: UserId,
+        lifecycle: NotificationLifecycle,
+        kind: NotificationKind,
+        subject: NotificationSubject,
+        message: Option<String>,
+        store: &mut C,
+    ) -> TbResult<Notification> {
+        Notification::create(recipient, lifecycle, kind, subject, message, store).await
+    }
 }
 
 #[cfg(test)]
@@ -207,6 +238,7 @@ mod tests {
             avatar: None,
             is_admin: false,
             onboarding_status: OnboardingStatus::Completed,
+            provider: "strava".to_string(),
         }
     }
 
@@ -245,10 +277,10 @@ mod tests {
         let mut store = MockStore::new();
         store
             .expect_user_create()
-            .returning(|_f, _l, _a| Ok(user(UserId::from(42))));
+            .returning(|_f, _l, _a, _p| Ok(user(UserId::from(42))));
         let facade = DomainFacadeImpl;
         let id = facade
-            .create_user("first", "last", &None, &mut store)
+            .create_user("first", "last", &None, "strava", &mut store)
             .await?;
         assert_eq!(id, UserId::from(42));
         Ok(())

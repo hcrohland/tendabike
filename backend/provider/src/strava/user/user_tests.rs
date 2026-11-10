@@ -18,15 +18,15 @@ async fn upsert_creates_new_user() -> TbResult<()> {
     store
         .expect_stravauser_get_by_stravaid()
         .returning(|_id| Ok(None));
-    facade
-        .expect_create_user()
-        .returning(move |firstname, lastname, _avatar, _store| {
+    facade.expect_create_user().returning(
+        move |firstname, lastname, _avatar, _provider, _store| {
             created_user_rec
                 .lock()
                 .unwrap()
                 .replace((firstname.to_string(), lastname.to_string()));
             Ok(UserId::from(1))
-        });
+        },
+    );
     store.expect_stravauser_create().returning(move |su| {
         created_strava_rec.lock().unwrap().replace(su.clone());
         Ok(su)
@@ -116,7 +116,7 @@ async fn upsert_without_refresh_is_disabled() -> TbResult<()> {
         .returning(|_id| Ok(None));
     facade
         .expect_create_user()
-        .returning(|_f, _l, _a, _s| Ok(UserId::from(1)));
+        .returning(|_f, _l, _a, _p, _s| Ok(UserId::from(1)));
     store.expect_stravauser_create().returning(Ok);
     let user =
         StravaUser::upsert(43.into(), "First", "Last", &None, None, &facade, &mut store).await?;

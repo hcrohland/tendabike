@@ -12,7 +12,8 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "firstname": "Tenda",
       "avatar": null,
       "is_admin": false,
-      "onboarding_status": "pending"
+      "onboarding_status": "pending",
+      "provider": "strava"
     }
   ],
   "parts": [

@@ -37,6 +37,7 @@ describe("ToyGroup", () => {
       avatar: undefined,
       is_admin: false,
       onboarding_status: "completed",
+      provider: "strava",
     });
     parts.setMap([]);
     activities.setMap([]);

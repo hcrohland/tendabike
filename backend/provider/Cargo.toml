@@ -12,7 +12,7 @@ log = { workspace = true }
 time = { workspace = true, features = ["serde"] }
 mockall = { workspace = true, optional = true }
 
-# Strava-specific dependencies (gated on the `strava` feature)
+# Provider-specific dependencies (gated on the `strava` / `icu` features)
 reqwest = { workspace = true, optional = true }
 oauth2 = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
@@ -23,8 +23,18 @@ derive_more = { workspace = true, features = ["from", "into", "display"], option
 async-recursion = { workspace = true, optional = true }
 
 [features]
-default = ["strava"]
+default = ["strava", "icu"]
 strava = [
+    "dep:reqwest",
+    "dep:oauth2",
+    "dep:serde",
+    "dep:serde_derive",
+    "dep:serde_json",
+    "dep:anyhow",
+    "dep:derive_more",
+    "dep:async-recursion",
+]
+icu = [
     "dep:reqwest",
     "dep:oauth2",
     "dep:serde",
@@ -40,6 +50,7 @@ test-support = ["dep:mockall"]
 tokio = { workspace = true, features = ["macros", "rt"] }
 tb_domain = { workspace = true, features = ["test-support"] }
 mockall = { workspace = true }
+uuid = { workspace = true, features = ["v7"] }
 
 [lib]
 doctest = false

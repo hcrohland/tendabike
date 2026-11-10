@@ -20,6 +20,9 @@ pub trait UserStore {
     ///
     /// * `firstname_` - The first name of the user.
     /// * `lastname_` - The last name of the user.
+    /// * `avatar_` - The user's avatar URL, if any.
+    /// * `provider_` - The activity provider the user connected with
+    ///   (`'strava'` | `'icu'`); set at signup, immutable (spec #763).
     ///
     /// # Returns
     ///
@@ -29,6 +32,7 @@ pub trait UserStore {
         firstname: &str,
         lastname: &str,
         avatar: &Option<String>,
+        provider: &str,
     ) -> TbResult<User>;
 
     /// Updates an existing user.

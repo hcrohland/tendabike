@@ -6,6 +6,12 @@
   import { types } from "../lib/types";
   import { getUser, users } from "../lib/user";
   import UsageChips from "../Usage/UsageChips.svelte";
+  import ProviderMark from "../Widgets/ProviderMark.svelte";
+  import {
+    providerOfActivityId,
+    providerMeta,
+    gearSourceUrl,
+  } from "../lib/provider";
   import * as m from "../../paraglide/messages";
 
   interface Props {
@@ -16,6 +22,14 @@
   }
 
   let { part, summary = false, gridclass, children }: Props = $props();
+
+  let gearProvider = $derived(
+    part.source ? providerOfActivityId(part.source) : undefined,
+  );
+  // Known gap: no provider-neutral `/source/gear/` redirect route exists in
+  // the backend yet, so the gear "view on" link uses the hard-coded provider
+  // URLs from `gearSourceUrl` instead of the redirect route.
+  let gearUrl = $derived(part.source ? gearSourceUrl(part.source) : undefined);
 
   function model(part: Part) {
     if (part.model == "" && part.vendor == "") {
@@ -65,14 +79,16 @@
     <!-- Meta line: model · type · date range -->
     <p class="text-sm mb-3">
       {model(part)}{typeName(part) ? " · " + typeName(part) : ""}
-      {#if part.what == 1}
-        <a href={"/strava/bikes/" + part.id} target="_blank">
-          <img
-            src="/strava_grey.png"
-            alt={m.gearcard_view_on_strava()}
-            title={m.gearcard_view_on_strava()}
-            class="inline ml-1"
-          />
+      {#if gearProvider && gearUrl}
+        <a href={gearUrl} target="_blank">
+          <span
+            class="inline ml-1 align-middle"
+            title={m.gearcard_view_on({
+              provider: providerMeta[gearProvider].name,
+            })}
+          >
+            <ProviderMark provider={gearProvider} size="sm" />
+          </span>
         </a>
       {/if}
       <span class="text-text-1">

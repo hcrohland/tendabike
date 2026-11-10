@@ -26,10 +26,15 @@ struct DbNotification {
 /// two nullable id columns.
 impl From<DbNotification> for Notification {
     fn from(db: DbNotification) -> Self {
+        // The subject is resolved from the two nullable id columns: an
+        // id (in exactly one column) names a subscription or a part; no id
+        // at all is the id-less `StubsSkipped` subject (spec #764) — the
+        // `kind` column is the only producer of that shape.
         let subject = match (db.subscription_id, db.part_id) {
             (Some(id), None) => NotificationSubject::Subscription(SubscriptionId::from(id)),
             (None, Some(id)) => NotificationSubject::Part(PartId::from(id)),
-            _ => panic!("notification subject must have exactly one of subscription_id or part_id"),
+            (None, None) => NotificationSubject::StubsSkipped,
+            _ => panic!("notification subject must have at most one of subscription_id or part_id"),
         };
         Self {
             id: db.id.into(),
@@ -60,6 +65,7 @@ fn kind_to_str(k: NotificationKind) -> &'static str {
         NotificationKind::SubCancelled => "sub_cancelled",
         NotificationKind::PartRegistered => "part_registered",
         NotificationKind::PartUnregistered => "part_unregistered",
+        NotificationKind::StubsSkipped => "stubs_skipped",
     }
 }
 
@@ -68,6 +74,8 @@ fn subject_to_cols(subject: &NotificationSubject) -> (Option<i32>, Option<i32>) 
     match subject {
         NotificationSubject::Subscription(id) => (Some(i32::from(*id)), None),
         NotificationSubject::Part(id) => (None, Some(i32::from(*id))),
+        // The id-less subject writes neither id column (spec #764).
+        NotificationSubject::StubsSkipped => (None, None),
     }
 }
 
@@ -240,6 +248,7 @@ mod tests {
         let kind_str = match subject {
             NotificationSubject::Subscription(_) => "sub_request",
             NotificationSubject::Part(_) => "part_registered",
+            NotificationSubject::StubsSkipped => "stubs_skipped",
         };
         DbNotification {
             id: uuid(),

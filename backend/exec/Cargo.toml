@@ -7,7 +7,7 @@ edition = { workspace = true }
 
 [dependencies]
 tb_domain = { workspace = true }
-tb_provider = { workspace = true, features = ["strava"] }
+tb_provider = { workspace = true, features = ["strava", "icu"] }
 async-trait = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
@@ -33,7 +33,7 @@ mockall = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tb_domain = { workspace = true, features = ["test-support"] }
-tb_provider = { workspace = true, features = ["strava", "test-support"] }
+tb_provider = { workspace = true, features = ["strava", "icu", "test-support"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
 time = { workspace = true }
 uuid = { workspace = true }
