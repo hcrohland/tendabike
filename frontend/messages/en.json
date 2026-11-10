@@ -22,7 +22,6 @@
   "connect_feature_reconnect": "One tap to reconnect",
   "connect_button": "Connect {name}",
   "gearcard_unknown_model": "unknown model",
-  "gearcard_view_on_strava": "View on Strava",
   "gearcard_view_on": "View on {provider}",
   "time_since": "since",
   "time_days": "days",

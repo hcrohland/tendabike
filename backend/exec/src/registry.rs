@@ -651,12 +651,9 @@ where
     }
 }
 
-/// The icu-specific service API's impl for the registry (spec #763): the icu
-/// direct ops own their own transaction(s). This ticket lands the OAuth
-/// connect flow — `icu_login_from_token` is the durable one (one transaction,
-/// `IcuUser::upsert` + `is_admin`); the remaining ops are stubs for later
-/// tickets. The connection is a full `Store` (the entity sub-traits) plus
-/// `IcuStore` (the icu queue and token ops).
+/// The icu-specific service API's impl for the registry: the icu direct ops
+/// own their own transaction(s). The connection is a full `Store` (the entity
+/// sub-traits) plus `IcuStore` (the icu queue and token ops).
 #[async_trait::async_trait]
 impl<S, P, D> IcuService for Registry<S, P, D>
 where
@@ -665,7 +662,7 @@ where
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
-    /// The icu login upsert (spec #763): one transaction
+    /// The icu login upsert: one transaction
     /// (`IcuUser::upsert` + `is_admin`), returning the identity and the admin
     /// flag. The web layer keeps the query-parse, the scope check, the HMAC
     /// path, the outbound exchange, and the tower-session write — the
@@ -698,7 +695,7 @@ where
         Ok((user.user_id(), is_admin))
     }
 
-    /// The icu webhook accept (spec #764): one transaction
+    /// The icu webhook accept: one transaction
     /// (`IcuEvent::accept` — the athlete validation and the `icu_events`
     /// queue insert), then wake the user's executor (fire-and-forget,
     /// `200`). A failed ingest 500s to intervals.icu (its own retry policy
@@ -715,7 +712,7 @@ where
         Ok(())
     }
 
-    /// The per-user icu sync (spec #765/#766): the onboarding sync. One
+    /// The per-user icu sync: the onboarding sync. One
     /// transaction — the lane's `insert_sync`, which imports the user's icu
     /// gear and runs the activity backfill (the date-window walk that queues
     /// the user's past activities as `icu_events` rows). The executor's
@@ -736,14 +733,14 @@ where
         Ok(())
     }
 
-    /// The icu deauthorization (spec #763). Stub for a later ticket.
+    /// The icu deauthorization.
     async fn icu_deauthorize(&self, _session: Box<dyn Session>, _tbid: UserId) -> TbResult<()> {
-        todo!("icu_deauthorize: landed in a later ticket (spec #763)")
+        todo!("icu_deauthorize")
     }
 
-    /// The icu user delete (spec #763). Stub for a later ticket.
+    /// The icu user delete.
     async fn icu_delete_user(&self, _session: Box<dyn Session>, _tbid: UserId) -> TbResult<()> {
-        todo!("icu_delete_user: landed in a later ticket (spec #763)")
+        todo!("icu_delete_user")
     }
 }
 

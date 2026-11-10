@@ -195,21 +195,20 @@ pub trait ProviderService: Send + Sync {
     async fn delete_user(&self, session: Box<dyn Session>, tbid: UserId) -> TbResult<()>;
 }
 
-/// The icu-specific service API (spec #763): the direct ops that are
-/// icu-specific (OAuth, webhook, sync, deauthorize, etc.). The icu peer of
+/// The icu-specific service API: the direct ops that are icu-specific
+/// (OAuth, webhook, sync, deauthorize, etc.). The icu peer of
 /// [`ProviderService`] — the `Registry` implements both, and presentation
 /// layers hold `Arc<dyn ServiceApi>` for the generic ops,
 /// `Arc<dyn ProviderService>` for the Strava-specific ones, and
 /// `Arc<dyn IcuService>` for the icu-specific ones.
 ///
-/// This ticket (#763) lands the schema and the OAuth connect flow:
 /// [`IcuService::icu_login_from_token`] is the durable one (one transaction —
 /// `IcuUser::upsert` + `is_admin`, no refresh token — intervals.icu tokens
-/// are durable). The remaining ops are stubs filled in by later tickets.
+/// are durable).
 #[cfg_attr(feature = "test-support", mockall::automock)]
 #[async_trait::async_trait]
 pub trait IcuService: Send + Sync {
-    /// The icu login upsert (spec #763): one transaction
+    /// The icu login upsert: one transaction
     /// (`IcuUser::upsert` + `is_admin`), returning the identity and the admin
     /// flag. The web layer keeps the query-parse, the scope check, the HMAC
     /// path, the outbound exchange, and the tower-session write.
@@ -219,12 +218,12 @@ pub trait IcuService: Send + Sync {
         access_token: String,
     ) -> TbResult<(UserId, bool)>;
 
-    /// The icu webhook accept (spec #763): one transaction (the queue insert),
-    /// then the wake if a user was queued. Stub for a later ticket.
+    /// The icu webhook accept: one transaction (the queue insert),
+    /// then the wake if a user was queued.
     async fn icu_accept_event(&self, event: IcuEvent) -> TbResult<()>;
 
-    /// The per-user icu sync (spec #763): enqueue an icu `Sync` event and
-    /// await its completion. Stub for a later ticket.
+    /// The per-user icu sync: enqueue an icu `Sync` event and
+    /// await its completion.
     async fn icu_sync(
         &self,
         session: Box<dyn Session>,
@@ -232,12 +231,11 @@ pub trait IcuService: Send + Sync {
         event_time: i64,
     ) -> TbResult<()>;
 
-    /// The icu deauthorization (spec #763): one transaction — the target's
-    /// session built in-txn, then the icu disable. Stub for a later ticket.
+    /// The icu deauthorization: one transaction — the target's
+    /// session built in-txn, then the icu disable.
     async fn icu_deauthorize(&self, session: Box<dyn Session>, tbid: UserId) -> TbResult<()>;
 
-    /// The icu user delete (spec #763): one transaction — the target's
+    /// The icu user delete: one transaction — the target's
     /// session built in-txn, then the icu disable plus the row deletions.
-    /// Stub for a later ticket.
     async fn icu_delete_user(&self, session: Box<dyn Session>, tbid: UserId) -> TbResult<()>;
 }

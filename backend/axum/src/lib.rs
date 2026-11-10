@@ -49,6 +49,8 @@ use appstate::*;
 mod error;
 use error::*;
 
+mod oauth_common;
+
 mod stream;
 
 fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> Router {

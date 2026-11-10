@@ -23,7 +23,7 @@ fn activity_id(id: &str) -> ActivityId {
 
 /// A gear reference carried by an icu activity.
 #[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct IcuGear {
+pub(crate) struct IcuGearRef {
     id: String,
 }
 
@@ -52,7 +52,7 @@ pub(crate) struct IcuActivity {
     /// Total climbing, in meters.
     pub total_elevation_gain: Option<f64>,
     /// The gear the activity used (its id is namespaced as `icu:<id>`).
-    pub gear: Option<IcuGear>,
+    pub gear: Option<IcuGearRef>,
     /// Energy output, in joules (→ the domain's `energy`).
     pub icu_joules: Option<f64>,
     /// The remaining intervals.icu fields (parsed, not modeled in the domain):

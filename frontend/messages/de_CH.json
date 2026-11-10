@@ -22,7 +22,6 @@
   "connect_feature_reconnect": "Mit eme Tipp nöi verbinde",
   "connect_button": "Verbind {name}",
   "gearcard_unknown_model": "unbekannts Modell",
-  "gearcard_view_on_strava": "Uf Strava aluege",
   "gearcard_view_on": "Uf {provider} aluege",
   "time_since": "sit",
   "time_days": "Täg",

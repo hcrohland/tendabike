@@ -26,6 +26,9 @@
   let gearProvider = $derived(
     part.source ? providerOfActivityId(part.source) : undefined,
   );
+  // Known gap: no provider-neutral `/source/gear/` redirect route exists in
+  // the backend yet, so the gear "view on" link uses the hard-coded provider
+  // URLs from `gearSourceUrl` instead of the redirect route.
   let gearUrl = $derived(part.source ? gearSourceUrl(part.source) : undefined);
 
   function model(part: Part) {
