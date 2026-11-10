@@ -33,8 +33,8 @@ use log::{debug, trace};
 use oauth2::AccessToken;
 use serde::de::DeserializeOwned;
 
-use crate::client::{HTTP_CLIENT, STRAVACLIENT};
-use crate::{StravaDataStore, StravaId, get_token};
+use super::client::{HTTP_CLIENT, STRAVACLIENT};
+use super::{StravaDataStore, StravaId, get_token};
 use tb_domain::{Error, TbResult, UserId};
 
 const API: &str = "https://www.strava.com/api/v3";
@@ -75,12 +75,12 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
     // rather than pretend (the seam suite's stubs never import from Strava;
     // the onboarding test expects the loop to panic on the sync's fetch).
     #[cfg(any(test, feature = "test-support"))]
-    if let Some(body) = crate::test_support::pop_test_canned(uri) {
+    if let Some(body) = super::test_support::pop_test_canned(uri) {
         let body = body?;
         return Ok(serde_json::from_str(&body).context("Could not parse response body")?);
     }
     #[cfg(feature = "test-support")]
-    match crate::test_support::global_canned_response(uri) {
+    match super::test_support::global_canned_response(uri) {
         Some(json) => {
             return Ok(serde_json::from_str(&json).context("Could not parse response body")?);
         }
@@ -105,8 +105,8 @@ pub(crate) async fn deauthorize(user_id: UserId, store: &mut impl StravaDataStor
     // wide `CANNED_STRAVA` global does not cover the revocation — the seam
     // suite's real session attempts the real (non-fatal) revocation.
     #[cfg(any(test, feature = "test-support"))]
-    if crate::test_support::in_test_mode() {
-        crate::test_support::record_deauthorize(strava_id);
+    if super::test_support::in_test_mode() {
+        super::test_support::record_deauthorize(strava_id);
         debug!("user {} token revoked (test)", strava_id);
         return Ok(());
     }
@@ -134,7 +134,7 @@ async fn get_strava(access: &AccessToken, uri: &str) -> TbResult<String> {
 
     // Update the rate-limit state from the response headers: every Strava
     // API response carries X-RateLimit-* headers (success or error).
-    crate::ratelimit::update_from_headers(resp.headers());
+    super::ratelimit::update_from_headers(resp.headers());
 
     let status = resp.status();
     if status.is_success() {

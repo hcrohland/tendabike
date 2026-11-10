@@ -1,9 +1,9 @@
 use log::error;
 use std::collections::HashMap;
 
-use crate::activity::StravaActivity;
-use crate::*;
-use tb_provider::DomainFacade;
+use super::activity::StravaActivity;
+use super::*;
+use crate::DomainFacade;
 
 #[derive(Debug, Serialize, Deserialize)]
 /// A struct representing an incoming Strava event.
@@ -482,7 +482,7 @@ pub(crate) async fn get_event(
 ) -> TbResult<QueueRead> {
     // Proactive rate-limit gate: if the budget is exhausted, report the
     // window boundary without dequeuing (the event stays queued).
-    if let Some(until) = crate::ratelimit::limited_until() {
+    if let Some(until) = super::ratelimit::limited_until() {
         return Ok(QueueRead::Limited { until });
     }
 

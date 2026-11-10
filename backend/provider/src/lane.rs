@@ -22,9 +22,10 @@
 //! probe and process a provider's event queue. The loop is generic over this
 //! trait: it calls `probe` to read the provider's queue (one transaction's
 //! housekeeping) and `process` to handle a queued event (the work
-//! transaction), and never names a concrete provider. Each provider crate
-//! implements it for its own lane (e.g. `tb_strava`); a second provider (a
-//! new crate) implements it too, and the loop works with it unchanged. The
+//! transaction), and never names a concrete provider. Each provider
+//! implements it for its own lane (e.g. the Strava module in `tb_provider`);
+//! a second provider (a new feature module) implements it too, and the loop
+//! works with it unchanged. The
 //! [`Probe`] outcome is generic over the provider's event type, so the
 //! loop's select and reclaim policy are provider-agnostic.
 
@@ -59,9 +60,9 @@ pub enum Probe<E> {
 /// write), and `all_stats` (the admin read). These are provider-specific: a
 /// second provider implements them for its own domain.
 ///
-/// Each provider crate implements it for its own lane; a second provider (a
-/// new crate implementing [`ProviderLane`] + its data store) plugs in without
-/// touching the loop.
+/// Each provider module implements it for its own lane; a second provider (a
+/// new feature module implementing [`ProviderLane`] + its data store) plugs in
+/// without touching the loop.
 #[async_trait::async_trait]
 pub trait ProviderLane: Send + Sync {
     /// The provider's event type.

@@ -6,7 +6,7 @@ use sqlx::FromRow;
 
 use crate::{SqlxConn, into_domain, option_into, vec_into};
 use tb_domain::{TbResult, UserId};
-use tb_strava::{StravaId, StravaUser, event::Event};
+use tb_provider::strava::{StravaId, StravaUser, event::Event};
 
 #[derive(Clone, Debug, Default, FromRow)]
 struct DbStravaUser {
@@ -114,7 +114,7 @@ impl From<DbEvent> for Event {
 }
 
 #[async_trait::async_trait]
-impl<'c> tb_strava::StravaDataStore for SqlxConn<'c> {
+impl<'c> tb_provider::strava::StravaDataStore for SqlxConn<'c> {
     async fn strava_event_create(&mut self, e: Event) -> TbResult<()> {
         let e: DbEvent = e.into();
         sqlx::query_as!(
@@ -307,7 +307,7 @@ impl<'c> tb_strava::StravaDataStore for SqlxConn<'c> {
     }
 }
 
-impl<'c> tb_strava::StravaStore for SqlxConn<'c> {}
+impl<'c> tb_provider::strava::StravaStore for SqlxConn<'c> {}
 
 #[cfg(test)]
 mod tests {
@@ -367,9 +367,11 @@ mod tests {
         updates.insert("private".to_string(), "false".to_string());
         let event = Event {
             id: Some(7),
-            object_type: tb_strava::event::ObjectType::try_from("activity".to_string()).unwrap(),
+            object_type: tb_provider::strava::event::ObjectType::try_from("activity".to_string())
+                .unwrap(),
             object_id: 99,
-            aspect_type: tb_strava::event::AspectType::try_from("update".to_string()).unwrap(),
+            aspect_type: tb_provider::strava::event::AspectType::try_from("update".to_string())
+                .unwrap(),
             updates,
             owner_id: StravaId::from(42),
             subscription_id: 5,

@@ -19,7 +19,7 @@ use std::sync::Mutex;
 
 use http::{HeaderMap, HeaderName};
 
-use tb_provider::{Cadence, RateLimiter, WindowSpec};
+use crate::{Cadence, RateLimiter, WindowSpec};
 
 /// Strava's 4-window header mapping: the overall and read scopes, each a
 /// 15-minute and a daily window reading the same header pair.

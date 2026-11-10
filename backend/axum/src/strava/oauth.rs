@@ -21,7 +21,7 @@ use std::sync::LazyLock;
 
 use crate::{appstate::AppState, error::AppError};
 use tb_domain::{Error, TbResult};
-use tb_strava::client::{HTTP_CLIENT, SCOPES, STRAVACLIENT, StravaAthleteInfo};
+use tb_provider::strava::client::{HTTP_CLIENT, SCOPES, STRAVACLIENT, StravaAthleteInfo};
 
 static CSRF_KEY: LazyLock<Vec<u8>> = LazyLock::new(|| {
     if let Ok(secret) = std::env::var("CSRF_SECRET") {
@@ -115,7 +115,7 @@ pub(crate) async fn login_authorized(
         }
     };
 
-    // Get an auth token (the outbound exchange — a `tb_strava` op, no seam)
+    // Get an auth token (the outbound exchange — a `tb_provider::strava` op, no seam)
     let token = STRAVACLIENT
         .exchange_code(AuthorizationCode::new(code))
         .request_async(&*HTTP_CLIENT)
@@ -145,7 +145,7 @@ pub(crate) async fn login_authorized(
         .await?;
 
     // The tower-session write stays in axum (spec #558 §5.2): the token
-    // flows through the `tb_strava` `TokenCache`, not the cookie.
+    // flows through the `tb_provider::strava` `TokenCache`, not the cookie.
     super::RequestSession::create_from_token(user_id, is_admin, session).await?;
 
     debug!("Redirecting to {path}");

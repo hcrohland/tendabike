@@ -19,7 +19,7 @@ anyhow = { workspace = true }
 time = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-tb_strava = { workspace = true }
+tb_provider = { workspace = true, features = ["strava"] }
 tb_exec = { workspace = true }
 tb_domain = { workspace = true }
 uuid = { workspace = true }
@@ -35,8 +35,7 @@ doctest = false
 
 [dev-dependencies]
 tb_domain = { workspace = true, features = ["test-support"] }
-tb_provider = { workspace = true }
-tb_strava = { workspace = true, features = ["test-support"] }
+tb_provider = { workspace = true, features = ["strava", "test-support"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 sqlx = { workspace = true, features = ["runtime-tokio", "time", "uuid", "macros", "chrono"] }
 dotenvy = { workspace = true }

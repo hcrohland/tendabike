@@ -19,9 +19,9 @@
 */
 
 //! The Strava provider lane: the [`ProviderLane`] impl for the Strava driver.
-//! Lives in `tb_strava` because the lane bridges the loop's [`ProviderLane`]
-//! seam (in `tb_provider`) to `tb_strava`'s `get_event`/`process` ops — the
-//! crate that owns those ops owns the lane. `probe` delegates to
+//! Lives in the Strava module because the lane bridges the loop's
+//! [`ProviderLane`] seam to the module's `get_event`/`process` ops — the code
+//! that owns those ops owns the lane. `probe` delegates to
 //! [`crate::event::get_event`] and `process` to [`crate::event::process`]. The
 //! lane is generic over the store type `S` (the provider's full store — the
 //! transaction's connection): `type Store = S`, so the loop's transaction
@@ -29,15 +29,15 @@
 
 use std::marker::PhantomData;
 
+use crate::{Probe, ProviderLane};
 use tb_domain::{PartId, Summary, TbResult, UserId, UserStat};
-use tb_provider::{Probe, ProviderLane};
 
-use crate::StravaStore;
-use crate::event::{Event, QueueRead, get_event, process};
+use super::StravaStore;
+use super::event::{Event, QueueRead, get_event, process};
 
 /// The Strava provider lane: the [`ProviderLane`] impl for the Strava driver.
-/// The loop calls through it; a second provider (a new crate) implements
-/// [`ProviderLane`] too, and the loop works with it unchanged.
+/// The loop calls through it; a second provider (a new feature module)
+/// implements [`ProviderLane`] too, and the loop works with it unchanged.
 ///
 /// Generic over the store type `S` (the provider's full store — the
 /// transaction's connection): `type Store = S`, so the loop's transaction
@@ -120,9 +120,7 @@ where
     /// Delegates to [`crate::event::process`]. Returns the event's
     /// [`Summary`] on success, or `None` on a DB failure.
     async fn process(&self, user_id: UserId, store: &mut S) -> Option<Summary> {
-        process(user_id, &tb_provider::DomainFacadeImpl, store)
-            .await
-            .ok()
+        process(user_id, &crate::DomainFacadeImpl, store).await.ok()
     }
 
     /// Queue a sync event on the Strava event queue (the onboarding cutover's
@@ -136,7 +134,7 @@ where
         auto: bool,
         store: &mut S,
     ) -> TbResult<()> {
-        crate::event::insert_sync(user_id, time, auto, store).await
+        super::event::insert_sync(user_id, time, auto, store).await
     }
 
     /// Import the user's Strava gear, returning the created part ids (the
@@ -144,7 +142,7 @@ where
     /// transaction and reads the parts it created for the frame. Delegates to
     /// [`crate::user::StravaUser::update_gear`].
     async fn update_gear(&self, user_id: UserId, store: &mut S) -> TbResult<Vec<PartId>> {
-        crate::user::StravaUser::update_gear(user_id, &tb_provider::DomainFacadeImpl, store).await
+        super::user::StravaUser::update_gear(user_id, &crate::DomainFacadeImpl, store).await
     }
 
     /// Read every user's provider-neutral stat (the admin read's provider
@@ -152,6 +150,6 @@ where
     /// queued-event count and disabled flag. Delegates to
     /// [`crate::user::get_all_stats`].
     async fn all_stats(&self, store: &mut S) -> TbResult<Vec<UserStat>> {
-        crate::user::get_all_stats(&tb_provider::DomainFacadeImpl, store).await
+        super::user::get_all_stats(&crate::DomainFacadeImpl, store).await
     }
 }

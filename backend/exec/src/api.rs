@@ -48,7 +48,7 @@ use tb_domain::{
     ActivityId, ApiRead, ApiWrite, PartId, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
     UserStat, WriteOutcome,
 };
-use tb_strava::{client::StravaAthleteInfo, event::InEvent};
+use tb_provider::strava::{client::StravaAthleteInfo, event::InEvent};
 
 use crate::ExecutorStatus;
 
@@ -170,26 +170,26 @@ pub trait ProviderService: Send + Sync {
     /// branch), then the wake if a user was queued (fire-and-forget).
     async fn accept_event(&self, event: InEvent) -> TbResult<()>;
 
-    /// The gear redirect URL (spec #558 §5.2): the `tb_strava` `strava_url`
+    /// The gear redirect URL (spec #558 §5.2): the `tb_provider::strava` `strava_url`
     /// op for `id`, gated on the caller's ownership.
     async fn gear_url(&self, session: Box<dyn Session>, id: PartId) -> TbResult<String>;
 
-    /// The activity redirect URL (spec #558 §5.2): the `tb_strava`
+    /// The activity redirect URL (spec #558 §5.2): the `tb_provider::strava`
     /// `strava_url` op for `id`, gated on the caller's ownership.
     async fn activity_url(&self, session: Box<dyn Session>, id: ActivityId) -> TbResult<String>;
 
-    /// The user redirect URL (spec #558 §5.2): the `tb_strava` `strava_url`
+    /// The user redirect URL (spec #558 §5.2): the `tb_provider::strava` `strava_url`
     /// op for the target's tbid (no session: the route has no user context
     /// to gate on).
     async fn user_url(&self, id: UserId) -> TbResult<String>;
 
     /// The deauthorization (spec #558 §5.2): one transaction — the target's
-    /// session built in-txn, then `tb_strava::user_deauthorize`. The
+    /// session built in-txn, then `tb_provider::strava::user_deauthorize`. The
     /// existing queue race is preserved.
     async fn deauthorize(&self, session: Box<dyn Session>, tbid: UserId) -> TbResult<()>;
 
     /// The user delete (spec #558 §5.2): one transaction — the target's
-    /// session built in-txn, then `tb_strava::user_delete`. The existing
+    /// session built in-txn, then `tb_provider::strava::user_delete`. The existing
     /// queue race is preserved.
     async fn delete_user(&self, session: Box<dyn Session>, tbid: UserId) -> TbResult<()>;
 }

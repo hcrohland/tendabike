@@ -12,7 +12,7 @@ All `tb_exec` tests run in-memory (no database): the executor loop's control flo
   - the **provider lane** — [`MockLane`] is a `mockall` `mock!` witness for the `ProviderLane` seam (`probe`/`process`/`insert_sync`/`update_gear`/`all_stats`). **Strava** is stubbed (canned) through it for the gear-hydration / stats paths.
 
   The per-request tests assert on canned outcomes from these mocks — they verify the executor's behavior (how it drives each seam: `begin` → work → `commit`/`rollback`, and what it does with the results), not the seams'.
-- **What it delegates to the seam** — the **store I/O** (real Postgres) lives in `tb_sqlx`'s `executor_seam.rs` (see [`sqlx.md`](sqlx.md)); the **domain-level results** live in the `tb_domain` suite (see [`domain.md`](domain.md)); the **Strava JSON → Part mapping** lives in `tb_strava` (see [`strava.md`](strava.md)).
+- **What it delegates to the seam** — the **store I/O** (real Postgres) lives in `tb_sqlx`'s `executor_seam.rs` (see [`sqlx.md`](sqlx.md)); the **domain-level results** live in the `tb_domain` suite (see [`domain.md`](domain.md)); the **Strava JSON → Part mapping** lives in the Strava module of `tb_provider` (see [`strava.md`](strava.md)).
 
 ## Coverage
 

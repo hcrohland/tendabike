@@ -47,7 +47,7 @@ async fn rescan(admin: AxumAdmin, State(state): State<AppState>) -> Result<Statu
     // transaction (`Activity::rescan_all`), then stops every live executor
     // — open streams end, and each client's native reconnect + catch-up
     // snapshot re-hydrates it. The admin's acting session rides
-    // along (carried for the admin-verification `tb_strava` change).
+    // along (carried for the admin-verification `tb_provider::strava` change).
     state.provider.rescan(Box::new(admin.session())).await?;
     Ok(StatusCode::NO_CONTENT)
 }

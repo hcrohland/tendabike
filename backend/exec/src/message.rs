@@ -29,7 +29,7 @@
 //!   **FIFO total order per user** (spec #558 §3.2: a read enqueued after a
 //!   write sees that write — the ordering contract a second driver gets).
 //! - **Strava events** — the existing `strava_events` database queue, read
-//!   latest-per-object (`tb_strava::event::get_event`).
+//!   latest-per-object (`tb_provider::strava::event::get_event`).
 //!
 //! The loop also owns the SSE push sink: a `broadcast` channel of
 //! [`Summary`] frames, one frame per **non-empty** completed message
@@ -40,7 +40,7 @@ use tb_domain::{
     ApiRead, ApiWrite, ReadOutcome, Session, Summary, TbResult, UserStat, WriteOutcome,
 };
 #[cfg(test)]
-use tb_strava::event::Event;
+use tb_provider::strava::event::Event;
 #[cfg(test)]
 use tokio::sync::broadcast;
 use tokio::sync::{mpsc, oneshot};
@@ -71,10 +71,10 @@ pub(crate) enum Message {
 ///   runs it in its own transaction (read-only within it by spec) and
 ///   resolves the read's data (a [`ReadOutcome`]) or the error.
 /// - [`Request::Gear`] — the hydration write (spec #558 §4): `update_gear`
-///   is a `tb_strava` op, so it is dispatched loop-side, not an `ApiWrite`
+///   is a `tb_provider::strava` op, so it is dispatched loop-side, not an `ApiWrite`
 ///   variant; the reply carries the created-parts `Summary` (the frame).
 /// - [`Request::AllStats`] — the admin `GET /user/all` read (spec #558
-///   §3.3): `get_all_stats` is a `tb_strava` op, so it rides the admin
+///   §3.3): `get_all_stats` is a `tb_provider::strava` op, so it rides the admin
 ///   user's channel as an exec-level variant, dispatched loop-side.
 ///
 /// `pub` (the fields stay private) because the integration (seam) suite —

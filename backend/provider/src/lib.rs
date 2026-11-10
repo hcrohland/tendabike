@@ -27,7 +27,7 @@
 //!
 //! [`lane`] — [`ProviderLane`] + its [`Probe`] outcome, the narrow seam the
 //! executor loop calls through to probe and process a provider's event queue.
-//! Each provider crate implements it for its own lane; the executor is generic
+//! Each provider module implements it for its own lane; the executor is generic
 //! over whichever lane it is given and never names a concrete provider.
 
 mod facade;
@@ -38,6 +38,9 @@ pub use lane::*;
 
 mod ratelimit;
 pub use ratelimit::{Cadence, RateLimiter, WindowSpec};
+
+#[cfg(feature = "strava")]
+pub mod strava;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;

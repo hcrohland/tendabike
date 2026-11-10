@@ -18,7 +18,7 @@
 
 */
 
-//! The `tb_strava`-owned Strava token machinery (spec #602): a private
+//! The Strava driver's token machinery (spec #602): a private
 //! [`TokenState`] (the user's `strava_id` plus the token fields the refresh
 //! machinery drives) and a process-wide in-memory [`TOKEN_CACHE`] keyed by
 //! [`UserId`].
@@ -37,8 +37,8 @@ use std::time::SystemTime;
 use log::debug;
 use oauth2::{AccessToken, RefreshToken, TokenResponse};
 
-use crate::client::{HTTP_CLIENT, STRAVACLIENT};
-use crate::{StravaDataStore, StravaId, StravaUser};
+use super::client::{HTTP_CLIENT, STRAVACLIENT};
+use super::{StravaDataStore, StravaId, StravaUser};
 use tb_domain::{Error, TbResult, UserId};
 
 /// A one-line expiry check: a known expiry in the past is expired; an unknown
@@ -50,7 +50,7 @@ fn is_expired(expires_at: &Option<SystemTime>) -> bool {
 /// The token state for a single Strava user (spec #602): the user's
 /// `strava_id` plus the token fields the refresh machinery drives.
 ///
-/// Private to `tb_strava`: no token type or value crosses the crate
+/// Private to the Strava driver: no token type or value crosses the module
 /// boundary. Built from the DB's durable refresh token on a cache miss (an
 /// empty access token with a past expiry, so the first request forces a
 /// refresh).
@@ -179,8 +179,8 @@ pub(crate) async fn get_token(
 /// [`get_token`]. A cache hit returns the cached [`TokenState`]'s `strava_id`;
 /// a cache miss builds it from the DB's [`StravaUser`] (and inserts it). It is
 /// a read-only `strava_id` resolution: it never calls `get_token` /
-/// `STRAVACLIENT`. Private to `tb_strava` — no `strava_id` crosses the crate
-/// boundary.
+/// `STRAVACLIENT`. Private to the Strava driver — no `strava_id` crosses the
+/// module boundary.
 pub(crate) async fn get_strava_id(
     user_id: UserId,
     store: &mut impl StravaDataStore,

@@ -16,4 +16,4 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tb_axum = { workspace = true }
 tb_exec = { workspace = true }
 tb_sqlx = { workspace = true }
-tb_strava = { workspace = true }
+tb_provider = { workspace = true, features = ["strava"] }

@@ -39,7 +39,7 @@ use std::{env, sync::LazyLock};
 /// The Strava athlete info carried in the token response's extra fields.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StravaAthleteInfo {
-    pub id: crate::StravaId,
+    pub id: super::StravaId,
     pub firstname: String,
     pub lastname: String,
     #[serde(rename = "profile_medium")]

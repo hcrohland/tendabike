@@ -7,7 +7,7 @@ edition = { workspace = true }
 
 [dependencies]
 tb_domain = { workspace = true }
-tb_strava = { workspace = true }
+tb_provider = { workspace = true, features = ["strava"] }
 tb_exec = { workspace = true }
 
 reqwest = { workspace = true }

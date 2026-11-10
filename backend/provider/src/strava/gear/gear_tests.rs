@@ -1,8 +1,10 @@
 use std::sync::{Arc, Mutex};
 
+use super::super::test_support::{
+    gear_json, part, queue, queue_error, requests, setup, strava_session,
+};
 use super::*;
-use crate::test_support::{gear_json, part, queue, queue_error, requests, setup, strava_session};
-use tb_provider::MockDomainFacade;
+use crate::MockDomainFacade;
 
 #[tokio::test]
 async fn into_partid_creates_bike() -> TbResult<()> {

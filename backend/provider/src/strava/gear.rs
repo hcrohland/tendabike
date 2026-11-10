@@ -4,8 +4,8 @@
 
 use time::OffsetDateTime;
 
-use crate::*;
-use tb_provider::DomainFacade;
+use super::*;
+use crate::DomainFacade;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct StravaGear {
