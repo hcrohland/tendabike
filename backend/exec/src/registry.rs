@@ -395,7 +395,7 @@ where
     S::Conn: Store + StravaStore,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
-    P::Event: Into<tb_provider::strava::event::Event>,
+    P::Event: Into<Option<tb_provider::strava::event::Event>>,
 {
     /// Register a shop stream for `shop_id` (spec #517): verify
     /// the caller is the shop owner in a transaction (a non-owner is
@@ -467,16 +467,22 @@ where
             match done.recv().await {
                 Ok(event) => {
                     // The correlation is a `tb_provider::strava` concern (the queue is
-                    // keyed by the `strava_id`, resolved inside the crate).
-                    let strava_event: tb_provider::strava::event::Event = event.into();
-                    let mut store = self.source.begin().await?;
-                    let is_our_sync =
-                        is_sync_for_user(&strava_event, user_id, event_time, &mut store).await?;
-                    store.commit().await?;
-                    if is_our_sync {
-                        return Ok(());
+                    // keyed by the `strava_id`, resolved inside the crate). The admin
+                    // sync is Strava-only: only a Strava event correlates (an icu
+                    // event on this channel is impossible under one-provider-per-user,
+                    // but the unified lane's event type is shared, so a non-Strava
+                    // one is skipped).
+                    if let Some(strava_event) = event.into() {
+                        let mut store = self.source.begin().await?;
+                        let is_our_sync =
+                            is_sync_for_user(&strava_event, user_id, event_time, &mut store)
+                                .await?;
+                        store.commit().await?;
+                        if is_our_sync {
+                            return Ok(());
+                        }
+                        // Some other message completed; keep waiting for ours.
                     }
-                    // Some other message completed; keep waiting for ours.
                 }
                 Err(_) => {
                     // The channel closed (or lagged): the executor settled
@@ -692,9 +698,21 @@ where
         Ok((user.user_id(), is_admin))
     }
 
-    /// The icu webhook accept (spec #763). Stub for a later ticket.
-    async fn icu_accept_event(&self, _event: IcuEvent) -> TbResult<()> {
-        todo!("icu_accept_event: landed in a later ticket (spec #763)")
+    /// The icu webhook accept (spec #764): one transaction
+    /// (`IcuEvent::accept` — the athlete validation and the `icu_events`
+    /// queue insert), then wake the user's executor (fire-and-forget,
+    /// `200`). A failed ingest 500s to intervals.icu (its own retry policy
+    /// applies).
+    async fn icu_accept_event(&self, event: IcuEvent) -> TbResult<()> {
+        let mut store = self.source.begin().await?;
+        let user_id = event.accept(&mut store).await?;
+        store.commit().await?;
+        // Fire the in-memory wake signal (spec §4.4): a pure signal to a
+        // running executor — it never spawns one, and the DB queue is the
+        // source of truth, so a missed wake only delays the event to the
+        // next spawn.
+        self.wake(user_id).await;
+        Ok(())
     }
 
     /// The per-user icu sync (spec #763). Stub for a later ticket.

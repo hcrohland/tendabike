@@ -178,6 +178,9 @@ pub enum NotificationKind {
     PartRegistered,
     /// A part was unregistered from a shop.
     PartUnregistered,
+    /// Stub activities (Strava-sourced, no data) were skipped during a sync
+    /// (spec #764): the `message` carries the skip count.
+    StubsSkipped,
 }
 
 impl std::fmt::Display for NotificationKind {
@@ -188,6 +191,7 @@ impl std::fmt::Display for NotificationKind {
             Self::SubCancelled => write!(f, "sub_cancelled"),
             Self::PartRegistered => write!(f, "part_registered"),
             Self::PartUnregistered => write!(f, "part_unregistered"),
+            Self::StubsSkipped => write!(f, "stubs_skipped"),
         }
     }
 }
@@ -201,6 +205,7 @@ impl std::str::FromStr for NotificationKind {
             "sub_cancelled" => Ok(Self::SubCancelled),
             "part_registered" => Ok(Self::PartRegistered),
             "part_unregistered" => Ok(Self::PartUnregistered),
+            "stubs_skipped" => Ok(Self::StubsSkipped),
             _ => Err(format!("unknown kind: {s}")),
         }
     }
@@ -214,6 +219,9 @@ pub enum NotificationSubject {
     Subscription(SubscriptionId),
     /// The notification refers to a part.
     Part(PartId),
+    /// An id-less subject (spec #764): the stub-skip notification refers to
+    /// no single entity — the `message` carries the skip count.
+    StubsSkipped,
 }
 
 /// The read state of a notification.
@@ -266,8 +274,9 @@ impl Notification {
     /// Creates a notification: the store assigns the id and timestamps it.
     /// This is the single door every side-effecting operation uses to create
     /// a notification (ADR-0010) — notification creation lives here, not in
-    /// the calling entity.
-    pub(crate) async fn create(
+    /// the calling entity. `pub` (not `pub(crate)`) because a provider's
+    /// `DomainFacade` forwards to it (the icu stub-skip notice, spec #764).
+    pub async fn create(
         recipient: UserId,
         lifecycle: NotificationLifecycle,
         kind: NotificationKind,

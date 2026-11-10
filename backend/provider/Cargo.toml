@@ -50,6 +50,7 @@ test-support = ["dep:mockall"]
 tokio = { workspace = true, features = ["macros", "rt"] }
 tb_domain = { workspace = true, features = ["test-support"] }
 mockall = { workspace = true }
+uuid = { workspace = true, features = ["v7"] }
 
 [lib]
 doctest = false

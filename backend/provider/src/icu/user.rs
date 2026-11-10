@@ -35,6 +35,19 @@ impl IcuId {
     pub(crate) async fn read(&self, store: &mut impl IcuDataStore) -> TbResult<Option<IcuUser>> {
         store.icuser_get_by_icuid(self).await
     }
+
+    /// Disable the user (a 401 on a live request, spec #764): drop their
+    /// queued events and clear their (durable) access token. The cleared
+    /// token is the disable signal — [`IcuUser::disabled`] reports it.
+    pub(crate) async fn disable(&self, store: &mut impl IcuDataStore) -> TbResult<()> {
+        info!("disabling icu user {self}");
+        let events = store.icu_events_delete_for_user(self).await?;
+        if events > 0 {
+            info!("deleted {events} open events for icu user {self}");
+        }
+        store.icuser_update_token(self.clone(), None).await?;
+        Ok(())
+    }
 }
 
 /// Icu User data.
@@ -54,6 +67,12 @@ impl IcuUser {
     /// Get the tendabike id for this user.
     pub fn user_id(&self) -> UserId {
         self.tendabike_id
+    }
+
+    /// Whether the user's icu integration is disabled: the (durable) access
+    /// token is cleared (a 401's disable, spec #764).
+    pub(crate) fn disabled(&self) -> bool {
+        self.access_token.is_none()
     }
 
     /// Upsert an icu user by athlete ID, updating their TendaBike user if
@@ -110,27 +129,6 @@ impl IcuUser {
 
         let user = store.icuser_create(user).await?;
         Ok(user)
-    }
-}
-
-/// The [`ActivityId`] for an icu activity, rendered as `"icu:<id>"`.
-///
-/// The `icu:` prefix is an icu concern: the domain's `ActivityId` is an
-/// opaque string (ADR-0013), so the prefix construction lives here, private
-/// to the icu module. Its consumer is the activity-import op (a later
-/// ticket, spec #763); it is kept now so the prefix is fixed and tested.
-#[allow(dead_code)]
-fn activity_id(id: &str) -> ActivityId {
-    ActivityId::from(format!("icu:{id}"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn icu_activity_id_uses_icu_prefix() {
-        assert_eq!(activity_id("42"), ActivityId::from("icu:42"));
     }
 }
 

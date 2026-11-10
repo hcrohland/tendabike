@@ -282,6 +282,14 @@ impl UserId {
         UserStore::user_get(store, *self).await.map(|u| u.is_admin)
     }
 
+    /// The user's activity provider (`'strava'` | `'icu'`), read from the
+    /// `users.provider` column (spec #763/#764): the per-user lane's
+    /// selection key. The lightweight single-row read — one field, no
+    /// `UserState` composite (it runs on every loop probe and process).
+    pub async fn provider(&self, store: &mut impl UserStore) -> TbResult<String> {
+        UserStore::user_get(store, *self).await.map(|u| u.provider)
+    }
+
     /// Sets the user's onboarding status. The single door for the status
     /// transitions the write dispatch performs (ADR-0010) — it calls this
     /// instead of the store directly.

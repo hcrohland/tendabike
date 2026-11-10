@@ -58,6 +58,7 @@ fn set_oauth_env_once() {
         std::env::set_var("CLIENT_SECRET", "test-client-secret");
         std::env::set_var("ICU_CLIENT_ID", "test-icu-client-id");
         std::env::set_var("ICU_CLIENT_SECRET", "test-icu-client-secret");
+        std::env::set_var("ICU_WEBHOOK_SECRET", "test-icu-webhook-secret");
     });
 }
 
@@ -2323,6 +2324,67 @@ async fn webhook_ingest_failure_500s() {
         r#"{"object_type":"activity","object_id":7,"aspect_type":"create","updates":{},"owner_id":1,"subscription_id":0,"event_time":1700000000}"#,
     )
     .await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+/// The intervals.icu webhook's wire shape: the shared `secret` plus an array
+/// of `events` (each an `athlete_id`, a `type`, a `timestamp`, and an
+/// `activity`).
+const ICU_WEBHOOK_BODY: &str = r#"{"secret":"test-icu-webhook-secret","events":[{"athlete_id":"i123456","type":"ACTIVITY_ANALYZED","timestamp":"2024-12-06T06:40:47.011+00:00","activity":{"id":"i55751783"}}]}"#;
+
+/// `POST /icu/callback` (the webhook, spec #764): a valid `secret` and an
+/// `ACTIVITY_ANALYZED` event queue the `icu_events` row (the `icu_accept_event`
+/// direct op) and answer `200`.
+#[tokio::test]
+async fn icu_webhook_accepts_the_event() {
+    let (store, mock, provider, mut icu) = mock_ctx();
+    icu.expect_icu_accept_event()
+        .times(1)
+        .returning(|_event| Ok(()));
+    let app = build_app(&store, mock, provider, icu);
+    let (status, _headers, body) =
+        run_json(app, Method::POST, "/icu/callback", None, ICU_WEBHOOK_BODY).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(String::from_utf8_lossy(&body), "null");
+}
+
+/// A webhook delivery with the wrong `secret` is refused with `401` and never
+/// reaches the accept op (the mock has no expectations, so any call would
+/// panic).
+#[tokio::test]
+async fn icu_webhook_bad_secret_401s() {
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
+    let body = r#"{"secret":"wrong-secret","events":[{"athlete_id":"i123456","type":"ACTIVITY_ANALYZED","timestamp":"2024-12-06T06:40:47.011+00:00","activity":{"id":"i55751783"}}]}"#;
+    let (status, _headers, _body) = run_json(app, Method::POST, "/icu/callback", None, body).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+/// A delivery whose events are not `ACTIVITY_ANALYZED` is answered `200` but
+/// queues nothing (the accept op is never called — the mock has no
+/// expectations, so any call would panic).
+#[tokio::test]
+async fn icu_webhook_ignores_non_analyzed_events() {
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
+    let body = r#"{"secret":"test-icu-webhook-secret","events":[{"athlete_id":"i123456","type":"WELLNESS_UPDATED","timestamp":"2024-12-06T06:40:47.011+00:00","activity":{"id":"i55751783"}}]}"#;
+    let (status, _headers, _body) = run_json(app, Method::POST, "/icu/callback", None, body).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+/// A failed icu webhook ingest 500s to intervals.icu (its own retry policy
+/// applies) — the mock's `Err` direct, no failing `begin` anywhere.
+#[tokio::test]
+async fn icu_webhook_ingest_failure_500s() {
+    let (store, mock, provider, mut icu) = mock_ctx();
+    icu.expect_icu_accept_event().times(1).returning(|_event| {
+        Err(tb_domain::Error::AnyFailure(anyhow::anyhow!(
+            "ingest failed"
+        )))
+    });
+    let app = build_app(&store, mock, provider, icu);
+    let (status, _headers, _body) =
+        run_json(app, Method::POST, "/icu/callback", None, ICU_WEBHOOK_BODY).await;
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
 }
 

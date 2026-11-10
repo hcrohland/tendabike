@@ -3014,6 +3014,7 @@ dependencies = [
  "tb_domain",
  "time",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

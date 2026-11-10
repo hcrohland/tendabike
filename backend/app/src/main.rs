@@ -43,7 +43,10 @@ async fn main() -> anyhow::Result<()> {
     let registry = tb_exec::Registry::with_defaults(
         tb_exec::DetachedBegin::new(pool),
         tb_exec::DomainFacadeImpl,
-        tb_provider::strava::StravaLane::new(),
+        // The per-user provider lane: wraps the Strava and icu lanes and
+        // selects between them per user from the `users.provider` column
+        // (spec #764), so the loop is provider-agnostic.
+        tb_exec::Lane::new(),
     );
     let api = std::sync::Arc::new(registry.clone()) as std::sync::Arc<dyn tb_exec::ServiceApi>;
     let provider =

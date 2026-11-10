@@ -12,7 +12,8 @@
 use time::OffsetDateTime;
 
 use tb_domain::{
-    Activity, ActivityId, Part, PartId, PartTypeId, Session, Stat, Store, Summary, TbResult, UserId,
+    Activity, ActivityId, Notification, NotificationKind, NotificationLifecycle,
+    NotificationSubject, Part, PartId, PartTypeId, Session, Stat, Store, Summary, TbResult, UserId,
 };
 
 /// The provider's door into the domain (spec #781): the operations a provider
@@ -107,6 +108,20 @@ pub trait DomainFacade<C: Send + Sync>: Send + Sync {
     /// Delete the user plus everything they own (the domain's
     /// `UserId::delete`).
     async fn delete_user(&self, id: &UserId, store: &mut C) -> TbResult<()>;
+
+    // ── Notification ─────────────────────────────────────────────────────
+    /// Create a notification (the domain's `Notification::create`): the
+    /// store assigns the id and timestamps it. The provider's only door to
+    /// mint a notification (e.g. the icu stub-skip notice, spec #764).
+    async fn create_notification(
+        &self,
+        recipient: UserId,
+        lifecycle: NotificationLifecycle,
+        kind: NotificationKind,
+        subject: NotificationSubject,
+        message: Option<String>,
+        store: &mut C,
+    ) -> TbResult<Notification>;
 }
 
 /// The concrete [`DomainFacade`]: a stateless unit struct that forwards each
@@ -193,6 +208,18 @@ impl<C: Store + Sync + 'static> DomainFacade<C> for DomainFacadeImpl {
 
     async fn delete_user(&self, id: &UserId, store: &mut C) -> TbResult<()> {
         id.delete(store).await
+    }
+
+    async fn create_notification(
+        &self,
+        recipient: UserId,
+        lifecycle: NotificationLifecycle,
+        kind: NotificationKind,
+        subject: NotificationSubject,
+        message: Option<String>,
+        store: &mut C,
+    ) -> TbResult<Notification> {
+        Notification::create(recipient, lifecycle, kind, subject, message, store).await
     }
 }
 
