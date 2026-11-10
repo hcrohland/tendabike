@@ -57,16 +57,6 @@ pub(crate) struct IcuActivity {
     pub gear: Option<IcuGearRef>,
     /// Energy output, in joules (→ the domain's `energy`).
     pub icu_joules: Option<f64>,
-    /// The remaining intervals.icu fields (parsed, not modeled in the domain):
-    /// calories, heart rates, and average watts.
-    #[allow(dead_code)]
-    pub calories: Option<f64>,
-    #[allow(dead_code)]
-    pub average_heartrate: Option<f64>,
-    #[allow(dead_code)]
-    pub max_heartrate: Option<f64>,
-    #[allow(dead_code)]
-    pub icu_average_watts: Option<f64>,
 }
 
 impl IcuActivity {
@@ -96,10 +86,6 @@ impl IcuActivity {
             total_elevation_loss,
             gear,
             icu_joules,
-            calories: _,
-            average_heartrate: _,
-            max_heartrate: _,
-            icu_average_watts: _,
         } = self;
         let what = Self::get_type(&type_)?;
         let gear = match gear {

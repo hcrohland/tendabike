@@ -134,10 +134,6 @@ pub(crate) async fn backfill<D: crate::DomainFacade<S>, S: IcuDataStore>(
                 total_elevation_loss: a.total_elevation_loss,
                 gear: a.gear,
                 icu_joules: a.icu_joules,
-                calories: None,
-                average_heartrate: None,
-                max_heartrate: None,
-                icu_average_watts: None,
             };
             let _summary = import_activity_data(icu_act, user_id, facade, store).await?;
             last_time = a.start_date.unix_timestamp().max(last_time);
