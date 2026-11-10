@@ -12,7 +12,7 @@ use axum::{
 };
 
 use crate::{ApiResult, RequestSession, appstate::AppState, domain::result_mismatch};
-use tb_domain::{ApiRead, ReadOutcome, Session};
+use tb_domain::{ApiRead, ApiWrite, ReadOutcome};
 
 #[derive(serde::Deserialize)]
 pub(super) struct InitialSyncQuery {
@@ -21,17 +21,20 @@ pub(super) struct InitialSyncQuery {
 }
 
 /// `POST /icu/onboarding/sync`: trigger the icu onboarding backfill (the gear
-/// import + the date-window activity walk). The walk queues the user's past
-/// activities as `icu_events` rows; the executor imports them in the
-/// background (non-blocking). Returns the updated user.
+/// import + the activity walk). The domain's status guard and completion
+/// update run on the user's executor in one loop-owned transaction alongside
+/// the icu-side `insert_sync`. Returns the updated user.
 pub(crate) async fn trigger_initial_sync(
     user: RequestSession,
     State(state): State<AppState>,
     Query(query): Query<InitialSyncQuery>,
 ) -> ApiResult<tb_domain::User> {
     state
-        .icu
-        .icu_sync(Box::new(user.clone()), user.user_id(), query.time)
+        .api
+        .write(
+            Box::new(user.clone()),
+            ApiWrite::UserOnboardingSync { time: query.time },
+        )
         .await?;
     match state.api.read(Box::new(user), ApiRead::UserRecord).await? {
         ReadOutcome::UserRecord(user) => Ok(Json(user)),
