@@ -97,7 +97,7 @@ fn icu_oauth_client() -> IcuClient {
     // *"ICU_CLIENT_SECRET" "REPLACE_ME";
     //  "ICU_REDIRECT_URL"  "http://127.0.0.1:3000/icu/token";
     //  "ICU_AUTH_URL"      "https://intervals.icu/oauth/authorize";
-    //  "ICU_TOKEN_URL"     "https://intervals.icu/api/v1/oauth/token";
+    //  "ICU_TOKEN_URL"     "https://intervals.icu/api/oauth/token";
 
     let client_id = ClientId::new(env::var("ICU_CLIENT_ID").expect("Missing ICU_CLIENT_ID!"));
     let client_secret =
@@ -108,7 +108,7 @@ fn icu_oauth_client() -> IcuClient {
     let redirect_url = RedirectUrl::new(redirect_url).unwrap();
 
     let auth_url = AuthUrl::new("https://intervals.icu/oauth/authorize".to_string()).unwrap();
-    let token_url = TokenUrl::new("https://intervals.icu/api/v1/oauth/token".to_string()).unwrap();
+    let token_url = TokenUrl::new("https://intervals.icu/api/oauth/token".to_string()).unwrap();
 
     IcuClient::new(client_id)
         .set_client_secret(client_secret)
