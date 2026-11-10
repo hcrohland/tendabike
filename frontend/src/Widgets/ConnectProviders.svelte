@@ -26,7 +26,7 @@
       >
         <div class="p-4 text-white" style="background:{providerMeta[p].accent}">
           <div class="flex items-center gap-2">
-            <ProviderMark provider={p} size="lg" />
+            <ProviderMark provider={p} size="lg" colored />
             <span class="text-lg font-bold">{providerMeta[p].name}</span>
           </div>
           <p class="text-sm opacity-90 mt-1">{blurb(p)}</p>

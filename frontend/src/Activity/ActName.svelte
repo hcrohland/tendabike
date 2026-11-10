@@ -19,7 +19,7 @@
       class="inline mx-2 align-middle"
       title={m.gearcard_view_on({ provider: providerMeta[provider].name })}
     >
-      <ProviderMark {provider} size="sm" colored={false} />
+      <ProviderMark {provider} size="sm" />
     </span>
   </a>
   <Menu>

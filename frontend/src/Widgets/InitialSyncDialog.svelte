@@ -83,7 +83,7 @@
       class="p-3 text-white flex items-center gap-2"
       style="background:{meta.accent}"
     >
-      <ProviderMark {provider} />
+      <ProviderMark {provider} colored />
       <span class="font-semibold">
         {m.initialsync_header({ provider: meta.name })}
       </span>

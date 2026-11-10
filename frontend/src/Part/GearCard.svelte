@@ -87,7 +87,7 @@
               provider: providerMeta[gearProvider].name,
             })}
           >
-            <ProviderMark provider={gearProvider} size="sm" colored={false} />
+            <ProviderMark provider={gearProvider} size="sm" />
           </span>
         </a>
       {/if}

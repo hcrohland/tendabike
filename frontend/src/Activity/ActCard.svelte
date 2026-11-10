@@ -70,7 +70,7 @@
               provider: providerMeta[provider].name,
             })}
           >
-            <ProviderMark {provider} size="sm" colored={false} />
+            <ProviderMark {provider} size="sm" />
           </span>
         </a>
       </div>

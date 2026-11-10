@@ -7,7 +7,7 @@
   let {
     provider,
     size = "md",
-    colored = true,
+    colored = false,
   }: {
     provider: Provider;
     size?: "sm" | "md" | "lg";
