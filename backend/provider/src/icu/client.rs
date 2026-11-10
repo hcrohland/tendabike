@@ -124,4 +124,4 @@ fn http_client() -> reqwest::Client {
 }
 
 /// The scope string the login exchange requests.
-pub const SCOPES: &str = "ACTIVITY:READ";
+pub const SCOPES: &str = "ACTIVITY:READ,SETTINGS:READ";
