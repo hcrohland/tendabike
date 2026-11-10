@@ -19,6 +19,8 @@
 //! - `http`: the thin icu HTTP calls (the bearer GET, the 401/429 mapping).
 //! - `activity`: the icu activity wire shape, its mapping to the domain, the
 //!   type mapping, and stub detection.
+//! - `gear`: the icu gear wire shape, its type mapping, and the import of the
+//!   user's gear list (`GET /athlete/{id}/gear`).
 //! - `ratelimit`: the icu rate-limit shim over the shared kernel.
 //! - `lane`: the `IcuLane` (`ProviderLane` impl).
 //!
@@ -41,6 +43,7 @@ pub mod user;
 pub use user::*;
 
 pub mod activity;
+pub mod gear;
 pub mod http;
 mod ratelimit;
 

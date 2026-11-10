@@ -94,24 +94,26 @@ where
         process(user_id, &crate::DomainFacadeImpl, store).await.ok()
     }
 
-    /// Queue a sync event (the onboarding cutover's provider side). The icu
-    /// backfill (the date-window walk) lands in a later ticket (spec #764);
-    /// until then this is a no-op so the onboarding cutover commits cleanly.
+    /// The onboarding cutover's provider side (spec #765): import the user's
+    /// icu gear. The activity backfill (the date-window walk) lands in a
+    /// later ticket (spec #766); until then the onboarding sync imports the
+    /// gear only.
     async fn insert_sync(
         &self,
-        _user_id: UserId,
+        user_id: UserId,
         _time: i64,
         _auto: bool,
-        _store: &mut S,
+        store: &mut S,
     ) -> TbResult<()> {
+        super::gear::update_gear(user_id, &crate::DomainFacadeImpl, store).await?;
         Ok(())
     }
 
-    /// Import the user's icu gear (the hydration write's provider side). The
-    /// icu gear import (`GET /athlete/{id}/gear`) lands in a later ticket
-    /// (spec #764); until then this is a no-op.
-    async fn update_gear(&self, _user_id: UserId, _store: &mut S) -> TbResult<Vec<PartId>> {
-        Ok(Vec::new())
+    /// Import the user's icu gear (the hydration write's provider side, spec
+    /// #765): `GET /athlete/{id}/gear`, importing each supported gear.
+    /// Delegates to [`super::gear::update_gear`].
+    async fn update_gear(&self, user_id: UserId, store: &mut S) -> TbResult<Vec<PartId>> {
+        super::gear::update_gear(user_id, &crate::DomainFacadeImpl, store).await
     }
 
     /// Read every user's provider-neutral stat (the admin read's provider

@@ -715,14 +715,22 @@ where
         Ok(())
     }
 
-    /// The per-user icu sync (spec #763). Stub for a later ticket.
+    /// The per-user icu sync (spec #765): the onboarding sync's gear import.
+    /// One transaction — `icu::gear::update_gear` (fetches
+    /// `GET /athlete/{id}/gear` and imports each supported gear). The
+    /// activity backfill (the date-window walk) lands in a later ticket
+    /// (spec #766); until then the sync imports the gear only.
     async fn icu_sync(
         &self,
         _session: Box<dyn Session>,
-        _user_id: UserId,
+        user_id: UserId,
         _event_time: i64,
     ) -> TbResult<()> {
-        todo!("icu_sync: landed in a later ticket (spec #763)")
+        let mut store = self.source.begin().await?;
+        tb_provider::icu::gear::update_gear(user_id, &tb_provider::DomainFacadeImpl, &mut store)
+            .await?;
+        store.commit().await?;
+        Ok(())
     }
 
     /// The icu deauthorization (spec #763). Stub for a later ticket.

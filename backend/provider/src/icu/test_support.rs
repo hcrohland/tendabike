@@ -97,3 +97,11 @@ pub fn stub_activity_json(id: &str, typ: &str) -> String {
         r#"{{"id":"{id}","type":"{typ}","name":"Stub Ride","start_date":"2026-01-02T10:00:00Z","distance":null,"moving_time":null,"elapsed_time":0,"total_elevation_gain":null,"icu_joules":null,"gear":null}}"#
     )
 }
+
+/// Minimal icu gear JSON with the given id and type (the `distance`/`retired`
+/// fields the domain ignores are present, as the icu API returns them).
+pub fn gear_json(id: &str, typ: &str) -> String {
+    format!(
+        r#"{{"id":"{id}","name":"Test Gear","type":"{typ}","distance":1000.0,"retired":false}}"#
+    )
+}
