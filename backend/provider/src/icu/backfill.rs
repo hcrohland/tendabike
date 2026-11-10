@@ -28,7 +28,7 @@ fn date_str(ts: i64) -> String {
 }
 
 /// How far back the onboarding backfill reaches (the "oldest desired date").
-const BACKFILL_MONTHS: i64 = 120;
+const BACKFILL_MONTHS: i64 = 240;
 /// A one-month span, in seconds (the backfill's reach, not a window size).
 const MONTH: i64 = 30 * 24 * 3600;
 /// The batch size for each list fetch.
