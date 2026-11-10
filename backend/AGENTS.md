@@ -29,7 +29,7 @@
 
 ## Tests
 
-To verify your changes: `SQLX_OFFLINE=true cargo test -q -- --include-ignored && echo PASS` — "PASS" in the output is the pass signal.
+To verify your changes: `SQLX_OFFLINE=true cargo test -q -- --include-ignored 2>&1 | grep "test result:"` — every line should say `ok` and `0 failed`.
 
 The DB-free suites (domain, provider, axum) run against `mockall` `mock!` doubles; the `#[ignore]`d seam suites in `tb_sqlx` run against a real Postgres and are the behavioral bar — they need `--include-ignored` and `SCRATCH_DATABASE_URL`. If `SCRATCH_DATABASE_URL` is set in the environment, a database is available and the full suite runs locally as it does in CI.
 
