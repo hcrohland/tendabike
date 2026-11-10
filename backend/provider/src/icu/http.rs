@@ -89,12 +89,15 @@ async fn get_icu(access: &str, uri: &str) -> TbResult<String> {
         StatusCode::UNAUTHORIZED => Err(Error::NotAuth(format!(
             "intervals.icu request authorization withdrawn for {uri}"
         ))),
-        _ => Err(Error::BadRequest(format!(
-            "intervals.icu request error: {}",
-            status
-                .canonical_reason()
-                .unwrap_or("Unknown status received")
-        ))),
+        _ => {
+            let body = resp.text().await.unwrap_or_default();
+            Err(Error::BadRequest(format!(
+                "intervals.icu request error: {} — {body}",
+                status
+                    .canonical_reason()
+                    .unwrap_or("Unknown status received")
+            )))
+        }
     }
 }
 
