@@ -3,18 +3,18 @@ use std::sync::{Arc, Mutex};
 use super::super::test_support::{icu_user, queue, queue_error, requests, setup};
 use super::*;
 use tb_domain::Error;
-use time::OffsetDateTime;
-use time::format_description::well_known::Rfc3339;
 
 type MockIcuDataStore = super::super::traits::MockIcuDataStore;
 
-/// A minimal activity in a backfill window response (the fields the queue row
-/// needs: the id and the start time).
+/// A minimal activity in a backfill batch response (the fields the domain
+/// Activity records).
 fn activity_json(id: &str, start: &str) -> String {
-    format!(r#"{{"id":"{id}","start_date":"{start}"}}"#)
+    format!(
+        r#"{{"id":"{id}","type":"Ride","name":"Test Ride","start_date":"{start}","distance":10000,"moving_time":3600,"elapsed_time":3700,"total_elevation_gain":100.0,"total_elevation_loss":100.0,"gear":{{"id":"g1"}},"icu_joules":50000.0}}"#
+    )
 }
 
-/// The user's icu athlete id fixture (the `icu_events` queue's key).
+/// The user's icu athlete id fixture.
 fn user_fixture(store: &mut MockIcuDataStore) {
     store
         .expect_icuser_get_by_tbid()
@@ -22,155 +22,105 @@ fn user_fixture(store: &mut MockIcuDataStore) {
         .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
 }
 
-// ─── the date-window walk ───────────────────────────────────────────────────
+// ─── the backfill walk ──────────────────────────────────────────────────────
 
 #[tokio::test]
-async fn backfill_walks_all_windows_and_queues_activities() {
-    let (mut store, _facade) = setup();
+async fn backfill_imports_activities_directly() {
+    let (mut store, mut facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     let now = 1_700_000_000i64;
     user_fixture(&mut store);
-    // No queued events yet: the cursor starts at `now - 6 months`.
     store
         .expect_icu_events_get_latest_time()
         .returning(|_id| Ok(None));
-    // Six one-month windows, each with one activity.
+    // One batch of activities (fewer than LIMIT → end of history).
     queue(
-        "/athlete/a1/activities?oldest=2023-05-18&newest=2023-06-17",
-        &format!("[{}]", activity_json("10", "2023-05-18T10:00:00Z")),
+        "/athlete/a1/activities?oldest=2023-05-18&limit=100&fields=id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules",
+        &format!("[{}]", activity_json("10", "2023-06-01T10:00:00Z")),
     );
-    queue(
-        "/athlete/a1/activities?oldest=2023-06-17&newest=2023-07-17",
-        &format!("[{}]", activity_json("11", "2023-06-18T10:00:00Z")),
-    );
-    queue(
-        "/athlete/a1/activities?oldest=2023-07-17&newest=2023-08-16",
-        &format!("[{}]", activity_json("12", "2023-07-18T10:00:00Z")),
-    );
-    queue(
-        "/athlete/a1/activities?oldest=2023-08-16&newest=2023-09-15",
-        &format!("[{}]", activity_json("13", "2023-08-18T10:00:00Z")),
-    );
-    queue(
-        "/athlete/a1/activities?oldest=2023-09-15&newest=2023-10-15",
-        &format!("[{}]", activity_json("14", "2023-09-18T10:00:00Z")),
-    );
-    queue(
-        "/athlete/a1/activities?oldest=2023-10-15&newest=2023-11-14",
-        &format!("[{}]", activity_json("15", "2023-10-18T10:00:00Z")),
-    );
-    let created = Arc::new(Mutex::new(Vec::new()));
-    let created_rec = created.clone();
-    store.expect_icu_event_create().returning(move |e| {
-        created_rec.lock().unwrap().push(e);
-        Ok(())
-    });
-    backfill(UserId::from(1), now, &mut store).await.unwrap();
-    let created = created.lock().unwrap();
-    assert_eq!(created.len(), 6, "one event per window's activity");
-    assert!(
-        created.iter().all(|e| e.object_type == "ACTIVITY_ANALYZED"),
-        "the backfill events carry the ACTIVITY_ANALYZED object type"
-    );
-    // The event_time is the activity's start time (the resume cursor).
+    let upserted: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let upserted_rec = upserted.clone();
+    facade
+        .expect_upsert_activity()
+        .times(1)
+        .returning(move |activity, _session, _store| {
+            upserted_rec.lock().unwrap().push(activity.id.to_string());
+            Ok(tb_domain::Summary::default())
+        });
+    // The gear ref resolution (part_by_source).
+    facade
+        .expect_part_by_source()
+        .returning(|_source, _store| Ok(None));
+    backfill(UserId::from(1), now, &facade, &mut store)
+        .await
+        .unwrap();
     assert_eq!(
-        created.iter().map(|e| e.event_time).min(),
-        Some(
-            OffsetDateTime::parse("2023-05-18T10:00:00Z", &Rfc3339)
-                .unwrap()
-                .unix_timestamp()
-        )
+        upserted.lock().unwrap().as_slice(),
+        ["icu:10"],
+        "the activity is imported with the icu: prefix"
     );
 }
 
 #[tokio::test]
-async fn backfill_resumes_from_newest_queued_event() {
-    let (mut store, _facade) = setup();
+async fn backfill_stops_when_no_more_activities() {
+    let (mut store, mut facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     let now = 1_700_000_000i64;
     user_fixture(&mut store);
-    // A prior backfill queued events up to 1697408000: the walk resumes there.
     store
         .expect_icu_events_get_latest_time()
-        .returning(|_id| Ok(Some(1697408000)));
-    // Only the final window is fetched (from the cursor to `now`).
+        .returning(|_id| Ok(None));
+    // Empty response → end of history.
     queue(
-        "/athlete/a1/activities?oldest=2023-10-15&newest=2023-11-14",
-        &format!("[{}]", activity_json("15", "2023-10-18T10:00:00Z")),
+        "/athlete/a1/activities?oldest=2023-05-18&limit=100&fields=id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules",
+        "[]",
     );
-    store.expect_icu_event_create().returning(|_e| Ok(()));
-    backfill(UserId::from(1), now, &mut store).await.unwrap();
-    assert_eq!(
-        requests(),
-        vec!["/athlete/a1/activities?oldest=2023-10-15&newest=2023-11-14".to_string()],
-        "only the window after the cursor is fetched"
+    facade.expect_upsert_activity().times(0);
+    backfill(UserId::from(1), now, &facade, &mut store)
+        .await
+        .unwrap();
+    assert!(
+        requests().len() == 1,
+        "only one batch is fetched (the empty one)"
     );
 }
 
 #[tokio::test]
 async fn backfill_stops_before_fetching_when_rate_limited() {
-    let (mut store, _facade) = setup();
+    let (mut store, mut facade) = setup();
     super::super::ratelimit::test_set_limited();
     let now = 1_700_000_000i64;
     user_fixture(&mut store);
     store
         .expect_icu_events_get_latest_time()
         .returning(|_id| Ok(None));
-    // The proactive gate fires before any fetch: the walk stops, no window is
-    // fetched (the queued events, if any, commit).
-    backfill(UserId::from(1), now, &mut store).await.unwrap();
+    // The proactive gate fires before any fetch.
+    facade.expect_upsert_activity().times(0);
+    backfill(UserId::from(1), now, &facade, &mut store)
+        .await
+        .unwrap();
     assert!(
         requests().is_empty(),
-        "no window is fetched while the rate-limit budget is exhausted"
+        "no batch is fetched while the rate-limit budget is exhausted"
     );
 }
 
 #[tokio::test]
-async fn backfill_stops_on_429_and_keeps_queued_events() {
-    let (mut store, _facade) = setup();
+async fn backfill_stops_on_429() {
+    let (mut store, mut facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     let now = 1_700_000_000i64;
     user_fixture(&mut store);
     store
         .expect_icu_events_get_latest_time()
         .returning(|_id| Ok(None));
-    // The first window's fetch is rate-limited: the walk stops (Ok — the
-    // events queued so far commit), and no further window is fetched.
     queue_error(
-        "/athlete/a1/activities?oldest=2023-05-18&newest=2023-06-17",
+        "/athlete/a1/activities?oldest=2023-05-18&limit=100&fields=id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules",
         Error::TryAgain("rate limited"),
     );
-    backfill(UserId::from(1), now, &mut store).await.unwrap();
-    assert_eq!(
-        requests().len(),
-        1,
-        "the walk stops after the 429 (no further window is fetched)"
-    );
-}
-
-#[tokio::test]
-async fn backfill_queues_nothing_when_history_is_empty() {
-    let (mut store, _facade) = setup();
-    super::super::ratelimit::test_set_not_limited();
-    let now = 1_700_000_000i64;
-    user_fixture(&mut store);
-    store
-        .expect_icu_events_get_latest_time()
-        .returning(|_id| Ok(None));
-    // Every window returns an empty list: nothing is queued.
-    for (oldest, newest) in [
-        ("2023-05-18", "2023-06-17"),
-        ("2023-06-17", "2023-07-17"),
-        ("2023-07-17", "2023-08-16"),
-        ("2023-08-16", "2023-09-15"),
-        ("2023-09-15", "2023-10-15"),
-        ("2023-10-15", "2023-11-14"),
-    ] {
-        queue(
-            &format!("/athlete/a1/activities?oldest={oldest}&newest={newest}"),
-            "[]",
-        );
-    }
-    store.expect_icu_event_create().times(0);
-    backfill(UserId::from(1), now, &mut store).await.unwrap();
+    facade.expect_upsert_activity().times(0);
+    backfill(UserId::from(1), now, &facade, &mut store)
+        .await
+        .unwrap();
+    assert_eq!(requests().len(), 1, "the walk stops after the 429");
 }

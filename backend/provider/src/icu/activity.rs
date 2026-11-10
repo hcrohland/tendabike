@@ -51,6 +51,8 @@ pub(crate) struct IcuActivity {
     pub elapsed_time: i32,
     /// Total climbing, in meters.
     pub total_elevation_gain: Option<f64>,
+    /// Total descent, in meters (→ the domain's `descend`).
+    pub total_elevation_loss: Option<f64>,
     /// The gear the activity used (its id is namespaced as `icu:<id>`).
     pub gear: Option<IcuGearRef>,
     /// Energy output, in joules (→ the domain's `energy`).
@@ -91,6 +93,7 @@ impl IcuActivity {
             moving_time,
             elapsed_time,
             total_elevation_gain,
+            total_elevation_loss,
             gear,
             icu_joules,
             calories: _,
@@ -114,7 +117,7 @@ impl IcuActivity {
             time: moving_time,
             distance: distance.map(|d| d.round() as i32),
             climb: total_elevation_gain.map(|c| c.round() as i32),
-            descend: None, // no loss field in the intervals.icu API
+            descend: total_elevation_loss.map(|d| d.round() as i32),
             energy: icu_joules.map(|e| e.round() as i32),
             device_name: None,
             external_id: None,
@@ -194,6 +197,26 @@ async fn gear_into_partid<D: DomainFacade<S>, S: IcuDataStore>(
 ///
 /// Returns `Ok(None)` when the activity is a stub (skipped — the gear
 /// reference is dropped and no upsert happens), or `Ok(Some(summary))` with
+/// Imports an icu activity that is already in hand (no HTTP fetch): stub
+/// check → map → upsert. Used by the backfill (the list response carries all
+/// the fields the domain records).
+pub(crate) async fn import_activity_data<D: DomainFacade<S>, S: IcuDataStore>(
+    act: IcuActivity,
+    user_id: UserId,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<Option<Summary>> {
+    if act.is_stub() {
+        debug!("skipping stub icu activity {}", act.id);
+        return Ok(None);
+    }
+    let activity = act.into_activity(user_id, facade, store).await?;
+    let session = Box::new(OnBehalf(user_id));
+    Ok(Some(
+        facade.upsert_activity(activity, session, store).await?,
+    ))
+}
+
 /// the upsert's `Summary` for a real activity. Errors (a 401, a 429, a DB
 /// failure) bubble up for the caller to classify.
 pub(crate) async fn import_activity<D: DomainFacade<S>, S: IcuDataStore>(

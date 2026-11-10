@@ -106,7 +106,7 @@ where
         store: &mut S,
     ) -> TbResult<()> {
         super::gear::update_gear(user_id, &crate::DomainFacadeImpl, store).await?;
-        super::backfill::backfill(user_id, time, store).await?;
+        super::backfill::backfill(user_id, time, &crate::DomainFacadeImpl, store).await?;
         Ok(())
     }
 
