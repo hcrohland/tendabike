@@ -35,7 +35,7 @@ async fn backfill_imports_activities_directly() {
         .returning(|_id| Ok(None));
     // One batch of activities (fewer than LIMIT → end of history).
     queue(
-        "/athlete/a1/activities?oldest=2023-05-18&limit=100&fields=id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules",
+        "/athlete/a1/activities?oldest=2004-02-27&limit=100&fields=id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules",
         &format!("[{}]", activity_json("10", "2023-06-01T10:00:00Z")),
     );
     let upserted: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
@@ -72,7 +72,7 @@ async fn backfill_stops_when_no_more_activities() {
         .returning(|_id| Ok(None));
     // Empty response → end of history.
     queue(
-        "/athlete/a1/activities?oldest=2023-05-18&limit=100&fields=id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules",
+        "/athlete/a1/activities?oldest=2004-02-27&limit=100&fields=id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules",
         "[]",
     );
     facade.expect_upsert_activity().times(0);
@@ -115,7 +115,7 @@ async fn backfill_stops_on_429() {
         .expect_icu_events_get_latest_time()
         .returning(|_id| Ok(None));
     queue_error(
-        "/athlete/a1/activities?oldest=2023-05-18&limit=100&fields=id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules",
+        "/athlete/a1/activities?oldest=2004-02-27&limit=100&fields=id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules",
         Error::TryAgain("rate limited"),
     );
     facade.expect_upsert_activity().times(0);
