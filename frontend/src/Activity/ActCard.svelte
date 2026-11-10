@@ -23,9 +23,11 @@
   import { parts } from "../lib/part";
   import Chip from "../Widgets/Chip.svelte";
   import Menu from "../Widgets/Menu.svelte";
+  import ProviderMark from "../Widgets/ProviderMark.svelte";
   import { DropdownItem } from "flowbite-svelte";
   import { changeActivity } from "./ChangeActivity.svelte";
   import { fmtNumber, fmtSeconds } from "../lib/utils";
+  import { providerOfActivityId, providerMeta } from "../lib/provider";
   import * as m from "../../paraglide/messages";
 
   let { activity }: { activity: Activity } = $props();
@@ -34,6 +36,8 @@
   let gearPart = $derived(
     activity.gear && parts[activity.gear] ? parts[activity.gear] : null,
   );
+
+  let provider = $derived(providerOfActivityId(activity.id));
 </script>
 
 <div class="rounded-lg border border-border-subtle bg-surface-1 p-2 sm:p-3">
@@ -60,12 +64,14 @@
           class="text-sm font-bold wrap-break-word"
         >
           {activity.name}
-          <img
-            src="/strava_grey.png"
-            alt={m.gearcard_view_on_strava()}
-            title={m.gearcard_view_on_strava()}
-            class="inline mx-1 w-4 h-4 align-middle"
-          />
+          <span
+            class="inline mx-1 align-middle"
+            title={m.gearcard_view_on({
+              provider: providerMeta[provider].name,
+            })}
+          >
+            <ProviderMark {provider} size="sm" />
+          </span>
         </a>
       </div>
     </div>

@@ -18,6 +18,7 @@
         rel="noopener"
         class="hover:underline">Source Code</a
       >
+      · {m.footer_works_with()}
     </p>
   </div>
 </footer>

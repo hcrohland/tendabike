@@ -23,6 +23,7 @@
   "connect_button": "Connect {name}",
   "gearcard_unknown_model": "unknown model",
   "gearcard_view_on_strava": "View on Strava",
+  "gearcard_view_on": "View on {provider}",
   "time_since": "since",
   "time_days": "days",
   "gearcard_notes": "Notes",
@@ -382,5 +383,6 @@
   "notif_dismiss": "Dismiss",
   "notif_fallback": "Notification",
   "footer_about": "About",
-  "footer_data_protection": "Data Protection"
+  "footer_data_protection": "Data Protection",
+  "footer_works_with": "works with Strava and intervals.icu"
 }

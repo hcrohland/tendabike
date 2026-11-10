@@ -35,3 +35,20 @@ export function onboardingSyncUrl(provider: Provider): string {
 export function providerOfActivityId(id: string): Provider {
   return id.startsWith("icu:") ? "icu" : "strava";
 }
+
+/// The provider's gear page URL for a part source (spec #760).
+/// Strava sources are the raw Strava gear id (`b…` / `g…`); icu
+/// sources are prefixed (`icu:…`). Returns `undefined` for an
+/// unrecognised source.
+export function gearSourceUrl(source: string): string | undefined {
+  if (source.startsWith("icu:")) {
+    return `https://intervals.icu/gear/${source.slice("icu:".length)}`;
+  }
+  if (source.startsWith("b")) {
+    return `https://www.strava.com/bikes/${source.slice(1)}`;
+  }
+  if (source.startsWith("g")) {
+    return "https://www.strava.com/settings/gear";
+  }
+  return undefined;
+}
