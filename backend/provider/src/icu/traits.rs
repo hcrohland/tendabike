@@ -62,6 +62,11 @@ pub trait IcuDataStore: Send + Sync {
     /// The number of queued icu events for `user` (the icu athlete id).
     async fn icu_events_get_count_for_user(&mut self, user: &IcuId) -> TbResult<i64>;
 
+    /// The newest queued icu event's time for `user` (the icu athlete id) —
+    /// the onboarding backfill's resume cursor — or `None` when the user has
+    /// no queued events.
+    async fn icu_events_get_latest_time(&mut self, user: &IcuId) -> TbResult<Option<i64>>;
+
     /// Delete every queued icu event for `user` (the icu athlete id); returns
     /// the number of rows deleted.
     async fn icu_events_delete_for_user(&mut self, user: &IcuId) -> TbResult<usize>;

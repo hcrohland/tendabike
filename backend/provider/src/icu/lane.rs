@@ -94,18 +94,19 @@ where
         process(user_id, &crate::DomainFacadeImpl, store).await.ok()
     }
 
-    /// The onboarding cutover's provider side (spec #765): import the user's
-    /// icu gear. The activity backfill (the date-window walk) lands in a
-    /// later ticket (spec #766); until then the onboarding sync imports the
-    /// gear only.
+    /// The onboarding cutover's provider side (spec #765/#766): import the
+    /// user's icu gear, then run the activity backfill — the date-window walk
+    /// that queues the user's past activities as `icu_events` rows for the
+    /// normal event loop to import one at a time.
     async fn insert_sync(
         &self,
         user_id: UserId,
-        _time: i64,
+        time: i64,
         _auto: bool,
         store: &mut S,
     ) -> TbResult<()> {
         super::gear::update_gear(user_id, &crate::DomainFacadeImpl, store).await?;
+        super::backfill::backfill(user_id, time, store).await?;
         Ok(())
     }
 

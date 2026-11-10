@@ -244,6 +244,17 @@ impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
         Ok(count.unwrap_or(0))
     }
 
+    async fn icu_events_get_latest_time(&mut self, user: &IcuId) -> TbResult<Option<i64>> {
+        let latest = sqlx::query_scalar!(
+            "SELECT MAX(event_time) FROM icu_events WHERE icu_athlete_id = $1",
+            user.to_string()
+        )
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)?;
+        Ok(latest)
+    }
+
     async fn icu_events_delete_for_user(&mut self, user: &IcuId) -> TbResult<usize> {
         let result = sqlx::query!(
             "DELETE FROM icu_events WHERE icu_athlete_id = $1",

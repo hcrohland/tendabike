@@ -715,19 +715,22 @@ where
         Ok(())
     }
 
-    /// The per-user icu sync (spec #765): the onboarding sync's gear import.
-    /// One transaction — `icu::gear::update_gear` (fetches
-    /// `GET /athlete/{id}/gear` and imports each supported gear). The
-    /// activity backfill (the date-window walk) lands in a later ticket
-    /// (spec #766); until then the sync imports the gear only.
+    /// The per-user icu sync (spec #765/#766): the onboarding sync. One
+    /// transaction — the lane's `insert_sync`, which imports the user's icu
+    /// gear and runs the activity backfill (the date-window walk that queues
+    /// the user's past activities as `icu_events` rows). The executor's
+    /// normal loop then imports the queued activities in the background
+    /// (non-blocking: this returns once the gear is imported and the
+    /// activities are queued).
     async fn icu_sync(
         &self,
         _session: Box<dyn Session>,
         user_id: UserId,
-        _event_time: i64,
+        event_time: i64,
     ) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_provider::icu::gear::update_gear(user_id, &tb_provider::DomainFacadeImpl, &mut store)
+        self.lane
+            .insert_sync(user_id, event_time, false, &mut store)
             .await?;
         store.commit().await?;
         Ok(())

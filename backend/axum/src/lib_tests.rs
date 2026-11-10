@@ -660,6 +660,35 @@ async fn icu_token_wrong_scope_redirects_to_root() {
     assert_eq!(headers["location"], "/");
 }
 
+/// `POST /icu/onboarding/sync?time=N` triggers the icu onboarding backfill
+/// (the `icu_sync` direct op — the gear import + the date-window activity
+/// walk that queues the user's past activities), then reads the `User` record
+/// back and answers `200` with the user.
+#[tokio::test]
+async fn icu_onboarding_sync_returns_200_and_user() {
+    let (store, mut mock, provider, mut icu) = mock_ctx();
+    icu.expect_icu_sync()
+        .times(1)
+        .returning(|_session, _user_id, _time| Ok(()));
+    mock.expect_read()
+        .times(1)
+        .returning(|_session, _read| Ok(ReadOutcome::UserRecord(user())));
+    let app = build_app(&store, mock, provider, icu);
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, body) = run(
+        app,
+        Method::POST,
+        "/icu/onboarding/sync?time=1700000000",
+        Some(&cookie),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(&body).contains("\"id\":1"),
+        "the updated user is returned"
+    );
+}
+
 // ─── Auth gates (401/404 before the service API) ──────────────────────────
 
 #[tokio::test]
