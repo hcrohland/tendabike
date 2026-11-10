@@ -605,8 +605,17 @@ where
     /// rejects a non-Strava id), then the Strava URL.
     async fn activity_url(&self, session: Box<dyn Session>, id: ActivityId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let uri =
-            activity::strava_url(id, session, &tb_provider::DomainFacadeImpl, &mut store).await?;
+        let uri = if id.to_string().starts_with("icu:") {
+            tb_provider::icu::activity::activity_url(
+                id,
+                session,
+                &tb_provider::DomainFacadeImpl,
+                &mut store,
+            )
+            .await?
+        } else {
+            activity::strava_url(id, session, &tb_provider::DomainFacadeImpl, &mut store).await?
+        };
         store.commit().await?;
         Ok(uri)
     }

@@ -21,6 +21,27 @@ fn activity_id(id: &str) -> ActivityId {
     ActivityId::from(format!("icu:{id}"))
 }
 
+/// The intervals.icu URL for an activity (the `/source/activities/{id}`
+/// redirect target): verifies ownership via the facade, then builds the
+/// provider URL from the raw id.
+pub async fn activity_url<D, S>(
+    id: ActivityId,
+    user: Box<dyn Session>,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<String>
+where
+    D: DomainFacade<S>,
+    S: Send + Sync,
+{
+    facade.read_activity(&id, user, store).await?;
+    let s = id.to_string();
+    let raw = s
+        .strip_prefix("icu:")
+        .ok_or_else(|| tb_domain::Error::BadRequest(format!("not an icu activity: {s}")))?;
+    Ok(format!("https://intervals.icu/activities/{raw}"))
+}
+
 /// A gear reference carried by an icu activity.
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct IcuGearRef {
