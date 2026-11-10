@@ -36,6 +36,6 @@
   <span
     class="inline-flex items-center justify-center {box} rounded font-bold -translate-y-px {colored
       ? 'bg-white/20 text-white'
-      : 'bg-black/10 text-black'}">icu</span
+      : 'bg-black/10 text-black dark:bg-white/10 dark:text-white'}">icu</span
   >
 {/if}
