@@ -82,9 +82,7 @@ impl IcuUser {
     /// # Arguments
     ///
     /// * `id` - A `IcuId` representing the icu athlete ID to upsert.
-    /// * `firstname` - A `&str` representing the first name.
-    /// * `lastname` - A `&str` representing the last name.
-    /// * `avatar` - An `&Option<String>` representing the avatar URL.
+    /// * `name` - A `&str` representing the athlete's full name.
     /// * `access_token` - A `&str` representing the durable access token.
     /// * `facade` - The domain door.
     /// * `store` - A mutable reference to the icu data store.
@@ -94,19 +92,19 @@ impl IcuUser {
     /// An `TbResult` containing the upserted [`IcuUser`].
     pub async fn upsert<D: DomainFacade<S>, S: IcuDataStore>(
         id: IcuId,
-        firstname: &str,
-        lastname: &str,
-        avatar: &Option<String>,
+        name: &str,
         access_token: &str,
         facade: &D,
         store: &mut S,
     ) -> TbResult<IcuUser> {
-        debug!("got id {id}: {firstname} {lastname}");
+        let (firstname, lastname) = name.split_once(' ').unwrap_or((name, ""));
+        let avatar = None;
+        debug!("got id {id}: {name}");
 
         let user = id.read(store).await?;
         if let Some(user) = user {
             facade
-                .update_user(&user.tendabike_id, firstname, lastname, avatar, store)
+                .update_user(&user.tendabike_id, firstname, lastname, &avatar, store)
                 .await?;
             store
                 .icuser_update_token(user.id.clone(), Some(access_token.to_string()))
@@ -116,7 +114,7 @@ impl IcuUser {
 
         // create new user!
         let tendabike_id = facade
-            .create_user(firstname, lastname, avatar, "icu", store)
+            .create_user(firstname, lastname, &avatar, "icu", store)
             .await?;
 
         let user = IcuUser {

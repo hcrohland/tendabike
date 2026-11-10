@@ -41,10 +41,7 @@ use super::IcuId;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct IcuAthleteInfo {
     pub id: IcuId,
-    pub firstname: String,
-    pub lastname: String,
-    #[serde(rename = "profile_medium")]
-    pub avatar: Option<String>,
+    pub name: String,
     #[serde(flatten)]
     other: serde_json::Value,
 }

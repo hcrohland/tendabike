@@ -34,9 +34,7 @@ async fn upsert_creates_new_user() -> TbResult<()> {
     });
     let user = IcuUser::upsert(
         "ath-42".into(),
-        "First",
-        "Last",
-        &None,
+        "First Last",
         "durable-token",
         &facade,
         &mut store,
@@ -92,9 +90,7 @@ async fn upsert_updates_existing_user() -> TbResult<()> {
         });
     let user = IcuUser::upsert(
         "ath-42".into(),
-        "New",
-        "Name",
-        &None,
+        "New Name",
         "new-durable-token",
         &facade,
         &mut store,

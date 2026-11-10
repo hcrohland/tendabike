@@ -672,19 +672,11 @@ where
         athlete: IcuAthleteInfo,
         access_token: String,
     ) -> TbResult<(UserId, bool)> {
-        let IcuAthleteInfo {
-            id,
-            firstname,
-            lastname,
-            avatar,
-            ..
-        } = athlete;
+        let IcuAthleteInfo { id, name, .. } = athlete;
         let mut store = self.source.begin().await?;
         let user = tb_provider::icu::IcuUser::upsert(
             id,
-            &firstname,
-            &lastname,
-            &avatar,
+            &name,
             &access_token,
             &tb_provider::DomainFacadeImpl,
             &mut store,
