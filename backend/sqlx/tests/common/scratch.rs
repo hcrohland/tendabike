@@ -293,8 +293,8 @@ pub async fn load_fixture(tx: &mut SqlxConn<'_>, snap: &StoreSnapshot) -> tb_dom
 
     for user in &snap.users {
         sqlx::query(
-            "INSERT INTO users (id, name, firstname, is_admin, avatar, onboarding_status)
-             VALUES ($1, $2, $3, $4, $5, $6)",
+            "INSERT INTO users (id, name, firstname, is_admin, avatar, onboarding_status, provider)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)",
         )
         .bind(i32::from(user.id))
         .bind(&user.name)
@@ -302,6 +302,7 @@ pub async fn load_fixture(tx: &mut SqlxConn<'_>, snap: &StoreSnapshot) -> tb_dom
         .bind(user.is_admin)
         .bind(&user.avatar)
         .bind(i32::from(user.onboarding_status))
+        .bind(&user.provider)
         .execute(&mut *exec)
         .await
         .map_err(db_err)?;

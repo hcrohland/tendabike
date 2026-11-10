@@ -42,5 +42,8 @@ pub use ratelimit::{Cadence, RateLimiter, WindowSpec};
 #[cfg(feature = "strava")]
 pub mod strava;
 
+#[cfg(feature = "icu")]
+pub mod icu;
+
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;

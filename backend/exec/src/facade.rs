@@ -119,6 +119,7 @@ mod tests {
             avatar: None,
             is_admin: false,
             onboarding_status: OnboardingStatus::Completed,
+            provider: "strava".to_string(),
         }
     }
 

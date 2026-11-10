@@ -13,7 +13,7 @@
 
 use std::sync::Arc;
 
-use tb_exec::{ProviderService, ServiceApi};
+use tb_exec::{IcuService, ProviderService, ServiceApi};
 
 #[derive(Clone)]
 pub(crate) struct AppState {
@@ -23,13 +23,21 @@ pub(crate) struct AppState {
     /// The provider-specific service API (OAuth, webhook, sync, rescan,
     /// deauthorize, etc.).
     pub(crate) provider: Arc<dyn ProviderService>,
+    /// The icu-specific service API (OAuth, webhook, sync, deauthorize,
+    /// etc.) — the icu peer of [`ProviderService`] (spec #763).
+    pub(crate) icu: Arc<dyn IcuService>,
 }
 
 impl AppState {
     /// Build the state over the service API and provider service handles
     /// (the composition root builds the `Registry` over the pool and hands
-    /// it over as `Arc<dyn ServiceApi>` + `Arc<dyn ProviderService>`).
-    pub(crate) fn new(api: Arc<dyn ServiceApi>, provider: Arc<dyn ProviderService>) -> Self {
-        Self { api, provider }
+    /// it over as `Arc<dyn ServiceApi>` + `Arc<dyn ProviderService>` +
+    /// `Arc<dyn IcuService>`).
+    pub(crate) fn new(
+        api: Arc<dyn ServiceApi>,
+        provider: Arc<dyn ProviderService>,
+        icu: Arc<dyn IcuService>,
+    ) -> Self {
+        Self { api, provider, icu }
     }
 }

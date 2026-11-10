@@ -60,6 +60,7 @@ fn user_public_drops_admin_and_onboarding() {
         avatar: Some("http://example.com/a.png".into()),
         is_admin: true,
         onboarding_status: OnboardingStatus::Completed,
+        provider: "strava".to_string(),
     };
     let pub_ = UserPublic::from(user);
     let json = serde_json::to_string(&pub_).unwrap();
@@ -95,6 +96,7 @@ async fn user_id_set_onboarding_status_delegates_to_store() -> crate::TbResult<(
         avatar: None,
         is_admin: false,
         onboarding_status: OnboardingStatus::Completed,
+        provider: "strava".to_string(),
     };
     store
         .expect_update_onboarding_status()

@@ -37,6 +37,7 @@ fn user_row(id: UserId) -> User {
         avatar: None,
         is_admin: false,
         onboarding_status: OnboardingStatus::Pending,
+        provider: "strava".to_string(),
     }
 }
 

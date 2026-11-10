@@ -11,6 +11,7 @@ struct DbUser {
     is_admin: bool,
     avatar: Option<String>,
     onboarding_status: i32,
+    provider: String,
 }
 
 impl From<User> for DbUser {
@@ -22,6 +23,7 @@ impl From<User> for DbUser {
             avatar,
             is_admin,
             onboarding_status,
+            provider,
         } = value;
         Self {
             id: id.into(),
@@ -30,6 +32,7 @@ impl From<User> for DbUser {
             avatar,
             is_admin,
             onboarding_status: onboarding_status.into(),
+            provider,
         }
     }
 }
@@ -43,6 +46,7 @@ impl From<DbUser> for User {
             avatar,
             is_admin,
             onboarding_status,
+            provider,
         } = value;
         Self {
             id: id.into(),
@@ -52,6 +56,7 @@ impl From<DbUser> for User {
             is_admin,
             onboarding_status: OnboardingStatus::try_from(onboarding_status)
                 .expect("Invalid onboarding status in database"),
+            provider,
         }
     }
 }
@@ -61,7 +66,7 @@ impl<'c> tb_domain::UserStore for SqlxConn<'c> {
     async fn user_get(&mut self, uid: UserId) -> TbResult<User> {
         sqlx::query_as!(
             DbUser,
-            "SELECT id, name, firstname, is_admin, avatar, onboarding_status FROM users WHERE id = $1",
+            "SELECT id, name, firstname, is_admin, avatar, onboarding_status, provider FROM users WHERE id = $1",
             i32::from(uid)
         )
         .fetch_one(&mut **self.inner())
@@ -75,18 +80,20 @@ impl<'c> tb_domain::UserStore for SqlxConn<'c> {
         firstname_: &str,
         lastname: &str,
         avatar_: &Option<String>,
+        provider: &str,
     ) -> TbResult<User> {
         let onboarding_status = i32::from(OnboardingStatus::Pending);
         sqlx::query_as!(
             DbUser,
-            "INSERT INTO users (firstname, name, is_admin, avatar, onboarding_status)
-             VALUES ($1, $2, $3, $4, $5)
+            "INSERT INTO users (firstname, name, is_admin, avatar, onboarding_status, provider)
+             VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING *",
             firstname_,
             lastname,
             false,
             avatar_ as _,
-            onboarding_status
+            onboarding_status,
+            provider
         )
         .fetch_one(&mut **self.inner())
         .await
@@ -179,6 +186,7 @@ mod tests {
             avatar: Some("pic.png".to_string()),
             is_admin: false,
             onboarding_status: OnboardingStatus::Completed,
+            provider: "icu".to_string(),
         };
         let db = DbUser::from(user);
         assert_eq!(db.id, 7);
@@ -187,6 +195,7 @@ mod tests {
         assert_eq!(db.avatar.as_deref(), Some("pic.png"));
         assert!(!db.is_admin);
         assert_eq!(db.onboarding_status, 99);
+        assert_eq!(db.provider, "icu");
         let back = User::from(db);
         assert_eq!(back.id, UserId::from(7));
         assert_eq!(back.name, "Bike");
@@ -206,6 +215,7 @@ mod tests {
             avatar: None,
             is_admin: false,
             onboarding_status: 5,
+            provider: "strava".to_string(),
         };
         let _ = User::from(db);
     }

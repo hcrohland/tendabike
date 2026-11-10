@@ -46,7 +46,9 @@ async fn main() -> anyhow::Result<()> {
         tb_provider::strava::StravaLane::new(),
     );
     let api = std::sync::Arc::new(registry.clone()) as std::sync::Arc<dyn tb_exec::ServiceApi>;
-    let provider = std::sync::Arc::new(registry) as std::sync::Arc<dyn tb_exec::ProviderService>;
+    let provider =
+        std::sync::Arc::new(registry.clone()) as std::sync::Arc<dyn tb_exec::ProviderService>;
+    let icu = std::sync::Arc::new(registry) as std::sync::Arc<dyn tb_exec::IcuService>;
 
-    Ok(tb_axum::start(api, provider, db, path, addr).await?)
+    Ok(tb_axum::start(api, provider, icu, db, path, addr).await?)
 }

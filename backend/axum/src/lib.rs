@@ -29,12 +29,14 @@ use anyhow::Context;
 use axum::Router;
 use sqlx::PgPool;
 use tb_domain::TbResult;
-use tb_exec::{ProviderService, ServiceApi};
+use tb_exec::{IcuService, ProviderService, ServiceApi};
 use tower_sessions::{ExpiredDeletion, SessionManagerLayer};
 use tower_sessions_sqlx_store::PostgresStore;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod domain;
+
+mod icu;
 
 mod source;
 
@@ -54,6 +56,7 @@ fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> Route
         .nest("/api", domain::router())
         .nest("/source", source::router())
         .nest("/strava", strava::router())
+        .nest("/icu", icu::router())
         .with_state(app_state);
 
     if let Some(path) = static_path {
@@ -69,6 +72,7 @@ fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> Route
 pub async fn start(
     api: Arc<dyn ServiceApi>,
     provider: Arc<dyn ProviderService>,
+    icu: Arc<dyn IcuService>,
     pool: PgPool,
     path: std::path::PathBuf,
     addr: SocketAddr,
@@ -83,7 +87,7 @@ pub async fn start(
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let app_state = AppState::new(api, provider);
+    let app_state = AppState::new(api, provider, icu);
 
     // The web layer chose a `PostgresStore` for its sessions, so the
     // caller hands over the postgres connection — the same pool the

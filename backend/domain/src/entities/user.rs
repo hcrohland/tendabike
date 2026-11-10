@@ -94,6 +94,9 @@ pub struct User {
     pub avatar: Option<String>,
     pub is_admin: bool,
     pub onboarding_status: OnboardingStatus,
+    /// The activity provider the user connected with (spec #763): `'strava'`
+    /// or `'icu'`. Set at signup, immutable — one provider per user.
+    pub provider: String,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
@@ -251,10 +254,11 @@ impl UserId {
         firstname: &str,
         lastname: &str,
         avatar: &Option<String>,
+        provider: &str,
         store: &mut impl UserStore,
     ) -> TbResult<Self> {
         store
-            .user_create(firstname, lastname, avatar)
+            .user_create(firstname, lastname, avatar, provider)
             .await
             .map(|u| u.id)
     }

@@ -53,6 +53,7 @@ use tb_domain::{
     Summary, TbResult, UserId, UserStat, WriteOutcome,
 };
 use tb_provider::ProviderLane;
+use tb_provider::icu::{IcuStore, client::IcuAthleteInfo, event::IcuEvent};
 use tb_provider::strava::{
     StravaStore, StravaUser, activity,
     client::StravaAthleteInfo,
@@ -60,7 +61,7 @@ use tb_provider::strava::{
     gear,
 };
 
-use crate::api::{ProviderService, ServiceApi};
+use crate::api::{IcuService, ProviderService, ServiceApi};
 use crate::message::Request;
 use crate::{DomainFacade, Txn, TxnSource};
 
@@ -641,6 +642,79 @@ where
         .await?;
         store.commit().await?;
         Ok(())
+    }
+}
+
+/// The icu-specific service API's impl for the registry (spec #763): the icu
+/// direct ops own their own transaction(s). This ticket lands the OAuth
+/// connect flow — `icu_login_from_token` is the durable one (one transaction,
+/// `IcuUser::upsert` + `is_admin`); the remaining ops are stubs for later
+/// tickets. The connection is a full `Store` (the entity sub-traits) plus
+/// `IcuStore` (the icu queue and token ops).
+#[async_trait::async_trait]
+impl<S, P, D> IcuService for Registry<S, P, D>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: Store + IcuStore,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
+{
+    /// The icu login upsert (spec #763): one transaction
+    /// (`IcuUser::upsert` + `is_admin`), returning the identity and the admin
+    /// flag. The web layer keeps the query-parse, the scope check, the HMAC
+    /// path, the outbound exchange, and the tower-session write — the
+    /// wire-shape parsing stays beside the exchange it feeds.
+    async fn icu_login_from_token(
+        &self,
+        athlete: IcuAthleteInfo,
+        access_token: String,
+    ) -> TbResult<(UserId, bool)> {
+        let IcuAthleteInfo {
+            id,
+            firstname,
+            lastname,
+            avatar,
+            ..
+        } = athlete;
+        let mut store = self.source.begin().await?;
+        let user = tb_provider::icu::IcuUser::upsert(
+            id,
+            &firstname,
+            &lastname,
+            &avatar,
+            &access_token,
+            &tb_provider::DomainFacadeImpl,
+            &mut store,
+        )
+        .await?;
+        let is_admin = user.user_id().is_admin(&mut store).await?;
+        store.commit().await?;
+        Ok((user.user_id(), is_admin))
+    }
+
+    /// The icu webhook accept (spec #763). Stub for a later ticket.
+    async fn icu_accept_event(&self, _event: IcuEvent) -> TbResult<()> {
+        todo!("icu_accept_event: landed in a later ticket (spec #763)")
+    }
+
+    /// The per-user icu sync (spec #763). Stub for a later ticket.
+    async fn icu_sync(
+        &self,
+        _session: Box<dyn Session>,
+        _user_id: UserId,
+        _event_time: i64,
+    ) -> TbResult<()> {
+        todo!("icu_sync: landed in a later ticket (spec #763)")
+    }
+
+    /// The icu deauthorization (spec #763). Stub for a later ticket.
+    async fn icu_deauthorize(&self, _session: Box<dyn Session>, _tbid: UserId) -> TbResult<()> {
+        todo!("icu_deauthorize: landed in a later ticket (spec #763)")
+    }
+
+    /// The icu user delete (spec #763). Stub for a later ticket.
+    async fn icu_delete_user(&self, _session: Box<dyn Session>, _tbid: UserId) -> TbResult<()> {
+        todo!("icu_delete_user: landed in a later ticket (spec #763)")
     }
 }
 
