@@ -13,6 +13,7 @@ const user = {
   avatar: undefined,
   is_admin: false,
   onboarding_status: "completed",
+  provider: "strava",
 } as const;
 
 function seedNotification() {

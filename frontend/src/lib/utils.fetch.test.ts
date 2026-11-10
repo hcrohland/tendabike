@@ -149,6 +149,7 @@ describe("checkStatus 401", () => {
       avatar: undefined,
       is_admin: false,
       onboarding_status: "pending",
+      provider: "strava",
     });
     await expect(
       checkStatus(resp("Unauthorized", 401, false, "")),

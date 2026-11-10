@@ -32,6 +32,7 @@ describe("GearCard", () => {
       avatar: undefined,
       is_admin: false,
       onboarding_status: "completed",
+      provider: "strava",
     });
     users.setMap([]);
   });
@@ -80,6 +81,7 @@ describe("GearCard", () => {
       avatar: undefined,
       is_admin: false,
       onboarding_status: "completed",
+      provider: "strava",
     });
     flushSync();
     expect(screen.queryByText("Max Mustermann")).toBeNull();

@@ -47,6 +47,7 @@ describe("Part", () => {
       avatar: undefined,
       is_admin: false,
       onboarding_status: "completed",
+      provider: "strava",
     });
     partNotes.setMap([]);
     attachments.setMap([]);

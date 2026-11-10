@@ -13,9 +13,11 @@
     Spinner,
     DarkMode,
     Select,
+    Button,
   } from "flowbite-svelte";
   import { handleError, myfetch } from "./lib/utils";
   import { refresh, getUser, setUser } from "./lib/user";
+  import { onboardingSyncUrl } from "./lib/provider";
   import { markHydrated, startStream, stopStream } from "./lib/stream";
   import { activities } from "./lib/activity";
   import { stateValues } from "./lib/mapable.svelte";
@@ -57,7 +59,8 @@
 
   async function triggerHistoricSync() {
     try {
-      const updatedUser = await myfetch("/strava/onboarding/sync", "POST");
+      const provider = getUser()?.provider ?? "strava";
+      const updatedUser = await myfetch(onboardingSyncUrl(provider), "POST");
       setUser(updatedUser);
       fullrefresh();
     } catch (e) {
@@ -194,9 +197,7 @@
     </NavUl>
   {:else}
     <div class="flex items-center md:order-2">
-      <a href={"/strava/login" + page.url.search}>
-        <img src="/connect_with_strava.png" alt="Login with Strava" />
-      </a>
+      <Button color="gray" href="/about#connect">{m.header_connect()}</Button>
     </div>
   {/if}
 </Navbar>

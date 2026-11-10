@@ -233,6 +233,7 @@ describe("stream", () => {
       avatar: undefined,
       is_admin: false,
       onboarding_status: "completed",
+      provider: "strava",
     });
     fetchMock.mockResolvedValue(resp("Unauthorized", 401, false, ""));
     startStream(() => {}, factory);
@@ -281,6 +282,7 @@ describe("stream: reactive to shop state", () => {
       avatar: undefined,
       is_admin: false,
       onboarding_status: "completed" as const,
+      provider: "strava" as const,
     };
   }
 
