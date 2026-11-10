@@ -85,7 +85,7 @@ pub(crate) async fn backfill(
             break;
         }
         let newest = (oldest + MONTH).min(now);
-        let activities: Vec<BackfillActivity> = match request_json(
+        let activities: Vec<BackfillActivity> = match request_json::<Vec<BackfillActivity>>(
             user_id,
             &format!(
                 "/athlete/{icu_id}/activities?oldest={}&newest={}",
@@ -96,7 +96,15 @@ pub(crate) async fn backfill(
         )
         .await
         {
-            Ok(activities) => activities,
+            Ok(activities) => {
+                log::debug!(
+                    "icu backfill: window {}..{} → {} activities",
+                    date_str(oldest),
+                    date_str(newest),
+                    activities.len()
+                );
+                activities
+            }
             // A 429: stop the walk (the queued events commit; a later
             // call resumes from the newest queued time).
             Err(Error::TryAgain(msg)) => {
