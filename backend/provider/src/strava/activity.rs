@@ -94,50 +94,13 @@ impl StravaActivity {
         })
     }
 
-    /// Maps Strava workout type strings to Tendabike types.
+    /// Maps Strava workout type strings to Tendabike types: the common
+    /// wire-name arms from the provider kit's table
+    /// ([`crate::activity_type::common_type`]). Strava carries no
+    /// cycling-subtype arms of its own, so a miss is an unsupported type.
     fn get_type(t: &str) -> TbResult<ActTypeId> {
-        Ok(match t {
-            "Ride" => 1,
-            "VirtualRide" => 5,
-            "EBikeRide" => 9,
-            "Snowboard" => 2,
-            "Run" => 3,
-            "VirtualRun" => 3,
-            "Hike" => 4,
-            "AlpineSki" => 6,
-            "Walk" => 8,
-            "BackcountrySki" => 10,
-            "Workout" => 0,
-            "StandUpPaddling" => 0,
-            "Windsurf" => 0,
-            "Kitesurf" => 0,
-            "Rowing" => 0,
-            "WaterSport" => 0,
-            "RockClimbing" => 0,
-            "Handcycle" => 0,
-            "Canoeing" => 0,
-            "Crossfit" => 0,
-            "Elliptical" => 0,
-            "Golf" => 0,
-            "IceSkate" => 0,
-            "InlineSkate" => 0,
-            "Kayaking" => 0,
-            "NordicSki" => 0,
-            "RollerSki" => 0,
-            "Sail" => 0,
-            "Skateboard" => 0,
-            "Snowshoe" => 0,
-            "Soccer" => 0,
-            "StairStepper" => 0,
-            "Surfing" => 0,
-            "Swim" => 0,
-            "Velomobile" => 0,
-            "WeightTraining" => 0,
-            "Wheelchair" => 0,
-            "Yoga" => 0,
-            _ => return Err(Error::BadRequest(format!("unsupported activity {t}"))),
-        }
-        .into())
+        crate::activity_type::common_type(t)
+            .ok_or_else(|| Error::BadRequest(format!("unsupported activity {t}")))
     }
 
     /// Sends the activity to Tendabike API.

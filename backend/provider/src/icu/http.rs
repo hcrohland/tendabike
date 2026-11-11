@@ -9,12 +9,12 @@
 //! the window boundary and the loop sleeps until it).
 
 use anyhow::Context;
-use http::StatusCode;
 use log::trace;
 use serde::de::DeserializeOwned;
 
 use super::client::HTTP_CLIENT;
 use super::{IcuDataStore, IcuId};
+use crate::{StatusDecision, classify_status};
 use tb_domain::{Error, TbResult, UserId};
 
 const API: &str = "https://intervals.icu/api/v1";
@@ -61,9 +61,10 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
     Ok(serde_json::from_str::<T>(&r).context("Could not parse response body")?)
 }
 
-/// The bearer GET of an intervals.icu API `uri`, mapping the HTTP status to a
-/// domain error (the same classification the Strava driver's `get_strava`
-/// uses).
+/// The bearer GET of an intervals.icu API `uri`, mapping the HTTP status to
+/// a domain error (the kit's status classification applied with icu's
+/// messages; the `Permanent` arm reads the response body into the detail —
+/// icu-specific, so it stays here).
 async fn get_icu(access: &str, uri: &str) -> TbResult<String> {
     let resp = HTTP_CLIENT
         .get(format!("{API}{uri}"))
@@ -81,15 +82,12 @@ async fn get_icu(access: &str, uri: &str) -> TbResult<String> {
         return Ok(resp.text().await.context("could not reach intervals.icu")?);
     }
 
-    match status {
-        StatusCode::TOO_MANY_REQUESTS
-        | StatusCode::BAD_GATEWAY
-        | StatusCode::SERVICE_UNAVAILABLE
-        | StatusCode::GATEWAY_TIMEOUT => Err(Error::TryAgain(status.canonical_reason().unwrap())),
-        StatusCode::UNAUTHORIZED => Err(Error::NotAuth(format!(
+    match classify_status(status) {
+        StatusDecision::TryAgain => Err(Error::TryAgain(status.canonical_reason().unwrap())),
+        StatusDecision::NotAuth => Err(Error::NotAuth(format!(
             "intervals.icu request authorization withdrawn for {uri}"
         ))),
-        _ => {
+        StatusDecision::Permanent => {
             let body = resp.text().await.unwrap_or_default();
             Err(Error::BadRequest(format!(
                 "intervals.icu request error: {} — {body}",

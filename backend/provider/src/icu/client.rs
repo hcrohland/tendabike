@@ -24,18 +24,16 @@
 //! the Strava driver's split).
 
 use oauth2::{
-    AuthUrl, Client, ClientId, ClientSecret, EndpointNotSet, EndpointSet, ExtraTokenFields,
-    RedirectUrl, StandardRevocableToken, StandardTokenResponse, TokenUrl,
-    basic::{
-        BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
-        BasicTokenType,
-    },
-    reqwest,
+    AuthUrl, ClientId, ClientSecret, EndpointNotSet, EndpointSet, ExtraTokenFields, RedirectUrl,
+    StandardTokenResponse, TokenUrl, basic::BasicTokenType,
 };
 use serde::{Deserialize, Serialize};
 use std::{env, sync::LazyLock};
 
 use super::IcuId;
+use crate::client::ProviderClient;
+
+pub use crate::client::HTTP_CLIENT;
 
 /// The icu athlete info carried in the token response's extra fields.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -68,12 +66,8 @@ pub type IcuClient<
     HasIntrospectionUrl = EndpointNotSet,
     HasRevocationUrl = EndpointNotSet,
     HasTokenUrl = EndpointSet,
-> = Client<
-    BasicErrorResponse,
+> = ProviderClient<
     IcuTokenResponse,
-    BasicTokenIntrospectionResponse,
-    StandardRevocableToken,
-    BasicRevocationErrorResponse,
     HasAuthUrl,
     HasDeviceAuthUrl,
     HasIntrospectionUrl,
@@ -83,10 +77,6 @@ pub type IcuClient<
 
 /// The shared icu oauth client (built once from the process environment).
 pub static ICU_CLIENT: LazyLock<IcuClient> = LazyLock::new(icu_oauth_client);
-
-/// The shared reqwest client for the icu API (no redirects: following
-/// them opens the client up to SSRF vulnerabilities).
-pub static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(http_client);
 
 fn icu_oauth_client() -> IcuClient {
     // Environment variables (* = required):
@@ -113,14 +103,6 @@ fn icu_oauth_client() -> IcuClient {
         .set_token_uri(token_url)
         .set_auth_type(oauth2::AuthType::RequestBody)
         .set_redirect_uri(redirect_url)
-}
-
-fn http_client() -> reqwest::Client {
-    reqwest::ClientBuilder::new()
-        // Following redirects opens the client up to SSRF vulnerabilities.
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .expect("Client should build")
 }
 
 /// The scope string the login exchange requests.

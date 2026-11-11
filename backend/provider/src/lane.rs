@@ -29,7 +29,67 @@
 //! [`Probe`] outcome is generic over the provider's event type, so the
 //! loop's select and reclaim policy are provider-agnostic.
 
+use std::marker::PhantomData;
+
 use tb_domain::{ActivityId, PartId, Session, Summary, TbResult, UserId, UserStat};
+
+/// The provider lane marker: a `PhantomData` over the store type `S` and the
+/// provider's event type `E`. Written once in the kit; each provider re-exports
+/// a type alias (e.g. `StravaLane<S> = Lane<S, StravaEvent>`) so existing names
+/// keep working. The distinct `E` keeps the per-provider [`ProviderLane`] impls
+/// apart (a plain `Lane<S>` would hit conflicting implementations, since the
+/// production store implements both store traits).
+///
+/// The marker-field impls (`Clone`/`Copy`/`Debug`/`Default`) are written by
+/// hand rather than derived: a derive would add an `S: Clone`/`S: Debug`
+/// bound, but the lane holds no `S` or `E` data (only `PhantomData` markers),
+/// so it is `Clone`/`Copy`/`Debug`/`Default` for any `S` and `E` — including
+/// a database connection, which is neither `Clone` nor `Debug`.
+pub struct Lane<S, E> {
+    _store: PhantomData<S>,
+    _event: PhantomData<E>,
+}
+
+impl<S, E> Clone for Lane<S, E> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<S, E> Copy for Lane<S, E> {}
+
+impl<S, E> std::fmt::Debug for Lane<S, E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Lane").finish()
+    }
+}
+
+impl<S, E> Default for Lane<S, E> {
+    fn default() -> Self {
+        Self {
+            _store: PhantomData,
+            _event: PhantomData,
+        }
+    }
+}
+
+// `Lane<S, E>` holds no `S` or `E` data (only `PhantomData` markers), so it is
+// safe to share across threads even when `S` is not `Sync` (a database
+// connection, like the Postgres one, is `Send` but not `Sync`). The
+// auto-derived `Sync` would require `S: Sync`; this sound `unsafe impl`
+// provides the unconditional `Sync` the `ProviderLane: Send + Sync` bound
+// needs.
+unsafe impl<S, E> Sync for Lane<S, E> {}
+
+impl<S, E> Lane<S, E> {
+    /// The lane for a store of type `S` and event type `E`.
+    pub fn new() -> Self {
+        Self {
+            _store: PhantomData,
+            _event: PhantomData,
+        }
+    }
+}
 
 /// The outcome of one probe of the provider's event queue (one transaction).
 /// Generic over the provider's event type, so the loop's select and reclaim

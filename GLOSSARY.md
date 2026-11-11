@@ -73,6 +73,10 @@ _Avoid_: source (a part's external id), lane (the dispatch abstraction)
 The `tb_provider` crate: the provider-agnostic seams (the `EntityFacade` entity-op door, the `ProviderLane` lane seam, the rate-limit kernel) plus the provider integrations, each a feature module. Today the Strava driver is its `strava` module; a future provider adds its own feature module.
 _Avoid_: provider (the external system a user syncs from — not the crate)
 
+**provider kit**:
+The shared scaffolding in `tb_provider` crate-root modules that every provider module depends on: the failure policy, the lane marker, the rate-limit shim, the HTTP classification, the client builder, the activity-type table, and the test-support machinery. A provider module carries only what is genuinely its own — the wire shapes, the token model, the queue semantics.
+_Avoid_: provider layer (the whole crate, not just the shared scaffolding)
+
 **provider activity id**:
 The provider layer's typed activity id: the cross-provider form the opaque `ActivityId` converts to and from, and the single home for the `strava:` / `icu:` prefix knowledge. The domain's `ActivityId` stays an opaque string — the prefix is a provider concern (ADR-0013).
 _Avoid_: activity id (the domain's opaque `ActivityId`)
