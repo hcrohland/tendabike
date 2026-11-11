@@ -28,13 +28,13 @@
 //! revocation) and know nothing about refresh mechanics.
 
 use anyhow::Context;
-use http::StatusCode;
 use log::{debug, trace};
 use oauth2::AccessToken;
 use serde::de::DeserializeOwned;
 
 use super::client::{HTTP_CLIENT, STRAVACLIENT};
 use super::{StravaDataStore, StravaId, get_token};
+use crate::{StatusDecision, classify_status};
 use tb_domain::{Error, TbResult, UserId};
 
 const API: &str = "https://www.strava.com/api/v3";
@@ -123,7 +123,7 @@ pub(crate) async fn deauthorize(user_id: UserId, store: &mut impl StravaDataStor
 }
 
 /// The bearer GET of a Strava API `uri`, mapping the HTTP status to a domain
-/// error (the same classification the session's old `get_strava` used).
+/// error (the kit's status classification applied with Strava's messages).
 async fn get_strava(access: &AccessToken, uri: &str) -> TbResult<String> {
     let resp = reqwest::Client::new()
         .get(format!("{API}{uri}"))
@@ -141,15 +141,12 @@ async fn get_strava(access: &AccessToken, uri: &str) -> TbResult<String> {
         return Ok(resp.text().await.context("could not reach strava")?);
     }
 
-    match status {
-        StatusCode::TOO_MANY_REQUESTS
-        | StatusCode::BAD_GATEWAY
-        | StatusCode::SERVICE_UNAVAILABLE
-        | StatusCode::GATEWAY_TIMEOUT => Err(Error::TryAgain(status.canonical_reason().unwrap())),
-        StatusCode::UNAUTHORIZED => Err(Error::NotAuth(format!(
+    match classify_status(status) {
+        StatusDecision::TryAgain => Err(Error::TryAgain(status.canonical_reason().unwrap())),
+        StatusDecision::NotAuth => Err(Error::NotAuth(format!(
             "Strava request authorization withdrawn for {uri}"
         ))),
-        _ => Err(Error::BadRequest(format!(
+        StatusDecision::BadRequest => Err(Error::BadRequest(format!(
             "Strava request error: {}",
             status
                 .canonical_reason()

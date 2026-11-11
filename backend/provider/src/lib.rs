@@ -49,6 +49,9 @@ pub use ratelimit::{Cadence, RateLimitShim, RateLimiter, WindowSpec};
 mod failure;
 pub use failure::*;
 
+mod http;
+pub use http::*;
+
 #[cfg(feature = "strava")]
 pub mod strava;
 
