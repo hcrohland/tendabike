@@ -52,6 +52,11 @@ pub use failure::*;
 mod http;
 pub use http::*;
 
+#[cfg(any(feature = "strava", feature = "icu"))]
+mod client;
+#[cfg(any(feature = "strava", feature = "icu"))]
+pub use client::*;
+
 #[cfg(feature = "strava")]
 pub mod strava;
 
