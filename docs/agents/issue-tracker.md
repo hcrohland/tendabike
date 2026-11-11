@@ -33,7 +33,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 | Add blocking | `gh issue edit <n> --add-blocking <n1>,<n2>` |
 | Check blockers | `gh issue view <n> --json blockedBy` |
 
-**Merge gotcha:** `gh pr checks --watch` exits as soon as the checks that are *registered* pass — before the main CI jobs start, only CodeQL is listed, so it can report green early. Before merging, confirm a run exists for the PR's head SHA: `gh run list --branch <head-branch> --limit 1`.
+**Check gotcha:** `gh pr checks --watch` exits as soon as the checks that are *registered* pass — before the main CI jobs start, only CodeQL is listed, so it can report green early. Use it to block, then confirm a run exists for the head SHA before acting on the result: `gh run list --branch <head-branch> --limit 1`. Applies both when waiting between commits and before merging.
 
 ## Pull requests as a triage surface
 
