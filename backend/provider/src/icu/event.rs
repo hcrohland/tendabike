@@ -128,7 +128,7 @@ pub(crate) async fn process<D: EntityFacade<S>, S: IcuDataStore>(
         match super::activity::import_activity(&event.activity_id, user_id, facade, store).await {
             Ok(Some(s)) => summary += s,
             Ok(None) => stubs += 1, // a stub: skipped (gear ref dropped)
-            Err(err) => match classify(err, &event, &icu_id, store).await? {
+            Err(err) => match apply_failure(err, &event, &icu_id, store).await? {
                 BatchOutcome::Stop => break, // 429 (event stays queued) or 401 (user disabled)
                 BatchOutcome::Continue => {} // permanent: the event was dropped, continue
             },
@@ -154,32 +154,28 @@ enum BatchOutcome {
     Continue,
 }
 
-/// Classifies a failed import (the batch's failure semantics, spec #764).
-///
-/// - `TryAgain` (429) → stop; the event stays queued (the probe reports
-///   `Limited`).
-/// - `NotAuth` (401) → disable the user (drops all their queued events); stop.
-/// - `DatabaseFailure` → propagate (the caller rolls back and backs off).
-/// - anything else is permanent (a 404, a parse) → drop the event; continue.
-async fn classify(
+/// Applies the kit's failure decision ([`crate::failure`], the batch's
+/// failure semantics, spec #764) to icu's tables: the disable and the drop
+/// commit with the batch's transaction.
+async fn apply_failure(
     err: Error,
     event: &IcuEvent,
     icu_id: &IcuId,
     store: &mut impl IcuDataStore,
 ) -> TbResult<BatchOutcome> {
-    match err {
-        Error::TryAgain(msg) => {
-            warn!("icu rate limited ({msg}); event stays queued until the window resets");
+    match crate::failure::classify(&err) {
+        crate::failure::FailureDecision::KeepQueued => {
+            warn!("icu rate limited ({err}); event stays queued until the window resets");
             Ok(BatchOutcome::Stop)
         }
-        Error::NotAuth(msg) => {
-            warn!("icu auth is dead ({msg}); disabling user {icu_id}");
+        crate::failure::FailureDecision::DisableUser => {
+            warn!("icu auth is dead ({err}); disabling user {icu_id}");
             icu_id.disable(store).await?;
             Ok(BatchOutcome::Stop)
         }
-        Error::DatabaseFailure(_) => Err(err),
-        other => {
-            warn!("dropping poison icu event {}: {other:#}", event.activity_id);
+        crate::failure::FailureDecision::Propagate => Err(err),
+        crate::failure::FailureDecision::DropEvent => {
+            warn!("dropping poison icu event {}: {err:#}", event.activity_id);
             store.icu_event_delete(event.id).await?;
             Ok(BatchOutcome::Continue)
         }

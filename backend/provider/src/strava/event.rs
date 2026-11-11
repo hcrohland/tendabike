@@ -275,9 +275,9 @@ impl Event {
                     match a.send_to_tb(user_id, facade, store).await {
                         Ok(ps) => summary += ps,
                         // Rate limit, dead auth, or DB failure: bubble up to
-                        // the classifier (`fail_event`) — the Stop keeps the
-                        // event at the last good cursor, the disable drops the
-                        // queue, the DB failure backs off in the loop.
+                        // the failure policy (`fail_event`) — the Stop keeps
+                        // the event at the last good cursor, the disable drops
+                        // the queue, the DB failure backs off in the loop.
                         Err(err)
                             if matches!(
                                 err,
@@ -314,43 +314,33 @@ impl Event {
         }
     }
 
-    /// The failure semantics of a failed Strava message (spec #446 §4.6) —
-    /// drop on permanent failure, no dead-letter table:
-    ///
-    /// - `TryAgain` (rate limited) → insert the global `Stop` and keep the
-    ///   event queued: it is retried after the backoff.
-    /// - `NotAuth` (401 after a token refresh) → disable the user's Strava
-    ///   integration, which drops all their queued events: the data freezes
-    ///   (stale but consistent), and no event-by-event 401s follow.
-    /// - A DB failure → propagate: the caller rolls back (the event
-    ///   stays queued) and applies its in-memory backoff.
-    /// - Anything else is permanent (a 404 means the activity is gone; a parse
-    ///   error will not heal): delete the event, log it, and move on — the
-    ///   admin sync endpoint re-covers a gap if the user cares.
+    /// Applies the kit's failure decision ([`crate::failure`], spec #446
+    /// §4.6) to Strava's tables: the disable and the delete commit with the
+    /// loop's transaction.
     ///
     /// Every arm returns `Ok` except the DB failure: the queue-side effects
-    /// (the `Stop`, the disable, the delete) are committed by the loop's
-    /// transaction, and the loop continues.
+    /// (the disable, the delete) are committed by the loop's transaction,
+    /// and the loop continues.
     async fn fail_event(&self, err: Error, store: &mut impl StravaDataStore) -> TbResult<Summary> {
-        match err {
-            Error::TryAgain(msg) => {
+        match crate::failure::classify(&err) {
+            crate::failure::FailureDecision::KeepQueued => {
                 // The rate-limit state is already updated from the 429
                 // response headers (in `get_strava`); the event stays queued
                 // and the next `get_event` probe will report `Limited`.
-                warn!("Strava rate limited ({msg}); event stays queued until the window resets");
+                warn!("Strava rate limited ({err}); event stays queued until the window resets");
                 Ok(Summary::default())
             }
-            Error::NotAuth(msg) => {
+            crate::failure::FailureDecision::DisableUser => {
                 warn!(
-                    "Strava auth is dead ({msg}); disabling user {}",
+                    "Strava auth is dead ({err}); disabling user {}",
                     self.owner_id
                 );
                 self.owner_id.disable(store).await?;
                 Ok(Summary::default())
             }
-            Error::DatabaseFailure(_) => Err(err),
-            other => {
-                warn!("dropping poison event {self}: {other:#}");
+            crate::failure::FailureDecision::Propagate => Err(err),
+            crate::failure::FailureDecision::DropEvent => {
+                warn!("dropping poison event {self}: {err:#}");
                 self.delete(store).await?;
                 Ok(Summary::default())
             }
