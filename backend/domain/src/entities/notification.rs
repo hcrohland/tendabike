@@ -275,7 +275,7 @@ impl Notification {
     /// This is the single door every side-effecting operation uses to create
     /// a notification (ADR-0010) — notification creation lives here, not in
     /// the calling entity. `pub` (not `pub(crate)`) because a provider's
-    /// `DomainFacade` forwards to it (the icu stub-skip notice, spec #764).
+    /// entity-op door forwards to it (the icu stub-skip notice, spec #764).
     pub async fn create(
         recipient: UserId,
         lifecycle: NotificationLifecycle,

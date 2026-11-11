@@ -9,24 +9,7 @@
 use time::{OffsetDateTime, UtcOffset};
 
 use super::*;
-use crate::DomainFacade;
-
-/// The [`ActivityId`] for a Strava activity, rendered as `"strava:<n>"`.
-///
-/// The `strava:` prefix is a Strava concern: the domain's `ActivityId` is an
-/// opaque string, so the prefix lives here, in the Strava driver.
-fn activity_id(n: i64) -> ActivityId {
-    ActivityId::from(format!("strava:{n}"))
-}
-
-/// The numeric Strava id, if `id` is a Strava id (`None` otherwise).
-///
-/// The inverse of [`activity_id`]; [`strava_url`] uses it to build the
-/// external URL from the raw (unprefixed) id.
-fn numeric_id(id: &ActivityId) -> Option<i64> {
-    let s: String = id.clone().into();
-    s.strip_prefix("strava:").and_then(|n| n.parse().ok())
-}
+use crate::{EntityFacade, ProviderActivityId, StravaActivityId};
 
 #[derive(Serialize, Deserialize, Debug)]
 /// A struct that represents an activity from Strava API.
@@ -64,7 +47,7 @@ pub(crate) struct StravaActivity {
 
 impl StravaActivity {
     /// Converts a StravaActivity into a Activity struct which is used to create a new activity in the Tendabike API.
-    async fn into_activity<D: DomainFacade<S>, S: StravaDataStore>(
+    async fn into_activity<D: EntityFacade<S>, S: StravaDataStore>(
         self,
         user_id: UserId,
         facade: &D,
@@ -94,7 +77,7 @@ impl StravaActivity {
             None => None,
         };
         Ok(Activity {
-            id: activity_id(id),
+            id: ProviderActivityId::Strava(StravaActivityId::from(id)).into(),
             what,
             gear,
             user_id,
@@ -158,7 +141,7 @@ impl StravaActivity {
     }
 
     /// Sends the activity to Tendabike API.
-    pub(crate) async fn send_to_tb<D: DomainFacade<S>, S: StravaDataStore>(
+    pub(crate) async fn send_to_tb<D: EntityFacade<S>, S: StravaDataStore>(
         self,
         user_id: UserId,
         facade: &D,
@@ -172,18 +155,18 @@ impl StravaActivity {
 
 /// The Strava URL for a Strava activity: the read is the ownership check,
 /// and the URL is built from the raw (unprefixed) Strava id.
-pub async fn strava_url<D: DomainFacade<S>, S: StravaDataStore>(
-    id: ActivityId,
+pub async fn strava_url<D: EntityFacade<S>, S: StravaDataStore>(
+    id: StravaActivityId,
     user: Box<dyn Session>,
     facade: &D,
     store: &mut S,
 ) -> TbResult<String> {
-    facade.read_activity(&id, user, store).await?;
-    let raw = numeric_id(&id).context("not a strava activity")?;
-    Ok(format!("https://strava.com/activities/{raw}"))
+    let full: ActivityId = ProviderActivityId::Strava(id).into();
+    facade.read_activity(&full, user, store).await?;
+    Ok(format!("https://strava.com/activities/{id}"))
 }
 
-pub(crate) async fn upsert_activity<D: DomainFacade<S>, S: StravaDataStore>(
+pub(crate) async fn upsert_activity<D: EntityFacade<S>, S: StravaDataStore>(
     id: i64,
     user_id: UserId,
     facade: &D,
@@ -193,7 +176,7 @@ pub(crate) async fn upsert_activity<D: DomainFacade<S>, S: StravaDataStore>(
     act.send_to_tb(user_id, facade, store).await
 }
 
-pub(crate) async fn delete_activity<D: DomainFacade<S>, S: StravaDataStore>(
+pub(crate) async fn delete_activity<D: EntityFacade<S>, S: StravaDataStore>(
     act: i64,
     user_id: UserId,
     facade: &D,
@@ -201,7 +184,11 @@ pub(crate) async fn delete_activity<D: DomainFacade<S>, S: StravaDataStore>(
 ) -> TbResult<Summary> {
     let session = Box::new(OnBehalf(user_id));
     facade
-        .delete_activity(activity_id(act), session, store)
+        .delete_activity(
+            ProviderActivityId::Strava(StravaActivityId::from(act)).into(),
+            session,
+            store,
+        )
         .await
 }
 

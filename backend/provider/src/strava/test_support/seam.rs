@@ -162,16 +162,16 @@ pub fn strava_admin_session(user: UserId, strava: StravaId) -> MockSession {
 }
 
 /// The standard test triple: a fresh `MockStravaDataStore`, a
-/// `MockDomainFacade` (with `C` = `MockStravaDataStore`), and a
+/// `MockEntityFacade` (with `C` = `MockStravaDataStore`), and a
 /// [`strava_session`] for user 1 / Strava ID 42.
 #[cfg(test)]
 pub fn setup() -> (
     super::super::traits::MockStravaDataStore,
-    crate::MockDomainFacade<super::super::traits::MockStravaDataStore>,
+    crate::MockEntityFacade<super::super::traits::MockStravaDataStore>,
     MockSession,
 ) {
     let store = super::super::traits::MockStravaDataStore::new();
-    let facade = crate::MockDomainFacade::<super::super::traits::MockStravaDataStore>::new();
+    let facade = crate::MockEntityFacade::<super::super::traits::MockStravaDataStore>::new();
     let session = strava_session(UserId::from(1), 42.into());
     (store, facade, session)
 }

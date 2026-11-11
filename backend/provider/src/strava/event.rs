@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use super::activity::StravaActivity;
 use super::*;
-use crate::DomainFacade;
+use crate::EntityFacade;
 
 #[derive(Debug, Serialize, Deserialize)]
 /// A struct representing an incoming Strava event.
@@ -202,7 +202,7 @@ impl Event {
         store.strava_event_set_time(self.id, self.event_time).await
     }
 
-    async fn process_activity<D: DomainFacade<S>, S: StravaDataStore>(
+    async fn process_activity<D: EntityFacade<S>, S: StravaDataStore>(
         &self,
         user_id: UserId,
         facade: &D,
@@ -228,7 +228,7 @@ impl Event {
     /// # Examples
     ///
     ///
-    async fn process_hook<D: DomainFacade<S>, S: StravaDataStore>(
+    async fn process_hook<D: EntityFacade<S>, S: StravaDataStore>(
         &self,
         user_id: UserId,
         facade: &D,
@@ -252,7 +252,7 @@ impl Event {
         Ok(res)
     }
 
-    async fn sync<D: DomainFacade<S>, S: StravaDataStore>(
+    async fn sync<D: EntityFacade<S>, S: StravaDataStore>(
         &mut self,
         user_id: UserId,
         facade: &D,
@@ -302,7 +302,7 @@ impl Event {
         Ok(summary)
     }
 
-    async fn process_sync<D: DomainFacade<S>, S: StravaDataStore>(
+    async fn process_sync<D: EntityFacade<S>, S: StravaDataStore>(
         mut self,
         user_id: UserId,
         facade: &D,
@@ -526,7 +526,7 @@ async fn next_activities(
     .await
 }
 
-pub(crate) async fn process<D: DomainFacade<S>, S: StravaDataStore>(
+pub(crate) async fn process<D: EntityFacade<S>, S: StravaDataStore>(
     user_id: UserId,
     facade: &D,
     store: &mut S,

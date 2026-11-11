@@ -12,7 +12,7 @@ use log::{info, warn};
 use serde::{Deserialize, Serialize};
 
 use super::{IcuDataStore, IcuId};
-use crate::DomainFacade;
+use crate::EntityFacade;
 use tb_domain::{Error, Summary, TbResult, UserId};
 
 /// A queued icu event (a row in the `icu_events` table).
@@ -106,7 +106,7 @@ pub(crate) async fn get_event(
 /// - **401 / dead auth** → disable the user (drops all their queued events).
 /// - **permanent** (a 404, a parse error) → drop the event and continue.
 /// - **DB failure** → propagate: the caller rolls back and backs off.
-pub(crate) async fn process<D: DomainFacade<S>, S: IcuDataStore>(
+pub(crate) async fn process<D: EntityFacade<S>, S: IcuDataStore>(
     user_id: UserId,
     facade: &D,
     store: &mut S,

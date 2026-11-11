@@ -39,7 +39,7 @@ pub fn user(id: UserId) -> User {
 }
 
 /// The standard test triple: a fresh `MockIcuDataStore` and a
-/// `MockDomainFacade` (with `C` = `MockIcuDataStore`). The icu lane has no
+/// `MockEntityFacade` (with `C` = `MockIcuDataStore`). The icu lane has no
 /// acting session of its own, so (unlike the Strava driver's `setup`, which
 /// reaches the seam through the session) this enables the HTTP seam's test
 /// mode directly — `begin_test` marks the thread in test mode so the canned
@@ -47,11 +47,11 @@ pub fn user(id: UserId) -> User {
 #[cfg(test)]
 pub fn setup() -> (
     super::traits::MockIcuDataStore,
-    crate::MockDomainFacade<super::traits::MockIcuDataStore>,
+    crate::MockEntityFacade<super::traits::MockIcuDataStore>,
 ) {
     begin_test();
     let store = super::traits::MockIcuDataStore::new();
-    let facade = crate::MockDomainFacade::<super::traits::MockIcuDataStore>::new();
+    let facade = crate::MockEntityFacade::<super::traits::MockIcuDataStore>::new();
     (store, facade)
 }
 

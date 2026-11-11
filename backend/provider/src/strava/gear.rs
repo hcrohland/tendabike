@@ -5,7 +5,7 @@
 use time::OffsetDateTime;
 
 use super::*;
-use crate::DomainFacade;
+use crate::EntityFacade;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct StravaGear {
@@ -18,7 +18,7 @@ struct StravaGear {
     frame_type: Option<i32>,
 }
 
-pub async fn strava_url<D: DomainFacade<S>, S: StravaDataStore>(
+pub async fn strava_url<D: EntityFacade<S>, S: StravaDataStore>(
     gear: i32,
     user: Box<dyn Session>,
     facade: &D,
@@ -47,7 +47,7 @@ impl StravaGear {
 ///
 /// If it does not exist create it at tb
 /// None will return None
-pub(crate) async fn into_partid<D: DomainFacade<S>, S: StravaDataStore>(
+pub(crate) async fn into_partid<D: EntityFacade<S>, S: StravaDataStore>(
     strava_id: String,
     user_id: UserId,
     facade: &D,

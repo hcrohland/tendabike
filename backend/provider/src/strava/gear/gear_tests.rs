@@ -4,7 +4,7 @@ use super::super::test_support::{
     gear_json, part, queue, queue_error, requests, setup, strava_session,
 };
 use super::*;
-use crate::MockDomainFacade;
+use crate::MockEntityFacade;
 
 #[tokio::test]
 async fn into_partid_creates_bike() -> TbResult<()> {
@@ -132,7 +132,7 @@ async fn into_partid_propagates_error() {
 
 async fn seed_part(
     store: &mut MockStravaDataStore,
-    facade: &mut MockDomainFacade<MockStravaDataStore>,
+    facade: &mut MockEntityFacade<MockStravaDataStore>,
     source: &str,
 ) -> TbResult<PartId> {
     // A part carrying `source` is created: no existing part for the source,

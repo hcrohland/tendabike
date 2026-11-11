@@ -13,7 +13,7 @@
 //! consumed-event channel, and the `run_event` dispatch are all
 //! provider-agnostic.
 
-use tb_domain::{PartId, Summary, TbResult, UserId, UserStat};
+use tb_domain::{ActivityId, PartId, Session, Summary, TbResult, UserId, UserStat};
 use tb_provider::icu::{IcuLane, IcuStore, event::IcuEvent};
 use tb_provider::strava::{StravaLane, StravaStore, event::Event as StravaEvent};
 use tb_provider::{Probe, ProviderLane};
@@ -191,5 +191,21 @@ where
         let mut stats = self.strava.all_stats(store).await?;
         stats.extend(self.icu.all_stats(store).await?);
         Ok(stats)
+    }
+
+    /// The per-user half of [`ProviderLane::activity_url`]: read the user's
+    /// `provider` column, then delegate to that provider's lane.
+    async fn activity_url(
+        &self,
+        id: ActivityId,
+        session: Box<dyn Session>,
+        store: &mut S,
+    ) -> TbResult<String> {
+        let provider = Self::provider_of(store, session.user_id()).await?;
+        if provider == "icu" {
+            self.icu.activity_url(id, session, store).await
+        } else {
+            self.strava.activity_url(id, session, store).await
+        }
     }
 }

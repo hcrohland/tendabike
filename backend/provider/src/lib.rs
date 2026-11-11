@@ -20,15 +20,22 @@
 
 //! The provider-agnostic seams shared by every activity provider (spec #781).
 //!
-//! [`facade`] — [`DomainFacade`], the trait a provider goes through to reach
+//! [`activity_id`] — [`ProviderActivityId`], the cross-provider typed activity
+//! id: the form the domain's opaque `ActivityId` converts to and from, and the
+//! single home for the `strava:` / `icu:` prefix knowledge (ADR-0013).
+//!
+//! [`facade`] — [`EntityFacade`], the trait a provider goes through to reach
 //! the domain, and its concrete implementation. A provider function is generic
-//! over `D: DomainFacade` (static dispatch); tests swap in the
-//! [`MockDomainFacade`] (under `test-support`).
+//! over `D: EntityFacade` (static dispatch); tests swap in the
+//! [`MockEntityFacade`] (under `test-support`).
 //!
 //! [`lane`] — [`ProviderLane`] + its [`Probe`] outcome, the narrow seam the
 //! executor loop calls through to probe and process a provider's event queue.
 //! Each provider module implements it for its own lane; the executor is generic
 //! over whichever lane it is given and never names a concrete provider.
+
+mod activity_id;
+pub use activity_id::*;
 
 mod facade;
 pub use facade::*;

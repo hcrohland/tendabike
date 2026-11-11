@@ -55,7 +55,7 @@ use tb_domain::{
 use tb_provider::ProviderLane;
 use tb_provider::icu::{IcuStore, client::IcuAthleteInfo, event::IcuEvent};
 use tb_provider::strava::{
-    StravaStore, StravaUser, activity,
+    StravaStore, StravaUser,
     client::StravaAthleteInfo,
     event::{InEvent, insert_sync, is_sync_for_user, sync_queued_for_user, sync_users},
     gear,
@@ -556,7 +556,7 @@ where
             &lastname,
             &avatar,
             refresh.as_ref(),
-            &tb_provider::DomainFacadeImpl,
+            &tb_provider::EntityFacadeImpl,
             &mut store,
         )
         .await?;
@@ -592,7 +592,7 @@ where
         let uri = gear::strava_url(
             i32::from(id),
             session,
-            &tb_provider::DomainFacadeImpl,
+            &tb_provider::EntityFacadeImpl,
             &mut store,
         )
         .await?;
@@ -601,21 +601,13 @@ where
     }
 
     /// The activity redirect URL (spec #558 §5.2): one transaction — the
-    /// `tb_provider::strava` `strava_url` op (which checks the activity's ownership and
-    /// rejects a non-Strava id), then the Strava URL.
+    /// lane's `activity_url` op (which checks the activity's ownership and
+    /// rejects an id the provider does not recognize), then the provider
+    /// URL. The dispatch and the per-provider URL building live on the lane;
+    /// the registry just delegates.
     async fn activity_url(&self, session: Box<dyn Session>, id: ActivityId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let uri = if id.to_string().starts_with("icu:") {
-            tb_provider::icu::activity::activity_url(
-                id,
-                session,
-                &tb_provider::DomainFacadeImpl,
-                &mut store,
-            )
-            .await?
-        } else {
-            activity::strava_url(id, session, &tb_provider::DomainFacadeImpl, &mut store).await?
-        };
+        let uri = self.lane.activity_url(id, session, &mut store).await?;
         store.commit().await?;
         Ok(uri)
     }
@@ -651,7 +643,7 @@ where
         tb_provider::strava::user_delete(
             &mut *session,
             tbid,
-            &tb_provider::DomainFacadeImpl,
+            &tb_provider::EntityFacadeImpl,
             &mut store,
         )
         .await?;
@@ -687,7 +679,7 @@ where
             id,
             &name,
             &access_token,
-            &tb_provider::DomainFacadeImpl,
+            &tb_provider::EntityFacadeImpl,
             &mut store,
         )
         .await?;

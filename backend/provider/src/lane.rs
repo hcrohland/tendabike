@@ -29,7 +29,7 @@
 //! [`Probe`] outcome is generic over the provider's event type, so the
 //! loop's select and reclaim policy are provider-agnostic.
 
-use tb_domain::{PartId, Summary, TbResult, UserId, UserStat};
+use tb_domain::{ActivityId, PartId, Session, Summary, TbResult, UserId, UserStat};
 
 /// The outcome of one probe of the provider's event queue (one transaction).
 /// Generic over the provider's event type, so the loop's select and reclaim
@@ -110,4 +110,17 @@ pub trait ProviderLane: Send + Sync {
     /// side, spec #558 §3.3): the domain [`UserStat`] — the stat plus the
     /// provider's queued-event count and disabled flag.
     async fn all_stats(&self, store: &mut Self::Store) -> TbResult<Vec<UserStat>>;
+
+    /// The activity redirect URL (the `/source/activities/{id}` direct op's
+    /// provider side, spec #558 §5.2): the provider's URL for `id`, gated on
+    /// the acting session's ownership of the activity (the read is the
+    /// ownership check). The registry runs it in its own transaction and
+    /// delegates here — the dispatch and the per-provider URL building live
+    /// on the lane, not in the registry.
+    async fn activity_url(
+        &self,
+        id: ActivityId,
+        session: Box<dyn Session>,
+        store: &mut Self::Store,
+    ) -> TbResult<String>;
 }

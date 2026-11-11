@@ -29,8 +29,8 @@
 
 use std::marker::PhantomData;
 
-use crate::{Probe, ProviderLane};
-use tb_domain::{PartId, Summary, TbResult, UserId, UserStat};
+use crate::{Probe, ProviderActivityId, ProviderLane};
+use tb_domain::{ActivityId, Error, PartId, Session, Summary, TbResult, UserId, UserStat};
 
 use super::StravaStore;
 use super::event::{Event, QueueRead, get_event, process};
@@ -120,7 +120,7 @@ where
     /// Delegates to [`crate::event::process`]. Returns the event's
     /// [`Summary`] on success, or `None` on a DB failure.
     async fn process(&self, user_id: UserId, store: &mut S) -> Option<Summary> {
-        process(user_id, &crate::DomainFacadeImpl, store).await.ok()
+        process(user_id, &crate::EntityFacadeImpl, store).await.ok()
     }
 
     /// Queue a sync event on the Strava event queue (the onboarding cutover's
@@ -142,7 +142,7 @@ where
     /// transaction and reads the parts it created for the frame. Delegates to
     /// [`crate::user::StravaUser::update_gear`].
     async fn update_gear(&self, user_id: UserId, store: &mut S) -> TbResult<Vec<PartId>> {
-        super::user::StravaUser::update_gear(user_id, &crate::DomainFacadeImpl, store).await
+        super::user::StravaUser::update_gear(user_id, &crate::EntityFacadeImpl, store).await
     }
 
     /// Read every user's provider-neutral stat (the admin read's provider
@@ -150,6 +150,21 @@ where
     /// queued-event count and disabled flag. Delegates to
     /// [`crate::user::get_all_stats`].
     async fn all_stats(&self, store: &mut S) -> TbResult<Vec<UserStat>> {
-        super::user::get_all_stats(&crate::DomainFacadeImpl, store).await
+        super::user::get_all_stats(&crate::EntityFacadeImpl, store).await
+    }
+
+    /// The Strava half of [`ProviderLane::activity_url`]: the `strava:` URL
+    /// for `id`, gated on the acting session's ownership of the activity.
+    /// Delegates to [`crate::activity::strava_url`].
+    async fn activity_url(
+        &self,
+        id: ActivityId,
+        session: Box<dyn Session>,
+        store: &mut S,
+    ) -> TbResult<String> {
+        let ProviderActivityId::Strava(raw) = ProviderActivityId::try_from(id)? else {
+            return Err(Error::BadRequest("not a strava activity".to_string()));
+        };
+        super::activity::strava_url(raw, session, &crate::EntityFacadeImpl, store).await
     }
 }
