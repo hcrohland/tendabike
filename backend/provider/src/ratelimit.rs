@@ -1,10 +1,14 @@
-//! Provider-agnostic rate-limit kernel: window model, header-pair parsing,
-//! boundary math, and the "latest exhausted window" gate.
+//! Provider-agnostic rate-limit kernel and shared shim: the window model,
+//! header-pair parsing, boundary math, and the "latest exhausted window"
+//! gate, plus the [`RateLimitShim`] scaffolding a provider module wraps its
+//! process-wide limiter in.
 //!
-//! A provider instantiates [`RateLimiter`] with its own [`WindowSpec`]s
-//! (header names + cadence), getting an independent, process-wide limiter.
-//! The state is in-memory: on restart it starts empty and learns from the
-//! first response.
+//! A provider keeps a `static` [`RateLimitShim`] constructed with its own
+//! label and [`WindowSpec`]s (header names + cadence), getting an
+//! independent, process-wide limiter. The state is in-memory: on restart it
+//! starts empty and learns from the first response.
+
+use std::sync::Mutex;
 
 use http::{HeaderMap, HeaderName, HeaderValue};
 
@@ -156,6 +160,60 @@ impl RateLimiter {
         }
         self.was_limited = is_limited;
         until
+    }
+}
+
+/// The shared rate-limit shim: the scaffolding each provider module used to
+/// duplicate around the [`RateLimiter`] kernel — a process-wide limiter
+/// behind a [`Mutex`], parameterized by the provider's label and
+/// [`WindowSpec`]s.
+///
+/// A provider keeps a `static` of this (constructed with its own label and
+/// specs), its own per-thread test-override `thread_local` (a thread-local
+/// can't live in a struct instance), and thin `limited_until` /
+/// `update_from_headers` passthroughs to the shim's methods.
+pub struct RateLimitShim(Mutex<RateLimiter>);
+
+impl RateLimitShim {
+    /// Create a new shim: a fresh [`RateLimiter`] with the given label and
+    /// specs, behind the mutex.
+    pub fn new(label: &'static str, specs: Vec<WindowSpec>) -> Self {
+        Self(Mutex::new(RateLimiter::new(label, specs)))
+    }
+
+    /// The rate-limit gate: the unix time at which the exhausted window
+    /// resets, or `None` if budget remains (or no data yet).
+    ///
+    /// Emits a WARN log on transition into or out of the rate-limited state.
+    pub fn limited_until(&self) -> Option<i64> {
+        self.0.lock().unwrap().limited_until()
+    }
+
+    /// Parses the provider's rate-limit response headers into the shared
+    /// state. Each header is a `"15min,daily"` comma-separated pair of
+    /// integers. Missing or malformed headers are ignored (the state keeps
+    /// its previous values for those fields).
+    pub fn update_from_headers(&self, headers: &HeaderMap) {
+        self.0.lock().unwrap().update_from_headers(headers);
+    }
+
+    /// A fresh limiter in the shape of the process-wide one (the given label
+    /// and specs), populated from the given `"header", "value"` pairs — the
+    /// test helper a provider's per-thread override is built from.
+    #[cfg(test)]
+    pub fn limiter_from_headers(
+        label: &'static str,
+        specs: &[WindowSpec],
+        pairs: &[(&str, &str)],
+    ) -> RateLimiter {
+        let mut headers = HeaderMap::new();
+        for (name, value) in pairs {
+            let name = HeaderName::from_bytes(name.as_bytes()).unwrap();
+            headers.insert(name, HeaderValue::from_str(value).unwrap());
+        }
+        let mut limiter = RateLimiter::new(label, specs.to_vec());
+        limiter.update_from_headers(&headers);
+        limiter
     }
 }
 

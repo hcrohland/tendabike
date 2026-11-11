@@ -44,7 +44,7 @@ mod lane;
 pub use lane::*;
 
 mod ratelimit;
-pub use ratelimit::{Cadence, RateLimiter, WindowSpec};
+pub use ratelimit::{Cadence, RateLimitShim, RateLimiter, WindowSpec};
 
 mod failure;
 pub use failure::*;
