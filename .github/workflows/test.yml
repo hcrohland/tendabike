@@ -49,6 +49,7 @@ jobs:
         env:
           POSTGRES_USER: tendabike
           POSTGRES_PASSWORD: tendabike
+          POSTGRES_DB: tendabike
         ports:
           - 5432:5432
         options: >-
@@ -57,14 +58,15 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      # The suite force-drops any database left behind by a previous run,
-      # then creates and seeds this scratch database itself; the service
-      # needs no POSTGRES_DB.
+      # Dedicated database for the prepare step: created by the service
+      # (POSTGRES_DB), then migrated before the cache is checked.
+      DATABASE_URL: postgres://tendabike:tendabike@localhost:5432/tendabike
+      # The suite force-drops any database left behind by a previous run, then
+      # creates and seeds this scratch database itself, separate from the
+      # prepare step's database above.
       SCRATCH_DATABASE_URL: postgres://tendabike:tendabike@localhost:5432/tendabike_test
-      # Compile against the committed .sqlx offline cache: the scratch
-      # database is created by the suite at runtime and only gets its
-      # schema when the pool runs the migrations, so a live compile-time
-      # query check would fail.
+      # Compile against the committed .sqlx offline cache: the live query check
+      # is the separate prepare step, so the test compile needs no live database.
       SQLX_OFFLINE: "true"
 
     steps:
@@ -73,6 +75,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Format check
         run: cargo fmt --check
+      # Apply the migrations to the dedicated database, then verify the committed
+      # .sqlx cache is in sync with the code and schema.
+      - name: Prepare (migrate + check)
+        working-directory: backend/sqlx
+        run: |
+          cargo sqlx migrate run
+          cargo sqlx prepare --check
       # -- --include-ignored runs the ignored store-seam suite the other test binaries
       # have no ignored tests, so this changes nothing for the in-memory suites.
       - name: Test

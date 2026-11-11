@@ -13,6 +13,10 @@
 
 - Each entity lives in both halves: `backend/domain/src/entities/<name>.rs` and `frontend/src/lib/<name>.ts`.
 
+## Database
+
+SQLx compiles queries against the committed `backend/sqlx/.sqlx/` offline cache. After adding or changing a query, run `cargo sqlx prepare` to refresh it; apply schema changes with `cargo sqlx migrate run`. A migration is frozen once applied — change its behaviour with a new migration, not by editing the applied one.
+
 ## Commit rules
 
 - Flow, in order: finish the work → if on `main`, create a feature branch → commit optimistically (run `git commit` directly; fix and re-commit on hook failure) → push → if the work is on an issue, comment on it with the commit SHA.
