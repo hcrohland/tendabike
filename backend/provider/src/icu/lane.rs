@@ -10,8 +10,8 @@
 
 use std::marker::PhantomData;
 
-use crate::{EntityFacade, Probe, ProviderLane};
-use tb_domain::{PartId, Summary, TbResult, UserId, UserStat};
+use crate::{EntityFacade, Probe, ProviderActivityId, ProviderLane};
+use tb_domain::{ActivityId, Error, PartId, Session, Summary, TbResult, UserId, UserStat};
 
 use super::event::{QueueRead, get_event, process};
 use super::{IcuEvent, IcuStore};
@@ -122,6 +122,21 @@ where
     /// queued-event count and disabled flag.
     async fn all_stats(&self, store: &mut S) -> TbResult<Vec<UserStat>> {
         all_stats(store).await
+    }
+
+    /// The icu half of [`ProviderLane::activity_url`]: the `icu:` URL for
+    /// `id`, gated on the acting session's ownership of the activity.
+    /// Delegates to [`super::activity::activity_url`].
+    async fn activity_url(
+        &self,
+        id: ActivityId,
+        session: Box<dyn Session>,
+        store: &mut S,
+    ) -> TbResult<String> {
+        let ProviderActivityId::Icu(raw) = ProviderActivityId::try_from(id)? else {
+            return Err(Error::BadRequest("not an icu activity".to_string()));
+        };
+        super::activity::activity_url(raw, session, &crate::EntityFacadeImpl, store).await
     }
 }
 

@@ -52,14 +52,14 @@ use tb_domain::{
     Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, Store,
     Summary, TbResult, UserId, UserStat, WriteOutcome,
 };
+use tb_provider::ProviderLane;
 use tb_provider::icu::{IcuStore, client::IcuAthleteInfo, event::IcuEvent};
 use tb_provider::strava::{
-    StravaStore, StravaUser, activity,
+    StravaStore, StravaUser,
     client::StravaAthleteInfo,
     event::{InEvent, insert_sync, is_sync_for_user, sync_queued_for_user, sync_users},
     gear,
 };
-use tb_provider::{ProviderActivityId, ProviderLane};
 
 use crate::api::{IcuService, ProviderService, ServiceApi};
 use crate::message::Request;
@@ -601,27 +601,13 @@ where
     }
 
     /// The activity redirect URL (spec #558 §5.2): one transaction — the
-    /// provider's `activity_url` op (which checks the activity's ownership and
-    /// rejects an id the provider does not recognize), then the provider URL.
-    /// The dispatch matches on [`ProviderActivityId`] — the single home for
-    /// the `strava:` / `icu:` prefix knowledge.
+    /// lane's `activity_url` op (which checks the activity's ownership and
+    /// rejects an id the provider does not recognize), then the provider
+    /// URL. The dispatch and the per-provider URL building live on the lane;
+    /// the registry just delegates.
     async fn activity_url(&self, session: Box<dyn Session>, id: ActivityId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let uri = match ProviderActivityId::try_from(id)? {
-            ProviderActivityId::Strava(raw) => {
-                activity::strava_url(raw, session, &tb_provider::EntityFacadeImpl, &mut store)
-                    .await?
-            }
-            ProviderActivityId::Icu(raw) => {
-                tb_provider::icu::activity::activity_url(
-                    raw,
-                    session,
-                    &tb_provider::EntityFacadeImpl,
-                    &mut store,
-                )
-                .await?
-            }
-        };
+        let uri = self.lane.activity_url(id, session, &mut store).await?;
         store.commit().await?;
         Ok(uri)
     }
