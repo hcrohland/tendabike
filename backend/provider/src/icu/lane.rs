@@ -8,67 +8,19 @@
 //! transaction's connection): `type Store = S`, so the loop's transaction
 //! connection ties to `S` and `probe`/`process` operate on it.
 
-use std::marker::PhantomData;
-
-use crate::{EntityFacade, Probe, ProviderActivityId, ProviderLane};
+use crate::{EntityFacade, Lane, Probe, ProviderActivityId, ProviderLane};
 use tb_domain::{ActivityId, Error, PartId, Session, Summary, TbResult, UserId, UserStat};
 
 use super::event::{QueueRead, get_event, process};
 use super::{IcuEvent, IcuStore};
 
-/// The icu provider lane: the [`ProviderLane`] impl for the icu driver.
-///
-/// Generic over the store type `S` (the provider's full store — the
-/// transaction's connection): `type Store = S`. `S` is the connection the
-/// loop's transaction source opens.
-///
-/// The marker-field impls (`Clone`/`Copy`/`Debug`/`Default`) are written by
-/// hand rather than derived: the lane holds no `S` data (only a
-/// `PhantomData<S>` marker), so it is `Clone`/`Copy`/`Debug`/`Default` for
-/// any `S` — including a database connection, which is neither.
-pub struct IcuLane<S: IcuStore> {
-    _store: PhantomData<S>,
-}
-
-impl<S: IcuStore> Clone for IcuLane<S> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<S: IcuStore> Copy for IcuLane<S> {}
-
-impl<S: IcuStore> std::fmt::Debug for IcuLane<S> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("IcuLane").finish()
-    }
-}
-
-impl<S: IcuStore> Default for IcuLane<S> {
-    fn default() -> Self {
-        Self {
-            _store: PhantomData,
-        }
-    }
-}
-
-// `IcuLane<S>` holds no `S` data (only a `PhantomData<S>` marker), so it is
-// safe to share across threads even when `S` is not `Sync`. The auto-derived
-// `Sync` would require `S: Sync`; this sound `unsafe impl` provides the
-// unconditional `Sync` the `ProviderLane: Send + Sync` bound needs.
-unsafe impl<S: IcuStore> Sync for IcuLane<S> {}
-
-impl<S: IcuStore> IcuLane<S> {
-    /// The lane for a store of type `S`.
-    pub fn new() -> Self {
-        Self {
-            _store: PhantomData,
-        }
-    }
-}
+/// The icu provider lane: [`Lane<S, IcuEvent>`](Lane) — the [`ProviderLane`]
+/// impl for the icu driver. The distinct event type `IcuEvent` keeps this impl
+/// apart from the Strava lane's.
+pub type IcuLane<S> = Lane<S, IcuEvent>;
 
 #[async_trait::async_trait]
-impl<S> ProviderLane for IcuLane<S>
+impl<S> ProviderLane for Lane<S, IcuEvent>
 where
     S: IcuStore + Send + 'static,
 {
