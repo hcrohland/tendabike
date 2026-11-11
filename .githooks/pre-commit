@@ -51,12 +51,15 @@ if [ "$run_rust" -eq 1 ]; then
     # its owning entity's file (plus the store impls, doubles, tests, seed tool).
     python3 .githooks/check-store-access.py
     cargo fmt --check
-    (cd backend/sqlx && cargo sqlx prepare --check)
+    # Live cache-vs-DB tripwire — only when a dev DB is available.
+    if [ -n "$DATABASE_URL" ]; then
+        (cd backend/sqlx && cargo sqlx prepare --check)
+    fi
     # --workspace --all-targets lints the #[cfg(test)]/test-support code too;
     # a bare `cargo clippy` only checks the default (lib/bin) targets and
     # silently skips the mock! witnesses and test-support modules.
-    cargo clippy --workspace --all-targets -- -D warnings
-    cargo check
+    SQLX_OFFLINE=true cargo clippy --workspace --all-targets -- -D warnings
+    SQLX_OFFLINE=true cargo check
 fi
 
 if [ "$run_frontend" -eq 1 ]; then
