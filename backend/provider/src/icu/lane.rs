@@ -10,7 +10,7 @@
 
 use std::marker::PhantomData;
 
-use crate::{DomainFacade, Probe, ProviderLane};
+use crate::{EntityFacade, Probe, ProviderLane};
 use tb_domain::{PartId, Summary, TbResult, UserId, UserStat};
 
 use super::event::{QueueRead, get_event, process};
@@ -91,7 +91,7 @@ where
     /// queue, importing each activity. Delegates to [`event::process`].
     /// Returns the batch's [`Summary`] on success, or `None` on a DB failure.
     async fn process(&self, user_id: UserId, store: &mut S) -> Option<Summary> {
-        process(user_id, &crate::DomainFacadeImpl, store).await.ok()
+        process(user_id, &crate::EntityFacadeImpl, store).await.ok()
     }
 
     /// The onboarding cutover's provider side (spec #765/#766): import the
@@ -105,8 +105,8 @@ where
         _auto: bool,
         store: &mut S,
     ) -> TbResult<()> {
-        super::gear::update_gear(user_id, &crate::DomainFacadeImpl, store).await?;
-        super::backfill::backfill(user_id, time, &crate::DomainFacadeImpl, store).await?;
+        super::gear::update_gear(user_id, &crate::EntityFacadeImpl, store).await?;
+        super::backfill::backfill(user_id, time, &crate::EntityFacadeImpl, store).await?;
         Ok(())
     }
 
@@ -114,7 +114,7 @@ where
     /// #765): `GET /athlete/{id}/gear`, importing each supported gear.
     /// Delegates to [`super::gear::update_gear`].
     async fn update_gear(&self, user_id: UserId, store: &mut S) -> TbResult<Vec<PartId>> {
-        super::gear::update_gear(user_id, &crate::DomainFacadeImpl, store).await
+        super::gear::update_gear(user_id, &crate::EntityFacadeImpl, store).await
     }
 
     /// Read every user's provider-neutral stat (the admin read's provider
@@ -134,7 +134,7 @@ async fn all_stats<S: IcuStore + Sync + 'static>(store: &mut S) -> TbResult<Vec<
     for u in users {
         let events = store.icu_events_get_count_for_user(&u.id).await?;
         res.push(UserStat {
-            stat: crate::DomainFacadeImpl
+            stat: crate::EntityFacadeImpl
                 .get_stat(&u.tendabike_id, store)
                 .await?,
             events,

@@ -68,7 +68,7 @@ struct BackfillActivity {
 /// Rate-limit aware: the walk stops when the budget is exhausted (a 429, or
 /// the proactive gate) — the activities imported so far commit, and a later
 /// call resumes from the newest imported time.
-pub(crate) async fn backfill<D: crate::DomainFacade<S>, S: IcuDataStore>(
+pub(crate) async fn backfill<D: crate::EntityFacade<S>, S: IcuDataStore>(
     user_id: UserId,
     now: i64,
     facade: &D,

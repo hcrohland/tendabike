@@ -120,7 +120,7 @@ where
     /// Delegates to [`crate::event::process`]. Returns the event's
     /// [`Summary`] on success, or `None` on a DB failure.
     async fn process(&self, user_id: UserId, store: &mut S) -> Option<Summary> {
-        process(user_id, &crate::DomainFacadeImpl, store).await.ok()
+        process(user_id, &crate::EntityFacadeImpl, store).await.ok()
     }
 
     /// Queue a sync event on the Strava event queue (the onboarding cutover's
@@ -142,7 +142,7 @@ where
     /// transaction and reads the parts it created for the frame. Delegates to
     /// [`crate::user::StravaUser::update_gear`].
     async fn update_gear(&self, user_id: UserId, store: &mut S) -> TbResult<Vec<PartId>> {
-        super::user::StravaUser::update_gear(user_id, &crate::DomainFacadeImpl, store).await
+        super::user::StravaUser::update_gear(user_id, &crate::EntityFacadeImpl, store).await
     }
 
     /// Read every user's provider-neutral stat (the admin read's provider
@@ -150,6 +150,6 @@ where
     /// queued-event count and disabled flag. Delegates to
     /// [`crate::user::get_all_stats`].
     async fn all_stats(&self, store: &mut S) -> TbResult<Vec<UserStat>> {
-        super::user::get_all_stats(&crate::DomainFacadeImpl, store).await
+        super::user::get_all_stats(&crate::EntityFacadeImpl, store).await
     }
 }

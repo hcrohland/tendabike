@@ -64,13 +64,6 @@ fn get_type_rejects_unknown() {
     ));
 }
 
-// ─── activity_id ────────────────────────────────────────────────────────────
-
-#[test]
-fn activity_id_renders_icu_prefix() {
-    assert_eq!(format!("{}", activity_id("i55751783")), "icu:i55751783");
-}
-
 // ─── is_stub ────────────────────────────────────────────────────────────────
 
 #[test]
@@ -103,7 +96,10 @@ async fn into_activity_maps_fields() -> TbResult<()> {
     let act = icu_activity(None)
         .into_activity(UserId::from(1), &_facade, &mut _store)
         .await?;
-    assert_eq!(act.id, activity_id("10"));
+    assert_eq!(
+        act.id,
+        ProviderActivityId::Icu(IcuActivityId::from("10")).into()
+    );
     assert_eq!(act.what, 1.into());
     assert_eq!(act.user_id, UserId::from(1));
     assert!(act.gear.is_none());
@@ -184,7 +180,12 @@ async fn import_activity_real_returns_summary() -> TbResult<()> {
         });
     let summary = import_activity("10", UserId::from(1), &facade, &mut store).await?;
     let summary = summary.expect("a real activity produces a summary");
-    assert!(summary.activities.get(&activity_id("10")).is_some());
+    assert!(
+        summary
+            .activities
+            .get(&ProviderActivityId::Icu(IcuActivityId::from("10")).into())
+            .is_some()
+    );
     Ok(())
 }
 

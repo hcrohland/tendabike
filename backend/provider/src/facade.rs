@@ -1,12 +1,12 @@
 //! The provider's door into the domain (spec #781).
 //!
-//! [`DomainFacade`] is the trait a provider goes through to reach the domain:
+//! [`EntityFacade`] is the trait a provider goes through to reach the domain:
 //! the operations a provider drives, each a one-line forward to the concrete
 //! domain op, generic over the store. A provider function is generic over
-//! `D: DomainFacade` (static dispatch); tests swap in the
-//! [`MockDomainFacade`] (under `test-support`).
+//! `D: EntityFacade` (static dispatch); tests swap in the
+//! [`MockEntityFacade`] (under `test-support`).
 //!
-//! [`MockDomainFacade`]: crate::test_support::MockDomainFacade
+//! [`MockEntityFacade`]: crate::test_support::MockEntityFacade
 
 #![allow(clippy::too_many_arguments)]
 use time::OffsetDateTime;
@@ -21,14 +21,14 @@ use tb_domain::{
 /// store.
 ///
 /// Dispatch is static — a provider function is generic over
-/// `D: DomainFacade`. Under `test-support`, `mockall`'s `#[automock]`
-/// generates [`MockDomainFacade`]; tests set expectations with the store type
+/// `D: EntityFacade`. Under `test-support`, `mockall`'s `#[automock]`
+/// generates [`MockEntityFacade`]; tests set expectations with the store type
 /// as a turbofish, e.g. `expect_upsert_activity::<MyStore>()`.
 ///
-/// [`MockDomainFacade`]: crate::test_support::MockDomainFacade
+/// [`MockEntityFacade`]: crate::test_support::MockEntityFacade
 #[cfg_attr(any(test, feature = "test-support"), mockall::automock)]
 #[async_trait::async_trait]
-pub trait DomainFacade<C: Send + Sync>: Send + Sync {
+pub trait EntityFacade<C: Send + Sync>: Send + Sync {
     // ── Activity ─────────────────────────────────────────────────────────
     /// Upsert the activity and register its usage (the domain's
     /// `Activity::upsert`).
@@ -124,13 +124,13 @@ pub trait DomainFacade<C: Send + Sync>: Send + Sync {
     ) -> TbResult<Notification>;
 }
 
-/// The concrete [`DomainFacade`]: a stateless unit struct that forwards each
+/// The concrete [`EntityFacade`]: a stateless unit struct that forwards each
 /// operation to the corresponding domain op.
 #[derive(Debug, Default, Clone, Copy)]
-pub struct DomainFacadeImpl;
+pub struct EntityFacadeImpl;
 
 #[async_trait::async_trait]
-impl<C: Store + Sync + 'static> DomainFacade<C> for DomainFacadeImpl {
+impl<C: Store + Sync + 'static> EntityFacade<C> for EntityFacadeImpl {
     async fn upsert_activity(
         &self,
         activity: Activity,
@@ -266,7 +266,7 @@ mod tests {
     async fn part_by_source_forwards_to_domain() -> TbResult<()> {
         let mut store = MockStore::new();
         store.expect_partid_get_by_source().returning(|_s| Ok(None));
-        let facade = DomainFacadeImpl;
+        let facade = EntityFacadeImpl;
         let part = facade.part_by_source("b1", &mut store).await?;
         assert!(part.is_none());
         Ok(())
@@ -278,7 +278,7 @@ mod tests {
         store
             .expect_user_create()
             .returning(|_f, _l, _a, _p| Ok(user(UserId::from(42))));
-        let facade = DomainFacadeImpl;
+        let facade = EntityFacadeImpl;
         let id = facade
             .create_user("first", "last", &None, "strava", &mut store)
             .await?;
@@ -294,7 +294,7 @@ mod tests {
         store
             .expect_activity_read_by_id()
             .returning(move |_id| Ok(Some(act_read.clone())));
-        let facade = DomainFacadeImpl;
+        let facade = EntityFacadeImpl;
         let session: Box<dyn Session> = Box::new(mock_session(UserId::from(1)));
         let act = facade
             .read_activity(&ActivityId::from("strava:1"), session, &mut store)
@@ -308,7 +308,7 @@ mod tests {
     /// domain. The store type `C` is inferred from the argument.
     #[tokio::test]
     async fn mock_domain_facade_serves_canned_outcome() -> TbResult<()> {
-        let mut mock = MockDomainFacade::new();
+        let mut mock = MockEntityFacade::new();
         mock.expect_part_by_source()
             .returning(|_source, _store| Ok(None));
         let mut store = MockStore::new();

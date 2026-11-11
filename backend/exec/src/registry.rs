@@ -52,7 +52,6 @@ use tb_domain::{
     Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, Store,
     Summary, TbResult, UserId, UserStat, WriteOutcome,
 };
-use tb_provider::ProviderLane;
 use tb_provider::icu::{IcuStore, client::IcuAthleteInfo, event::IcuEvent};
 use tb_provider::strava::{
     StravaStore, StravaUser, activity,
@@ -60,6 +59,7 @@ use tb_provider::strava::{
     event::{InEvent, insert_sync, is_sync_for_user, sync_queued_for_user, sync_users},
     gear,
 };
+use tb_provider::{ProviderActivityId, ProviderLane};
 
 use crate::api::{IcuService, ProviderService, ServiceApi};
 use crate::message::Request;
@@ -556,7 +556,7 @@ where
             &lastname,
             &avatar,
             refresh.as_ref(),
-            &tb_provider::DomainFacadeImpl,
+            &tb_provider::EntityFacadeImpl,
             &mut store,
         )
         .await?;
@@ -592,7 +592,7 @@ where
         let uri = gear::strava_url(
             i32::from(id),
             session,
-            &tb_provider::DomainFacadeImpl,
+            &tb_provider::EntityFacadeImpl,
             &mut store,
         )
         .await?;
@@ -601,20 +601,26 @@ where
     }
 
     /// The activity redirect URL (spec #558 §5.2): one transaction — the
-    /// `tb_provider::strava` `strava_url` op (which checks the activity's ownership and
-    /// rejects a non-Strava id), then the Strava URL.
+    /// provider's `activity_url` op (which checks the activity's ownership and
+    /// rejects an id the provider does not recognize), then the provider URL.
+    /// The dispatch matches on [`ProviderActivityId`] — the single home for
+    /// the `strava:` / `icu:` prefix knowledge (ADR-0013).
     async fn activity_url(&self, session: Box<dyn Session>, id: ActivityId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let uri = if id.to_string().starts_with("icu:") {
-            tb_provider::icu::activity::activity_url(
-                id,
-                session,
-                &tb_provider::DomainFacadeImpl,
-                &mut store,
-            )
-            .await?
-        } else {
-            activity::strava_url(id, session, &tb_provider::DomainFacadeImpl, &mut store).await?
+        let uri = match ProviderActivityId::try_from(id)? {
+            ProviderActivityId::Strava(raw) => {
+                activity::strava_url(raw, session, &tb_provider::EntityFacadeImpl, &mut store)
+                    .await?
+            }
+            ProviderActivityId::Icu(raw) => {
+                tb_provider::icu::activity::activity_url(
+                    raw,
+                    session,
+                    &tb_provider::EntityFacadeImpl,
+                    &mut store,
+                )
+                .await?
+            }
         };
         store.commit().await?;
         Ok(uri)
@@ -651,7 +657,7 @@ where
         tb_provider::strava::user_delete(
             &mut *session,
             tbid,
-            &tb_provider::DomainFacadeImpl,
+            &tb_provider::EntityFacadeImpl,
             &mut store,
         )
         .await?;
@@ -687,7 +693,7 @@ where
             id,
             &name,
             &access_token,
-            &tb_provider::DomainFacadeImpl,
+            &tb_provider::EntityFacadeImpl,
             &mut store,
         )
         .await?;

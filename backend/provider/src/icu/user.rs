@@ -13,7 +13,7 @@ use derive_more::{Display, From, Into};
 use serde::Deserialize;
 
 use super::*;
-use crate::DomainFacade;
+use crate::EntityFacade;
 
 /// The icu athlete ID: a provider text id (intervals.icu ids are not
 /// integers), wrapped as an opaque newtype. The inner value is private —
@@ -90,7 +90,7 @@ impl IcuUser {
     /// # Returns
     ///
     /// An `TbResult` containing the upserted [`IcuUser`].
-    pub async fn upsert<D: DomainFacade<S>, S: IcuDataStore>(
+    pub async fn upsert<D: EntityFacade<S>, S: IcuDataStore>(
         id: IcuId,
         name: &str,
         access_token: &str,

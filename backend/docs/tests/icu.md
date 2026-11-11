@@ -6,13 +6,13 @@ All tests run in-memory (no database, no network); one `<name>_tests.rs` module 
 
 The ICU module (`tb_provider::icu`) owns the **intervals.icu → domain mapping**: translating icu JSON into domain entities (gear JSON → `Part`, activity JSON → `Activity`, user JSON → `IcuUser`) and the icu-logic free functions over it (activity import, gear hydration, event processing, backfill).
 
-- **What it mocks** — the **IcuDataStore** (the icu-specific I/O boundary): `MockIcuDataStore` is a `mockall` `#[automock]` of the `IcuDataStore` trait, so the icu-logic runs for real against canned store outcomes. Domain operations are mocked via `MockDomainFacade` (the `DomainFacade` seam). The **intervals.icu HTTP API** is stubbed behind the thread-local canned-response map (`queue` / `queue_error` / `requests`).
+- **What it mocks** — the **IcuDataStore** (the icu-specific I/O boundary): `MockIcuDataStore` is a `mockall` `#[automock]` of the `IcuDataStore` trait, so the icu-logic runs for real against canned store outcomes. Domain operations are mocked via `MockEntityFacade` (the `EntityFacade` seam). The **intervals.icu HTTP API** is stubbed behind the thread-local canned-response map (`queue` / `queue_error` / `requests`).
 - **What it delegates to the seam** — the **store I/O** (real Postgres) lives in the sqlx seam suites (see [`sqlx.md`](sqlx.md)); the **frame-push / orchestration** (deciding what to push after hydration) lives in `tb_exec` (see [`exec.md`](exec.md)); the **domain-level results** live in the `tb_domain` suite (see [`domain.md`](domain.md)).
 
 ## Key infrastructure
 
-- **`MockIcuDataStore`** (`provider/src/icu/traits.rs`, via `#[automock]`) — the `IcuDataStore` automock: icu-table I/O is canned, domain ops go through `MockDomainFacade` (`C` inferred as `MockIcuDataStore`). The icu-logic tests (activity import, gear hydration, event processing, backfill) run the logic for real and assert on canned outcomes.
-- **`setup()`** (`provider/src/icu/test_support.rs`) — builds a fresh `MockIcuDataStore` and a `MockDomainFacade` (with `C` = `MockIcuDataStore`), and calls `begin_test()` to mark the thread in test mode so the HTTP seam's canned responses are replayed. Unlike the Strava driver there is no token cache to seed (intervals.icu tokens are durable, read straight from `icu_users`), so `setup()` is the only entry point.
+- **`MockIcuDataStore`** (`provider/src/icu/traits.rs`, via `#[automock]`) — the `IcuDataStore` automock: icu-table I/O is canned, domain ops go through `MockEntityFacade` (`C` inferred as `MockIcuDataStore`). The icu-logic tests (activity import, gear hydration, event processing, backfill) run the logic for real and assert on canned outcomes.
+- **`setup()`** (`provider/src/icu/test_support.rs`) — builds a fresh `MockIcuDataStore` and a `MockEntityFacade` (with `C` = `MockIcuDataStore`), and calls `begin_test()` to mark the thread in test mode so the HTTP seam's canned responses are replayed. Unlike the Strava driver there is no token cache to seed (intervals.icu tokens are durable, read straight from `icu_users`), so `setup()` is the only entry point.
 - **HTTP seam** (`provider/src/icu/test_support/seam.rs`) — thread-local canned responses for the intervals.icu API. The canned-response surface is free functions:
   - `begin_test()` — mark the thread in test mode and clear any canned responses/records (per-test isolation)
   - `queue(uri, json)` — script a JSON response body for an **exact** request URI (FIFO per URI)
@@ -59,6 +59,6 @@ async fn my_test() -> TbResult<()> {
 
 ## Gotchas
 
-- `setup()` returns `(MockIcuDataStore, MockDomainFacade)` — both are owned, not references. Use `mut` bindings for store methods.
+- `setup()` returns `(MockIcuDataStore, MockEntityFacade)` — both are owned, not references. Use `mut` bindings for store methods.
 - The HTTP seam is thread-local: each `#[tokio::test]` runs on its own thread, so `begin_test()` (called by `setup()`) gives per-test isolation automatically.
 - `icu_user(tbid, icuathlete, enabled)` sets `access_token` to `Some("test-token")` when `enabled` is true, `None` otherwise — the token is read by `http::request_json` to authenticate API calls.
