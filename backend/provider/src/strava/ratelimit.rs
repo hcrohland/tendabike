@@ -19,31 +19,36 @@ use std::sync::Mutex;
 
 use http::{HeaderMap, HeaderName};
 
-use crate::{Cadence, RateLimiter, WindowSpec};
+use crate::{Cadence, RateLimiter, UsageKind, WindowSpec};
 
 /// Strava's 4-window header mapping: the overall and read scopes, each a
-/// 15-minute and a daily window reading the same header pair.
+/// 15-minute and a daily window reading the same header pair. Strava reports
+/// *used* requests (`X-RateLimit-Usage`).
 fn strava_specs() -> Vec<WindowSpec> {
     vec![
         WindowSpec {
             limit_header: HeaderName::from_bytes(b"X-RateLimit-Limit").unwrap(),
             usage_header: HeaderName::from_bytes(b"X-RateLimit-Usage").unwrap(),
             cadence: Cadence::FifteenMin,
+            usage_kind: UsageKind::Used,
         },
         WindowSpec {
             limit_header: HeaderName::from_bytes(b"X-RateLimit-Limit").unwrap(),
             usage_header: HeaderName::from_bytes(b"X-RateLimit-Usage").unwrap(),
             cadence: Cadence::Daily,
+            usage_kind: UsageKind::Used,
         },
         WindowSpec {
             limit_header: HeaderName::from_bytes(b"X-ReadRateLimit-Limit").unwrap(),
             usage_header: HeaderName::from_bytes(b"X-ReadRateLimit-Usage").unwrap(),
             cadence: Cadence::FifteenMin,
+            usage_kind: UsageKind::Used,
         },
         WindowSpec {
             limit_header: HeaderName::from_bytes(b"X-ReadRateLimit-Limit").unwrap(),
             usage_header: HeaderName::from_bytes(b"X-ReadRateLimit-Usage").unwrap(),
             cadence: Cadence::Daily,
+            usage_kind: UsageKind::Used,
         },
     ]
 }

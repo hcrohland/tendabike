@@ -59,12 +59,25 @@ impl Cadence {
     }
 }
 
+/// How the usage header's integer is to be interpreted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UsageKind {
+    /// The header reports the number of requests *used* (e.g. Strava's
+    /// `X-RateLimit-Usage`). The value is stored as the window's usage.
+    Used,
+    /// The header reports the number of requests *remaining* (e.g. icu's
+    /// `X-RateLimit-Remaining`). The window's usage is derived as
+    /// `limit - remaining` (saturating), so `remaining == 0` reads as exhausted.
+    Remaining,
+}
+
 /// Ties one rate-limit window to its response headers and cadence.
 #[derive(Debug, Clone)]
 pub struct WindowSpec {
     pub limit_header: HeaderName,
     pub usage_header: HeaderName,
     pub cadence: Cadence,
+    pub usage_kind: UsageKind,
 }
 
 /// A per-provider rate limiter: one [`Window`] of state per [`WindowSpec`],
@@ -74,6 +87,9 @@ pub struct RateLimiter {
     windows: Vec<Window>,
     specs: Vec<WindowSpec>,
     was_limited: bool,
+    /// Whether the previous [`update_from_headers`] saw a missing header, so
+    /// the missing-header WARN fires on transition (not on every response).
+    was_missing: bool,
 }
 
 impl RateLimiter {
@@ -87,6 +103,7 @@ impl RateLimiter {
             windows,
             specs,
             was_limited: false,
+            was_missing: false,
         }
     }
 
@@ -99,17 +116,51 @@ impl RateLimiter {
     /// Update the window states from response headers.
     ///
     /// For each spec, parses the limit and usage headers (a `"15min,daily"`
-    /// comma-separated pair) and updates the corresponding window. Missing or
-    /// malformed headers keep the previous value for that field.
+    /// comma-separated pair) and updates the corresponding window. A missing
+    /// or malformed header keeps the previous value for that field. The usage
+    /// value is interpreted per the spec's [`UsageKind`]: `Used` stores it
+    /// directly; `Remaining` derives usage as `limit - remaining`.
+    ///
+    /// Emits a WARN log on transition into (or out of) the state where any
+    /// spec's header is missing from the response — a provider that should be
+    /// sending its rate-limit headers but isn't leaves the limiter blind.
     pub fn update_from_headers(&mut self, headers: &HeaderMap) {
+        let mut any_missing = false;
         for (window, spec) in self.windows.iter_mut().zip(self.specs.iter()) {
-            if let Some(pair) = parse_pair(headers.get(&spec.limit_header)) {
+            let limit_pair = parse_pair(headers.get(&spec.limit_header));
+            if limit_pair.is_none() {
+                any_missing = true;
+            }
+            let usage_pair = parse_pair(headers.get(&spec.usage_header));
+            if usage_pair.is_none() {
+                any_missing = true;
+            }
+            if let Some(pair) = limit_pair {
                 window.limit = Some(spec.cadence.pair_value(pair));
             }
-            if let Some(pair) = parse_pair(headers.get(&spec.usage_header)) {
-                window.usage = Some(spec.cadence.pair_value(pair));
+            if let Some(pair) = usage_pair {
+                let raw = spec.cadence.pair_value(pair);
+                match spec.usage_kind {
+                    UsageKind::Used => window.usage = Some(raw),
+                    // `remaining` needs the limit to derive usage; without it
+                    // the field keeps its previous value.
+                    UsageKind::Remaining => {
+                        if let Some(limit) = window.limit {
+                            window.usage = Some(limit.saturating_sub(raw));
+                        }
+                    }
+                }
             }
         }
+        if any_missing && !self.was_missing {
+            log::warn!(
+                "{}: rate-limit headers missing from response; limiter state is stale",
+                self.label
+            );
+        } else if !any_missing && self.was_missing {
+            log::debug!("{}: rate-limit headers present again", self.label);
+        }
+        self.was_missing = any_missing;
         log::debug!("Rate limit state updated: {:?}", self.windows);
     }
 
@@ -198,23 +249,37 @@ mod tests {
                 limit_header: HeaderName::from_bytes(b"X-Limit").unwrap(),
                 usage_header: HeaderName::from_bytes(b"X-Usage").unwrap(),
                 cadence: Cadence::FifteenMin,
+                usage_kind: UsageKind::Used,
             },
             WindowSpec {
                 limit_header: HeaderName::from_bytes(b"X-Limit").unwrap(),
                 usage_header: HeaderName::from_bytes(b"X-Usage").unwrap(),
                 cadence: Cadence::Daily,
+                usage_kind: UsageKind::Used,
             },
             WindowSpec {
                 limit_header: HeaderName::from_bytes(b"X-Read-Limit").unwrap(),
                 usage_header: HeaderName::from_bytes(b"X-Read-Usage").unwrap(),
                 cadence: Cadence::FifteenMin,
+                usage_kind: UsageKind::Used,
             },
             WindowSpec {
                 limit_header: HeaderName::from_bytes(b"X-Read-Limit").unwrap(),
                 usage_header: HeaderName::from_bytes(b"X-Read-Usage").unwrap(),
                 cadence: Cadence::Daily,
+                usage_kind: UsageKind::Used,
             },
         ]
+    }
+
+    /// A single-window spec whose usage header reports *remaining* requests.
+    fn remaining_spec() -> Vec<WindowSpec> {
+        vec![WindowSpec {
+            limit_header: HeaderName::from_bytes(b"X-Limit").unwrap(),
+            usage_header: HeaderName::from_bytes(b"X-Remaining").unwrap(),
+            cadence: Cadence::FifteenMin,
+            usage_kind: UsageKind::Remaining,
+        }]
     }
 
     fn headers(pairs: &[(&str, &str)]) -> HeaderMap {
@@ -345,6 +410,43 @@ mod tests {
         limiter.update_from_headers(&h2);
         let w = limiter.windows();
         assert_eq!(w[2], window(100, 42));
+    }
+
+    // ─── UsageKind::Remaining ────────────────────────────────────────────
+
+    #[test]
+    fn remaining_zero_reads_as_exhausted() {
+        let mut limiter = RateLimiter::new("test", remaining_spec());
+        let h = headers(&[("X-Limit", "2500,5000"), ("X-Remaining", "0,4500")]);
+        limiter.update_from_headers(&h);
+        let w = limiter.windows();
+        // usage = limit - remaining = 2500 - 0 = 2500 (15-min window)
+        assert_eq!(w[0], window(2500, 2500));
+        assert!(w[0].is_exhausted());
+        assert!(limiter.gate().is_some());
+    }
+
+    #[test]
+    fn remaining_positive_reads_as_not_exhausted() {
+        let mut limiter = RateLimiter::new("test", remaining_spec());
+        let h = headers(&[("X-Limit", "2500,5000"), ("X-Remaining", "100,4500")]);
+        limiter.update_from_headers(&h);
+        let w = limiter.windows();
+        // usage = 2500 - 100 = 2400
+        assert_eq!(w[0], window(2500, 2400));
+        assert!(!w[0].is_exhausted());
+        assert!(limiter.gate().is_none());
+    }
+
+    #[test]
+    fn remaining_exceeding_limit_saturates_to_zero_usage() {
+        let mut limiter = RateLimiter::new("test", remaining_spec());
+        let h = headers(&[("X-Limit", "100,1000"), ("X-Remaining", "500,4500")]);
+        limiter.update_from_headers(&h);
+        let w = limiter.windows();
+        // usage = 100 - 500 saturates to 0 (no underflow)
+        assert_eq!(w[0], window(100, 0));
+        assert!(!w[0].is_exhausted());
     }
 
     // ─── RateLimiter::limited_until ──────────────────────────────────────

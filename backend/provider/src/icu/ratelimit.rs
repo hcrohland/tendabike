@@ -2,9 +2,10 @@
 //! [`tb_provider::RateLimiter`] kernel.
 //!
 //! The process-wide limiter is constructed with intervals.icu's header
-//! mapping — the read and write scopes, each a 15-minute and a daily window
-//! reading the `X-RateLimit-*` pair. The HTTP layer feeds it from response
-//! headers ([`update_from_headers`]); the event-queue read consults it for the
+//! mapping — a 15-minute and a daily window, both reading the
+//! `X-RateLimit-Limit` / `X-RateLimit-Remaining` pair (the API reports
+//! *remaining* requests). The HTTP layer feeds it from response headers
+//! ([`update_from_headers`]); the event-queue read consults it for the
 //! "limited until" gate ([`limited_until`]).
 //!
 //! The state is process-wide (shared across all executors) and in-memory: on
@@ -19,31 +20,25 @@ use std::sync::Mutex;
 
 use http::{HeaderMap, HeaderName};
 
-use crate::{Cadence, RateLimiter, WindowSpec};
+use crate::{Cadence, RateLimiter, UsageKind, WindowSpec};
 
-/// intervals.icu's 4-window header mapping: the read and write scopes, each a
-/// 15-minute and a daily window reading the `X-RateLimit-*` pair.
+/// intervals.icu's 2-window header mapping: a 15-minute and a daily window,
+/// both reading the `X-RateLimit-Limit` / `X-RateLimit-Remaining` pair. The
+/// API reports *remaining* requests (not used), so the usage is derived as
+/// `limit - remaining`. There is no separate read scope.
 fn icu_specs() -> Vec<WindowSpec> {
     vec![
         WindowSpec {
             limit_header: HeaderName::from_bytes(b"X-RateLimit-Limit").unwrap(),
-            usage_header: HeaderName::from_bytes(b"X-RateLimit-Usage").unwrap(),
+            usage_header: HeaderName::from_bytes(b"X-RateLimit-Remaining").unwrap(),
             cadence: Cadence::FifteenMin,
+            usage_kind: UsageKind::Remaining,
         },
         WindowSpec {
             limit_header: HeaderName::from_bytes(b"X-RateLimit-Limit").unwrap(),
-            usage_header: HeaderName::from_bytes(b"X-RateLimit-Usage").unwrap(),
+            usage_header: HeaderName::from_bytes(b"X-RateLimit-Remaining").unwrap(),
             cadence: Cadence::Daily,
-        },
-        WindowSpec {
-            limit_header: HeaderName::from_bytes(b"X-ReadRateLimit-Limit").unwrap(),
-            usage_header: HeaderName::from_bytes(b"X-ReadRateLimit-Usage").unwrap(),
-            cadence: Cadence::FifteenMin,
-        },
-        WindowSpec {
-            limit_header: HeaderName::from_bytes(b"X-ReadRateLimit-Limit").unwrap(),
-            usage_header: HeaderName::from_bytes(b"X-ReadRateLimit-Usage").unwrap(),
-            cadence: Cadence::Daily,
+            usage_kind: UsageKind::Remaining,
         },
     ]
 }
@@ -86,13 +81,13 @@ pub fn update_from_headers(headers: &HeaderMap) {
 }
 
 #[cfg(test)]
-/// Sets this thread's rate-limiter override to "at limit" (read 15-min
-/// exhausted), so [`limited_until`] reports a boundary.
+/// Sets this thread's rate-limiter override to "at limit" (15-min exhausted:
+/// 0 remaining), so [`limited_until`] reports a boundary.
 pub fn test_set_limited() {
     TEST_OVERRIDE.with(|o| {
         *o.borrow_mut() = Some(limiter_from_headers(&[
-            ("X-ReadRateLimit-Limit", "100,1000"),
-            ("X-ReadRateLimit-Usage", "100,500"),
+            ("X-RateLimit-Limit", "100,1000"),
+            ("X-RateLimit-Remaining", "0,500"),
         ]));
     });
 }
@@ -103,8 +98,8 @@ pub fn test_set_limited() {
 pub fn test_set_not_limited() {
     TEST_OVERRIDE.with(|o| {
         *o.borrow_mut() = Some(limiter_from_headers(&[
-            ("X-ReadRateLimit-Limit", "100,1000"),
-            ("X-ReadRateLimit-Usage", "0,0"),
+            ("X-RateLimit-Limit", "100,1000"),
+            ("X-RateLimit-Remaining", "100,1000"),
         ]));
     });
 }
@@ -143,5 +138,33 @@ mod tests {
     fn icu_limited_until_is_none_when_not_exhausted() {
         test_set_not_limited();
         assert_eq!(limited_until(), None);
+    }
+
+    /// The intervals.icu API returns exactly these two headers (per the API
+    /// docs): `X-RateLimit-Limit: <15m>,<daily>` and
+    /// `X-RateLimit-Remaining: <15m>,<daily>`. This feeds the real shape and
+    /// asserts the limiter detects an exhausted 15-minute window (0 remaining).
+    #[test]
+    fn icu_limiter_works_with_real_api_headers() {
+        let mut m = HeaderMap::new();
+        m.insert(
+            HeaderName::from_bytes(b"X-RateLimit-Limit").unwrap(),
+            http::HeaderValue::from_str("2500,5000").unwrap(),
+        );
+        m.insert(
+            HeaderName::from_bytes(b"X-RateLimit-Remaining").unwrap(),
+            http::HeaderValue::from_str("0,4500").unwrap(),
+        );
+        let mut limiter = RateLimiter::new("icu", icu_specs());
+        limiter.update_from_headers(&m);
+        let until = limiter
+            .gate()
+            .expect("exhausted 15-minute window reports a boundary");
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        assert!(until > now, "boundary is in the future");
+        assert_eq!(until % 900, 0, "boundary is a 15-min mark");
     }
 }

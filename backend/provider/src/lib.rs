@@ -37,7 +37,7 @@ mod lane;
 pub use lane::*;
 
 mod ratelimit;
-pub use ratelimit::{Cadence, RateLimiter, WindowSpec};
+pub use ratelimit::{Cadence, RateLimiter, UsageKind, WindowSpec};
 
 #[cfg(feature = "strava")]
 pub mod strava;
