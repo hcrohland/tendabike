@@ -9,6 +9,10 @@
 - Keep batch size one: draft a unit, write it, confirm it landed, then draft the next — one ticket per create, one file or function per edit. Each unit's content is written after the previous one lands, not drafted in a batch up front.
 - Formatting is done by external formatters, never by hand: write the code, then run cargo fmt (Rust) or npm run format from the project root.
 
+## Backend layout
+
+A Cargo package's directory is its name without the `tb_` prefix: `tb_provider` → `backend/provider/`.
+
 ## Domain
 
 - Each entity lives in both halves: `backend/domain/src/entities/<name>.rs` and `frontend/src/lib/<name>.ts`.
