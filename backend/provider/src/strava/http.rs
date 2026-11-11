@@ -146,7 +146,7 @@ async fn get_strava(access: &AccessToken, uri: &str) -> TbResult<String> {
         StatusDecision::NotAuth => Err(Error::NotAuth(format!(
             "Strava request authorization withdrawn for {uri}"
         ))),
-        StatusDecision::BadRequest => Err(Error::BadRequest(format!(
+        StatusDecision::Permanent => Err(Error::BadRequest(format!(
             "Strava request error: {}",
             status
                 .canonical_reason()

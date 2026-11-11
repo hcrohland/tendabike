@@ -163,10 +163,9 @@ impl RateLimiter {
     }
 }
 
-/// The shared rate-limit shim: the scaffolding each provider module used to
-/// duplicate around the [`RateLimiter`] kernel — a process-wide limiter
-/// behind a [`Mutex`], parameterized by the provider's label and
-/// [`WindowSpec`]s.
+/// The shared rate-limit shim: the scaffolding each provider module wraps
+/// around the [`RateLimiter`] kernel — a process-wide limiter behind a
+/// [`Mutex`], parameterized by the provider's label and [`WindowSpec`]s.
 ///
 /// A provider keeps a `static` of this (constructed with its own label and
 /// specs), its own per-thread test-override `thread_local` (a thread-local

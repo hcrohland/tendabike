@@ -32,9 +32,9 @@ pub use crate::facade::MockEntityFacade;
 /// fields, so it is shared verbatim by every seam.
 #[derive(Default)]
 pub struct CannedState {
-    pub test_mode: bool,
-    pub responses: HashMap<String, VecDeque<TbResult<String>>>,
-    pub requests: Vec<String>,
+    test_mode: bool,
+    responses: HashMap<String, VecDeque<TbResult<String>>>,
+    requests: Vec<String>,
 }
 
 /// Begin a test's thread-local scope on the seam's `CANNED` key: resets the

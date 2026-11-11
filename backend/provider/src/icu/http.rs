@@ -63,7 +63,7 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
 
 /// The bearer GET of an intervals.icu API `uri`, mapping the HTTP status to
 /// a domain error (the kit's status classification applied with icu's
-/// messages; the `BadRequest` arm reads the response body into the detail —
+/// messages; the `Permanent` arm reads the response body into the detail —
 /// icu-specific, so it stays here).
 async fn get_icu(access: &str, uri: &str) -> TbResult<String> {
     let resp = HTTP_CLIENT
@@ -87,7 +87,7 @@ async fn get_icu(access: &str, uri: &str) -> TbResult<String> {
         StatusDecision::NotAuth => Err(Error::NotAuth(format!(
             "intervals.icu request authorization withdrawn for {uri}"
         ))),
-        StatusDecision::BadRequest => {
+        StatusDecision::Permanent => {
             let body = resp.text().await.unwrap_or_default();
             Err(Error::BadRequest(format!(
                 "intervals.icu request error: {} — {body}",

@@ -20,16 +20,9 @@ use tb_domain::Error;
 ///   admin sync endpoint re-covers a gap if the user cares.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FailureDecision {
-    /// The event stays queued (a rate limit): it is retried after the backoff.
     KeepQueued,
-    /// The user's integration is dead (a 401 after a token refresh): disable
-    /// it — which drops all their queued events.
     DisableUser,
-    /// The event is permanently bad (a 404, a parse error): drop it, log it,
-    /// and move on.
     DropEvent,
-    /// A DB failure: propagate it — the caller rolls back (the event stays
-    /// queued) and applies its in-memory backoff.
     Propagate,
 }
 

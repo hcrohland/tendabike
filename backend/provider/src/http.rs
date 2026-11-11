@@ -11,7 +11,7 @@ use http::StatusCode;
 ///   the backoff.
 /// - dead auth (`NotAuth`, a 401) → the caller disables the user's
 ///   integration, which drops all their queued events.
-/// - anything else (`BadRequest`) → a permanent error: the caller drops the
+/// - anything else (`Permanent`) → a permanent error: the caller drops the
 ///   event and moves on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusDecision {
@@ -21,14 +21,14 @@ pub enum StatusDecision {
     /// Dead auth (a 401): the caller disables the user's integration.
     NotAuth,
     /// Anything else (a 404, a 400, ...): a permanent error.
-    BadRequest,
+    Permanent,
 }
 
 /// Classifies a non-success provider API response status.
 ///
 /// Pure: no I/O. Each provider maps the decision onto its own `Error`
 /// variant with its own message (and, for the icu driver, reads the response
-/// body into the `BadRequest` arm — provider-specific, so it stays there).
+/// body into the `Permanent` arm — provider-specific, so it stays there).
 pub fn classify_status(status: StatusCode) -> StatusDecision {
     match status {
         StatusCode::TOO_MANY_REQUESTS
@@ -36,7 +36,7 @@ pub fn classify_status(status: StatusCode) -> StatusDecision {
         | StatusCode::SERVICE_UNAVAILABLE
         | StatusCode::GATEWAY_TIMEOUT => StatusDecision::TryAgain,
         StatusCode::UNAUTHORIZED => StatusDecision::NotAuth,
-        _ => StatusDecision::BadRequest,
+        _ => StatusDecision::Permanent,
     }
 }
 
@@ -65,14 +65,14 @@ mod tests {
     }
 
     #[test]
-    fn everything_else_is_bad_request() {
+    fn everything_else_is_permanent() {
         for status in [
             StatusCode::BAD_REQUEST,
             StatusCode::FORBIDDEN,
             StatusCode::NOT_FOUND,
             StatusCode::INTERNAL_SERVER_ERROR,
         ] {
-            assert_eq!(classify_status(status), StatusDecision::BadRequest);
+            assert_eq!(classify_status(status), StatusDecision::Permanent);
         }
     }
 }

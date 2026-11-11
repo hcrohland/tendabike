@@ -1,9 +1,8 @@
-//! The shared client scaffolding both providers used to duplicate (spec
-//! #838): the no-redirect `reqwest` client — built once and shared by every
-//! provider call — and the oauth2 client type alias, parameterized by the
-//! token response type. The providers keep their own client *values* (built
-//! from their own env vars and endpoints) and their token-response wire
-//! types.
+//! The shared client scaffolding both providers use (spec #838): the
+//! no-redirect `reqwest` client — built once and shared by every provider
+//! call — and the oauth2 client type alias, parameterized by the token
+//! response type. The providers keep their own client *values* (built from
+//! their own env vars and endpoints) and their token-response wire types.
 
 use oauth2::{
     Client, EndpointNotSet, EndpointSet, StandardRevocableToken,
@@ -17,7 +16,7 @@ use std::sync::LazyLock;
 pub static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(http_client);
 
 /// Builds the shared no-redirect `reqwest` client.
-pub fn http_client() -> reqwest::Client {
+fn http_client() -> reqwest::Client {
     reqwest::ClientBuilder::new()
         // Following redirects opens the client up to SSRF vulnerabilities.
         .redirect(reqwest::redirect::Policy::none())
