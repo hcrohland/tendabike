@@ -124,55 +124,21 @@ impl IcuActivity {
         })
     }
 
-    /// Maps intervals.icu activity type strings to Tendabike types.
-    ///
-    /// Mirrors the Strava driver's mapping for all shared types (including the
-    /// non-cycling ones), plus the cycling-subtype arms:
-    /// `Ride`→1, `MountainBikeRide`/`EMountainBikeRide`→11, `GravelRide`→12,
-    /// `Cyclocross`→13, `EBikeRide`→9, `VirtualRide`→5, and the
-    /// `Handcycle`/`TrackRide`/`Velomobile`/`NordicSki`/`RollerSki` fallback to
-    /// 0. Unknown types are `Err(BadRequest)`.
+    /// Maps intervals.icu activity type strings to Tendabike types: the
+    /// common wire-name arms from the provider kit's table
+    /// ([`crate::activity_type::common_type`]), plus the cycling-subtype arms
+    /// that are icu-specific — `MountainBikeRide`/`EMountainBikeRide`→11,
+    /// `GravelRide`→12, `Cyclocross`→13, and `TrackRide`→0. Unknown types are
+    /// `Err(BadRequest)`.
     fn get_type(t: &str) -> TbResult<ActTypeId> {
+        if let Some(id) = crate::activity_type::common_type(t) {
+            return Ok(id);
+        }
         Ok(match t {
-            // ── cycling subtypes ──────────────────────────────────────────
-            "Ride" => 1,
             "MountainBikeRide" | "EMountainBikeRide" => 11,
             "GravelRide" => 12,
             "Cyclocross" => 13,
-            "EBikeRide" => 9,
-            "VirtualRide" => 5,
-            "Handcycle" | "TrackRide" | "Velomobile" | "NordicSki" | "RollerSki" => 0,
-            // ── shared (non-cycling) types ────────────────────────────────
-            "Snowboard" => 2,
-            "Run" | "VirtualRun" => 3,
-            "Hike" => 4,
-            "AlpineSki" => 6,
-            "Walk" => 8,
-            "BackcountrySki" => 10,
-            "Workout" => 0,
-            "StandUpPaddling" => 0,
-            "Windsurf" => 0,
-            "Kitesurf" => 0,
-            "Rowing" => 0,
-            "WaterSport" => 0,
-            "RockClimbing" => 0,
-            "Canoeing" => 0,
-            "Crossfit" => 0,
-            "Elliptical" => 0,
-            "Golf" => 0,
-            "IceSkate" => 0,
-            "InlineSkate" => 0,
-            "Kayaking" => 0,
-            "Sail" => 0,
-            "Skateboard" => 0,
-            "Snowshoe" => 0,
-            "Soccer" => 0,
-            "StairStepper" => 0,
-            "Surfing" => 0,
-            "Swim" => 0,
-            "WeightTraining" => 0,
-            "Wheelchair" => 0,
-            "Yoga" => 0,
+            "TrackRide" => 0,
             _ => return Err(Error::BadRequest(format!("unsupported activity {t}"))),
         }
         .into())

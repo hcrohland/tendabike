@@ -57,6 +57,9 @@ mod client;
 #[cfg(any(feature = "strava", feature = "icu"))]
 pub use client::*;
 
+mod activity_type;
+pub use activity_type::*;
+
 #[cfg(feature = "strava")]
 pub mod strava;
 
