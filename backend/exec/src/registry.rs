@@ -604,7 +604,7 @@ where
     /// provider's `activity_url` op (which checks the activity's ownership and
     /// rejects an id the provider does not recognize), then the provider URL.
     /// The dispatch matches on [`ProviderActivityId`] — the single home for
-    /// the `strava:` / `icu:` prefix knowledge (ADR-0013).
+    /// the `strava:` / `icu:` prefix knowledge.
     async fn activity_url(&self, session: Box<dyn Session>, id: ActivityId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
         let uri = match ProviderActivityId::try_from(id)? {
