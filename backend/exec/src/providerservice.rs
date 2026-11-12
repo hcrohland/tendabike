@@ -24,12 +24,6 @@
 //! the transaction, hands the connection to the provider layer's dispatch
 //! free function (the single `match provider`), and commits.
 //!
-//! This is the new provider-agnostic surface, built **beside** the existing
-//! Strava-specific [`crate::api::ProviderService`]. The two coexist and the
-//! old surface is untouched; the name `ProviderService` is shared, so the old
-//! one is `crate::api::ProviderService` and this one is
-//! `crate::providerservice::ProviderService`.
-//!
 //! Eight in-transaction ops. The user-keyed ops (`sync`, `deauthorize`,
 //! `delete_user`) dispatch on the user's real provider, read in-transaction
 //! (the provider layer's dispatch reads the `users.provider` column) — not on

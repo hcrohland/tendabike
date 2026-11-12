@@ -97,7 +97,7 @@ pub enum ExecutorStatus {
 /// the `JoinHandle`) is stored: the watchdog keeps the original handle to
 /// `await` and record `Dead` on a panic **or** the abort `JoinError`. The
 /// fields the [`super::Registry`] facade's `exec_field` closures reach into
-/// (`status`, `request_sender`, `frames`, `events`) are `pub(super)` so the
+/// (`status`, `request_sender`, `frames`) are `pub(super)` so the
 /// facade can pull them; the rest stay private to the core.
 #[derive(Clone)]
 pub(super) struct Executor<P>
@@ -109,9 +109,6 @@ where
     /// enqueue a `Request` here and await its oneshot.
     pub(super) request_sender: RequestSender,
     pub(super) frames: broadcast::Sender<Summary>,
-    /// Every provider event the loop consumed (spec §6.4): the admin sync's
-    /// completion signal, correlated by the event's identity.
-    pub(super) events: broadcast::Sender<P::Event>,
     /// The in-memory wake signal (spec §4.4/§4.6): fired by the core's
     /// `wake` after a provider event is queued; the running loop selects on
     /// it, so the event is processed at once, even mid-idle-sleep.
@@ -119,6 +116,8 @@ where
     /// Aborts the executor task (`stop_all`): the watchdog records `Dead`
     /// on the abort `JoinError`, like a panic.
     task: tokio::task::AbortHandle,
+    /// Marks the lane type (the loop's event type is `P::Event`).
+    _lane: std::marker::PhantomData<P>,
 }
 
 /// The per-shop frame channel with its owner (the shop stream is owner-only).
@@ -227,29 +226,6 @@ where
         map.clear();
     }
 
-    /// A subscription to the user's executor's consumed-Strava-event channel
-    /// (spec §6.4): spawning the executor if it is not running. The admin
-    /// sync subscribes **before** it enqueues its event, so the completion
-    /// signal cannot be missed.
-    pub(super) async fn events<S, D>(
-        &self,
-        source: &S,
-        facade: &D,
-        lane: &P,
-        user_id: UserId,
-        pusher: Box<dyn FramePusher>,
-    ) -> TbResult<broadcast::Receiver<P::Event>>
-    where
-        S: TxnSource + Clone + 'static,
-        D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
-        P: ProviderLane<Store = S::Conn>,
-    {
-        self.exec_field(source, facade, lane, user_id, pusher, |exec| {
-            exec.events.subscribe()
-        })
-        .await
-    }
-
     /// Push a frame to the user's SSE streams (test helper: the production
     /// path delivers frames from the loop through the pusher).
     pub(super) async fn send_frame(&self, user_id: UserId, summary: Summary) {
@@ -290,7 +266,6 @@ where
         let (status_tx, status_rx) = watch::channel(status);
         let (request_sender, _request_receiver) = request_channel();
         let (frames, frame_rx) = broadcast::channel(BROADCAST_CAPACITY);
-        let (events, _events_rx) = broadcast::channel(BROADCAST_CAPACITY);
         let wake = Arc::new(Notify::new());
         let task = tokio::spawn(async {}).abort_handle();
         // The stored receiver keeps the watch channel open; drop the sender.
@@ -299,9 +274,9 @@ where
             status: status_rx,
             request_sender,
             frames,
-            events,
             wake,
             task,
+            _lane: std::marker::PhantomData,
         };
         self.executors.lock().await.insert(user_id, exec);
         frame_rx
@@ -588,9 +563,9 @@ where
             status: status_rx,
             request_sender,
             frames,
-            events,
             wake,
             task,
+            _lane: std::marker::PhantomData,
         };
         map.insert(user_id, exec.clone());
         Ok(exec)
