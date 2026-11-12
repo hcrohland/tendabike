@@ -37,6 +37,9 @@
 mod activity_id;
 pub use activity_id::*;
 
+mod provider;
+pub use provider::*;
+
 mod facade;
 pub use facade::*;
 
