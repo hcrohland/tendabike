@@ -48,7 +48,7 @@ async fn main() -> anyhow::Result<()> {
         // and selects between them per user from the `users.provider`
         // column (a typed switch on `Provider`), so the loop is
         // provider-agnostic.
-        tb_provider::UnifiedLane::new(),
+        tb_provider::UnifiedLane::new(tb_provider::EntityFacadeImpl),
     );
     let api = std::sync::Arc::new(registry.clone()) as std::sync::Arc<dyn tb_exec::ServiceApi>;
     let provider = std::sync::Arc::new(registry)

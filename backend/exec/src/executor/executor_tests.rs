@@ -52,6 +52,7 @@ use tb_domain::{
     TbResult, Usage, UsageId, User, UserId, UserStat, UserState, WriteOutcome,
 };
 use tb_provider::strava::event::Event;
+use tb_provider::test_support::MockEntityFacade;
 use tb_provider::{Probe, ProviderLane};
 use time::OffsetDateTime;
 use tokio::sync::{broadcast, oneshot};
@@ -104,6 +105,8 @@ mockall::mock! {
     impl ProviderLane for Lane {
         type Event = Event;
         type Store = MockConn;
+        type Facade = MockEntityFacade<MockConn>;
+        fn facade(&self) -> &MockEntityFacade<MockConn>;
         async fn probe(&self, user_id: UserId, store: &mut MockConn) -> Probe<Event>;
         async fn process(&self, user_id: UserId, store: &mut MockConn) -> Option<Summary>;
         async fn insert_sync(

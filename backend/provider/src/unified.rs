@@ -19,7 +19,7 @@
 */
 
 //! The unified provider lane (ADR-0014): the [`ProviderLane`] impl the
-//! executor loop runs in production — the third impl of the [`Lane<S, E>`]
+//! executor loop runs in production — the third impl of the [`Lane<S, E, F>`]
 //! seam, beside the two per-provider lanes.
 //!
 //! The loop is generic over a single [`ProviderLane`] type, but a user has
@@ -40,7 +40,7 @@ use tb_domain::{ActivityId, PartId, Session, Summary, TbResult, UserId, UserStat
 use crate::Provider;
 use crate::icu::{IcuLane, IcuStore, event::IcuEvent};
 use crate::strava::{StravaLane, StravaStore, event::Event as StravaEvent};
-use crate::{Lane, Probe, ProviderLane};
+use crate::{EntityFacadeImpl, Lane, Probe, ProviderLane};
 
 /// The unified provider event the per-user lane reports: the two providers'
 /// event rows under one type, so the loop's `P::Event` is provider-agnostic
@@ -64,10 +64,10 @@ impl From<LaneEvent> for Option<StravaEvent> {
     }
 }
 
-/// The unified provider lane: [`Lane<S, LaneEvent>`](Lane) — the third
-/// [`ProviderLane`] impl (ADR-0014), beside the two per-provider lanes. It
-/// wraps both provider lanes and selects between them per call from the
-/// user's `provider` column (a typed switch on [`Provider`]); the loop is
+/// The unified provider lane: [`Lane<S, LaneEvent, EntityFacadeImpl>`](Lane) —
+/// the third [`ProviderLane`] impl (ADR-0014), beside the two per-provider
+/// lanes. It wraps both provider lanes and selects between them per call from
+/// the user's `provider` column (a typed switch on [`Provider`]); the loop is
 /// generic over this single type and never names a concrete provider.
 ///
 /// Generic over the store type `S` (the transaction's connection):
@@ -75,9 +75,13 @@ impl From<LaneEvent> for Option<StravaEvent> {
 /// `probe`/`process` operate on it. `S` must be a complete store for both
 /// providers (`StravaStore + IcuStore`), which also carries the domain
 /// `Store` (the `user_get` the per-call selection reads).
-pub type UnifiedLane<S> = Lane<S, LaneEvent>;
+///
+/// The unified lane is production-only: it is concrete over the
+/// [`EntityFacadeImpl`] (no mock injection) — tests target the per-provider
+/// lanes directly.
+pub type UnifiedLane<S> = Lane<S, LaneEvent, EntityFacadeImpl>;
 
-impl<S> Lane<S, LaneEvent>
+impl<S> Lane<S, LaneEvent, EntityFacadeImpl>
 where
     S: StravaStore + IcuStore,
 {
@@ -92,12 +96,17 @@ where
 }
 
 #[async_trait::async_trait]
-impl<S> ProviderLane for Lane<S, LaneEvent>
+impl<S> ProviderLane for Lane<S, LaneEvent, EntityFacadeImpl>
 where
     S: StravaStore + IcuStore + Send + 'static,
 {
     type Event = LaneEvent;
     type Store = S;
+    type Facade = EntityFacadeImpl;
+
+    fn facade(&self) -> &EntityFacadeImpl {
+        &self.facade
+    }
 
     /// Probe the user's provider event queue (one transaction's
     /// housekeeping): read the user's `provider` column, then delegate to
@@ -108,13 +117,16 @@ where
             Err(_) => return Probe::Error,
         };
         match provider {
-            Provider::Icu => match IcuLane::new().probe(user_id, store).await {
+            Provider::Icu => match IcuLane::new(EntityFacadeImpl).probe(user_id, store).await {
                 Probe::Event(event) => Probe::Event(LaneEvent::Icu(event)),
                 Probe::Limited(until) => Probe::Limited(until),
                 Probe::Empty => Probe::Empty,
                 Probe::Error => Probe::Error,
             },
-            Provider::Strava => match StravaLane::new().probe(user_id, store).await {
+            Provider::Strava => match StravaLane::new(EntityFacadeImpl)
+                .probe(user_id, store)
+                .await
+            {
                 Probe::Event(event) => Probe::Event(LaneEvent::Strava(event)),
                 Probe::Limited(until) => Probe::Limited(until),
                 Probe::Empty => Probe::Empty,
@@ -131,8 +143,12 @@ where
             Err(_) => return None,
         };
         match provider {
-            Provider::Icu => IcuLane::new().process(user_id, store).await,
-            Provider::Strava => StravaLane::new().process(user_id, store).await,
+            Provider::Icu => IcuLane::new(EntityFacadeImpl).process(user_id, store).await,
+            Provider::Strava => {
+                StravaLane::new(EntityFacadeImpl)
+                    .process(user_id, store)
+                    .await
+            }
         }
     }
 
@@ -147,9 +163,13 @@ where
     ) -> TbResult<()> {
         let provider = Self::provider_of(store, user_id).await?;
         match provider {
-            Provider::Icu => IcuLane::new().insert_sync(user_id, time, auto, store).await,
+            Provider::Icu => {
+                IcuLane::new(EntityFacadeImpl)
+                    .insert_sync(user_id, time, auto, store)
+                    .await
+            }
             Provider::Strava => {
-                StravaLane::new()
+                StravaLane::new(EntityFacadeImpl)
                     .insert_sync(user_id, time, auto, store)
                     .await
             }
@@ -161,8 +181,16 @@ where
     async fn update_gear(&self, user_id: UserId, store: &mut S) -> TbResult<Vec<PartId>> {
         let provider = Self::provider_of(store, user_id).await?;
         match provider {
-            Provider::Icu => IcuLane::new().update_gear(user_id, store).await,
-            Provider::Strava => StravaLane::new().update_gear(user_id, store).await,
+            Provider::Icu => {
+                IcuLane::new(EntityFacadeImpl)
+                    .update_gear(user_id, store)
+                    .await
+            }
+            Provider::Strava => {
+                StravaLane::new(EntityFacadeImpl)
+                    .update_gear(user_id, store)
+                    .await
+            }
         }
     }
 
@@ -170,8 +198,8 @@ where
     /// side): the union of the Strava users' stats and the icu users' stats
     /// (each user's stat is sourced from their own provider).
     async fn all_stats(&self, store: &mut S) -> TbResult<Vec<UserStat>> {
-        let mut stats = StravaLane::new().all_stats(store).await?;
-        stats.extend(IcuLane::new().all_stats(store).await?);
+        let mut stats = StravaLane::new(EntityFacadeImpl).all_stats(store).await?;
+        stats.extend(IcuLane::new(EntityFacadeImpl).all_stats(store).await?);
         Ok(stats)
     }
 
@@ -185,8 +213,16 @@ where
     ) -> TbResult<String> {
         let provider = Self::provider_of(store, session.user_id()).await?;
         match provider {
-            Provider::Icu => IcuLane::new().activity_url(id, session, store).await,
-            Provider::Strava => StravaLane::new().activity_url(id, session, store).await,
+            Provider::Icu => {
+                IcuLane::new(EntityFacadeImpl)
+                    .activity_url(id, session, store)
+                    .await
+            }
+            Provider::Strava => {
+                StravaLane::new(EntityFacadeImpl)
+                    .activity_url(id, session, store)
+                    .await
+            }
         }
     }
 }
