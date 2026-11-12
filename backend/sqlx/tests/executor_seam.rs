@@ -938,7 +938,8 @@ async fn trigger_processing_drains_each_queued_user() {
 
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
-        registry.trigger_processing(
+        ServiceApi::trigger_processing(
+            &registry,
             Box::new(mock_session_admin(UserId::from(1))),
             None,
             200,
@@ -1045,7 +1046,7 @@ async fn rescan_stops_the_executors() {
 
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
-        reg.rescan(Box::new(mock_session(UserId::from(1)))),
+        ServiceApi::rescan(&reg, Box::new(mock_session(UserId::from(1)))),
     )
     .await
     .expect("the rescan must finish in time");
@@ -1291,8 +1292,7 @@ async fn shop_subscribe_policy() {
 
     // (a) A non-owner is forbidden: the ownership read runs against the
     // shop row just seeded (owner 1), so user 2 is rejected.
-    let err = registry
-        .subscribe_shop(UserId::from(2), shop)
+    let err = ServiceApi::subscribe_shop(&registry, UserId::from(2), shop)
         .await
         .expect_err("a non-owner's subscribe must be forbidden");
     assert!(
@@ -1301,8 +1301,7 @@ async fn shop_subscribe_policy() {
     );
 
     // (b) The owner subscribes and receives a stream receiver.
-    let mut rx = registry
-        .subscribe_shop(UserId::from(1), shop)
+    let mut rx = ServiceApi::subscribe_shop(&registry, UserId::from(1), shop)
         .await
         .expect("the owner can subscribe");
 

@@ -52,6 +52,7 @@ use tb_domain::{
     Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, Store,
     Summary, TbResult, UserId, UserStat, WriteOutcome,
 };
+use tb_provider::Provider;
 use tb_provider::ProviderLane;
 use tb_provider::icu::{IcuStore, client::IcuAthleteInfo, event::IcuEvent};
 use tb_provider::strava::{
@@ -302,7 +303,17 @@ where
 #[async_trait::async_trait]
 impl<S, P, D> ServiceApi for Registry<S, P, D>
 where
+    // The generic channel ops (`read`/`write`/`hydrate_gear`/`subscribe`/
+    // `all_stats`) ride the executor and need only `Txn` (their domain work
+    // rides the facade and the lane). The three provider-neutral direct ops
+    // (`rescan`, `subscribe_shop`, `trigger_processing`, ADR-0014) own their
+    // own transactions and do their work directly — the rescan's
+    // `Activity::rescan_all` (a full `Store`), the shop-ownership read
+    // (`ShopStore + Txn`, carried by `Store`), and the `sync_users` queue op
+    // (`StravaStore`) — so this impl carries the full `Store + StravaStore +
+    // Txn` bound.
     S: TxnSource + Clone + 'static,
+    S::Conn: Store + StravaStore + Txn,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
@@ -374,6 +385,61 @@ where
         let (request, reply) = Request::new_all_stats(session);
         self.send_request(user_id, request, reply, "stats read")
             .await
+    }
+
+    /// The admin rescan (spec #558 §5.2): one transaction
+    /// (`Activity::rescan_all`), then stop every live executor — the
+    /// rescan is all-users maintenance that bypasses the executors (the
+    /// spec §3/§6.4 carve-out), so no frame carries its effect: open
+    /// streams end, and each client's native reconnect + catch-up snapshot
+    /// re-hydrates it.
+    async fn rescan(&self, _session: Box<dyn Session>) -> TbResult<()> {
+        let mut store = self.source.begin().await?;
+        Activity::rescan_all(&mut store).await?;
+        store.commit().await?;
+        self.stop_all().await;
+        Ok(())
+    }
+
+    /// Register a shop stream for `shop_id` (spec #517): verify
+    /// the caller is the shop owner in a transaction (a non-owner is
+    /// `Forbidden`, mapped to a 403 by the web layer), then create the shop
+    /// channel on demand and return a subscription to it. The ownership check
+    /// is a `ShopId` store call (ADR-0010); the channel creation is delegated
+    /// to the core.
+    async fn subscribe_shop(
+        &self,
+        user_id: UserId,
+        shop_id: ShopId,
+    ) -> TbResult<broadcast::Receiver<Summary>> {
+        self.subscribe_shop(user_id, shop_id).await
+    }
+
+    /// Trigger processing for all (or one) users (spec #558 §5.2): admin-only
+    /// (the acting `session` must be an admin — `Forbidden` otherwise). One
+    /// transaction (`sync_users`) queuing a `Sync` event per (non-disabled)
+    /// user, then — per queued user — spawn the executor (a no-op if it is
+    /// already running) and wake it. `user_id` narrows the trigger to one
+    /// user (the route's `?user_id=` query).
+    async fn trigger_processing(
+        &self,
+        mut session: Box<dyn Session>,
+        user_id: Option<UserId>,
+        event_time: i64,
+        migrate: bool,
+    ) -> TbResult<()> {
+        let mut store = self.source.begin().await?;
+        let queued = sync_users(&mut *session, user_id, event_time, migrate, &mut store).await?;
+        store.commit().await?;
+        // Per queued user: spawn the executor (a no-op if it is already
+        // running) so it drains the queued Sync even when the user is
+        // offline, then wake it (interrupt its idle wait so the Sync is
+        // processed at once).
+        for user_id in queued {
+            self.exec_field(user_id, |_| ()).await?;
+            self.wake(user_id).await;
+        }
+        Ok(())
     }
 }
 
@@ -734,6 +800,104 @@ where
     /// The icu user delete.
     async fn icu_delete_user(&self, _session: Box<dyn Session>, _tbid: UserId) -> TbResult<()> {
         todo!("icu_delete_user")
+    }
+}
+
+/// The provider-agnostic provider service's impl for the registry (ADR-0014):
+/// the six direct ops are a thin forward — each opens the transaction, hands
+/// the connection to the provider layer's dispatch free function (the single
+/// `match provider`), and commits. No provider dispatch and no driver naming
+/// in this crate. The connection is a complete store for both providers
+/// (`StravaStore + IcuStore`), which the dispatch's arms each bound on.
+#[async_trait::async_trait]
+impl<S, P, D> crate::providerservice::ProviderService for Registry<S, P, D>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: tb_provider::strava::StravaStore + tb_provider::icu::IcuStore + Send + Sync + 'static,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
+{
+    /// The per-user sync (ADR-0014): one transaction — the provider layer's
+    /// dispatch enqueues a `Sync` event on the user's provider queue.
+    async fn sync(
+        &self,
+        provider: Provider,
+        _session: Box<dyn Session>,
+        user_id: UserId,
+        event_time: i64,
+    ) -> TbResult<()> {
+        let mut store = self.source.begin().await?;
+        tb_provider::dispatch::sync(provider, user_id, event_time, &mut store).await?;
+        store.commit().await?;
+        Ok(())
+    }
+
+    /// The deauthorization (ADR-0014): one transaction — the target's session
+    /// built in-txn, then the provider layer's deauthorize.
+    async fn deauthorize(
+        &self,
+        provider: Provider,
+        mut session: Box<dyn Session>,
+        tbid: UserId,
+    ) -> TbResult<()> {
+        let mut store = self.source.begin().await?;
+        tb_provider::dispatch::deauthorize(provider, &mut *session, tbid, &mut store).await?;
+        store.commit().await?;
+        Ok(())
+    }
+
+    /// The user delete (ADR-0014): one transaction — the target's session
+    /// built in-txn, then the provider layer's delete.
+    async fn delete_user(
+        &self,
+        provider: Provider,
+        mut session: Box<dyn Session>,
+        tbid: UserId,
+    ) -> TbResult<()> {
+        let mut store = self.source.begin().await?;
+        tb_provider::dispatch::delete_user(provider, &mut *session, tbid, &mut store).await?;
+        store.commit().await?;
+        Ok(())
+    }
+
+    /// The activity redirect URL (ADR-0014): one transaction — the provider
+    /// layer's `activity_url` op (which checks the activity's ownership), then
+    /// the provider URL.
+    async fn activity_url(
+        &self,
+        provider: Provider,
+        session: Box<dyn Session>,
+        id: ActivityId,
+    ) -> TbResult<String> {
+        let mut store = self.source.begin().await?;
+        let uri = tb_provider::dispatch::activity_url(provider, session, id, &mut store).await?;
+        store.commit().await?;
+        Ok(uri)
+    }
+
+    /// The gear redirect URL (ADR-0014): one transaction — the provider
+    /// layer's `gear_url` op (which checks the part's ownership). The one
+    /// non-total op: the icu arm is the typed absence (`None`).
+    async fn gear_url(
+        &self,
+        provider: Provider,
+        session: Box<dyn Session>,
+        id: PartId,
+    ) -> TbResult<Option<String>> {
+        let mut store = self.source.begin().await?;
+        let uri = tb_provider::dispatch::gear_url(provider, session, id, &mut store).await?;
+        store.commit().await?;
+        Ok(uri)
+    }
+
+    /// The user redirect URL (ADR-0014): one transaction — the provider
+    /// layer's `user_url` op for the target's tbid (no session). The icu arm
+    /// builds the public athlete profile page.
+    async fn user_url(&self, provider: Provider, id: UserId) -> TbResult<String> {
+        let mut store = self.source.begin().await?;
+        let uri = tb_provider::dispatch::user_url(provider, id, &mut store).await?;
+        store.commit().await?;
+        Ok(uri)
     }
 }
 

@@ -101,6 +101,39 @@ pub trait ServiceApi: Send + Sync {
     /// The admin `GET /user/all` read (spec #558 §3.3): `get_all_stats` in
     /// the admin user's own channel, in the loop's own transaction.
     async fn all_stats(&self, session: Box<dyn Session>) -> TbResult<Vec<UserStat>>;
+
+    /// The admin rescan (spec #558 §5.2): one transaction
+    /// (`Activity::rescan_all`), then every live executor stopped (the
+    /// rescan's effect rides no frame — the clients re-hydrate on their
+    /// native reconnect). Provider-neutral: a domain op, not a provider
+    /// concept (ADR-0014).
+    async fn rescan(&self, session: Box<dyn Session>) -> TbResult<()>;
+
+    /// Register a shop stream for `shop_id` (spec #517): the caller must be
+    /// the shop owner (a non-owner is `Forbidden`, which the web layer maps to
+    /// a 403); the channel is created on demand and the returned receiver is a
+    /// subscription to it. Provider-neutral: a shop stream, not a provider
+    /// concept (ADR-0014).
+    async fn subscribe_shop(
+        &self,
+        user_id: UserId,
+        shop_id: ShopId,
+    ) -> TbResult<broadcast::Receiver<Summary>>;
+
+    /// Trigger processing for all (or one) users (spec #558 §5.2): one
+    /// transaction (`sync_users`) queuing a `Sync` event per (non-disabled)
+    /// user, then — per queued user — spawn the executor (a no-op if it is
+    /// already running) and wake it, so the queue drains even for users whose
+    /// executor is not running (offline). `user_id` narrows the trigger to one
+    /// user (the route's `?user_id=` query). Provider-neutral at the interface
+    /// (ADR-0014).
+    async fn trigger_processing(
+        &self,
+        session: Box<dyn Session>,
+        user_id: Option<UserId>,
+        event_time: i64,
+        migrate: bool,
+    ) -> TbResult<()>;
 }
 
 /// The provider-specific service API: the eleven direct ops (spec #558 §5.2)

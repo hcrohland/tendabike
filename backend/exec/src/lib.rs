@@ -50,6 +50,14 @@ mod message;
 mod registry;
 mod txn;
 
+/// The provider-agnostic provider service (ADR-0014): the new direct-op
+/// surface, built beside the Strava-specific [`api::ProviderService`]. It is
+/// a public module (not re-exported at the crate root) because it shares the
+/// name `ProviderService` with the old trait — the old one stays
+/// [`tb_exec::ProviderService`](api::ProviderService) and this one is
+/// [`tb_exec::providerservice::ProviderService`](providerservice::ProviderService).
+pub mod providerservice;
+
 pub use api::*;
 pub use executor::*;
 pub use facade::*;
