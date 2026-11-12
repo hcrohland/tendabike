@@ -18,7 +18,7 @@
 
 */
 
-//! The provider-agnostic direct-op dispatch (ADR-0014): the six free
+//! The provider-agnostic direct-op dispatch (ADR-0014): the eight free
 //! functions the executor's provider-agnostic [`ProviderService`] impl
 //! forwards to. Each is a typed switch on [`Provider`] that delegates to the
 //! driver module (or the driver's [`ProviderLane`]) that does the actual work
@@ -57,6 +57,47 @@ where
 {
     let s = user_id.provider(store).await?;
     Provider::try_from(s.as_str())
+}
+
+/// The provider-agnostic `login` dispatch (ADR-0014): the provider's login
+/// work — the scope check, the token exchange, the athlete wire-shape
+/// parsing, and the upsert — returning the identity and the admin flag. The
+/// provider is the route's (it knows it from the URL); `code` and `scope`
+/// are the opaque callback values (no driver wire type crosses the seam).
+pub async fn login<S>(
+    provider: Provider,
+    code: &str,
+    scope: &str,
+    store: &mut S,
+) -> TbResult<(UserId, bool)>
+where
+    S: StravaStore + IcuStore + Send + Sync + 'static,
+{
+    match provider {
+        Provider::Strava => {
+            crate::strava::login(code, scope, &crate::EntityFacadeImpl, store).await
+        }
+        Provider::Icu => crate::icu::login(code, scope, &crate::EntityFacadeImpl, store).await,
+    }
+}
+
+/// The provider-agnostic `accept_event` dispatch (ADR-0014): the provider's
+/// webhook intake work — the envelope parse, the secret verification, the
+/// event filtering, the timestamp parse, and the queue insert — returning
+/// the TendaBike users a row was queued for (the caller's wake list). The
+/// provider is the route's (it knows it from the URL); `body` is the raw
+/// webhook body (no driver wire type crosses the seam).
+pub async fn accept_event<S>(provider: Provider, body: &str, store: &mut S) -> TbResult<Vec<UserId>>
+where
+    S: StravaStore + IcuStore + Send + Sync + 'static,
+{
+    match provider {
+        Provider::Strava => {
+            let queued = crate::strava::event::accept_event(body, store).await?;
+            Ok(queued.into_iter().collect())
+        }
+        Provider::Icu => crate::icu::event::accept_event(body, store).await,
+    }
 }
 
 /// The provider-agnostic `sync` dispatch (ADR-0014): enqueue a `Sync` event
@@ -168,3 +209,6 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod dispatch_tests;

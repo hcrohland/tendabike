@@ -820,6 +820,35 @@ where
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
+    /// The login (ADR-0014): one transaction — the provider layer's dispatch
+    /// does the provider's login work (the scope check, the token exchange,
+    /// the athlete wire-shape parsing, and the upsert), returning the
+    /// identity and the admin flag.
+    async fn login(&self, provider: Provider, code: &str, scope: &str) -> TbResult<(UserId, bool)> {
+        let mut store = self.source.begin().await?;
+        let result = tb_provider::dispatch::login(provider, code, scope, &mut store).await?;
+        store.commit().await?;
+        Ok(result)
+    }
+
+    /// The webhook intake (ADR-0014): one transaction — the provider
+    /// layer's dispatch does the provider's intake work (the envelope parse,
+    /// the secret verification, the event filtering, the timestamp parse, and
+    /// the queue insert), then the wake per queued user (fire-and-forget).
+    async fn accept_event(&self, provider: Provider, body: &str) -> TbResult<()> {
+        let mut store = self.source.begin().await?;
+        let queued = tb_provider::dispatch::accept_event(provider, body, &mut store).await?;
+        store.commit().await?;
+        // Fire the in-memory wake signal (spec §4.4) per queued user: a pure
+        // signal to a running executor — it never spawns one, and the DB
+        // queue is the source of truth, so a missed wake only delays the
+        // event to the next spawn.
+        for user_id in queued {
+            self.wake(user_id).await;
+        }
+        Ok(())
+    }
+
     /// The per-user sync (ADR-0014): one transaction — the provider layer's
     /// dispatch reads the user's real provider in-transaction and enqueues a
     /// `Sync` event on their provider queue.

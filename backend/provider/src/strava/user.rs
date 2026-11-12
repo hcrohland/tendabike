@@ -7,7 +7,7 @@
 //! checking the validity of the user's access token.
 
 use derive_more::{Display, From, Into};
-use oauth2::RefreshToken;
+use oauth2::{AuthorizationCode, RefreshToken, TokenResponse};
 use serde::Deserialize;
 
 use super::*;
@@ -209,6 +209,57 @@ pub async fn get_all_stats<D: EntityFacade<S>, S: StravaDataStore>(
         });
     }
     Ok(res)
+}
+
+/// The login (ADR-0014): the provider's login work behind the seam — the
+/// scope check, the token exchange, the wire-shape parsing of the athlete
+/// (plus the avatar normalization: a non-`http` avatar is dropped), and the
+/// upsert, returning the identity and the admin flag. `code` and `scope` are
+/// the opaque callback values the presentation layer forwards (no driver
+/// wire type crosses the seam).
+pub async fn login<D: EntityFacade<S>, S: StravaDataStore + UserStore>(
+    code: &str,
+    scope: &str,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<(UserId, bool)> {
+    if scope != SCOPES {
+        return Err(Error::BadRequest(format!(
+            "insufficient authorization {scope}"
+        )));
+    }
+
+    let token = STRAVACLIENT
+        .exchange_code(AuthorizationCode::new(code.to_string()))
+        .request_async(&*HTTP_CLIENT)
+        .await
+        .context("token exchange failed")?;
+
+    let mut athlete: StravaAthleteInfo = token
+        .extra_fields()
+        .athlete
+        .clone()
+        .ok_or(Error::BadRequest("No Athlete Info from Strava".to_string()))?;
+    // make sure you have a non-local url
+    if let Some(a) = &athlete.avatar
+        && !a.starts_with("http")
+    {
+        athlete.avatar = None;
+    }
+    let refresh_token = token.refresh_token().cloned();
+
+    let user = StravaUser::upsert(
+        athlete.id,
+        &athlete.firstname,
+        &athlete.lastname,
+        &athlete.avatar,
+        refresh_token.as_ref(),
+        facade,
+        store,
+    )
+    .await?;
+    let is_admin = user.user_id().is_admin(store).await?;
+    Ok((user.user_id(), is_admin))
 }
 
 /// Deauthorize a user: revoke their Strava token and disable their local

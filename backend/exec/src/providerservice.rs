@@ -30,13 +30,17 @@
 //! one is `crate::api::ProviderService` and this one is
 //! `crate::providerservice::ProviderService`.
 //!
-//! Six in-transaction ops. The user-keyed ops (`sync`, `deauthorize`,
+//! Eight in-transaction ops. The user-keyed ops (`sync`, `deauthorize`,
 //! `delete_user`) dispatch on the user's real provider, read in-transaction
 //! (the provider layer's dispatch reads the `users.provider` column) — not on
 //! the route, so a per-provider route acting on a user of the other provider
-//! follows the stated identity rule. The redirect-URL ops (`activity_url`,
-//! `user_url` — total, `TbResult<String>` — and `gear_url`, the one non-total
-//! op, `TbResult<Option<String>>` (icu gear has no public page)) are keyed by
+//! follows the stated identity rule. The route-keyed ops (`login`,
+//! `accept_event`) take the typed [`Provider`] as a parameter (the route
+//! knows it from the URL) plus opaque string input (the authorization code
+//! and scope, the raw webhook body) — no driver wire type crosses the seam.
+//! The redirect-URL ops (`activity_url`, `user_url` — total,
+//! `TbResult<String>` — and `gear_url`, the one non-total op,
+//! `TbResult<Option<String>>` (icu gear has no public page)) are keyed by
 //! the typed [`Provider`] enum.
 //!
 //! `#[async_trait]`; object-safe for `Arc<dyn ProviderService>`, which keeps
@@ -47,10 +51,11 @@
 use tb_domain::{ActivityId, PartId, Session, TbResult, UserId};
 use tb_provider::Provider;
 
-/// The provider-agnostic provider service (ADR-0014): the six direct ops a
+/// The provider-agnostic provider service (ADR-0014): the eight direct ops a
 /// presentation layer drives the provider through. The user-keyed ops
 /// (`sync`, `deauthorize`, `delete_user`) dispatch on the user's real
-/// provider, read in-transaction; the redirect-URL ops are keyed by the typed
+/// provider, read in-transaction; the route-keyed ops (`login`,
+/// `accept_event`) and the redirect-URL ops are keyed by the typed
 /// [`Provider`] enum. The [`Registry`] implements it as a thin forward (each
 /// op opens the transaction, calls the provider layer's dispatch free
 /// function, and commits — no provider dispatch in this crate).
@@ -59,6 +64,22 @@ use tb_provider::Provider;
 #[cfg_attr(feature = "test-support", mockall::automock)]
 #[async_trait::async_trait]
 pub trait ProviderService: Send + Sync {
+    /// The login (ADR-0014): one transaction — the provider layer's dispatch
+    /// does the provider's login work (the scope check, the token exchange,
+    /// the athlete wire-shape parsing, and the upsert), returning the
+    /// identity and the admin flag. The provider is the route's (it knows it
+    /// from the URL); `code` and `scope` are the opaque callback values — no
+    /// driver wire type crosses the seam.
+    async fn login(&self, provider: Provider, code: &str, scope: &str) -> TbResult<(UserId, bool)>;
+
+    /// The webhook intake (ADR-0014): one transaction — the provider
+    /// layer's dispatch does the provider's intake work (the envelope parse,
+    /// the secret verification, the event filtering, the timestamp parse, and
+    /// the queue insert), then the registry wakes each queued user
+    /// (fire-and-forget). `body` is the raw webhook body — no driver wire
+    /// type crosses the seam.
+    async fn accept_event(&self, provider: Provider, body: &str) -> TbResult<()>;
+
     /// The per-user sync (ADR-0014): enqueue a `Sync` event on the user's
     /// provider queue. One transaction — the provider layer's dispatch reads
     /// the user's real provider in-transaction and enqueues the event (the
