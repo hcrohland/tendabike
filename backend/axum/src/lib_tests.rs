@@ -38,6 +38,7 @@ use tb_exec::{
     ExecutorStatus, IcuService, MockIcuService, MockProviderService, MockServiceApi,
     ProviderService, ServiceApi,
 };
+use tb_provider::Provider;
 // The provider-agnostic provider service (ADR-0014) — the new surface. It
 // shares the name `MockProviderService` with the old Strava-specific trait's
 // mock (imported above), so the new mock is aliased here. The new trait
@@ -2422,41 +2423,61 @@ async fn icu_webhook_ingest_failure_500s() {
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
 }
 
-/// `GET /strava/bikes/{id}` is the gear redirect direct op: the Strava URL
-/// permanent-redirects, and a failed op goes home (`/`).
+/// `GET /strava/bikes/{id}` is the gear redirect direct op (ADR-0014): the
+/// handler drives the neutral `provider` handle with the route's provider.
+/// A present URL permanent-redirects, the typed absence (no provider page)
+/// is a no-op redirect to the current page (the empty relative reference),
+/// and a failed op goes home (`/`).
 #[tokio::test]
 async fn redirect_gear_permains_to_strava_url() {
-    let (store, mock, provider, mut strava, icu) = mock_ctx();
-    strava
+    let (store, mock, mut provider, strava, icu) = mock_ctx();
+    provider
         .expect_gear_url()
         .times(1)
-        .withf(|_session, id| *id == PartId::from(7))
-        .returning(|_session, _id| Ok("https://www.strava.com/bikes/7".to_string()));
-    strava
+        .withf(|provider, _session, id| *provider == Provider::Strava && *id == PartId::from(7))
+        .returning(|_provider, _session, _id| {
+            Ok(Some("https://www.strava.com/bikes/7".to_string()))
+        });
+    provider
         .expect_gear_url()
         .times(1)
-        .withf(|_session, id| *id == PartId::from(9))
-        .returning(|_session, _id| Err(tb_domain::Error::NotFound("part 9".to_string())));
+        .withf(|provider, _session, id| *provider == Provider::Strava && *id == PartId::from(9))
+        .returning(|_provider, _session, _id| {
+            Err(tb_domain::Error::NotFound("part 9".to_string()))
+        });
+    provider
+        .expect_gear_url()
+        .times(1)
+        .withf(|provider, _session, id| *provider == Provider::Strava && *id == PartId::from(10))
+        .returning(|_provider, _session, _id| Ok(None));
     let app = build_app(&store, mock, provider, strava, icu);
     let cookie = user_cookie(&store).await;
     let (status, headers, _body) =
         run(app.clone(), Method::GET, "/strava/bikes/7", Some(&cookie)).await;
     assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
     assert_eq!(headers["location"], "https://www.strava.com/bikes/7");
-    let (status, headers, _body) = run(app, Method::GET, "/strava/bikes/9", Some(&cookie)).await;
+    let (status, headers, _body) =
+        run(app.clone(), Method::GET, "/strava/bikes/9", Some(&cookie)).await;
     assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
     assert_eq!(headers["location"], "/");
+    let (status, headers, _body) = run(app, Method::GET, "/strava/bikes/10", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
+    assert_eq!(headers["location"], "");
 }
 
-/// `GET /source/activities/{id}` is the activity redirect direct op: the
-/// prefixed id routes to the provider URL, which permanent-redirects.
+/// `GET /source/activities/{id}` is the activity redirect direct op
+/// (ADR-0014): the handler drives the neutral `provider` handle, parsing the
+/// provider from the id's prefix; the provider URL permanent-redirects.
 #[tokio::test]
 async fn redirect_activity_permains_to_strava_url() {
-    let (store, mock, provider, mut strava, icu) = mock_ctx();
-    strava
+    let (store, mock, mut provider, strava, icu) = mock_ctx();
+    provider
         .expect_activity_url()
         .times(1)
-        .returning(|_session, _id| Ok("https://www.strava.com/activities/8".to_string()));
+        .withf(|provider, _session, _id| *provider == Provider::Strava)
+        .returning(
+            |_provider, _session, _id| Ok("https://www.strava.com/activities/8".to_string()),
+        );
     let app = build_app(&store, mock, provider, strava, icu);
     let cookie = user_cookie(&store).await;
     let (status, headers, _body) = run(
@@ -2470,19 +2491,92 @@ async fn redirect_activity_permains_to_strava_url() {
     assert_eq!(headers["location"], "https://www.strava.com/activities/8");
 }
 
-/// `GET /strava/users/{id}` is the user redirect direct op (no user
-/// context — the route is public): the Strava URL permanent-redirects.
+/// `GET /source/activities/{id}` routes an icu-prefixed id to the icu
+/// provider (ADR-0014): the provider is parsed from the id's prefix, not the
+/// route.
+#[tokio::test]
+async fn redirect_activity_icu_prefix_routes_to_icu() {
+    let (store, mock, mut provider, strava, icu) = mock_ctx();
+    provider
+        .expect_activity_url()
+        .times(1)
+        .withf(|provider, _session, _id| *provider == Provider::Icu)
+        .returning(|_provider, _session, _id| {
+            Ok("https://intervals.icu/activities/i55751783".to_string())
+        });
+    let app = build_app(&store, mock, provider, strava, icu);
+    let cookie = user_cookie(&store).await;
+    let (status, headers, _body) = run(
+        app,
+        Method::GET,
+        "/source/activities/icu:i55751783",
+        Some(&cookie),
+    )
+    .await;
+    assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
+    assert_eq!(
+        headers["location"],
+        "https://intervals.icu/activities/i55751783"
+    );
+}
+
+/// `GET /strava/users/{id}` is the user redirect direct op (ADR-0014, no
+/// user context — the route is public): the handler drives the neutral
+/// `provider` handle with the route's provider; the Strava URL
+/// permanent-redirects.
 #[tokio::test]
 async fn redirect_user_permains_to_strava_url() {
-    let (store, mock, provider, mut strava, icu) = mock_ctx();
-    strava
+    let (store, mock, mut provider, strava, icu) = mock_ctx();
+    provider
         .expect_user_url()
         .times(1)
-        .returning(|_id| Ok("https://www.strava.com/athletes/3".to_string()));
+        .withf(|provider, id| *provider == Provider::Strava && *id == UserId::from(3))
+        .returning(|_provider, _id| Ok("https://www.strava.com/athletes/3".to_string()));
     let app = build_app(&store, mock, provider, strava, icu);
     let (status, headers, _body) = run(app, Method::GET, "/strava/users/3", None).await;
     assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
     assert_eq!(headers["location"], "https://www.strava.com/athletes/3");
+}
+
+/// `GET /icu/users/{id}` is the icu user redirect direct op (ADR-0014, no
+/// user context — the route is public): the handler drives the neutral
+/// `provider` handle with the icu provider; the public athlete profile URL
+/// permanent-redirects (a new capability — the icu arm builds it from the
+/// athlete id in the icu user row).
+#[tokio::test]
+async fn redirect_user_permains_to_icu_profile() {
+    let (store, mock, mut provider, strava, icu) = mock_ctx();
+    provider
+        .expect_user_url()
+        .times(1)
+        .withf(|provider, id| *provider == Provider::Icu && *id == UserId::from(3))
+        .returning(|_provider, _id| Ok("https://intervals.icu/athletes/i55751783".to_string()));
+    let app = build_app(&store, mock, provider, strava, icu);
+    let (status, headers, _body) = run(app, Method::GET, "/icu/users/3", None).await;
+    assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
+    assert_eq!(
+        headers["location"],
+        "https://intervals.icu/athletes/i55751783"
+    );
+}
+
+/// `GET /icu/bikes/{id}` is the icu gear redirect direct op (ADR-0014): icu
+/// gear is a private settings item with no public page, so the op is the
+/// typed absence and the route is a no-op redirect to the current page (the
+/// empty relative reference).
+#[tokio::test]
+async fn redirect_gear_icu_is_a_no_op() {
+    let (store, mock, mut provider, strava, icu) = mock_ctx();
+    provider
+        .expect_gear_url()
+        .times(1)
+        .withf(|provider, _session, id| *provider == Provider::Icu && *id == PartId::from(7))
+        .returning(|_provider, _session, _id| Ok(None));
+    let app = build_app(&store, mock, provider, strava, icu);
+    let cookie = user_cookie(&store).await;
+    let (status, headers, _body) = run(app, Method::GET, "/icu/bikes/7", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
+    assert_eq!(headers["location"], "");
 }
 
 /// `POST /strava/disable/{id}` (admin) is the deauthorization direct op and

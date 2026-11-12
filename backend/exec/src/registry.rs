@@ -651,8 +651,10 @@ where
     }
 
     /// The gear redirect URL (spec #558 §5.2): one transaction — the
-    /// `tb_provider::strava` `strava_url` op (which checks the part's ownership), then
-    /// the Strava URL.
+    /// `tb_provider::strava` `strava_url` op (which checks the part's
+    /// ownership), then the Strava URL. The old surface: a part with no
+    /// provider source (a manual part) is a `NotFound` (the new neutral
+    /// `gear_url` op expresses it as the typed absence, ADR-0014).
     async fn gear_url(&self, session: Box<dyn Session>, id: PartId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
         let uri = gear::strava_url(
@@ -661,7 +663,8 @@ where
             &tb_provider::EntityFacadeImpl,
             &mut store,
         )
-        .await?;
+        .await?
+        .ok_or(Error::NotFound("".to_string()))?;
         store.commit().await?;
         Ok(uri)
     }

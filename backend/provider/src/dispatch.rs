@@ -146,9 +146,7 @@ where
 {
     match provider {
         Provider::Strava => {
-            let uri =
-                gear::strava_url(i32::from(id), session, &crate::EntityFacadeImpl, store).await?;
-            Ok(Some(uri))
+            gear::strava_url(i32::from(id), session, &crate::EntityFacadeImpl, store).await
         }
         Provider::Icu => Ok(None),
     }

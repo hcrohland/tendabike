@@ -1,45 +1,15 @@
-//! This module contains functions for redirecting to Strava URLs.
-//!
-//! The functions in this module are used to redirect users to Strava URLs for activities, gear, and users.
-//!
+//! The Strava admin redirect routes (ADR-0014): the deauthorization and
+//! delete direct ops. The gear and user redirect routes moved to the
+//! provider-neutral [`crate::redirect`] module, shared by the per-provider
+//! route tables.
 
 use axum::{
     Json,
     extract::{Path, State},
-    response::Redirect,
 };
-use tb_domain::{PartId, UserId};
+use tb_domain::UserId;
 
-use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, error::AppError};
-
-pub(super) async fn redirect_gear(
-    user: RequestSession,
-    Path(id): Path<i32>,
-    State(state): State<AppState>,
-) -> Result<Redirect, AppError> {
-    // The service API's direct op (spec #558 §5.2): one transaction — the
-    // `strava_url` op against the acting session (which checks the part's
-    // ownership), then the Strava URL. The handler maps `Err` →
-    // `Redirect::permanent("/")` as before.
-    let uri = state
-        .strava
-        .gear_url(Box::new(user), PartId::from(id))
-        .await
-        .unwrap_or_else(|_| "/".to_string());
-    Ok(Redirect::permanent(&uri))
-}
-
-pub(super) async fn redirect_user(
-    Path(id): Path<i32>,
-    State(state): State<AppState>,
-) -> Result<Redirect, AppError> {
-    let uri = state
-        .strava
-        .user_url(id.into())
-        .await
-        .unwrap_or_else(|_| "/".to_string());
-    Ok(Redirect::permanent(&uri))
-}
+use crate::{ApiResult, AxumAdmin, appstate::AppState};
 
 pub(super) async fn revoke_user(
     admin: AxumAdmin,

@@ -39,6 +39,8 @@ mod domain;
 
 mod icu;
 
+mod redirect;
+
 mod source;
 
 mod strava;
