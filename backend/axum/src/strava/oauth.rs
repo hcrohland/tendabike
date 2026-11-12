@@ -100,7 +100,7 @@ pub(crate) async fn login_authorized(
     }
     let refresh_token = token.refresh_token().cloned();
     let (user_id, is_admin) = state
-        .provider
+        .strava
         .login_from_token(athlete, refresh_token)
         .await?;
 

@@ -51,9 +51,11 @@ async fn main() -> anyhow::Result<()> {
         tb_provider::UnifiedLane::new(),
     );
     let api = std::sync::Arc::new(registry.clone()) as std::sync::Arc<dyn tb_exec::ServiceApi>;
-    let provider =
+    let provider = std::sync::Arc::new(registry.clone())
+        as std::sync::Arc<dyn tb_exec::providerservice::ProviderService>;
+    let strava =
         std::sync::Arc::new(registry.clone()) as std::sync::Arc<dyn tb_exec::ProviderService>;
     let icu = std::sync::Arc::new(registry) as std::sync::Arc<dyn tb_exec::IcuService>;
 
-    Ok(tb_axum::start(api, provider, icu, db, path, addr).await?)
+    Ok(tb_axum::start(api, provider, strava, icu, db, path, addr).await?)
 }

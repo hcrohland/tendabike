@@ -818,44 +818,36 @@ where
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     /// The per-user sync (ADR-0014): one transaction — the provider layer's
-    /// dispatch enqueues a `Sync` event on the user's provider queue.
+    /// dispatch reads the user's real provider in-transaction and enqueues a
+    /// `Sync` event on their provider queue.
     async fn sync(
         &self,
-        provider: Provider,
         _session: Box<dyn Session>,
         user_id: UserId,
         event_time: i64,
     ) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_provider::dispatch::sync(provider, user_id, event_time, &mut store).await?;
+        tb_provider::dispatch::sync(user_id, event_time, &mut store).await?;
         store.commit().await?;
         Ok(())
     }
 
-    /// The deauthorization (ADR-0014): one transaction — the target's session
-    /// built in-txn, then the provider layer's deauthorize.
-    async fn deauthorize(
-        &self,
-        provider: Provider,
-        mut session: Box<dyn Session>,
-        tbid: UserId,
-    ) -> TbResult<()> {
+    /// The deauthorization (ADR-0014): one transaction — the dispatch
+    /// resolves the target's provider in-transaction, builds their session
+    /// in-txn, then deauthorizes.
+    async fn deauthorize(&self, mut session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_provider::dispatch::deauthorize(provider, &mut *session, tbid, &mut store).await?;
+        tb_provider::dispatch::deauthorize(&mut *session, tbid, &mut store).await?;
         store.commit().await?;
         Ok(())
     }
 
-    /// The user delete (ADR-0014): one transaction — the target's session
-    /// built in-txn, then the provider layer's delete.
-    async fn delete_user(
-        &self,
-        provider: Provider,
-        mut session: Box<dyn Session>,
-        tbid: UserId,
-    ) -> TbResult<()> {
+    /// The user delete (ADR-0014): one transaction — the dispatch resolves
+    /// the target's provider in-transaction, builds their session in-txn,
+    /// then deletes.
+    async fn delete_user(&self, mut session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_provider::dispatch::delete_user(provider, &mut *session, tbid, &mut store).await?;
+        tb_provider::dispatch::delete_user(&mut *session, tbid, &mut store).await?;
         store.commit().await?;
         Ok(())
     }

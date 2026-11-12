@@ -103,7 +103,7 @@ pub(crate) async fn create_event(
     // (`InEvent::accept` — the queue insert, or the athlete-deauth
     // branch), then the wake if a user was queued (fire-and-forget). A
     // failed ingest 500s to Strava (its own retry policy applies).
-    state.provider.accept_event(event).await?;
+    state.strava.accept_event(event).await?;
     Ok(Json(()))
 }
 
@@ -126,13 +126,14 @@ pub(super) async fn sync_api(
     Query(query): Query<SyncQuery>,
 ) -> ApiResult<()> {
     let user_id: Option<tb_domain::UserId> = query.user_id.map(|u| u.into());
-    // The service API's direct op (spec #558 §5.2): one transaction
-    // (`sync_users`) queuing a `Sync` event per (non-disabled) user, then —
-    // per queued user — spawn the executor (a no-op if already running) and
-    // wake it, so the queue drains even for offline users; `user_id` narrows
-    // the trigger to one user (the route's `?user_id=` query).
+    // The service API's batched admin op (ADR-0014): one transaction
+    // (`sync_users`) queuing a `Sync` event per (non-disabled) user — each on
+    // their own provider's queue — then — per queued user — spawn the
+    // executor (a no-op if already running) and wake it, so the queue drains
+    // even for offline users; `user_id` narrows the trigger to one user (the
+    // route's `?user_id=` query).
     state
-        .provider
+        .api
         .trigger_processing(
             Box::new(admin.session()),
             user_id,
@@ -150,12 +151,13 @@ pub(super) async fn sync(
     Query(query): Query<InitialSyncQuery>,
 ) -> Result<StatusCode, AppError> {
     let user_id: tb_domain::UserId = tbid.into();
-    // The service API's direct op (spec #558 §5.2): read the target's
-    // Strava id, enqueue a `Sync` event on the `strava_events` queue, wake
-    // the executor, and await that event's completion (unbounded — the
-    // spec'd behavior for the admin endpoint), with the queue-fallback
-    // read only on a lost broadcast. The admin's acting session rides
-    // along (carried for the admin-verification `tb_provider::strava` change).
+    // The provider-agnostic direct op (ADR-0014): the provider layer's
+    // dispatch reads the target's real provider in-transaction and enqueues a
+    // `Sync` event on their provider queue (the Strava `strava_events` row,
+    // the icu onboarding cutover). A per-provider route acting on a user of
+    // the other provider follows the stated identity rule. The admin's acting
+    // session rides along (carried for the admin-verification
+    // `tb_provider::strava` change).
     state
         .provider
         .sync(Box::new(admin.session()), user_id, query.time)
