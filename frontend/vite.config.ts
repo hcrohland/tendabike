@@ -47,7 +47,7 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     proxy: {
-      "^/(api)|(strava)": {
+      "^/(api|strava|icu|source)": {
         target: "http://localhost:8000",
         changeOrigin: true,
       },

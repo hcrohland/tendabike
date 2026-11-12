@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM icu_users WHERE tbid = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4e1510a2966700d0aed04e3b4b147edbbee4bc1d21140cf58df9a52380d7b3a8"
+}

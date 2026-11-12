@@ -29,12 +29,16 @@ use anyhow::Context;
 use axum::Router;
 use sqlx::PgPool;
 use tb_domain::TbResult;
-use tb_exec::ServiceApi;
+use tb_exec::{IcuService, ProviderService, ServiceApi};
 use tower_sessions::{ExpiredDeletion, SessionManagerLayer};
 use tower_sessions_sqlx_store::PostgresStore;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod domain;
+
+mod icu;
+
+mod source;
 
 mod strava;
 use strava::{AxumAdmin, RequestSession};
@@ -45,12 +49,16 @@ use appstate::*;
 mod error;
 use error::*;
 
+mod oauth_common;
+
 mod stream;
 
-pub fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> Router {
+fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> Router {
     let mut router = Router::new()
         .nest("/api", domain::router())
+        .nest("/source", source::router())
         .nest("/strava", strava::router())
+        .nest("/icu", icu::router())
         .with_state(app_state);
 
     if let Some(path) = static_path {
@@ -65,6 +73,8 @@ pub fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> R
 
 pub async fn start(
     api: Arc<dyn ServiceApi>,
+    provider: Arc<dyn ProviderService>,
+    icu: Arc<dyn IcuService>,
     pool: PgPool,
     path: std::path::PathBuf,
     addr: SocketAddr,
@@ -79,7 +89,7 @@ pub async fn start(
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let app_state = AppState::new(api);
+    let app_state = AppState::new(api, provider, icu);
 
     // The web layer chose a `PostgresStore` for its sessions, so the
     // caller hands over the postgres connection — the same pool the

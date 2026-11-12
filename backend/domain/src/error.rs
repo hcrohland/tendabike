@@ -40,7 +40,7 @@ pub enum Error {
     #[error("Try again: {0}")]
     TryAgain(&'static str),
     /// A lookup by user and time matched more than one row: the maintainer
-    /// confirmed rule for the activity import lookup (issue #408) is that a
+    /// confirmed rule for the activity import lookup is that a
     /// same-minute duplicate is an error, not a silent first-match.
     #[error("Ambiguous match: {0}")]
     Ambiguous(String),

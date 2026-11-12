@@ -37,13 +37,13 @@ use crate::{
 
 /// Body for creating a text note.
 #[derive(Clone, Debug, Deserialize)]
-pub struct NewTextNote {
+struct NewTextNote {
     pub name: String,
 }
 
 /// Body for updating a text note.
 #[derive(Clone, Debug, Deserialize)]
-pub struct UpdateTextNote {
+struct UpdateTextNote {
     pub name: String,
 }
 

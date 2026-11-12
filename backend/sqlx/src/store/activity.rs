@@ -30,8 +30,8 @@ struct DbActivity {
     gear: Option<i32>,
     /// utc offset since timstamptz does not store the timezone
     utc_offset: i32,
-    /// The primary key
-    id: i64,
+    /// The primary key (provider-prefixed text id)
+    id: String,
     /// device name
     device_name: Option<String>,
     external_id: Option<String>,
@@ -159,11 +159,11 @@ impl<'c> tb_domain::ActivityStore for SqlxConn<'c> {
         .try_into()
     }
 
-    async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Option<Activity>> {
+    async fn activity_read_by_id(&mut self, aid: &ActivityId) -> TbResult<Option<Activity>> {
         sqlx::query_as!(
             DbActivity,
             "SELECT * FROM activities WHERE id = $1 FOR UPDATE",
-            i64::from(aid)
+            aid.to_string()
         )
         .fetch_optional(&mut **self.inner())
         .await
@@ -202,8 +202,8 @@ impl<'c> tb_domain::ActivityStore for SqlxConn<'c> {
         .try_into()
     }
 
-    async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize> {
-        let result = sqlx::query!("DELETE FROM activities WHERE id = $1", i64::from(aid))
+    async fn activity_delete(&mut self, aid: &ActivityId) -> TbResult<usize> {
+        let result = sqlx::query!("DELETE FROM activities WHERE id = $1", aid.to_string())
             .execute(&mut **self.inner())
             .await
             .map_err(into_domain)?;
@@ -247,7 +247,7 @@ impl<'c> tb_domain::ActivityStore for SqlxConn<'c> {
     /// exact instant: an activity's local wall-clock minute (its start in
     /// the stored `utc_offset`, floored to the minute) must equal the query
     /// instant's UTC wall-clock minute. The match must be unambiguous
-    /// (maintainer-confirmed, issue #408): zero rows is
+    /// (maintainer-confirmed): zero rows is
     /// [`tb_domain::Error::NotFound`], exactly one is returned, and two or
     /// more is [`tb_domain::Error::Ambiguous`], so a conflicting import row
     /// fails loudly instead of updating one of the rides at random.
@@ -309,7 +309,7 @@ impl<'c> tb_domain::ActivityStore for SqlxConn<'c> {
     }
 
     async fn activities_delete(&mut self, list: &[Activity]) -> TbResult<usize> {
-        let list: Vec<_> = list.iter().map(|s| i64::from(s.id)).collect();
+        let list: Vec<String> = list.iter().map(|s| s.id.clone().into()).collect();
 
         let result = sqlx::query!("DELETE FROM activities WHERE id = ANY($1)", &list as _)
             .execute(&mut **self.inner())
@@ -333,7 +333,7 @@ mod tests {
 
     fn activity() -> Activity {
         Activity {
-            id: ActivityId::from(42),
+            id: ActivityId::from("strava:42"),
             user_id: UserId::from(1),
             what: ActTypeId::from(4),
             name: "Morning Ride".to_string(),
@@ -364,7 +364,7 @@ mod tests {
             energy: Some(3000000),
             gear: Some(1),
             utc_offset,
-            id: 42,
+            id: "strava:42".to_string(),
             device_name: Some("Garmin".to_string()),
             external_id: None,
         }
@@ -374,7 +374,7 @@ mod tests {
     fn activity_into_db_derives_utc_offset() {
         let db = DbActivity::from(activity());
         assert_eq!(db.utc_offset, 7200);
-        assert_eq!(db.id, 42);
+        assert_eq!(db.id, "strava:42");
         assert_eq!(db.user_id, 1);
         assert_eq!(db.gear, Some(1));
     }
@@ -411,7 +411,7 @@ mod tests {
     fn vec_tryinto_maps_all_rows() {
         let acts = vec_tryinto(Ok(vec![db_activity(7200), db_activity(0)])).unwrap();
         assert_eq!(acts.len(), 2);
-        assert_eq!(acts[0].id, ActivityId::from(42));
+        assert_eq!(acts[0].id, ActivityId::from("strava:42"));
     }
 
     #[test]

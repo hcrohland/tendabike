@@ -40,9 +40,18 @@ async fn main() -> anyhow::Result<()> {
     // wrapper provides the cancellation-safe `begin` (the spawn/oneshot
     // machinery that keeps a cancelled `BEGIN` from poisoning the pool) —
     // an executor-level concern, not a sqlx-wrapper concern.
-    let api = std::sync::Arc::new(tb_exec::Registry::with_defaults(
+    let registry = tb_exec::Registry::with_defaults(
         tb_exec::DetachedBegin::new(pool),
-    )) as std::sync::Arc<dyn tb_exec::ServiceApi>;
+        tb_exec::DomainFacadeImpl,
+        // The per-user provider lane: wraps the Strava and icu lanes and
+        // selects between them per user from the `users.provider` column
+        // (spec #764), so the loop is provider-agnostic.
+        tb_exec::Lane::new(),
+    );
+    let api = std::sync::Arc::new(registry.clone()) as std::sync::Arc<dyn tb_exec::ServiceApi>;
+    let provider =
+        std::sync::Arc::new(registry.clone()) as std::sync::Arc<dyn tb_exec::ProviderService>;
+    let icu = std::sync::Arc::new(registry) as std::sync::Arc<dyn tb_exec::IcuService>;
 
-    Ok(tb_axum::start(api, db, path, addr).await?)
+    Ok(tb_axum::start(api, provider, icu, db, path, addr).await?)
 }

@@ -19,7 +19,7 @@ impl ServiceId {
         ServiceStore::service_get(store, self).await
     }
 
-    pub async fn delete(
+    pub(crate) async fn delete(
         self,
         user: &dyn Session,
         store: &mut (impl PartStore + ServiceStore + ShopStore + UsageStore),
@@ -43,7 +43,7 @@ impl ServiceId {
         }
 
         // delete service: it is reported as a None tombstone, so the
-        // client's merge drops its row (issue #462)
+        // client's merge drops its row
         service.usage.delete(store).await?;
         ServiceStore::service_delete(store, self).await?;
         summary.services.tombstone(service.key());
@@ -131,7 +131,7 @@ impl Service {
     /// guard the dispatch used to run, now at this public entry point (like
     /// [`Service::redo`] and [`Service::update`]).
     #[allow(clippy::too_many_arguments)]
-    pub async fn create(
+    pub(crate) async fn create(
         part_id: PartId,
         time: OffsetDateTime,
         name: String,
@@ -160,7 +160,7 @@ impl Service {
         .fold(Usage::new(self.usage), |usage, act| usage + &act.usage()))
     }
 
-    pub async fn redo(
+    pub(crate) async fn redo(
         self,
         user: &dyn Session,
         store: &mut (
@@ -222,7 +222,7 @@ impl Service {
         Ok(summary)
     }
 
-    pub async fn update(
+    pub(crate) async fn update(
         mut self,
         user: &dyn Session,
         store: &mut (

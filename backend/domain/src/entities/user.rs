@@ -81,7 +81,7 @@ impl From<OnboardingStatus> for i32 {
 }
 
 impl OnboardingStatus {
-    pub fn is_initial_sync_completed(&self) -> bool {
+    pub(crate) fn is_initial_sync_completed(&self) -> bool {
         matches!(self, Self::Completed)
     }
 }
@@ -94,6 +94,9 @@ pub struct User {
     pub avatar: Option<String>,
     pub is_admin: bool,
     pub onboarding_status: OnboardingStatus,
+    /// The activity provider the user connected with (spec #763): `'strava'`
+    /// or `'icu'`. Set at signup, immutable — one provider per user.
+    pub provider: String,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
@@ -152,6 +155,33 @@ pub struct Stat {
     activities: i64,
 }
 
+impl Stat {
+    /// A stat with zero counts (for test construction).
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn new(user: User) -> Self {
+        Self {
+            user,
+            parts: 0,
+            activities: 0,
+        }
+    }
+}
+
+/// The all-user stat (the admin `GET /user/all` read's row, spec #558 §3.3):
+/// the provider-neutral [`Stat`] plus the provider's queued-event count and
+/// disabled flag. Provider-neutral in name (the `all_stats` op is generic —
+/// it rides the admin user's channel and is not Strava-specific), so it lives
+/// beside [`Stat`] in the domain, not in a driver crate.
+#[derive(Debug, Serialize)]
+pub struct UserStat {
+    #[serde(flatten)]
+    pub stat: Stat,
+    /// The provider's queued-event count for the user.
+    pub events: i64,
+    /// Whether the user's provider integration is disabled.
+    pub disabled: bool,
+}
+
 impl UserId {
     /// The unified user read (spec #558 §3.5): the user with its state —
     /// the full [`User`] plus the [`Summary`] of everything the user owns,
@@ -160,7 +190,11 @@ impl UserId {
     ///
     /// Crosses: activity, attachment, part, partnote, service, serviceplan,
     /// shop, usage, user.
-    pub async fn read(self, shop: Option<ShopId>, store: &mut impl Store) -> TbResult<UserState> {
+    pub(crate) async fn read(
+        self,
+        shop: Option<ShopId>,
+        store: &mut impl Store,
+    ) -> TbResult<UserState> {
         let user = UserStore::user_get(store, self).await?;
         let caller: UserPublic = user.clone().into();
         let summary = self.get_summary(shop, Some(caller), store).await?;
@@ -171,11 +205,11 @@ impl UserId {
     /// For callers that need only the record — the onboarding guard, the
     /// `ApiRead::UserRecord` webhook read — and must not pay for the full
     /// [`UserState`] composite (spec #558 §3.5).
-    pub async fn record(&self, store: &mut impl UserStore) -> TbResult<User> {
+    pub(crate) async fn record(&self, store: &mut impl UserStore) -> TbResult<User> {
         UserStore::user_get(store, *self).await
     }
 
-    pub async fn get_public(self, store: &mut impl UserStore) -> TbResult<UserPublic> {
+    pub(crate) async fn get_public(self, store: &mut impl UserStore) -> TbResult<UserPublic> {
         let User {
             id,
             name,
@@ -220,10 +254,11 @@ impl UserId {
         firstname: &str,
         lastname: &str,
         avatar: &Option<String>,
+        provider: &str,
         store: &mut impl UserStore,
     ) -> TbResult<Self> {
         store
-            .user_create(firstname, lastname, avatar)
+            .user_create(firstname, lastname, avatar, provider)
             .await
             .map(|u| u.id)
     }
@@ -247,6 +282,14 @@ impl UserId {
         UserStore::user_get(store, *self).await.map(|u| u.is_admin)
     }
 
+    /// The user's activity provider (`'strava'` | `'icu'`), read from the
+    /// `users.provider` column (spec #763/#764): the per-user lane's
+    /// selection key. The lightweight single-row read — one field, no
+    /// `UserState` composite (it runs on every loop probe and process).
+    pub async fn provider(&self, store: &mut impl UserStore) -> TbResult<String> {
+        UserStore::user_get(store, *self).await.map(|u| u.provider)
+    }
+
     /// Sets the user's onboarding status. The single door for the status
     /// transitions the write dispatch performs (ADR-0010) — it calls this
     /// instead of the store directly.
@@ -264,7 +307,7 @@ impl UserId {
     /// it is reused in the shop-user lookup instead of re-reading the row.
     ///
     /// Crosses: activity, attachment, notification, part, partnote, service, serviceplan, shop, usage, user.
-    pub async fn get_summary(
+    pub(crate) async fn get_summary(
         &self,
         shop: Option<ShopId>,
         caller: Option<UserPublic>,

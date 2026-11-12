@@ -38,7 +38,7 @@
 //! The core is source-agnostic: the facade owns the [`TxnSource`] and the
 //! `Box<dyn FramePusher>` the loop routes committed `Summary`s through, and
 //! passes both to the core's spawn. The facade's `subscribe_shop` keeps the
-//! ownership read (a `Shop` store call, ADR-0010) and delegates only the
+//! ownership check (a `ShopId` store call, ADR-0010) and delegates only the
 //! channel creation to the core. The [`ExecutorStatus`] settled-fate enum
 //! lives in the core and is re-exported here so `crate::ExecutorStatus`
 //! resolves unchanged.
@@ -49,22 +49,21 @@ use oauth2::RefreshToken;
 use tokio::sync::{broadcast, oneshot, watch};
 
 use tb_domain::{
-    Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, Summary,
-    TbResult, UserId, WriteOutcome,
+    Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, Store,
+    Summary, TbResult, UserId, UserStat, WriteOutcome,
 };
-use tb_strava::{
-    StravaStat, StravaUser, activity,
+use tb_provider::ProviderLane;
+use tb_provider::icu::{IcuStore, client::IcuAthleteInfo, event::IcuEvent};
+use tb_provider::strava::{
+    StravaStore, StravaUser,
     client::StravaAthleteInfo,
-    event::{
-        Event as StravaEvent, InEvent, insert_sync, is_sync_for_user, sync_queued_for_user,
-        sync_users,
-    },
+    event::{InEvent, insert_sync, is_sync_for_user, sync_queued_for_user, sync_users},
     gear,
 };
 
-use crate::api::ServiceApi;
+use crate::api::{IcuService, ProviderService, ServiceApi};
 use crate::message::Request;
-use crate::{Txn, TxnSource};
+use crate::{DomainFacade, Txn, TxnSource};
 
 mod core;
 
@@ -76,7 +75,7 @@ pub use core::{DeliveryContext, ExecutorStatus};
 /// (it is reaped only when no stream is attached), so the window sets how
 /// often the idle loop re-probes the `strava_events` queue. A stream-less
 /// executor (a write-only spawn) reaps immediately after its work.
-pub const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 /// The SSE heartbeat cadence (spec §4.5): a `: ping` comment keeps the
 /// connection alive (and proxies) while the executor is idle (or reaped).
 /// The web layer's SSE `KeepAlive` wiring uses this constant.
@@ -95,17 +94,30 @@ pub const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 /// suite's doubles in the tests) — the seam is injected at construction and
 /// every method uses it, so the presentation layer never names it.
 #[derive(Clone)]
-pub struct Registry<S: TxnSource + Clone + 'static> {
+pub struct Registry<S, P, D>
+where
+    S: TxnSource + Clone + 'static,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
+{
     source: S,
+    /// The domain facade: the executor's door into the domain (spec #795).
+    /// Owned by the registry and handed to the core's spawn (a clone per
+    /// executor).
+    facade: D,
+    /// The provider lane: the narrow seam the loop calls through to probe
+    /// and process the provider's event queue. The registry owns it and
+    /// passes a clone to the core's spawn.
+    lane: P,
     /// The lifecycle core: the per-user executor map, the per-shop
     /// frame-channel map, and the spawn/reap/wake/stop-all logic. Source-
     /// agnostic — the facade owns the [`TxnSource`] and the `Box<dyn
     /// FramePusher>` it passes to the core's spawn.
-    core: Core,
+    core: Core<P>,
 }
 
 /// The frame push surface the executor loop uses to route a completed
-/// `Summary` to its delivery targets (spec #517, ticket #582; collapsed from
+/// `Summary` to its delivery targets (spec #517; collapsed from
 /// three push methods to one `deliver`, spec #706): the implementation (the
 /// [`Registry`]'s lifecycle core) owns the complete routing policy — given
 /// the acting session's context, it inspects the `Summary`'s content and
@@ -122,25 +134,29 @@ pub trait FramePusher: Send + Sync {
     async fn deliver(&self, context: DeliveryContext, summary: Summary);
 }
 
-impl<S> Registry<S>
+impl<S, P, D> Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     /// The registry with an explicit idle cadence (test ergonomics: a
     /// short idle cadence makes the executor's lifecycle observable).
     /// The SSE heartbeat cadence is the crate constant
     /// [`HEARTBEAT_INTERVAL`] — the `KeepAlive` wiring uses it directly.
-    pub fn new(source: S, idle_timeout: Duration) -> Self {
+    pub fn new(source: S, facade: D, lane: P, idle_timeout: Duration) -> Self {
         Self {
             source,
+            facade,
+            lane,
             core: Core::new(idle_timeout),
         }
     }
 
     /// The registry with the production default (the 60s idle re-probe
     /// cadence).
-    pub fn with_defaults(source: S) -> Self {
-        Self::new(source, IDLE_TIMEOUT)
+    pub fn with_defaults(source: S, facade: D, lane: P) -> Self {
+        Self::new(source, facade, lane, IDLE_TIMEOUT)
     }
 
     /// Fire the wake signal for the user's executor (spec §4.4/§4.6): a
@@ -151,15 +167,15 @@ where
     /// write) — the DB queue is the source of truth. Infallible by design:
     /// a missed wake only delays the event to the next spawn, so the
     /// webhook treats it as non-critical.
-    pub async fn wake(&self, user_id: UserId) {
+    pub(crate) async fn wake(&self, user_id: UserId) {
         self.core.wake(user_id).await
     }
 
-    /// Stop every live executor (the admin rescan's global re-hydration,
-    /// issue #446): abort every task (the watchdog records `Dead` on the
+    /// Stop every live executor (the admin rescan's global re-hydration):
+    /// abort every task (the watchdog records `Dead` on the
     /// abort `JoinError`, like a panic) and clear the executor map — the
     /// core's `stop_all`. The next `subscribe`/`write` respawns fresh.
-    pub async fn stop_all(&self) {
+    pub(crate) async fn stop_all(&self) {
         self.core.stop_all().await
     }
 
@@ -167,9 +183,11 @@ where
     /// (spec §6.4): spawning the executor if it is not running. The admin
     /// sync subscribes **before** it enqueues its event, so the completion
     /// signal cannot be missed.
-    pub async fn events(&self, user_id: UserId) -> TbResult<broadcast::Receiver<StravaEvent>> {
+    pub(crate) async fn events(&self, user_id: UserId) -> TbResult<broadcast::Receiver<P::Event>> {
         let pusher: Box<dyn FramePusher> = Box::new(self.clone());
-        self.core.events(&self.source, user_id, pusher).await
+        self.core
+            .events(&self.source, &self.facade, &self.lane, user_id, pusher)
+            .await
     }
 
     /// Push a frame to the user's SSE streams (test helper: the production
@@ -211,22 +229,66 @@ where
     /// `Box<dyn FramePusher>` (from `self.clone()`, which shares the core's
     /// maps) and passes it with the source to the core; the lock is dropped
     /// when this returns, before the caller's next await.
-    async fn exec_field<R>(&self, user_id: UserId, f: impl FnOnce(&Executor) -> R) -> TbResult<R> {
+    async fn exec_field<R>(
+        &self,
+        user_id: UserId,
+        f: impl FnOnce(&Executor<P>) -> R,
+    ) -> TbResult<R> {
         let pusher: Box<dyn FramePusher> = Box::new(self.clone());
-        self.core.exec_field(&self.source, user_id, pusher, f).await
+        self.core
+            .exec_field(&self.source, &self.facade, &self.lane, user_id, pusher, f)
+            .await
     }
 }
 
-/// The frame push surface (spec #517, ticket #582): the executor loop
+/// The shop-stream subscription (spec #517): the inherent
+/// surface with the narrow `ShopStore + Txn` bound (the ownership read
+/// needs only the shop sub-trait). The [`ProviderService`] impl delegates
+/// to this; the web layer calls it through the trait (which carries the
+/// full `Store + StravaStore` bound for the other direct ops).
+impl<S, P, D> Registry<S, P, D>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: tb_domain::ShopStore + Txn,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
+{
+    /// Register a shop stream for `shop_id` (spec #517): verify
+    /// the caller is the shop owner in a transaction (a non-owner is
+    /// `Forbidden`, mapped to a 403 by the web layer), then create the shop
+    /// channel on demand and return a subscription to it.
+    pub async fn subscribe_shop(
+        &self,
+        user_id: UserId,
+        shop_id: ShopId,
+    ) -> TbResult<broadcast::Receiver<Summary>> {
+        // Verify ownership in a transaction (the web layer maps `Forbidden`
+        // to a 403).
+        let mut store = self.source.begin().await?;
+        shop_id.check_owner(user_id, &mut store).await?;
+        store.commit().await?;
+
+        // Create the shop channel on demand and subscribe (the "open shop"
+        // check is implicit: `receiver_count() > 0`). The owner tag is the
+        // verified caller: it lets a
+        // notification frame fan out to every open shop stream of its
+        // recipient.
+        Ok(self.core.subscribe_shop(shop_id, user_id).await)
+    }
+}
+
+/// The frame push surface (spec #517): the executor loop
 /// routes a completed `Summary` through this, and the implementation
 /// delegates the routing to the core — the deep "where does a frame go?"
 /// policy lives there (spec #705/#706), locking its own maps (the shop
 /// stream map, the executor map) — the two are independent, so a push never
 /// holds both locks.
 #[async_trait::async_trait]
-impl<S> FramePusher for Registry<S>
+impl<S, P, D> FramePusher for Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     /// Delegate the routing to the core (the complete frame-routing policy).
     async fn deliver(&self, context: DeliveryContext, summary: Summary) {
@@ -236,12 +298,13 @@ where
 
 /// The service API's impl for the registry (spec #558 §2): the per-user
 /// channel ops ride [`Self::send_request`] (spawn-or-join the executor,
-/// enqueue, await the oneshot); the direct ops own their own
-/// transaction(s) and any lifecycle control.
+/// enqueue, await the oneshot).
 #[async_trait::async_trait]
-impl<S> ServiceApi for Registry<S>
+impl<S, P, D> ServiceApi for Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     /// Enqueue one [`ApiRead`] on the user's executor and await its data
     /// (spec #558 §3): the loop runs the read in its own transaction
@@ -270,7 +333,7 @@ where
     /// Enqueue the [`Gear`](Request::Gear) hydration write on the user's
     /// executor and await its frame (spec #558 §4): the loop runs
     /// `update_gear` in its own transaction with its own session (a
-    /// `tb_strava` op — it cannot be an `ApiWrite` variant) and resolves
+    /// `tb_provider::strava` op — it cannot be an `ApiWrite` variant) and resolves
     /// with the created parts' `Summary` — the frame (the union of the
     /// parts it created, one entry per part, empty when nothing is new).
     /// The `/user/summary` route runs this **before** its unified `User`
@@ -300,50 +363,55 @@ where
         .await
     }
 
-    /// Register a shop stream for `shop_id` (spec #517, ticket #582): verify
+    /// Enqueue the admin [`AllStats`](Request::AllStats) read on the user's
+    /// executor and await its stats (spec #558 §3.3): the admin's `GET
+    /// /user/all` rides the admin user's own channel — `get_all_stats` is a
+    /// `tb_provider::strava` op, so it is an exec-level variant, dispatched loop-side
+    /// in the loop's own transaction. The oneshot wait is unbounded, like a
+    /// read's (spec #558 §3.7).
+    async fn all_stats(&self, session: Box<dyn Session>) -> TbResult<Vec<UserStat>> {
+        let user_id = session.user_id();
+        let (request, reply) = Request::new_all_stats(session);
+        self.send_request(user_id, request, reply, "stats read")
+            .await
+    }
+}
+
+/// The provider-specific service API's impl for the registry: the eleven
+/// direct ops own their own transaction(s) and any lifecycle control. The
+/// `P::Event = StravaEvent` constraint is valid for the Strava provider (the
+/// `sync` op correlates by the Strava event's identity).
+#[async_trait::async_trait]
+impl<S, P, D> ProviderService for Registry<S, P, D>
+where
+    // The direct ops own their own transactions and do their domain work
+    // directly (the `subscribe_shop` ownership read, the `rescan`, the
+    // `sync`/`trigger` queue ops, the login upsert, the deauthorize/delete)
+    // — so their connection is a full `Store` (the entity sub-traits) plus
+    // `StravaStore` (the provider's queue and token ops). The executor loop
+    // needs only `Txn` (its domain work rides the facade and the lane); this
+    // bound is the registry's direct surface, not the loop's.
+    S: TxnSource + Clone + 'static,
+    S::Conn: Store + StravaStore,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
+    P::Event: Into<Option<tb_provider::strava::event::Event>>,
+{
+    /// Register a shop stream for `shop_id` (spec #517): verify
     /// the caller is the shop owner in a transaction (a non-owner is
     /// `Forbidden`, mapped to a 403 by the web layer), then create the shop
     /// channel on demand and return a subscription to it. No `ExecutorStatus`
     /// — the shop stream is a standalone channel, not tied to the executor's
     /// lifecycle.
     ///
-    /// The ownership read is a `Shop` store call (ADR-0010), so it stays
+    /// The ownership check is a `ShopId` store call (ADR-0010), so it stays
     /// here in the facade; the channel creation is delegated to the core.
     async fn subscribe_shop(
         &self,
         user_id: UserId,
         shop_id: ShopId,
     ) -> TbResult<broadcast::Receiver<Summary>> {
-        // Verify ownership in a transaction (the web layer maps `Forbidden`
-        // to a 403).
-        let mut store = self.source.begin().await?;
-        let shop = shop_id.read(&mut store).await?;
-        store.commit().await?;
-        if shop.owner != user_id {
-            return Err(Error::Forbidden(
-                "You must be the shop owner to open this shop's stream".into(),
-            ));
-        }
-
-        // Create the shop channel on demand and subscribe (the "open shop"
-        // check is implicit: `receiver_count() > 0`). The owner tag is the
-        // verified caller (follow-up to issue #687): it lets a
-        // notification frame fan out to every open shop stream of its
-        // recipient.
-        Ok(self.core.subscribe_shop(shop_id, user_id).await)
-    }
-
-    /// Enqueue the admin [`AllStats`](Request::AllStats) read on the user's
-    /// executor and await its stats (spec #558 §3.3): the admin's `GET
-    /// /user/all` rides the admin user's own channel — `get_all_stats` is a
-    /// `tb_strava` op, so it is an exec-level variant, dispatched loop-side
-    /// in the loop's own transaction. The oneshot wait is unbounded, like a
-    /// read's (spec #558 §3.7).
-    async fn all_stats(&self, session: Box<dyn Session>) -> TbResult<Vec<StravaStat>> {
-        let user_id = session.user_id();
-        let (request, reply) = Request::new_all_stats(session);
-        self.send_request(user_id, request, reply, "stats read")
-            .await
+        self.subscribe_shop(user_id, shop_id).await
     }
 
     /// The admin rescan (spec #558 §5.2): one transaction
@@ -351,7 +419,7 @@ where
     /// rescan is all-users maintenance that bypasses the executors (the
     /// spec §3/§6.4 carve-out), so no frame carries its effect: open
     /// streams end, and each client's native reconnect + catch-up snapshot
-    /// re-hydrates it (issue #446).
+    /// re-hydrates it.
     async fn rescan(&self, _session: Box<dyn Session>) -> TbResult<()> {
         let mut store = self.source.begin().await?;
         Activity::rescan_all(&mut store).await?;
@@ -384,7 +452,7 @@ where
         let mut done = self.events(user_id).await?;
 
         // The enqueue txn (spec #558 §5.2): the `Sync` event, committed —
-        // the `strava_id` (the queue's key) is resolved inside `tb_strava`.
+        // the `strava_id` (the queue's key) is resolved inside `tb_provider::strava`.
         let mut store = self.source.begin().await?;
         insert_sync(user_id, event_time, false, &mut store).await?;
         store.commit().await?;
@@ -398,16 +466,23 @@ where
         loop {
             match done.recv().await {
                 Ok(event) => {
-                    // The correlation is a `tb_strava` concern (the queue is
-                    // keyed by the `strava_id`, resolved inside the crate).
-                    let mut store = self.source.begin().await?;
-                    let is_our_sync =
-                        is_sync_for_user(&event, user_id, event_time, &mut store).await?;
-                    store.commit().await?;
-                    if is_our_sync {
-                        return Ok(());
+                    // The correlation is a `tb_provider::strava` concern (the queue is
+                    // keyed by the `strava_id`, resolved inside the crate). The admin
+                    // sync is Strava-only: only a Strava event correlates (an icu
+                    // event on this channel is impossible under one-provider-per-user,
+                    // but the unified lane's event type is shared, so a non-Strava
+                    // one is skipped).
+                    if let Some(strava_event) = event.into() {
+                        let mut store = self.source.begin().await?;
+                        let is_our_sync =
+                            is_sync_for_user(&strava_event, user_id, event_time, &mut store)
+                                .await?;
+                        store.commit().await?;
+                        if is_our_sync {
+                            return Ok(());
+                        }
+                        // Some other message completed; keep waiting for ours.
                     }
-                    // Some other message completed; keep waiting for ours.
                 }
                 Err(_) => {
                     // The channel closed (or lagged): the executor settled
@@ -481,6 +556,7 @@ where
             &lastname,
             &avatar,
             refresh.as_ref(),
+            &tb_provider::EntityFacadeImpl,
             &mut store,
         )
         .await?;
@@ -509,56 +585,155 @@ where
     }
 
     /// The gear redirect URL (spec #558 §5.2): one transaction — the
-    /// `tb_strava` `strava_url` op (which checks the part's ownership), then
+    /// `tb_provider::strava` `strava_url` op (which checks the part's ownership), then
     /// the Strava URL.
-    async fn gear_url(&self, mut session: Box<dyn Session>, id: PartId) -> TbResult<String> {
+    async fn gear_url(&self, session: Box<dyn Session>, id: PartId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let uri = gear::strava_url(i32::from(id), &mut *session, &mut store).await?;
+        let uri = gear::strava_url(
+            i32::from(id),
+            session,
+            &tb_provider::EntityFacadeImpl,
+            &mut store,
+        )
+        .await?;
         store.commit().await?;
         Ok(uri)
     }
 
     /// The activity redirect URL (spec #558 §5.2): one transaction — the
-    /// `tb_strava` `strava_url` op (which checks the activity's ownership),
-    /// then the Strava URL.
+    /// lane's `activity_url` op (which checks the activity's ownership and
+    /// rejects an id the provider does not recognize), then the provider
+    /// URL. The dispatch and the per-provider URL building live on the lane;
+    /// the registry just delegates.
     async fn activity_url(&self, session: Box<dyn Session>, id: ActivityId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let uri = activity::strava_url(i64::from(id), &*session, &mut store).await?;
+        let uri = self.lane.activity_url(id, session, &mut store).await?;
         store.commit().await?;
         Ok(uri)
     }
 
     /// The user redirect URL (spec #558 §5.2): one transaction — the
-    /// `tb_strava` `strava_url` op for the target's tbid (no session: the
+    /// `tb_provider::strava` `strava_url` op for the target's tbid (no session: the
     /// route has no user context to gate on).
     async fn user_url(&self, id: UserId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let uri = tb_strava::strava_url(id, &mut store).await?;
+        let uri = tb_provider::strava::strava_url(id, &mut store).await?;
         store.commit().await?;
         Ok(uri)
     }
 
     /// The deauthorization (spec #558 §5.2): one transaction —
-    /// `tb_strava::user_deauthorize` (which verifies the caller is an admin)
+    /// `tb_provider::strava::user_deauthorize` (which verifies the caller is an admin)
     /// and the target `tbid`. No wake, no message; the existing race (deauth
     /// deletes the target's queued events outside the target's loop) is
     /// preserved.
     async fn deauthorize(&self, mut session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_strava::user_deauthorize(&mut *session, tbid, &mut store).await?;
+        tb_provider::strava::user_deauthorize(&mut *session, tbid, &mut store).await?;
         store.commit().await?;
         Ok(())
     }
 
     /// The user delete (spec #558 §5.2): one transaction —
-    /// `tb_strava::user_delete` (which verifies the caller is an admin) and
+    /// `tb_provider::strava::user_delete` (which verifies the caller is an admin) and
     /// the target `tbid` (the deauthorization plus the row deletions). No
     /// wake, no message; the existing race is preserved.
     async fn delete_user(&self, mut session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_strava::user_delete(&mut *session, tbid, &mut store).await?;
+        tb_provider::strava::user_delete(
+            &mut *session,
+            tbid,
+            &tb_provider::EntityFacadeImpl,
+            &mut store,
+        )
+        .await?;
         store.commit().await?;
         Ok(())
+    }
+}
+
+/// The icu-specific service API's impl for the registry: the icu direct ops
+/// own their own transaction(s). The connection is a full `Store` (the entity
+/// sub-traits) plus `IcuStore` (the icu queue and token ops).
+#[async_trait::async_trait]
+impl<S, P, D> IcuService for Registry<S, P, D>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: Store + IcuStore,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
+{
+    /// The icu login upsert: one transaction
+    /// (`IcuUser::upsert` + `is_admin`), returning the identity and the admin
+    /// flag. The web layer keeps the query-parse, the scope check, the HMAC
+    /// path, the outbound exchange, and the tower-session write — the
+    /// wire-shape parsing stays beside the exchange it feeds.
+    async fn icu_login_from_token(
+        &self,
+        athlete: IcuAthleteInfo,
+        access_token: String,
+    ) -> TbResult<(UserId, bool)> {
+        let IcuAthleteInfo { id, name, .. } = athlete;
+        let mut store = self.source.begin().await?;
+        let user = tb_provider::icu::IcuUser::upsert(
+            id,
+            &name,
+            &access_token,
+            &tb_provider::EntityFacadeImpl,
+            &mut store,
+        )
+        .await?;
+        let is_admin = user.user_id().is_admin(&mut store).await?;
+        store.commit().await?;
+        Ok((user.user_id(), is_admin))
+    }
+
+    /// The icu webhook accept: one transaction
+    /// (`IcuEvent::accept` — the athlete validation and the `icu_events`
+    /// queue insert), then wake the user's executor (fire-and-forget,
+    /// `200`). A failed ingest 500s to intervals.icu (its own retry policy
+    /// applies).
+    async fn icu_accept_event(&self, event: IcuEvent) -> TbResult<()> {
+        let mut store = self.source.begin().await?;
+        let user_id = event.accept(&mut store).await?;
+        store.commit().await?;
+        // Fire the in-memory wake signal (spec §4.4): a pure signal to a
+        // running executor — it never spawns one, and the DB queue is the
+        // source of truth, so a missed wake only delays the event to the
+        // next spawn.
+        self.wake(user_id).await;
+        Ok(())
+    }
+
+    /// The per-user icu sync: the onboarding sync. One
+    /// transaction — the lane's `insert_sync`, which imports the user's icu
+    /// gear and runs the activity backfill (the date-window walk that queues
+    /// the user's past activities as `icu_events` rows). The executor's
+    /// normal loop then imports the queued activities in the background
+    /// (non-blocking: this returns once the gear is imported and the
+    /// activities are queued).
+    async fn icu_sync(
+        &self,
+        _session: Box<dyn Session>,
+        user_id: UserId,
+        event_time: i64,
+    ) -> TbResult<()> {
+        let mut store = self.source.begin().await?;
+        self.lane
+            .insert_sync(user_id, event_time, false, &mut store)
+            .await?;
+        store.commit().await?;
+        Ok(())
+    }
+
+    /// The icu deauthorization.
+    async fn icu_deauthorize(&self, _session: Box<dyn Session>, _tbid: UserId) -> TbResult<()> {
+        todo!("icu_deauthorize")
+    }
+
+    /// The icu user delete.
+    async fn icu_delete_user(&self, _session: Box<dyn Session>, _tbid: UserId) -> TbResult<()> {
+        todo!("icu_delete_user")
     }
 }
 
@@ -571,9 +746,11 @@ where
 /// error ("read", "hydration", "stats read", "write"). `exec_field`
 /// drops the registry lock on return, so the unbounded reply await
 /// runs without it.
-impl<S> Registry<S>
+impl<S, P, D> Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     async fn send_request<Out>(
         &self,

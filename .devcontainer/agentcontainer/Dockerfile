@@ -18,6 +18,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tmux \
     vim \
     ripgrep \
+    extrepo \
+    sqlite3 \
+    && extrepo enable github-cli \
+    && apt update \
+    && apt install gh \
     && rm -rf /var/lib/apt/lists/*
 
 RUN cat >> /etc/bash.bashrc <<'EOF'
@@ -61,8 +66,9 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
     --component rust-analyzer \
     && rustup -V
 
-RUN cargo install sqlx-cli --no-default-features --features postgres,rustls
-
+RUN cargo install sqlx-cli --no-default-features --features postgres,rustls \
+    && cargo install rust-analyzer-mcp
+    
 # The base image ships a `vscode` user on uid/gid 1000 with passwordless
 # sudo. Rename it to `laios` (and its sudoers drop-in) rather than
 # colliding on the UID. cargo/rustup homes are made world-writable so the

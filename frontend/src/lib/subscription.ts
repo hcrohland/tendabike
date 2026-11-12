@@ -1,5 +1,5 @@
 import { mapableState } from "./mapable.svelte";
-import { Shop } from "./shop";
+import { Shop } from "./shop.svelte";
 import type { UserPublic } from "./user";
 
 export type SubscriptionStatus =

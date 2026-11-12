@@ -15,6 +15,7 @@ export class Part {
   last_used: Date;
   disposed_at?: Date;
   usage: string;
+  source?: string;
   shop?: number;
 
   constructor(data: any) {
@@ -30,6 +31,7 @@ export class Part {
       ? new Date(data.disposed_at)
       : undefined;
     this.usage = data.usage;
+    this.source = data.source;
     this.shop = data.shop;
   }
 

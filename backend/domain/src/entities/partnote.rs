@@ -73,17 +73,10 @@ impl PartNote {
         self.mime.is_some()
     }
 
-    /// Returns `true` when this note's mime type renders as an inline image.
-    pub fn has_image(&self) -> bool {
-        self.mime
-            .as_deref()
-            .is_some_and(|m| m.starts_with("image/"))
-    }
-
     /// Retrieves the stored bytes of this note's file attachment.
     ///
     /// Returns `NotFound` for text notes (and for notes whose file data is missing).
-    pub async fn file(&self, store: &mut impl PartNoteStore) -> TbResult<Vec<u8>> {
+    pub(crate) async fn file(&self, store: &mut impl PartNoteStore) -> TbResult<Vec<u8>> {
         if !self.has_file() {
             return Err(Error::NotFound(format!("note {} is not a file", self.id)));
         }
@@ -103,7 +96,7 @@ impl PartNote {
 
 impl PartId {
     /// Returns all notes attached to this part, after checking access.
-    pub async fn notes(
+    pub(crate) async fn notes(
         self,
         user: &dyn Session,
         store: &mut (impl PartNoteStore + PartStore + ShopStore),
@@ -115,7 +108,7 @@ impl PartId {
     /// Creates a free-text note on this part.
     ///
     /// Returns `BadRequest` for a blank name; access is checked against the part.
-    pub async fn note_create_text(
+    pub(crate) async fn note_create_text(
         self,
         user: &dyn Session,
         name: String,
@@ -135,7 +128,7 @@ impl PartId {
     /// filename — the same resolution [`PartNoteId::update_file`] applies.
     /// Access is checked against the part.
     #[allow(clippy::too_many_arguments)]
-    pub async fn note_create_file(
+    pub(crate) async fn note_create_file(
         self,
         user: &dyn Session,
         name: Option<String>,
@@ -159,7 +152,7 @@ impl PartId {
 
 impl PartNoteId {
     /// Retrieves this note, after checking access to its part.
-    pub async fn note(
+    pub(crate) async fn note(
         self,
         user: &dyn Session,
         store: &mut (impl PartNoteStore + PartStore + ShopStore),
@@ -172,7 +165,7 @@ impl PartNoteId {
     /// Updates the body of a text note.
     ///
     /// Returns `BadRequest` for a blank name; access is checked via [`PartNoteId::note`].
-    pub async fn update_text(
+    pub(crate) async fn update_text(
         self,
         user: &dyn Session,
         name: String,
@@ -191,7 +184,7 @@ impl PartNoteId {
     /// `filename` falls back to the note's current filename (or `"file"`); `name` falls back
     /// to the resolved filename. Access is checked via [`PartNoteId::note`].
     #[allow(clippy::too_many_arguments)]
-    pub async fn update_file(
+    pub(crate) async fn update_file(
         self,
         user: &dyn Session,
         name: Option<String>,
@@ -217,7 +210,7 @@ impl PartNoteId {
     ///
     /// Returns `NotFound` when the note has no file; access is checked via
     /// [`PartNoteId::note`].
-    pub async fn remove_file(
+    pub(crate) async fn remove_file(
         self,
         user: &dyn Session,
         store: &mut (impl PartNoteStore + PartStore + ShopStore),
@@ -230,7 +223,7 @@ impl PartNoteId {
     }
 
     /// Deletes this note after checking access to its part.
-    pub async fn delete(
+    pub(crate) async fn delete(
         self,
         user: &dyn Session,
         store: &mut (impl PartNoteStore + PartStore + ShopStore),

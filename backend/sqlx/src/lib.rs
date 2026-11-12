@@ -1,8 +1,13 @@
-pub use tb_sqlx::*;
+pub use tb_sqlx::{DbPool, SqlxConn};
 
+mod icustore;
+mod prepopulated_data;
+mod snapshot;
 mod store;
 mod stravastore;
 mod tb_sqlx;
+
+pub use snapshot::{SNAPSHOT_JSON, StoreSnapshot};
 
 fn into_domain(err: sqlx::Error) -> tb_domain::Error {
     match err {

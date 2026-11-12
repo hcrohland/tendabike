@@ -1,18 +1,19 @@
-# tb_strava tests
+# Strava tests
 
-All tests run in-memory (no database, no network); one `<name>_tests.rs` module per module under `strava/src/<name>/`, declared `#[cfg(test)]` in `activity.rs`, `event.rs`, `gear.rs`, `user.rs`.
+All tests run in-memory (no database, no network); one `<name>_tests.rs` module per module under `provider/src/strava/<name>/`, declared `#[cfg(test)]` in `activity.rs`, `event.rs`, `gear.rs`, `user.rs`.
 
 ## Behavior ownership
 
-`tb_strava` owns the **Strava → domain mapping**: translating Strava JSON into domain entities (gear JSON → `Part`, activity JSON → `Activity`, user JSON → `StravaUser`) and the Strava-logic free functions over it (activity sync, gear hydration, event processing, deauthorization).
+The Strava module (`tb_provider::strava`) owns the **Strava → domain mapping**: translating Strava JSON into domain entities (gear JSON → `Part`, activity JSON → `Activity`, user JSON → `StravaUser`) and the Strava-logic free functions over it (activity sync, gear hydration, event processing, deauthorization).
 
-- **What it mocks** — the **Store** (the I/O boundary beneath the domain): `MockStravaConn` is a `mockall` `mock!` of the `Store` seam, so the domain logic runs for real against canned store outcomes. The **Strava HTTP API** is stubbed behind the thread-local canned-response map (`queue` / `queue_error` / `requests`).
+- **What it mocks** — the **StravaDataStore** (the Strava-specific I/O boundary): `MockStravaDataStore` is a `mockall` `#[automock]` of the `StravaDataStore` trait, so the Strava-logic runs for real against canned store outcomes. Domain operations are mocked via `MockEntityFacade` (the `EntityFacade` seam). The **Strava HTTP API** is stubbed behind the thread-local canned-response map (`queue` / `queue_error` / `requests`).
 - **What it delegates to the seam** — the **store I/O** (real Postgres) lives in the sqlx seam suites (see [`sqlx.md`](sqlx.md)); the **frame-push / orchestration** (deciding what to push after hydration) lives in `tb_exec` (see [`exec.md`](exec.md)); the **domain-level results** live in the `tb_domain` suite (see [`domain.md`](domain.md)).
 
 ## Key infrastructure
 
-- **`MockStravaConn`** (`strava/src/test_support.rs`) — a `mockall` `mock!` witness (`#[cfg(test)]`) accumulating the full `Store` seam (nine sub-traits + the method-free `Store` marker) plus the `StravaStore` surface; the Strava-logic free functions take a bare `&mut impl StravaStore`, so no `Txn`. The Strava-logic tests (into_partid, activity sync, gear hydration, event processing, deauthorize) run the logic for real and assert on canned `mock!` outcomes.
-- **`strava_session` / `strava_admin_session`** (`strava/src/test_support.rs`) — build a domain `MockSession` that seeds the `TokenCache` with a warm token (no refresh), so the thin free functions' refresh-token persistence is a no-op for it. The canned responses live in a **thread-local** map the free functions consult (each test runs on its own thread → per-test isolation); `strava_session` begins that scope. The canned-response surface is free functions (not methods on the session):
+- **`tb_provider::test_support`** (the shared kit, `provider/src/test_support.rs`) — the common canned-response machinery (`CannedState` + the `begin_test` / `in_test_mode` / `queue` / `queue_error` / `pop_test_canned` / `requests` free functions) every provider HTTP seam shares. The per-provider seam (`provider/src/strava/test_support/seam.rs`) is a thin wrapper over it: it owns the per-provider `thread_local` and re-exposes those free functions (plus Strava's extras).
+- **`MockStravaDataStore`** (`provider/src/strava/traits.rs`, via `#[automock]`) — the `StravaDataStore` automock: Strava-table I/O is canned, domain ops go through `MockEntityFacade` (`C` inferred as `MockStravaDataStore`). The Strava-logic tests (into_partid, activity sync, gear hydration, event processing, deauthorize) run the logic for real and assert on canned outcomes.
+- **`strava_session` / `strava_admin_session`** (`provider/src/strava/test_support.rs`) — build a domain `MockSession` that seeds the `TokenCache` with a warm token (no refresh), so the thin free functions' refresh-token persistence is a no-op for it. The canned responses live in a **thread-local** map the free functions consult (each test runs on its own thread → per-test isolation); `strava_session` begins that scope. The canned-response surface is free functions (not methods on the session):
   - `queue(uri, json)` — script a JSON response body for an **exact** request URI (FIFO per URI)
   - `queue_error(uri, error)` — script an error for an exact URI; unscripted URIs yield `Error::BadRequest`
   - `requests() -> Vec<String>` — every requested URI, in order (assert on these to verify API calls)

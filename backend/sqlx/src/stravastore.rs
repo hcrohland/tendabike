@@ -6,10 +6,10 @@ use sqlx::FromRow;
 
 use crate::{SqlxConn, into_domain, option_into, vec_into};
 use tb_domain::{TbResult, UserId};
-use tb_strava::{StravaId, StravaUser, event::Event};
+use tb_provider::strava::{StravaId, StravaUser, event::Event};
 
 #[derive(Clone, Debug, Default, FromRow)]
-pub struct DbStravaUser {
+struct DbStravaUser {
     id: i32,
     tendabike_id: i32,
     refresh_token: Option<String>,
@@ -45,15 +45,15 @@ impl From<DbStravaUser> for StravaUser {
 }
 
 #[derive(Debug, Default, FromRow)]
-pub struct DbEvent {
+struct DbEvent {
     id: Option<i32>,
-    pub object_type: String,
-    pub object_id: i64,
-    pub aspect_type: String,
+    object_type: String,
+    object_id: i64,
+    aspect_type: String,
     updates: String,
     owner_id: i32,
     subscription_id: i32,
-    pub event_time: i64,
+    event_time: i64,
 }
 
 impl From<Event> for DbEvent {
@@ -114,7 +114,7 @@ impl From<DbEvent> for Event {
 }
 
 #[async_trait::async_trait]
-impl<'c> tb_strava::StravaDataStore for SqlxConn<'c> {
+impl<'c> tb_provider::strava::StravaDataStore for SqlxConn<'c> {
     async fn strava_event_create(&mut self, e: Event) -> TbResult<()> {
         let e: DbEvent = e.into();
         sqlx::query_as!(
@@ -307,7 +307,7 @@ impl<'c> tb_strava::StravaDataStore for SqlxConn<'c> {
     }
 }
 
-impl<'c> tb_strava::StravaStore for SqlxConn<'c> {}
+impl<'c> tb_provider::strava::StravaStore for SqlxConn<'c> {}
 
 #[cfg(test)]
 mod tests {
@@ -367,9 +367,11 @@ mod tests {
         updates.insert("private".to_string(), "false".to_string());
         let event = Event {
             id: Some(7),
-            object_type: tb_strava::event::ObjectType::try_from("activity".to_string()).unwrap(),
+            object_type: tb_provider::strava::event::ObjectType::try_from("activity".to_string())
+                .unwrap(),
             object_id: 99,
-            aspect_type: tb_strava::event::AspectType::try_from("update".to_string()).unwrap(),
+            aspect_type: tb_provider::strava::event::AspectType::try_from("update".to_string())
+                .unwrap(),
             updates,
             owner_id: StravaId::from(42),
             subscription_id: 5,

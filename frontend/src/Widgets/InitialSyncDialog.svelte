@@ -21,16 +21,28 @@
   import { Modal, P, Heading, Button } from "flowbite-svelte";
   import { myfetch, handleError } from "../lib/utils";
   import { getUser, setUser } from "../lib/user";
+  import {
+    providerMeta,
+    onboardingSyncUrl,
+    type Provider,
+  } from "../lib/provider";
+  import ProviderMark from "./ProviderMark.svelte";
   import { m } from "../../paraglide/messages";
 
   let open = $state(getUser()?.onboarding_status === "pending");
+
+  /// The dialog is only open for a known user in pending status, so the
+  /// provider (and with it the branding and the sync route) is derived from
+  /// the current user.
+  let provider = $derived((getUser()?.provider ?? "strava") as Provider);
+  let meta = $derived(providerMeta[provider]);
 
   let loading = $state(false);
 
   async function triggerSync() {
     loading = true;
     try {
-      const updatedUser = await myfetch("/strava/onboarding/sync", "POST");
+      const updatedUser = await myfetch(onboardingSyncUrl(provider), "POST");
       setUser(updatedUser);
       open = false;
     } catch (e) {
@@ -40,6 +52,8 @@
     }
   }
 
+  /// The postpone route exists only for Strava: an intervals.icu user
+  /// always backfills on first connect.
   async function skipSync() {
     loading = true;
     try {
@@ -61,35 +75,59 @@
   dismissable={false}
   outsideclose={false}
 >
-  <div class="text-center">
-    <Heading tag="h3" class="mb-5 text-lg font-normal text-text-1">
-      {m.initialsync_welcome()}
-    </Heading>
-    <P class="mb-4 text-left">
-      {m.initialsync_question()}
-    </P>
-    <P class="mb-6 text-left text-sm text-text-1">
-      {m.initialsync_desc1()}
-    </P>
-    <P class="mb-6 text-left text-sm text-text-1">
-      {m.initialsync_desc2()}
-    </P>
-    <P class="mb-6 text-left text-sm text-text-1">
-      {m.initialsync_desc3({
-        sync: m.header_sync(),
-        historic: m.header_import_historic(),
-      })}
-    </P>
-    <P class="mb-6 text-left text-sm text-text-1">
-      {m.initialsync_desc4()} <br />
-    </P>
-    <div class="flex justify-center gap-4">
-      <Button color="blue" disabled={loading} onclick={triggerSync}>
-        {loading ? m.action_importing() : m.header_import_activities()}
-      </Button>
-      <Button color="alternative" disabled={loading} onclick={skipSync}>
-        {m.initialsync_skip()}
-      </Button>
+  <div
+    class="rounded-lg border-2 overflow-hidden"
+    style="border-color:{meta.accent}"
+  >
+    <div
+      class="p-3 text-white flex items-center gap-2"
+      style="background:{meta.accent}"
+    >
+      <ProviderMark {provider} colored />
+      <span class="font-semibold">
+        {m.initialsync_header({ provider: meta.name })}
+      </span>
+    </div>
+    <div class="p-4 sm:p-6 bg-surface-1">
+      <div class="text-center">
+        <Heading tag="h3" class="mb-5 text-lg font-normal text-text-1">
+          {m.initialsync_welcome()}
+        </Heading>
+        <P class="mb-4 text-left">
+          {m.initialsync_question({ provider: meta.name })}
+        </P>
+        <P class="mb-6 text-left text-sm text-text-1">
+          {m.initialsync_desc1()}
+        </P>
+        <P class="mb-6 text-left text-sm text-text-1">
+          {m.initialsync_desc2()}
+        </P>
+        {#if provider === "strava"}
+          <P class="mb-6 text-left text-sm text-text-1">
+            {m.initialsync_desc3({
+              sync: m.header_sync(),
+              historic: m.header_import_historic(),
+            })}
+          </P>
+        {/if}
+        <P class="mb-6 text-left text-sm text-text-1">
+          {m.initialsync_desc4()} <br />
+        </P>
+        <div class="flex justify-center gap-4">
+          <Button
+            color={provider === "strava" ? "orange" : "gray"}
+            disabled={loading}
+            onclick={triggerSync}
+          >
+            {loading ? m.action_importing() : m.header_import_activities()}
+          </Button>
+          {#if provider === "strava"}
+            <Button color="alternative" disabled={loading} onclick={skipSync}>
+              {m.initialsync_skip()}
+            </Button>
+          {/if}
+        </div>
+      </div>
     </div>
   </div>
 </Modal>

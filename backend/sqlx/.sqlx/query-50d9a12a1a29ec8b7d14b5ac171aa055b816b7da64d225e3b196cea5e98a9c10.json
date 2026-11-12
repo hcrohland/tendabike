@@ -66,7 +66,7 @@
       {
         "ordinal": 12,
         "name": "id",
-        "type_info": "Int8"
+        "type_info": "Text"
       },
       {
         "ordinal": 13,
@@ -81,7 +81,7 @@
     ],
     "parameters": {
       "Left": [
-        "Int8",
+        "Text",
         "Int4",
         "Int4",
         "Text",

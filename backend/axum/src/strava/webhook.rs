@@ -63,10 +63,10 @@ use crate::{
     error::AppError,
 };
 use tb_domain::{ApiRead, ApiWrite, Error, ReadOutcome, TbResult};
-use tb_strava::event::InEvent;
+use tb_provider::strava::event::InEvent;
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct Hub {
+pub(crate) struct Hub {
     #[serde(rename = "hub.mode")]
     #[serde(skip_serializing)]
     mode: String,
@@ -103,7 +103,7 @@ pub(crate) async fn create_event(
     // (`InEvent::accept` — the queue insert, or the athlete-deauth
     // branch), then the wake if a user was queued (fire-and-forget). A
     // failed ingest 500s to Strava (its own retry policy applies).
-    state.api.accept_event(event).await?;
+    state.provider.accept_event(event).await?;
     Ok(Json(()))
 }
 
@@ -132,7 +132,7 @@ pub(super) async fn sync_api(
     // wake it, so the queue drains even for offline users; `user_id` narrows
     // the trigger to one user (the route's `?user_id=` query).
     state
-        .api
+        .provider
         .trigger_processing(
             Box::new(admin.session()),
             user_id,
@@ -155,9 +155,9 @@ pub(super) async fn sync(
     // the executor, and await that event's completion (unbounded — the
     // spec'd behavior for the admin endpoint), with the queue-fallback
     // read only on a lost broadcast. The admin's acting session rides
-    // along (carried for the admin-verification `tb_strava` change).
+    // along (carried for the admin-verification `tb_provider::strava` change).
     state
-        .api
+        .provider
         .sync(Box::new(admin.session()), user_id, query.time)
         .await?;
     Ok(StatusCode::NO_CONTENT)

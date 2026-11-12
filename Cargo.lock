@@ -2945,7 +2945,7 @@ dependencies = [
  "sqlx",
  "tb_domain",
  "tb_exec",
- "tb_strava",
+ "tb_provider",
  "thiserror 2.0.21",
  "time",
  "tokio",
@@ -2989,7 +2989,29 @@ dependencies = [
  "serde",
  "serde_json",
  "tb_domain",
- "tb_strava",
+ "tb_provider",
+ "time",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "tb_provider"
+version = "0.9.0"
+dependencies = [
+ "anyhow",
+ "async-recursion",
+ "async-trait",
+ "derive_more",
+ "http",
+ "log",
+ "mockall",
+ "oauth2",
+ "reqwest 0.13.5",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "tb_domain",
  "time",
  "tokio",
  "uuid",
@@ -3009,31 +3031,10 @@ dependencies = [
  "sqlx",
  "tb_domain",
  "tb_exec",
- "tb_strava",
+ "tb_provider",
  "time",
  "tokio",
  "uuid",
-]
-
-[[package]]
-name = "tb_strava"
-version = "0.9.0"
-dependencies = [
- "anyhow",
- "async-recursion",
- "async-trait",
- "derive_more",
- "http",
- "log",
- "mockall",
- "oauth2",
- "reqwest 0.13.5",
- "serde",
- "serde_derive",
- "serde_json",
- "tb_domain",
- "time",
- "tokio",
 ]
 
 [[package]]
@@ -3045,6 +3046,7 @@ dependencies = [
  "mimalloc",
  "tb_axum",
  "tb_exec",
+ "tb_provider",
  "tb_sqlx",
  "tokio",
 ]

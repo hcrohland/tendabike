@@ -5,10 +5,11 @@ import { parts, type Part } from "./part";
 import { partNotes, type PartNote } from "./partnote";
 import { Attachment, attachments } from "./attachment";
 import { plans, type ServicePlan } from "./serviceplan";
-import { Shop, shops } from "./shop";
+import { Shop, shops } from "./shop.svelte";
 import { notifications, type Notification } from "./notification.svelte";
 import { myfetch } from "./utils";
 import { mapableState, type StateMap } from "./mapable.svelte";
+import type { Provider } from "./provider";
 import { getUser, setUser } from "./user.svelte";
 
 export { getUser, setUser };
@@ -55,6 +56,9 @@ export type User = {
   avatar: string | undefined;
   is_admin: boolean;
   onboarding_status: OnboardingStatus;
+  /// The activity provider the user connected with (`'strava'` | `'icu'`),
+  /// set at signup, immutable — one provider per user (spec #760).
+  provider: Provider;
 };
 
 /// The wire shape of `GET /api/user`: the full user record plus the
@@ -95,7 +99,7 @@ type SummaryRow<K extends keyof Summary> = {
 type AnySummaryRow = { [K in keyof Summary]: SummaryRow<K> }[keyof Summary];
 
 /**
- * The sync registry (issue #412): one row per Summary field, pairing the
+ * The sync registry: one row per Summary field, pairing the
  * payload field with the state collection it feeds. Both merge lanes fold
  * over it, so the table is the single answer to "which collections does a
  * Summary feed?" The row type pins each key to its own collection, so a

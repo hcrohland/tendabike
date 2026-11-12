@@ -55,8 +55,7 @@
 //! - the one write whose result is an operation outcome the `Summary`
 //!   cannot carry is `ActivityDescend`: the CSV rows the domain matched and
 //!   skipped (the [`DescendReport`]) ride the HTTP response body — the
-//!   matched activities' state still rides the frame (the §6.2 deviation,
-//!   recorded on issue #446).
+//!   matched activities' state still rides the frame (the §6.2 deviation).
 
 use time::OffsetDateTime;
 
@@ -81,7 +80,7 @@ pub struct NoteFile {
 /// One mutating API route, as the per-user loop receives it.
 ///
 /// The variants are the full mutating route table of `backend/axum`
-/// (`src/domain/*.rs` plus the two onboarding routes in `src/strava/webhook.rs`),
+/// (`src/domain/*.rs` plus the two onboarding routes),
 /// entity-prefixed. The admin routes are deliberately absent: they are
 /// admin-triggered, not user writes (spec #446 §3).
 #[derive(Clone, Debug, PartialEq)]
@@ -233,8 +232,8 @@ pub enum ApiWrite {
     /// recipient's; the recipient guard applies).
     NotificationDelete { id: NotificationId },
 
-    // --- user (onboarding, `/strava`) ---
-    /// Trigger the initial Strava sync (the query's `time`, 0 = "now"). The
+    // --- user (onboarding) ---
+    /// Trigger the initial sync (the query's `time`, 0 = "now"). The
     /// domain part runs in [`exec`]; the variant carries `time` for the
     /// cutover, which builds the sync Event from it.
     UserOnboardingSync { time: i64 },
@@ -251,7 +250,7 @@ pub enum ApiWrite {
 /// domain matched and skipped (the [`DescendReport`]) are the handler's
 /// response body (`200 + {good, bad}`), not `Summary` state — the matched
 /// activities' updated state still rides the frame (the spec #446 §6.2
-/// deviation, recorded on issue #446).
+/// deviation).
 #[derive(Clone, Debug, PartialEq)]
 pub enum WriteOutcome {
     /// The write's `Summary` (every write except the descend).
@@ -290,10 +289,10 @@ impl WriteOutcome {
 ///
 /// The `UserOnboarding*` arms do the **domain part only** — the status guard
 /// (the same `BadRequest` messages as the webhook handlers) and the status
-/// update. The Strava-side sync event is deliberately not part of this
-/// crate: the domain cannot depend on the Strava driver (the dependency
-/// direction is `domain ← strava`), and the domain's store bound is `Store`,
-/// not a `StravaStore`. The cutover ticket (issue #457) enqueues a sync
+/// update. The provider-side sync event is deliberately not part of this
+/// crate: the domain cannot depend on a provider driver (the dependency
+/// direction is `domain ← provider`), and the domain's store bound is `Store`,
+/// not a provider store. The cutover enqueues a sync
 /// `Event` on the user's channel for `UserOnboardingSync`.
 ///
 /// Returns the `Summary` of everything the operation touched (see the module
@@ -352,7 +351,7 @@ pub async fn exec(
             what,
             purchase,
         } => {
-            // `source` is a Strava import detail the route does not
+            // `source` is a provider import detail the route does not
             // parameterize: a part created through the API has none.
             let part =
                 Part::create(name, vendor, model, what, None, purchase, session, store).await?;
@@ -560,7 +559,7 @@ pub async fn exec(
 
         // Domain part only: the status guard, exactly as in the webhook
         // handlers, plus the status update. A `User` is not in any `Summary`,
-        // so the result is empty. The Strava-side sync event is handled by
+        // so the result is empty. The provider-side sync event is handled by
         // the loop — see the `exec` docs.
         ApiWrite::UserOnboardingSync { .. } => {
             // The lightweight single-row read: the guard needs only the

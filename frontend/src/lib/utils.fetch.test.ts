@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { myfetch, checkStatus, handleError } from "./utils";
 import { getUser, setUser } from "./user";
 import { toastsDoor, clearToasts } from "./notification.svelte";
-import { Shop, setShop } from "./shop";
+import { Shop, setShop } from "./shop.svelte";
 import { resp } from "../test/helpers";
 
 beforeEach(() => {
@@ -149,6 +149,7 @@ describe("checkStatus 401", () => {
       avatar: undefined,
       is_admin: false,
       onboarding_status: "pending",
+      provider: "strava",
     });
     await expect(
       checkStatus(resp("Unauthorized", 401, false, "")),

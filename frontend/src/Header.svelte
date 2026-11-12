@@ -13,9 +13,11 @@
     Spinner,
     DarkMode,
     Select,
+    Button,
   } from "flowbite-svelte";
   import { handleError, myfetch } from "./lib/utils";
   import { refresh, getUser, setUser } from "./lib/user";
+  import { onboardingSyncUrl } from "./lib/provider";
   import { markHydrated, startStream, stopStream } from "./lib/stream";
   import { activities } from "./lib/activity";
   import { stateValues } from "./lib/mapable.svelte";
@@ -25,7 +27,7 @@
   import { ChevronDownOutline } from "flowbite-svelte-icons";
   import Garmin from "./Activity/Garmin.svelte";
   import ShopMenu from "./Shop/ShopMenu.svelte";
-  import { getShop } from "./lib/shop";
+  import { getShop } from "./lib/shop.svelte";
   import * as m from "../paraglide/messages";
   import { getLocale, setLocale, locales } from "../paraglide/runtime";
   import { onDestroy } from "svelte";
@@ -57,7 +59,8 @@
 
   async function triggerHistoricSync() {
     try {
-      const updatedUser = await myfetch("/strava/onboarding/sync", "POST");
+      const provider = getUser()?.provider ?? "strava";
+      const updatedUser = await myfetch(onboardingSyncUrl(provider), "POST");
       setUser(updatedUser);
       fullrefresh();
     } catch (e) {
@@ -86,7 +89,7 @@
 <Navbar class="text-text-1">
   <NavBrand href="/cat">
     <img
-      src="favicon.png"
+      src="/favicon.png"
       alt="TendaBike"
       title="TendaBike"
       class="rounded-circle h-11"
@@ -194,9 +197,7 @@
     </NavUl>
   {:else}
     <div class="flex items-center md:order-2">
-      <a href={"/strava/login" + page.url.search}>
-        <img src="connect_with_strava.png" alt="Login with Strava" />
-      </a>
+      <Button color="gray" href="/about#connect">{m.header_connect()}</Button>
     </div>
   {/if}
 </Navbar>

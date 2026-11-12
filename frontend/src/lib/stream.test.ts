@@ -1,11 +1,11 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { render } from "@testing-library/svelte";
 import { flushSync } from "svelte";
-import { markHydrated, startStream, stopStream } from "./stream";
+import { markHydrated, resetHydrated, startStream, stopStream } from "./stream";
 import { parts } from "./part";
 import { stateValues } from "./mapable.svelte";
 import { setUser, getUser } from "./user";
-import { setShop, Shop } from "./shop";
+import { Shop, setShop } from "./shop.svelte";
 import { resp, summary, summaryContent } from "../test/helpers";
 import StreamHarness from "../test/StreamHarness.svelte";
 
@@ -49,6 +49,7 @@ describe("stream", () => {
     parts.setMap([]);
     setUser(undefined);
     setShop(undefined);
+    resetHydrated();
     fetchMock = vi.fn();
     fetchMock.mockResolvedValue(resp({ user: {}, summary: summary() }));
     vi.stubGlobal("fetch", fetchMock);
@@ -176,6 +177,22 @@ describe("stream", () => {
     expect(parts[7].name).toBe("Frame Part");
   });
 
+  it("applies a frame when markHydrated runs before startStream (the Header effect order)", () => {
+    // Mirror Header.svelte's $effect: markHydrated() is called before
+    // startStream(), so it is a no-op (no active stream yet); the new stream
+    // must still end up hydrated, or its frames are buffered forever.
+    markHydrated();
+    startStream(() => {}, factory);
+    theStream().fireOpen();
+    theStream().fireMessage(
+      JSON.stringify(
+        summary({ parts: { "7": { id: 7, name: "Frame Part" } } }),
+      ),
+    );
+    expect(parts[7]).toBeDefined();
+    expect(parts[7].name).toBe("Frame Part");
+  });
+
   it("a tombstone frame deletes the row it names", () => {
     parts.setMap([summaryContent().parts["1"]]);
     startStream(() => {}, factory);
@@ -216,6 +233,7 @@ describe("stream", () => {
       avatar: undefined,
       is_admin: false,
       onboarding_status: "completed",
+      provider: "strava",
     });
     fetchMock.mockResolvedValue(resp("Unauthorized", 401, false, ""));
     startStream(() => {}, factory);
@@ -264,6 +282,7 @@ describe("stream: reactive to shop state", () => {
       avatar: undefined,
       is_admin: false,
       onboarding_status: "completed" as const,
+      provider: "strava" as const,
     };
   }
 
@@ -272,6 +291,7 @@ describe("stream: reactive to shop state", () => {
     parts.setMap([]);
     setUser(undefined);
     setShop(undefined);
+    resetHydrated();
     fetchMock = vi.fn();
     fetchMock.mockResolvedValue(resp({ user: {}, summary: summary() }));
     vi.stubGlobal("fetch", fetchMock);

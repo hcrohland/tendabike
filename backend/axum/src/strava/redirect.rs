@@ -8,7 +8,7 @@ use axum::{
     extract::{Path, State},
     response::Redirect,
 };
-use tb_domain::{ActivityId, PartId, UserId};
+use tb_domain::{PartId, UserId};
 
 use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, error::AppError};
 
@@ -22,21 +22,8 @@ pub(super) async fn redirect_gear(
     // ownership), then the Strava URL. The handler maps `Err` →
     // `Redirect::permanent("/")` as before.
     let uri = state
-        .api
+        .provider
         .gear_url(Box::new(user), PartId::from(id))
-        .await
-        .unwrap_or_else(|_| "/".to_string());
-    Ok(Redirect::permanent(&uri))
-}
-
-pub(super) async fn redirect_act(
-    user: RequestSession,
-    Path(id): Path<i64>,
-    State(state): State<AppState>,
-) -> Result<Redirect, AppError> {
-    let uri = state
-        .api
-        .activity_url(Box::new(user), ActivityId::from(id))
         .await
         .unwrap_or_else(|_| "/".to_string());
     Ok(Redirect::permanent(&uri))
@@ -47,7 +34,7 @@ pub(super) async fn redirect_user(
     State(state): State<AppState>,
 ) -> Result<Redirect, AppError> {
     let uri = state
-        .api
+        .provider
         .user_url(id.into())
         .await
         .unwrap_or_else(|_| "/".to_string());
@@ -60,12 +47,12 @@ pub(super) async fn revoke_user(
     State(state): State<AppState>,
 ) -> ApiResult<()> {
     // The service API's direct op (spec #558 §5.2): one transaction — the
-    // target's session built in-txn, then `tb_strava::user_deauthorize`
+    // target's session built in-txn, then `tb_provider::strava::user_deauthorize`
     // (no wake, no message; the existing queue race is preserved). The admin's
     // acting session rides along (carried for the admin-verification
-    // `tb_strava` change).
+    // `tb_provider::strava` change).
     state
-        .api
+        .provider
         .deauthorize(Box::new(admin.session()), tbid)
         .await?;
     Ok(Json(()))
@@ -77,12 +64,12 @@ pub(super) async fn deleteuser(
     State(state): State<AppState>,
 ) -> ApiResult<()> {
     // The service API's direct op (spec #558 §5.2): one transaction — the
-    // target's session built in-txn, then `tb_strava::user_delete` (no wake,
+    // target's session built in-txn, then `tb_provider::strava::user_delete` (no wake,
     // no message; the existing queue race is preserved). The admin's acting
-    // session rides along (carried for the admin-verification `tb_strava`
+    // session rides along (carried for the admin-verification `tb_provider::strava`
     // change).
     state
-        .api
+        .provider
         .delete_user(Box::new(admin.session()), tbid)
         .await?;
     Ok(Json(()))

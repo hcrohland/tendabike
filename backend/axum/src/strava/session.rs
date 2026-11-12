@@ -32,7 +32,7 @@ pub(crate) struct RequestSession {
 /// The fetch requests' per-request active-shop header (ADR-0009). The SSE
 /// stream keeps its `?shop=` query parameter — the native `EventSource`
 /// client cannot send custom headers.
-pub(crate) const ACTIVE_SHOP_HEADER: &str = "X-Active-Shop";
+const ACTIVE_SHOP_HEADER: &str = "X-Active-Shop";
 
 const SESSION_KEY: &str = "session";
 const SESSION_NEXT_UPDATE: &str = "update";
@@ -41,7 +41,7 @@ impl RequestSession {
     /// Write the tower session for a just-logged-in user (spec #558 §5.2):
     /// the identity upsert is the service API's `login_from_token` op (one
     /// transaction — `StravaUser::upsert` + `is_admin`); this keeps only the
-    /// tower-session half (the token flows through the `tb_strava`
+    /// tower-session half (the token flows through the `tb_provider::strava`
     /// `TokenCache`, not the cookie).
     pub(crate) async fn create_from_token(
         user_id: UserId,
@@ -179,8 +179,8 @@ where
 /// The admin-verification extractor: a `RequestSession` that has been
 /// checked `is_admin()`. It carries the acting session through, so the admin
 /// handlers can hand it to the registry (which verifies admin in a later
-/// `tb_strava` ticket) rather than rebuilding an identity-only one.
-pub struct AxumAdmin {
+/// `tb_provider::strava` ticket) rather than rebuilding an identity-only one.
+pub(crate) struct AxumAdmin {
     session: RequestSession,
 }
 

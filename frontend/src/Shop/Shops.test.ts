@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { shops, Shop } from "../lib/shop";
+import { shops, Shop } from "../lib/shop.svelte";
 import { setUser } from "../lib/user";
 import { resp } from "../test/helpers";
 import Shops from "./Shops.svelte";
@@ -12,6 +12,7 @@ const user = {
   avatar: undefined,
   is_admin: false,
   onboarding_status: "completed",
+  provider: "strava",
 } as const;
 
 beforeEach(() => {

@@ -4,14 +4,20 @@ permissions:
   actions: read
 
 on:
-  #   push:
-  #     branches: [ "main" ]
+  push:
+    branches: ["main"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:
 
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_RELEASE_DEBUG: 0
 
 jobs:
   svelte:
@@ -23,7 +29,7 @@ jobs:
         with:
           #node-version: 21
           cache: npm
-      - run: npm install
+      - run: npm ci
       - name: Format check
         run: npm run fmtcheck
       - name: Check
@@ -67,8 +73,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Format check
         run: cargo fmt --check
-      # -- --include-ignored runs the ignored store-seam suite (issue
-      #417); the other test binaries have no ignored tests, so this
-      # changes nothing for the in-memory suites.
+      # -- --include-ignored runs the ignored store-seam suite the other test binaries
+      # have no ignored tests, so this changes nothing for the in-memory suites.
       - name: Test
-        run: cargo test --release -- --include-ignored
+        run: cargo test -q -- --include-ignored

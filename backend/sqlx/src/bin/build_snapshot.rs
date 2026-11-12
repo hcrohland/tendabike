@@ -1,7 +1,7 @@
-//! Rebuilds `backend/domain/src/prepopulated_data.rs` from the canonical
+//! Rebuilds `backend/sqlx/src/prepopulated_data.rs` from the canonical
 //! workshop store.
 //!
-//! The fixture builder is re-based on a scratch Postgres DB (issue #647):
+//! The fixture builder is re-based on a scratch Postgres DB:
 //! the canonical workshop's domain-operation sequence runs against a
 //! `PostgresStore` (a `SqlxConn` over the scratch database), the rows are
 //! read back into `StoreSnapshot`, and serialized. Codegen requires a
@@ -15,9 +15,9 @@ use std::time::Duration;
 
 use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, AttachmentStore, Part, PartId, PartStore,
-    PartTypeId, Session, StoreSnapshot, UsageId, UsageStore, UserId, UserStore, attach_assembly,
+    PartTypeId, Session, UsageId, UsageStore, UserId, UserStore, attach_assembly,
 };
-use tb_sqlx::DbPool;
+use tb_sqlx::{DbPool, StoreSnapshot};
 use time::OffsetDateTime;
 
 /// The scratch database url from the environment (the codegen requires a
@@ -125,7 +125,7 @@ async fn build_workshop_snapshot(pool: &DbPool) -> tb_domain::TbResult<StoreSnap
     let s = TestSession;
 
     // Create user 1 (the customer who owns all workshop parts).
-    store.user_create("Tenda", "Bike", &None).await?;
+    store.user_create("Tenda", "Bike", &None, "strava").await?;
 
     // ─── Bike A: Main Bike ────────────────────────────────────────────
     let bike_a = Part::create(
@@ -408,7 +408,7 @@ async fn build_workshop_snapshot(pool: &DbPool) -> tb_domain::TbResult<StoreSnap
     // ─── Activities on Bike A (for usage calculation) ─────────────────
     let base = sample_purchase_date() - time::Duration::days(180);
     mk_activity(
-        ActivityId::new(1),
+        ActivityId::from("strava:1"),
         "Morning Ride",
         base,
         3600,
@@ -420,7 +420,7 @@ async fn build_workshop_snapshot(pool: &DbPool) -> tb_domain::TbResult<StoreSnap
     .upsert(&s, &mut store)
     .await?;
     mk_activity(
-        ActivityId::new(2),
+        ActivityId::from("strava:2"),
         "Hill Repeats",
         base + time::Duration::hours(2),
         1800,
@@ -432,7 +432,7 @@ async fn build_workshop_snapshot(pool: &DbPool) -> tb_domain::TbResult<StoreSnap
     .upsert(&s, &mut store)
     .await?;
     mk_activity(
-        ActivityId::new(3),
+        ActivityId::from("strava:3"),
         "Recovery Spin",
         base + time::Duration::days(1),
         2400,
@@ -490,7 +490,7 @@ async fn build_workshop_snapshot(pool: &DbPool) -> tb_domain::TbResult<StoreSnap
     snap.parts.sort_by_key(|p| p.id);
     snap.attachments.sort_by_key(|a| (a.part_id, a.attached));
     snap.usages.sort_by_key(|u| u.id);
-    snap.activities.sort_by_key(|a| a.id);
+    snap.activities.sort_by_key(|a| a.id.clone());
     Ok(snap)
 }
 
@@ -552,12 +552,8 @@ async fn main() -> anyhow::Result<()> {
         json
     );
 
-    // Write to the `tb_domain` crate's `prepopulated_data.rs` (the bin lives
-    // in `tb_sqlx`, but the generated file is in `tb_domain`).
-    let path = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../domain/src/prepopulated_data.rs"
-    );
+    // Write to this crate's `prepopulated_data.rs`.
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/prepopulated_data.rs");
     std::fs::write(path, &content)?;
     println!("Wrote {}", path);
 

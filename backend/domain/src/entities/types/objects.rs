@@ -77,6 +77,21 @@ const ACTLIST: &str = r#"
     "id": 10,
     "name": "Skitour",
     "gear_type": 303
+  },
+  {
+    "id": 11,
+    "name": "Mountain Bike Ride",
+    "gear_type": 1
+  },
+  {
+    "id": 12,
+    "name": "Gravel Ride",
+    "gear_type": 1
+  },
+  {
+    "id": 13,
+    "name": "Cyclocross",
+    "gear_type": 1
   }
 ]
 "#;

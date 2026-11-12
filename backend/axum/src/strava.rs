@@ -36,7 +36,6 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/onboarding/sync", post(webhook::trigger_initial_sync))
         .route("/onboarding/postpone", post(webhook::postpone_initial_sync))
         .route("/bikes/{id}", get(redirect::redirect_gear))
-        .route("/activities/{id}", get(redirect::redirect_act))
         .route("/users/{id}", get(redirect::redirect_user))
         .route("/disable/{id}", post(redirect::revoke_user))
         .route("/delete/{id}", delete(redirect::deleteuser))

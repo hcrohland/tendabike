@@ -4,7 +4,7 @@
 
   import ShopList from "./ShopList.svelte";
   import { handleError, myfetch } from "../lib/utils";
-  import { Shop } from "../lib/shop";
+  import { Shop } from "../lib/shop.svelte";
   import { type ShopSubscription } from "../lib/subscription";
   import { getUser, type UserPublic } from "../lib/user";
   import { type Map } from "../lib/mapable.svelte";

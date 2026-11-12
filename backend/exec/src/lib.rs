@@ -29,14 +29,14 @@
 //! - [`txn`] — the `Txn` and `TxnSource` traits: the transaction lifecycle
 //!   named for the loop. The loop is generic over the source and never names
 //!   a concrete adapter.
-//! - [`message`] — the [`Message`] enum and the in-memory plumbing (the
+//! - [`message`] — the `Message` enum and the in-memory plumbing (the
 //!   per-user API-write channel, the oneshot reply, the `Summary` frame sink).
 //! - [`executor`] — [`LoopContext`], the loop itself (its wiring and its
 //!   state) and its `run` method: a biased select, one transaction per
 //!   message, and the reclaim-on-idle policy.
 //!
 //! The loop computes no domain state of its own: it drives the existing
-//! `ApiWrite` dispatch and `tb_strava` event processing inside transactions
+//! `ApiWrite` dispatch and `tb_provider::strava` event processing inside transactions
 //! it owns. The seam's Postgres half lives in `tb_sqlx`, and the transaction
 //! integration is verified against real Postgres in `tb_sqlx`'s
 //! `tests/executor_seam.rs`; the unit tests stand in for the seam with a
@@ -45,12 +45,16 @@
 
 mod api;
 mod executor;
+mod facade;
+mod lane;
 mod message;
 mod registry;
 mod txn;
 
 pub use api::*;
 pub use executor::*;
+pub use facade::*;
+pub use lane::*;
 pub use message::*;
 pub use registry::*;
 pub use txn::*;

@@ -1,0 +1,218 @@
+/*
+   tendabike - the bike maintenance tracker
+
+   Copyright (C) 2023  Christoph Rohland
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as published
+   by the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+*/
+
+//! The executor's door into the domain (spec #795).
+//!
+//! [`DomainFacade`] is the trait the executor goes through to reach the
+//! domain: the four dispatch-level operations the executor needs, each a
+//! one-line forward to the corresponding `tb_domain` function, generic over
+//! the store. The executor is generic over `D: DomainFacade` (static
+//! dispatch); the crate's own tests swap in the [`MockDomainFacade`] (a
+//! crate-internal `cfg(test)` double).
+//!
+//! [`MockDomainFacade`]: crate::MockDomainFacade
+
+use tb_domain::{
+    ApiRead, ApiWrite, Part, PartId, ReadOutcome, Session, Store, TbResult, UserId, WriteOutcome,
+};
+
+/// The executor's door into the domain (spec #795): the four dispatch-level
+/// operations the executor needs, each a one-line forward to the corresponding
+/// `tb_domain` function, generic over the store.
+///
+/// Dispatch is static — the executor is generic over `D: DomainFacade`.
+/// Under `cfg(test)`, `mockall`'s `#[automock]` generates
+/// [`MockDomainFacade`]; the crate's own tests set expectations with the
+/// store type as a turbofish, e.g. `expect_part_owner::<MyStore>()`.
+///
+/// [`MockDomainFacade`]: crate::MockDomainFacade
+#[async_trait::async_trait]
+#[cfg_attr(test, mockall::automock)]
+pub trait DomainFacade<C: Send + Sync>: Send + Sync {
+    /// Dispatch an [`ApiWrite`] (the domain's `exec`).
+    async fn exec(
+        &self,
+        write: ApiWrite,
+        session: &dyn Session,
+        store: &mut C,
+    ) -> TbResult<WriteOutcome>;
+
+    /// Dispatch an [`ApiRead`] (the domain's `read`).
+    async fn read(
+        &self,
+        read: ApiRead,
+        session: &dyn Session,
+        store: &mut C,
+    ) -> TbResult<ReadOutcome>;
+
+    /// Resolve a part's owner (the domain's `PartId::owner` — the
+    /// session-less read the executor uses to route a shop-context frame).
+    async fn part_owner(&self, id: PartId, store: &mut C) -> TbResult<UserId>;
+
+    /// Read a part by id with ownership check (the domain's `PartId::part`).
+    async fn part(&self, id: PartId, session: &dyn Session, store: &mut C) -> TbResult<Part>;
+}
+
+/// The concrete [`DomainFacade`]: a stateless unit struct that forwards each
+/// operation to the corresponding `tb_domain` function.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct DomainFacadeImpl;
+
+#[async_trait::async_trait]
+impl<C: Store + Sync + 'static> DomainFacade<C> for DomainFacadeImpl {
+    async fn exec(
+        &self,
+        write: ApiWrite,
+        session: &dyn Session,
+        store: &mut C,
+    ) -> TbResult<WriteOutcome> {
+        tb_domain::exec(write, session, store).await
+    }
+
+    async fn read(
+        &self,
+        read: ApiRead,
+        session: &dyn Session,
+        store: &mut C,
+    ) -> TbResult<ReadOutcome> {
+        tb_domain::read(read, session, store).await
+    }
+
+    async fn part_owner(&self, id: PartId, store: &mut C) -> TbResult<UserId> {
+        id.owner(store).await
+    }
+
+    async fn part(&self, id: PartId, session: &dyn Session, store: &mut C) -> TbResult<Part> {
+        id.part(session, store).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tb_domain::test_support::{MockStore, mock_session};
+    use tb_domain::{OnboardingStatus, PartTypeId, UsageId, User};
+
+    /// A canned [`User`] for `id` (inert defaults for the rest).
+    fn user(id: UserId) -> User {
+        User {
+            id,
+            name: "Test User".to_string(),
+            firstname: "Test".to_string(),
+            avatar: None,
+            is_admin: false,
+            onboarding_status: OnboardingStatus::Completed,
+            provider: "strava".to_string(),
+        }
+    }
+
+    /// A canned [`Part`] for `id` owned by `owner` (inert defaults for the
+    /// rest).
+    fn part(id: PartId, owner: UserId) -> Part {
+        Part {
+            id,
+            owner,
+            what: PartTypeId::from_id(1),
+            name: "Test Part".to_string(),
+            vendor: "Test Vendor".to_string(),
+            model: "Test Model".to_string(),
+            purchase: time::OffsetDateTime::UNIX_EPOCH,
+            last_used: time::OffsetDateTime::UNIX_EPOCH,
+            disposed_at: None,
+            usage: UsageId::default(),
+            source: None,
+            shop: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn part_owner_forwards_to_domain() -> TbResult<()> {
+        let mut store = MockStore::new();
+        let owner = UserId::from(42);
+        let part_val = part(PartId::from(1), owner);
+        store
+            .expect_partid_get_part()
+            .returning(move |_id| Ok(part_val.clone()));
+        let facade = DomainFacadeImpl;
+        let result = facade.part_owner(PartId::from(1), &mut store).await?;
+        assert_eq!(result, owner);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn part_forwards_to_domain() -> TbResult<()> {
+        let mut store = MockStore::new();
+        let owner = UserId::from(1);
+        let part_val = part(PartId::from(1), owner);
+        store
+            .expect_partid_get_part()
+            .returning(move |_id| Ok(part_val.clone()));
+        let facade = DomainFacadeImpl;
+        let session: Box<dyn Session> = Box::new(mock_session(owner));
+        let result = facade.part(PartId::from(1), &*session, &mut store).await?;
+        assert_eq!(result.id, PartId::from(1));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn exec_forwards_to_domain() -> TbResult<()> {
+        let mut store = MockStore::new();
+        store
+            .expect_notification_read_all()
+            .returning(|_uid| Ok(vec![]));
+        let facade = DomainFacadeImpl;
+        let session: Box<dyn Session> = Box::new(mock_session(UserId::from(1)));
+        let outcome = facade
+            .exec(ApiWrite::NotificationReadAll, &*session, &mut store)
+            .await?;
+        assert!(matches!(outcome, WriteOutcome::Summary(_)));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn read_forwards_to_domain() -> TbResult<()> {
+        let mut store = MockStore::new();
+        let user_val = user(UserId::from(1));
+        store
+            .expect_user_get()
+            .returning(move |_uid| Ok(user_val.clone()));
+        let facade = DomainFacadeImpl;
+        let session: Box<dyn Session> = Box::new(mock_session(UserId::from(1)));
+        let outcome = facade
+            .read(ApiRead::UserRecord, &*session, &mut store)
+            .await?;
+        assert_eq!(outcome, ReadOutcome::UserRecord(user(UserId::from(1))));
+        Ok(())
+    }
+
+    /// The `#[automock]` witness is the seam the executor's tests mock: set
+    /// an expectation and the canned outcome is served without touching the
+    /// domain. The store type `C` is inferred from the argument.
+    #[tokio::test]
+    async fn mock_domain_facade_serves_canned_outcome() -> TbResult<()> {
+        let mut mock = MockDomainFacade::new();
+        mock.expect_part_owner()
+            .returning(|_id, _store| Box::pin(async { Ok(UserId::from(99)) }));
+        let mut store = MockStore::new();
+        let result = mock.part_owner(PartId::from(1), &mut store).await?;
+        assert_eq!(result, UserId::from(99));
+        Ok(())
+    }
+}

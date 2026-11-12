@@ -41,7 +41,7 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct NewPart {
+pub(crate) struct NewPart {
     pub what: PartTypeId,
     /// This name of the part.
     pub name: String,
@@ -55,7 +55,7 @@ pub struct NewPart {
 
 #[serde_as]
 #[derive(Clone, Debug, PartialEq, Deserialize)]
-pub struct ChangePart {
+pub(crate) struct ChangePart {
     pub name: String,
     /// The vendor name
     pub vendor: String,

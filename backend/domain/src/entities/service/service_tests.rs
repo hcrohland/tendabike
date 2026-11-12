@@ -1,4 +1,4 @@
-//! The `Service` entity tests over a canned [`MockStore`] (issue #643).
+//! The `Service` entity tests over a canned [`MockStore`].
 //!
 //! Each test runs the real service domain logic — the usage aggregation and
 //! computation from canned activity data (a main part aggregates all of its
@@ -62,7 +62,7 @@ fn usage(time: i32, distance: i32, climb: i32, descend: i32, energy: i32) -> Usa
 /// metrics (the values that `activity.usage()` folds into the aggregate).
 fn ride(id: i64, gear: PartId, start: OffsetDateTime, usage: Usage) -> Activity {
     Activity {
-        id: ActivityId::new(id),
+        id: ActivityId::from(id.to_string()),
         user_id: test_user(),
         what: ActTypeId::from(1),
         name: "Ride".to_string(),

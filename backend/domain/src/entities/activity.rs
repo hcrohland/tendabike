@@ -27,8 +27,6 @@
 //! Most operations are done on the ActivityId though
 //!
 
-use std::collections::HashSet;
-
 use anyhow::Context;
 use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
@@ -40,22 +38,19 @@ use crate::*;
 ///
 /// Most operations for activities are done on the Id alone
 ///
+/// An opaque identifier. The domain treats it as an opaque string and never
+/// interprets its contents; its string form is owned by the provider that
+/// created it.
 #[derive(
-    Clone,
-    Copy,
-    Debug,
-    Hash,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Serialize,
-    Deserialize,
-    From,
-    Into,
-    Display,
+    Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, From, Into, Display,
 )]
-pub struct ActivityId(i64);
+pub struct ActivityId(String);
+
+impl From<&str> for ActivityId {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
 
 /// Round a UTC offset, in whole seconds, to the nearest 30 minutes.
 ///
@@ -134,7 +129,7 @@ pub struct Activity {
 impl IdKeyed for Activity {
     type Key = ActivityId;
     fn key(&self) -> Self::Key {
-        self.id
+        self.id.clone()
     }
 }
 
@@ -145,15 +140,11 @@ enum Factor {
 }
 
 impl ActivityId {
-    pub fn new(id: i64) -> Self {
-        Self(id)
-    }
-
     /// Read the activity with id self
     ///
     /// checks authorization
     async fn read_optional(
-        self,
+        &self,
         session: &dyn Session,
         store: &mut impl ActivityStore,
     ) -> TbResult<Option<Activity>> {
@@ -171,7 +162,7 @@ impl ActivityId {
     ///
     /// checks authorization
     pub async fn read(
-        self,
+        &self,
         session: &dyn Session,
         store: &mut impl ActivityStore,
     ) -> TbResult<Activity> {
@@ -198,9 +189,9 @@ impl ActivityId {
             .await?
             .register(Factor::Sub, store)
             .await?;
-        store.activity_delete(self).await?;
+        store.activity_delete(&self).await?;
         // The deleted activity is reported as a None tombstone, so the
-        // client's merge drops its row (issue #462).
+        // client's merge drops its row.
         res.activities.tombstone(self);
         Ok(res)
     }
@@ -249,7 +240,7 @@ impl Activity {
     ///
     /// returns all affected parts  
     /// checks authorization  
-    pub async fn update(
+    pub(crate) async fn update(
         self,
         user: &dyn Session,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
@@ -339,31 +330,14 @@ impl Activity {
     ///
     /// A `Vec` of `Activity` objects representing all activities for the given user.
     ///
-    pub async fn get_all(user: &UserId, store: &mut impl ActivityStore) -> TbResult<Vec<Activity>> {
+    pub(crate) async fn get_all(
+        user: &UserId,
+        store: &mut impl ActivityStore,
+    ) -> TbResult<Vec<Activity>> {
         store.activity_get_all(user).await
     }
 
-    pub async fn categories(
-        user: &dyn Session,
-        store: &mut impl ActivityStore,
-    ) -> TbResult<HashSet<PartTypeId>> {
-        let act_types = store
-            .activity_get_all(&user.user_id())
-            .await?
-            .into_iter()
-            .map(|a| a.what)
-            .collect::<HashSet<_>>();
-
-        let p_types = ActivityType::all_ordered()
-            .into_iter()
-            .filter(|t| act_types.contains(&t.id))
-            .map(|t| t.gear_type)
-            .collect::<HashSet<_>>();
-
-        Ok(p_types)
-    }
-
-    pub async fn csv2descend(
+    pub(crate) async fn csv2descend(
         data: impl std::io::Read,
         user: &dyn Session,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
@@ -428,7 +402,7 @@ impl Activity {
         Ok((summary, report))
     }
 
-    pub async fn set_default_part(
+    pub(crate) async fn set_default_part(
         gear_id: PartId,
         user: &dyn Session,
         store: &mut (

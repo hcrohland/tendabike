@@ -21,8 +21,8 @@
 //! This module contains the domain logic for notifications.
 //!
 //! A [`Notification`] is a message addressed to a single recipient, created
-//! as a side effect of a domain operation — never directly by the user
-//! (issue #586). It has a kind and a lifecycle.
+//! as a side effect of a domain operation — never directly by the user.
+//! It has a kind and a lifecycle.
 //!
 //! **Lifecycles:**
 //! - **Persistent** (subscription kinds): a read marks it `seen` and it stays
@@ -44,7 +44,7 @@ use uuid::Uuid;
 use crate::*;
 
 /// A message addressed to a single recipient, created as a side effect of a
-/// domain operation — never directly by the user (issue #586).
+/// domain operation — never directly by the user.
 #[serde_as]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Notification {
@@ -100,7 +100,7 @@ impl NotificationId {
     ///
     /// A persistent notification is upserted into the summary (now `seen`);
     /// a transient notification is deleted and its id tombstoned.
-    pub async fn read(
+    pub(crate) async fn read(
         self,
         recipient: UserId,
         store: &mut impl NotificationStore,
@@ -128,7 +128,7 @@ impl NotificationId {
     /// non-recipient gets `None` → `NotFound` (no existence leak). Applies to
     /// any of the recipient's notifications, transient or persistent —
     /// `read` is the lifecycle-aware path, `delete` is the removal.
-    pub async fn delete(
+    pub(crate) async fn delete(
         self,
         recipient: UserId,
         store: &mut impl NotificationStore,
@@ -178,6 +178,9 @@ pub enum NotificationKind {
     PartRegistered,
     /// A part was unregistered from a shop.
     PartUnregistered,
+    /// Stub activities (Strava-sourced, no data) were skipped during a sync
+    /// (spec #764): the `message` carries the skip count.
+    StubsSkipped,
 }
 
 impl std::fmt::Display for NotificationKind {
@@ -188,6 +191,7 @@ impl std::fmt::Display for NotificationKind {
             Self::SubCancelled => write!(f, "sub_cancelled"),
             Self::PartRegistered => write!(f, "part_registered"),
             Self::PartUnregistered => write!(f, "part_unregistered"),
+            Self::StubsSkipped => write!(f, "stubs_skipped"),
         }
     }
 }
@@ -201,6 +205,7 @@ impl std::str::FromStr for NotificationKind {
             "sub_cancelled" => Ok(Self::SubCancelled),
             "part_registered" => Ok(Self::PartRegistered),
             "part_unregistered" => Ok(Self::PartUnregistered),
+            "stubs_skipped" => Ok(Self::StubsSkipped),
             _ => Err(format!("unknown kind: {s}")),
         }
     }
@@ -214,6 +219,9 @@ pub enum NotificationSubject {
     Subscription(SubscriptionId),
     /// The notification refers to a part.
     Part(PartId),
+    /// An id-less subject (spec #764): the stub-skip notification refers to
+    /// no single entity — the `message` carries the skip count.
+    StubsSkipped,
 }
 
 /// The read state of a notification.
@@ -244,7 +252,7 @@ impl Notification {
     ///
     /// Persistent notifications are upserted (now `seen`); transient
     /// notifications are deleted and their ids tombstoned.
-    pub async fn read_all(
+    pub(crate) async fn read_all(
         recipient: UserId,
         store: &mut impl NotificationStore,
     ) -> TbResult<Summary> {
@@ -266,8 +274,9 @@ impl Notification {
     /// Creates a notification: the store assigns the id and timestamps it.
     /// This is the single door every side-effecting operation uses to create
     /// a notification (ADR-0010) — notification creation lives here, not in
-    /// the calling entity.
-    pub(crate) async fn create(
+    /// the calling entity. `pub` (not `pub(crate)`) because a provider's
+    /// entity-op door forwards to it (the icu stub-skip notice, spec #764).
+    pub async fn create(
         recipient: UserId,
         lifecycle: NotificationLifecycle,
         kind: NotificationKind,

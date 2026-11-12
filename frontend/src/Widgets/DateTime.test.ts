@@ -1,18 +1,12 @@
-import { render, screen } from "@testing-library/svelte";
-import { afterEach, describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/svelte";
+import { flushSync } from "svelte";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import DateTime from "./DateTime.svelte";
-import { formatDate, parseDate } from "svelty-picker";
-import { de, en } from "svelty-picker/i18n";
 import { getLocale, overwriteGetLocale } from "../../paraglide/runtime";
 
-// Issue #483: the picker round-trips its string value across a locale
-// boundary. The SveltyPicker component formats/parses with the i18n it is
-// given (default: en), while the widget's bind:value accessor uses the
-// client locale (de). Month names that differ between the two ("Okt" vs
-// "Oct") then fail the cross-locale parse (indexOf -1 -> month 0 ->
-// wraps to December), so a German client sees a date two months off.
-// (Non-ASCII month names like "Mär" are safe: the library's token split
-// treats any non-ASCII character as a token character.)
+// The combined-popover picker shows the date + time in a single trigger
+// button, formatted in the client's locale. The popover (inline Datepicker +
+// time input) is closed by default, so the button label is what the user sees.
 
 const realGetLocale = getLocale;
 
@@ -25,50 +19,123 @@ function useLocale(locale: "en" | "de") {
   expect(getLocale()).toBe(locale);
 }
 
-// The contract: whatever date the form holds, the picker's input must
-// display exactly that date, in the client's locale.
-function expectDisplays(date: Date, locale: "en" | "de") {
-  const input = screen.getByRole("textbox") as HTMLInputElement;
-  expect(input.value).toBe(
-    formatDate(date, "d. M yyyy - h:ii", locale === "de" ? de : en, "standard"),
+// The contract: whatever date the form holds, the trigger button must show
+// that date (in the client's locale) plus the time.
+function expectLabel(date: Date, locale: "en" | "de") {
+  const btn = screen.getByRole("button", { name: /\d{4}/ });
+  const dateOnly = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
   );
-  // and the displayed string parses back to the same date
-  const parsed = parseDate(
-    input.value,
-    "d. M yyyy - h:ii",
-    locale === "de" ? de : en,
-    "standard",
+  const time = `${String(date.getHours()).padStart(2, "0")}:${String(
+    date.getMinutes(),
+  ).padStart(2, "0")}`;
+  expect(btn.textContent?.trim()).toBe(
+    `${dateOnly.toLocaleDateString(locale)} ${time}`,
   );
-  expect(parsed.getTime()).toBe(date.getTime());
 }
 
 describe("DateTime (client locale)", () => {
-  it("displays the given date in the German locale (issue #483)", () => {
+  it("shows the given date in the German locale", () => {
     useLocale("de");
     const date = new Date(2026, 9, 8, 14, 30); // 8. Okt 2026
     render(DateTime, { props: { date } });
-    expectDisplays(date, "de");
+    expectLabel(date, "de");
   });
 
-  it("displays an umlaut month (Mär) in the German locale (issue #483)", () => {
-    // non-ASCII month names must survive the round-trip in the client locale
+  it("shows a umlaut month in the German locale", () => {
+    // non-ASCII month names must not break the locale display
     useLocale("de");
     const date = new Date(2026, 2, 8, 14, 30); // 8. Mär 2026
     render(DateTime, { props: { date } });
-    expectDisplays(date, "de");
+    expectLabel(date, "de");
   });
 
   it("keeps working in the English locale", () => {
     useLocale("en");
     const date = new Date(2026, 9, 8, 14, 30); // 8. Oct 2026
     render(DateTime, { props: { date } });
-    expectDisplays(date, "en");
+    expectLabel(date, "en");
   });
 
-  it("displays a month whose name exists in both locales (Nov)", () => {
+  it("shows a month whose name exists in both locales (Nov)", () => {
     useLocale("de");
     const date = new Date(2026, 10, 5, 14, 30); // 5. Nov 2026
     render(DateTime, { props: { date } });
-    expectDisplays(date, "de");
+    expectLabel(date, "de");
+  });
+});
+
+describe("DateTime (time rounding)", () => {
+  // The Popper toggles on a requestAnimationFrame debounce that compares
+  // against performance.now(); both must be faked for the popover to open
+  // deterministically (same setup as NotificationBell.test.ts).
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: [
+        "setTimeout",
+        "clearTimeout",
+        "setInterval",
+        "clearInterval",
+        "Date",
+        "requestAnimationFrame",
+        "cancelAnimationFrame",
+        "performance",
+      ],
+    });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function settle() {
+    for (let i = 0; i < 3; i++) {
+      await vi.advanceTimersByTimeAsync(300);
+      flushSync();
+    }
+  }
+
+  it("snaps a picked time to the 15-minute grid", async () => {
+    useLocale("en");
+    const date = new Date(2026, 9, 8, 14, 30);
+    const { container } = render(DateTime, { props: { date } });
+
+    // open the popover (the Popper trigger listens for mousedown)
+    const btn = screen.getByRole("button", { name: /\d{4}/ });
+    fireEvent.mouseDown(btn);
+    await settle();
+
+    const timeInput = container.querySelector(
+      'input[type="time"]',
+    ) as HTMLInputElement;
+    expect(timeInput).toBeTruthy();
+    fireEvent.change(timeInput, { target: { value: "14:37" } });
+    await settle();
+
+    // 14:37 snaps down to 14:30
+    expect(
+      screen.getByRole("button", { name: /14:30/ }).textContent?.trim(),
+    ).toBe("10/8/2026 14:30");
+  });
+
+  it("rounds the initial value of an off-grid bound date", async () => {
+    useLocale("en");
+    const date = new Date(2026, 9, 8, 14, 37);
+    const { container } = render(DateTime, { props: { date } });
+
+    // the trigger shows the snapped time before the popover opens
+    expect(screen.getByRole("button", { name: /14:30/ })).toBeTruthy();
+    // ...and the bound prop is not mutated in place
+    expect(date.getMinutes()).toBe(37);
+
+    // the time input starts on the grid, too
+    const btn = screen.getByRole("button", { name: /\d{4}/ });
+    fireEvent.mouseDown(btn);
+    await settle();
+    const timeInput = container.querySelector(
+      'input[type="time"]',
+    ) as HTMLInputElement;
+    expect(timeInput.value).toBe("14:30");
   });
 });

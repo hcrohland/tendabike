@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM icu_users WHERE tbid = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "tbid",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "icu_athlete_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "access_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "disabled",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "7a9cce72bede8065c1ba981af240cb8ce25caafdc0986d5dcd8f13d5546c023d"
+}

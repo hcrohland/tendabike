@@ -1,0 +1,283 @@
+//! This module contains the implementation of the StravaUser struct and its methods.
+//!
+//! The StravaUser struct represents a user of the Strava API and contains information such as the user's
+//! Strava ID, Tendabike ID, access token, and refresh token.
+//!
+//! The methods implemented for the StravaUser struct allow for reading and updating user data, as well as
+//! checking the validity of the user's access token.
+
+use derive_more::{Display, From, Into};
+use oauth2::RefreshToken;
+use serde::Deserialize;
+
+use super::*;
+use crate::EntityFacade;
+
+#[derive(
+    Clone, Copy, Debug, Display, From, Into, Default, Hash, PartialEq, Eq, Serialize, Deserialize,
+)]
+pub struct StravaId(i32);
+
+impl StravaId {
+    pub(crate) async fn read(
+        &self,
+        store: &mut impl StravaDataStore,
+    ) -> TbResult<Option<StravaUser>> {
+        store.stravauser_get_by_stravaid(self).await
+    }
+
+    /// update the refresh token for the user
+    ///
+    /// sets a five minute buffer for the access token
+    /// returns the updated user
+    pub(crate) async fn update_token(
+        self,
+        refresh: Option<String>,
+        store: &mut impl StravaDataStore,
+    ) -> TbResult<StravaUser> {
+        store.stravauser_update_token(self, refresh).await
+    }
+
+    /// disable a user
+    pub(crate) async fn disable(self, store: &mut impl StravaDataStore) -> TbResult<()> {
+        info!("disabling user {self}");
+
+        let events = store.strava_events_delete_for_user(&self).await?;
+
+        if events > 0 {
+            info!("deleted {} open events for strava user {}", events, self);
+        }
+
+        store.stravauser_update_token(self, None).await?;
+        Ok(())
+    }
+}
+
+/// Strava User data
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct StravaUser {
+    /// the Strava user id
+    pub id: StravaId,
+    /// the corresponding tendabike user id
+    pub tendabike_id: UserId,
+    /// the refresh token to get a new access token from Strava
+    pub refresh_token: Option<RefreshToken>,
+}
+
+impl StravaUser {
+    /// Reads the StravaUser data for the given `id` from the database.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - A `UserId` representing the Tendabike user ID.
+    /// * `store` - A mutable reference to the database connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error` if the user is not registered.
+    pub(crate) async fn read(id: UserId, store: &mut impl StravaDataStore) -> TbResult<Self> {
+        store.stravauser_get_by_tbid(id).await
+    }
+
+    /// get the tendabike id for this user
+    pub fn user_id(&self) -> UserId {
+        self.tendabike_id
+    }
+
+    /// get the strava id for this user
+    pub(crate) fn strava_id(&self) -> StravaId {
+        self.id
+    }
+
+    pub(crate) fn refresh_token(&self) -> Option<RefreshToken> {
+        self.refresh_token.clone()
+    }
+
+    pub(crate) fn disabled(&self) -> bool {
+        self.refresh_token.is_none()
+    }
+
+    /// Upsert a Strava user by ID, updating their Tendabike user ID if they already exist, or creating a new user if they don't.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - A `StravaId` representing the ID of the Strava user to upsert.
+    /// * `firstname` - A `&str` representing the first name of the Strava user.
+    /// * `lastname` - A `&str` representing the last name of the Strava user.
+    /// * `store` - A mutable reference to a `AppConn` representing the database connection.
+    ///
+    /// # Returns
+    ///
+    /// An `TbResult` containing a `StravaUser` representing the upserted user.
+    pub async fn upsert<D: EntityFacade<S>, S: StravaDataStore>(
+        id: StravaId,
+        firstname: &str,
+        lastname: &str,
+        avatar: &Option<String>,
+        refresh: Option<&RefreshToken>,
+        facade: &D,
+        store: &mut S,
+    ) -> TbResult<StravaUser> {
+        debug!("got id {}: {} {}", id, firstname, lastname);
+
+        let user = id.read(store).await?;
+        if let Some(user) = user {
+            facade
+                .update_user(&user.tendabike_id, firstname, lastname, avatar, store)
+                .await?;
+            store
+                .stravauser_update_token(user.id, refresh.map(|t| t.secret().to_string()))
+                .await?;
+            return Ok(user);
+        }
+
+        // create new user!
+        let tendabike_id = facade
+            .create_user(firstname, lastname, avatar, "strava", store)
+            .await?;
+
+        let user = StravaUser {
+            id,
+            tendabike_id,
+            refresh_token: refresh.cloned(),
+        };
+        info!("creating new user id {user:?}");
+
+        let user = store.stravauser_create(user).await?;
+        // Note: Automatic sync removed - user must manually trigger initial activity import
+        Ok(user)
+    }
+
+    /// Get list of gear for user from Strava.
+    ///
+    /// Skips the Strava call silently when the rate limiter reports no
+    /// budget: hydration is best-effort and must not be blocked by a
+    /// non-essential API call.
+    pub async fn update_gear<D: EntityFacade<S>, S: StravaDataStore>(
+        user_id: UserId,
+        facade: &D,
+        store: &mut S,
+    ) -> TbResult<Vec<PartId>> {
+        if super::ratelimit::limited_until().is_some() {
+            log::debug!("update_gear: rate limited, skipping hydration");
+            return Ok(Vec::new());
+        }
+
+        #[derive(Deserialize, Debug)]
+        struct Gear {
+            id: String,
+        }
+
+        #[derive(Deserialize, Debug)]
+        struct Athlete {
+            // firstname: String,
+            // lastname: String,
+            bikes: Vec<Gear>,
+            shoes: Vec<Gear>,
+        }
+
+        let ath: Athlete = request_json(user_id, "/athlete", store).await?;
+
+        let mut parts = Vec::new();
+        for gear in ath.bikes.into_iter().chain(ath.shoes) {
+            parts.push(gear::into_partid(gear.id, user_id, facade, store).await?);
+        }
+
+        Ok(parts)
+    }
+}
+
+/// The all-user stat read (spec #558 §3.3): every Strava user's provider
+/// neutral [`UserStat`] — the domain [`Stat`] plus this provider's queued
+/// event count and disabled flag. The [`UserStat`] type is provider-neutral
+/// (it lives in `tb_domain`, beside [`Stat`]), so a second provider's
+/// `all_stats` op returns the same type.
+pub async fn get_all_stats<D: EntityFacade<S>, S: StravaDataStore>(
+    facade: &D,
+    store: &mut S,
+) -> TbResult<Vec<UserStat>> {
+    let users = store.stravauser_get_all().await?;
+
+    let mut res = Vec::new();
+    for u in users {
+        let stat = facade.get_stat(&u.tendabike_id, store).await?;
+        let events = store.strava_events_get_count_for_user(&u.id).await?;
+        res.push(UserStat {
+            stat,
+            events,
+            disabled: u.disabled(),
+        });
+    }
+    Ok(res)
+}
+
+/// Deauthorize a user: revoke their Strava token and disable their local
+/// row. Admin-only — the acting `session` must be an admin (the domain
+/// enforces the invariant, defense-in-depth over the web layer's `AxumAdmin`
+/// guard); `user_id` is the target user.
+///
+/// # Errors
+///
+/// This function will return an error if the acting session is not an admin
+/// (`Forbidden`), or if the target user does not exist, is already disabled,
+/// or has open events and if strava or the database is not reachable. A
+/// failed Strava token revocation is non-fatal (logged).
+pub async fn user_deauthorize(
+    session: &mut dyn Session,
+    user_id: UserId,
+    store: &mut impl StravaDataStore,
+) -> TbResult<()> {
+    if !session.is_admin() {
+        return Err(Error::Forbidden(
+            "only an admin can deauthorize a user".to_string(),
+        ));
+    }
+
+    if let Err(err) = deauthorize(user_id, store).await {
+        warn!("could not deauthorize user {user_id}: {:#}", err)
+    }
+
+    warn!("User {user_id} deauthorized");
+
+    let strava_id = get_strava_id(user_id, store).await?;
+    strava_id.disable(store).await
+}
+
+/// Returns the Strava URL for a user with the given Strava ID.
+///
+/// # Arguments
+///
+/// * `user_id` - An `UserId` representing the TendaBike user ID of the user.
+/// * `store` - A mutable reference to a `AppConn` representing the database connection.
+///
+/// # Returns
+///
+/// An `TbResult` containing a `String` representing the Strava URL for the user.
+pub async fn strava_url(user_id: UserId, store: &mut impl StravaDataStore) -> TbResult<String> {
+    let user = store.stravauser_get_by_tbid(user_id).await?;
+    Ok(format!("https://strava.com/athletes/{}", user.strava_id()))
+}
+
+/// Delete a user: deauthorize them (admin-only) plus delete their rows.
+/// Admin-only — the acting `session` must be an admin; `tbid` is the target
+/// user.
+pub async fn user_delete<D: EntityFacade<S>, S: StravaDataStore>(
+    session: &mut dyn Session,
+    tbid: UserId,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<()> {
+    if !session.is_admin() {
+        return Err(Error::Forbidden(
+            "only an admin can delete a user".to_string(),
+        ));
+    }
+    debug!("Deauthorizing user {tbid}");
+    user_deauthorize(session, tbid, store).await?;
+    let n = store.stravauser_delete(tbid).await?;
+    debug!("Deleted {n} strava user");
+    facade.delete_user(&tbid, store).await
+}
+
+#[cfg(test)]
+mod user_tests;

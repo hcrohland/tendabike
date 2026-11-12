@@ -46,28 +46,26 @@ use tokio::sync::{broadcast, watch};
 
 use tb_domain::{
     ActivityId, ApiRead, ApiWrite, PartId, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
-    WriteOutcome,
+    UserStat, WriteOutcome,
 };
-use tb_strava::{StravaStat, client::StravaAthleteInfo, event::InEvent};
+use tb_provider::icu::{client::IcuAthleteInfo, event::IcuEvent};
+use tb_provider::strava::{client::StravaAthleteInfo, event::InEvent};
 
 use crate::ExecutorStatus;
 
-/// The app's presentation-agnostic service API (spec #558 §2): 15 methods —
-/// the five channel ops (`read`, `write`, `hydrate_gear`, `subscribe`,
-/// `all_stats`) and the ten direct ops (spec #558 §5.2). Presentation
-/// layers depend on this trait, not the concrete [`crate::Registry`].
+/// The app's presentation-agnostic service API (spec #558 §2): the five
+/// generic channel ops (`read`, `write`, `hydrate_gear`, `subscribe`,
+/// `all_stats`). Presentation layers depend on this trait, not the concrete
+/// [`crate::Registry`]. The provider-specific ops live in
+/// [`ProviderService`] — a second provider implements `ProviderService` with
+/// its own ops while the generic `ServiceApi` stays the same.
 ///
 /// Every method that takes a `session` parameter threads the acting
-/// [`Session`] through the executor to the downstream domain/`tb_strava`
-/// functions it runs: the executor hands it to the op in its own
-/// transaction. The session's `shop()` is the frame's delivery context (it
-/// routes a committed `Summary`) and scopes a read's `Summary`; the admin
-/// deauth and delete ops use it to verify the caller is an admin. The
-/// executor's spawn-time session is identity-only — it serves only the
-/// background Strava lanes (the queue probe + events), which need just the
-/// fixed user_id + the TokenCache, never a shop; the per-request shop rides
-/// on each request.
-#[cfg_attr(feature = "mock", mockall::automock)]
+/// [`Session`] through the executor to the downstream domain functions it
+/// runs: the executor hands it to the op in its own transaction. The
+/// session's `shop()` is the frame's delivery context (it routes a committed
+/// `Summary`) and scopes a read's `Summary`.
+#[cfg_attr(feature = "test-support", mockall::automock)]
 #[async_trait::async_trait]
 pub trait ServiceApi: Send + Sync {
     /// One per-user read on the user's executor (spec #558 §3): the loop
@@ -100,21 +98,31 @@ pub trait ServiceApi: Send + Sync {
         watch::Receiver<ExecutorStatus>,
     )>;
 
-    /// Register a shop stream for `shop_id` (spec #517, ticket #582): the
+    /// The admin `GET /user/all` read (spec #558 §3.3): `get_all_stats` in
+    /// the admin user's own channel, in the loop's own transaction.
+    async fn all_stats(&self, session: Box<dyn Session>) -> TbResult<Vec<UserStat>>;
+}
+
+/// The provider-specific service API: the eleven direct ops (spec #558 §5.2)
+/// that are provider-specific (OAuth, webhook, sync, rescan, deauthorize,
+/// etc.). A second provider implements this trait with its own ops; the
+/// generic [`ServiceApi`] stays the same.
+///
+/// The `Registry` implements both [`ServiceApi`] and [`ProviderService`];
+/// presentation layers hold `Arc<dyn ServiceApi>` for the generic ops and
+/// `Arc<dyn ProviderService>` for the provider-specific ones.
+#[cfg_attr(feature = "test-support", mockall::automock)]
+#[async_trait::async_trait]
+pub trait ProviderService: Send + Sync {
+    /// Register a shop stream for `shop_id` (spec #517): the
     /// caller must be the shop owner (a non-owner is `Forbidden`, which the
     /// web layer maps to a 403); the channel is created on demand and the
-    /// returned receiver is a subscription to it. No `ExecutorStatus` — the
-    /// shop stream is a standalone channel, not tied to the executor's
-    /// lifecycle (unlike [`Self::subscribe`]).
+    /// returned receiver is a subscription to it.
     async fn subscribe_shop(
         &self,
         user_id: UserId,
         shop_id: ShopId,
     ) -> TbResult<broadcast::Receiver<Summary>>;
-
-    /// The admin `GET /user/all` read (spec #558 §3.3): `get_all_stats` in
-    /// the admin user's own channel, in the loop's own transaction.
-    async fn all_stats(&self, session: Box<dyn Session>) -> TbResult<Vec<StravaStat>>;
 
     /// The admin rescan (spec #558 §5.2): one transaction
     /// (`Activity::rescan_all`), then every live executor stopped (the
@@ -138,9 +146,8 @@ pub trait ServiceApi: Send + Sync {
     /// transaction (`sync_users`) queuing a `Sync` event per (non-disabled)
     /// user, then — per queued user — spawn the executor (a no-op if it is
     /// already running) and wake it, so the queue drains even for users
-    /// whose executor is not running (offline). Distinct from the per-user
-    /// [`Self::sync`], which awaits one user's completion. `user_id` narrows
-    /// the trigger to one user (the route's `?user_id=` query).
+    /// whose executor is not running (offline). `user_id` narrows the
+    /// trigger to one user (the route's `?user_id=` query).
     async fn trigger_processing(
         &self,
         session: Box<dyn Session>,
@@ -164,26 +171,71 @@ pub trait ServiceApi: Send + Sync {
     /// branch), then the wake if a user was queued (fire-and-forget).
     async fn accept_event(&self, event: InEvent) -> TbResult<()>;
 
-    /// The gear redirect URL (spec #558 §5.2): the `tb_strava` `strava_url`
+    /// The gear redirect URL (spec #558 §5.2): the `tb_provider::strava` `strava_url`
     /// op for `id`, gated on the caller's ownership.
     async fn gear_url(&self, session: Box<dyn Session>, id: PartId) -> TbResult<String>;
 
-    /// The activity redirect URL (spec #558 §5.2): the `tb_strava`
+    /// The activity redirect URL (spec #558 §5.2): the `tb_provider::strava`
     /// `strava_url` op for `id`, gated on the caller's ownership.
     async fn activity_url(&self, session: Box<dyn Session>, id: ActivityId) -> TbResult<String>;
 
-    /// The user redirect URL (spec #558 §5.2): the `tb_strava` `strava_url`
+    /// The user redirect URL (spec #558 §5.2): the `tb_provider::strava` `strava_url`
     /// op for the target's tbid (no session: the route has no user context
     /// to gate on).
     async fn user_url(&self, id: UserId) -> TbResult<String>;
 
     /// The deauthorization (spec #558 §5.2): one transaction — the target's
-    /// session built in-txn, then `tb_strava::user_deauthorize`. The
+    /// session built in-txn, then `tb_provider::strava::user_deauthorize`. The
     /// existing queue race is preserved.
     async fn deauthorize(&self, session: Box<dyn Session>, tbid: UserId) -> TbResult<()>;
 
     /// The user delete (spec #558 §5.2): one transaction — the target's
-    /// session built in-txn, then `tb_strava::user_delete`. The existing
+    /// session built in-txn, then `tb_provider::strava::user_delete`. The existing
     /// queue race is preserved.
     async fn delete_user(&self, session: Box<dyn Session>, tbid: UserId) -> TbResult<()>;
+}
+
+/// The icu-specific service API: the direct ops that are icu-specific
+/// (OAuth, webhook, sync, deauthorize, etc.). The icu peer of
+/// [`ProviderService`] — the `Registry` implements both, and presentation
+/// layers hold `Arc<dyn ServiceApi>` for the generic ops,
+/// `Arc<dyn ProviderService>` for the Strava-specific ones, and
+/// `Arc<dyn IcuService>` for the icu-specific ones.
+///
+/// [`IcuService::icu_login_from_token`] is the durable one (one transaction —
+/// `IcuUser::upsert` + `is_admin`, no refresh token — intervals.icu tokens
+/// are durable).
+#[cfg_attr(feature = "test-support", mockall::automock)]
+#[async_trait::async_trait]
+pub trait IcuService: Send + Sync {
+    /// The icu login upsert: one transaction
+    /// (`IcuUser::upsert` + `is_admin`), returning the identity and the admin
+    /// flag. The web layer keeps the query-parse, the scope check, the HMAC
+    /// path, the outbound exchange, and the tower-session write.
+    async fn icu_login_from_token(
+        &self,
+        athlete: IcuAthleteInfo,
+        access_token: String,
+    ) -> TbResult<(UserId, bool)>;
+
+    /// The icu webhook accept: one transaction (the queue insert),
+    /// then the wake if a user was queued.
+    async fn icu_accept_event(&self, event: IcuEvent) -> TbResult<()>;
+
+    /// The per-user icu sync: enqueue an icu `Sync` event and
+    /// await its completion.
+    async fn icu_sync(
+        &self,
+        session: Box<dyn Session>,
+        user_id: UserId,
+        event_time: i64,
+    ) -> TbResult<()>;
+
+    /// The icu deauthorization: one transaction — the target's
+    /// session built in-txn, then the icu disable.
+    async fn icu_deauthorize(&self, session: Box<dyn Session>, tbid: UserId) -> TbResult<()>;
+
+    /// The icu user delete: one transaction — the target's
+    /// session built in-txn, then the icu disable plus the row deletions.
+    async fn icu_delete_user(&self, session: Box<dyn Session>, tbid: UserId) -> TbResult<()>;
 }

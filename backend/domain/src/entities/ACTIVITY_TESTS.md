@@ -2,11 +2,11 @@
 
 ## Overview
 
-Activities are the primary source of usage data in TendaBike. They represent cycling (and other) sessions tracked by Strava or CSV import, and they propagate their metrics (time, distance, climb, descend, energy) through the attachment system to all parts that were in use at the time.
+Activities are the primary source of usage data in TendaBike. They represent cycling (and other) sessions tracked by provider import or CSV import, and they propagate their metrics (time, distance, climb, descend, energy) through the attachment system to all parts that were in use at the time.
 
 ### Key Flow
 ```
-Activity (from Strava/CSV) 
+Activity (from provider/CSV)
   → Activity.register() 
     → Attachment::register_activity(gear, time, usage, store)
       → Find all attachments of gear at activity start time

@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with TendaBike. If not, see <https://www.gnu.org/licenses/>.
 
-//! Store seam integration suite (issue #406).
+//! Store seam integration suite.
 //!
 //! Loads the standard prepopulated domain fixture into a real Postgres
 //! database and verifies the store's I/O contract: the fixture roundtrip,
@@ -58,7 +58,7 @@
 //! never passes.
 //!
 //! The CI job that runs this suite against a real Postgres service is the
-//! required `rust` job in `.github/workflows/test.yml` (issue #411): it
+//! required `rust` job in `.github/workflows/test.yml`: it
 //! carries a `postgres:18` service, sets `SCRATCH_DATABASE_URL` to a scratch
 //! database, and runs `cargo test --release -- --include-ignored`, so the
 //! suite is part of the one required gate.
@@ -73,9 +73,9 @@ use tb_domain::test_support::{
 };
 use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, Attachment, AttachmentStore, MAX_TIME,
-    NotificationStore, Part, PartId, PartStore, PartTypeId, SNAPSHOT_JSON, StoreSnapshot, UsageId,
-    UsageStore, UserId, UserStore,
+    NotificationStore, Part, PartId, PartStore, PartTypeId, UsageId, UsageStore, UserId, UserStore,
 };
+use tb_sqlx::{SNAPSHOT_JSON, StoreSnapshot};
 use time::{OffsetDateTime, macros::datetime};
 use tokio::sync::MutexGuard;
 use uuid::Uuid;
@@ -180,7 +180,7 @@ fn att(
 /// call sites vary: the id, the name, the start instant, and the gear.
 fn ride(id: i64, name: &str, start: OffsetDateTime, gear: Option<PartId>) -> Activity {
     Activity {
-        id: ActivityId::new(id),
+        id: ActivityId::from(format!("strava:{id}")),
         user_id: UserId::from(1),
         what: ActTypeId::from(1),
         name: name.to_string(),
@@ -480,7 +480,7 @@ async fn find_attached_already_never_attached() -> tb_domain::TbResult<()> {
 // Activity: store-path rules
 // ---------------------------------------------------------------------------
 
-/// The activity id is a primary key (issue #405): the INSERT hits the key
+/// The activity id is a primary key: the INSERT hits the key
 /// on a duplicate id and maps to `Error::DatabaseFailure`.
 #[tokio::test]
 #[ignore]
@@ -490,13 +490,14 @@ async fn activity_create_rejects_duplicate_id() -> tb_domain::TbResult<()> {
         store.activity_create(ride.clone()).await?;
 
         // The first ride is stored, and a different id still succeeds.
+        let id = ActivityId::from("strava:100");
         let stored = store
-            .activity_read_by_id(ActivityId::new(100))
+            .activity_read_by_id(&id)
             .await?
             .expect("the first ride is stored");
-        assert_eq!(stored.id, ActivityId::new(100));
+        assert_eq!(stored.id, id);
         let mut other = ride.clone();
-        other.id = ActivityId::new(101);
+        other.id = ActivityId::from("strava:101");
         store.activity_create(other).await?;
 
         // The duplicate create comes last: a failed statement aborts the
@@ -559,7 +560,7 @@ async fn activity_update_preserves_fields() -> tb_domain::TbResult<()> {
 
         // An update of a missing activity is a NotFound on both stores.
         let ghost = Activity {
-            id: ActivityId::new(999),
+            id: ActivityId::from("strava:999"),
             ..act
         };
         let err = store.activity_update(ghost).await;
@@ -605,7 +606,7 @@ async fn activity_find_range_boundary() -> tb_domain::TbResult<()> {
             1,
             "a ride exactly at the range begin must be included"
         );
-        assert_eq!(found[0].id, ActivityId::new(100));
+        assert_eq!(found[0].id, ActivityId::from("strava:100"));
 
         Ok(())
     })
@@ -630,7 +631,7 @@ async fn activity_get_by_user_and_time() -> tb_domain::TbResult<()> {
         // activity (a zero-offset ride's local minute is its UTC minute).
         let query = start + time::Duration::seconds(15);
         let found = store.get_by_user_and_time(UserId::from(1), query).await?;
-        assert_eq!(found.id, ActivityId::new(100));
+        assert_eq!(found.id, ActivityId::from("strava:100"));
 
         // A different minute: no match.
         let other_minute = start + time::Duration::minutes(2);
@@ -648,7 +649,7 @@ async fn activity_get_by_user_and_time() -> tb_domain::TbResult<()> {
             .unwrap()
             .to_offset(time::UtcOffset::from_whole_seconds(7200).unwrap());
         let act2 = Activity {
-            id: ActivityId::new(101),
+            id: ActivityId::from("strava:101"),
             start: local_start,
             ..act
         };
@@ -656,7 +657,7 @@ async fn activity_get_by_user_and_time() -> tb_domain::TbResult<()> {
 
         let query = OffsetDateTime::from_unix_timestamp(1706777630 + 7200 - 20).unwrap(); // 10:53:30 UTC — the ride's local minute
         let found = store.get_by_user_and_time(UserId::from(1), query).await?;
-        assert_eq!(found.id, ActivityId::new(101));
+        assert_eq!(found.id, ActivityId::from("strava:101"));
 
         let next_minute = query + time::Duration::seconds(60); // 10:54:30 UTC
         let err = store
@@ -671,7 +672,7 @@ async fn activity_get_by_user_and_time() -> tb_domain::TbResult<()> {
         // makes the lookup ambiguous — an error, not a silent first-match, so a
         // conflicting CSV row lands in the bad list.
         let dup = Activity {
-            id: ActivityId::new(102),
+            id: ActivityId::from("strava:102"),
             start: start + time::Duration::seconds(15), // 12:00:45 — the first ride's minute
             ..act2.clone()
         };

@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE icu_users\n             SET access_token = $2\n             WHERE icu_athlete_id = $1\n             RETURNING *",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "tbid",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "icu_athlete_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "access_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "disabled",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "f9986e20274286ff7b7bebfdf8ac6c82e361cc88c347cf54e3b63e34d5a286e8"
+}

@@ -76,7 +76,14 @@ fn parttypeid_act_types_bike() {
     let acts = PartTypeId::from_id(1).act_types();
     assert_eq!(
         acts,
-        vec![ActTypeId::from(1), ActTypeId::from(5), ActTypeId::from(9)]
+        vec![
+            ActTypeId::from(1),
+            ActTypeId::from(5),
+            ActTypeId::from(9),
+            ActTypeId::from(11),
+            ActTypeId::from(12),
+            ActTypeId::from(13)
+        ]
     );
 }
 
@@ -92,5 +99,22 @@ fn parttypeid_act_types_shoe() {
 #[test]
 fn activitytype_all_ordered_nonempty() {
     let acts = ActivityType::all_ordered();
-    assert_eq!(acts.len(), 11);
+    assert_eq!(acts.len(), 14);
+}
+
+#[test]
+fn icu_only_activity_types_present() {
+    // The icu-only cycling subtypes (spec #764): 11–13, all gear_type 1.
+    for (id, name) in [
+        (11, "Mountain Bike Ride"),
+        (12, "Gravel Ride"),
+        (13, "Cyclocross"),
+    ] {
+        let t = ActivityType::all_ordered()
+            .into_iter()
+            .find(|a| a.id == ActTypeId::from(id))
+            .unwrap_or_else(|| panic!("missing activity type {id}"));
+        assert_eq!(t.name, name);
+        assert_eq!(t.gear_type, PartTypeId::from_id(1));
+    }
 }

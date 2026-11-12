@@ -1,9 +1,9 @@
-//! The `Activity` entity tests over a canned [`MockStore`] (issue #644).
+//! The `Activity` entity tests over a canned [`MockStore`].
 //!
 //! Each test runs the real activity domain logic over a [`MockStore`] whose
 //! methods return canned rows. Two kinds of logic live here:
 //!
-//! - **Value logic** (`ActivityId::new`, `Activity::usage` extraction, including
+//! - **Value logic** (`ActivityId` constructors, `Activity::usage` extraction, including
 //!   the descend/time defaults) runs store-free, as plain unit tests.
 //! - **Accounting and orchestration** run for real over canned store inputs,
 //!   with **no read-back of a row just written**: upsert/delete accounting is
@@ -17,6 +17,8 @@
 //!   sqlx seam, `sqlx/tests/store_seam.rs`, where Postgres is the source of
 //!   truth.
 
+use std::collections::HashSet;
+
 use super::*;
 use crate::test_support::{MockStore, fixtures, mock_session, only_tombstone, part_type_ids};
 
@@ -27,13 +29,9 @@ fn activity_start() -> OffsetDateTime {
     OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
 }
 
-fn later_start() -> OffsetDateTime {
-    OffsetDateTime::from_unix_timestamp(1700100000).unwrap()
-}
-
 fn sample_activity() -> Activity {
     Activity {
-        id: ActivityId::new(1),
+        id: ActivityId::from("1"),
         user_id: test_user(),
         what: ActTypeId::from(1),
         name: "Morning Ride".to_string(),
@@ -149,13 +147,6 @@ fn wire_register_accounting(store: &mut MockStore, attachments: Vec<Attachment>,
 
 // === Suite 1: ActivityId and usage — value logic (no store) ===
 
-/// ActivityId::new creates an ActivityId with the given value
-#[test]
-fn activityid_new_creates_with_value() {
-    let id = ActivityId::new(42);
-    assert_eq!(format!("{}", id), "42");
-}
-
 /// Activity::usage extracts Usage from activity
 #[test]
 fn activity_usage_returns_usage() {
@@ -235,7 +226,7 @@ async fn activityid_read_rejects_cross_user() -> TbResult<()> {
         .returning(|_| Ok(Some(sample_activity())));
 
     let other_session = mock_session(UserId::from(2));
-    let result = ActivityId::new(1).read(&other_session, &mut store).await;
+    let result = ActivityId::from("1").read(&other_session, &mut store).await;
     assert!(matches!(result, Err(Error::Forbidden(_))));
     Ok(())
 }
@@ -259,7 +250,7 @@ async fn activity_upsert_creates_new() -> TbResult<()> {
     let summary = act.upsert(&test_session(), &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
     assert_eq!(
-        summary.activities.get(&ActivityId::new(1)).unwrap().name,
+        summary.activities.get(&ActivityId::from("1")).unwrap().name,
         "New Activity"
     );
     Ok(())
@@ -356,7 +347,7 @@ async fn activity_upsert_updates_existing() -> TbResult<()> {
     let summary = modified.upsert(&test_session(), &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
     assert_eq!(
-        summary.activities.get(&ActivityId::new(1)).unwrap().name,
+        summary.activities.get(&ActivityId::from("1")).unwrap().name,
         "Updated Activity"
     );
     Ok(())
@@ -367,9 +358,9 @@ async fn activity_upsert_updates_existing() -> TbResult<()> {
 #[tokio::test]
 async fn activity_upsert_preserves_original_id() -> TbResult<()> {
     let mut store = MockStore::new();
-    let act_id = ActivityId::new(42);
+    let act_id = ActivityId::from("42");
     let act = Activity {
-        id: act_id,
+        id: act_id.clone(),
         name: "Custom ID Activity".to_string(),
         device_name: None,
         external_id: None,
@@ -422,7 +413,7 @@ async fn activity_delete_reverts_bike_and_attached_part_usage() -> TbResult<()> 
         usage_row(UsageId::default(), 9025, 135000, 1200, 1200, 1700, 4),
     );
 
-    let summary = ActivityId::new(1)
+    let summary = ActivityId::from("1")
         .delete(&test_session(), &mut store)
         .await?;
 
@@ -465,11 +456,11 @@ async fn activity_delete_returns_summary() -> TbResult<()> {
         .returning(move |_| Ok(Some(act.clone())));
     store.expect_activity_delete().returning(|_| Ok(1));
 
-    let summary = ActivityId::new(1)
+    let summary = ActivityId::from("1")
         .delete(&test_session(), &mut store)
         .await?;
     assert_eq!(summary.activities.len(), 1);
-    assert!(summary.activities.is_tombstoned(&ActivityId::new(1)));
+    assert!(summary.activities.is_tombstoned(&ActivityId::from("1")));
     Ok(())
 }
 
@@ -483,7 +474,9 @@ async fn activity_delete_rejects_non_owner() -> TbResult<()> {
         .returning(|_| Ok(Some(sample_activity())));
 
     let other_session = mock_session(UserId::from(99));
-    let result = ActivityId::new(1).delete(&other_session, &mut store).await;
+    let result = ActivityId::from("1")
+        .delete(&other_session, &mut store)
+        .await;
     assert!(matches!(result, Err(Error::Forbidden(_))));
     Ok(())
 }
@@ -524,42 +517,6 @@ async fn activity_update_missing_activity_returns_not_found() -> TbResult<()> {
     };
     let result = fake.update(&test_session(), &mut store).await;
     assert!(result.is_err());
-    Ok(())
-}
-
-// === Suite 6: categories (mapping) ===
-
-/// Activity::categories maps the user's activity types to unique gear types:
-/// two rides of the same type collapse to one gear type (the bike).
-#[tokio::test]
-async fn activity_categories_returns_unique_gear_types() -> TbResult<()> {
-    let mut store = MockStore::new();
-    let acts = vec![
-        sample_activity(),
-        Activity {
-            id: ActivityId::new(2),
-            name: "Another Ride".to_string(),
-            start: later_start(),
-            ..sample_activity()
-        },
-    ];
-    store
-        .expect_activity_get_all()
-        .returning(move |_| Ok(acts.clone()));
-
-    let categories = Activity::categories(&test_session(), &mut store).await?;
-    assert_eq!(categories, HashSet::from([BIKE]));
-    Ok(())
-}
-
-/// Activity::categories is empty for a user with no activities.
-#[tokio::test]
-async fn activity_categories_empty_for_no_activities() -> TbResult<()> {
-    let mut store = MockStore::new();
-    store.expect_activity_get_all().returning(|_| Ok(vec![]));
-
-    let categories = Activity::categories(&mock_session(UserId::from(99)), &mut store).await?;
-    assert!(categories.is_empty());
     Ok(())
 }
 
@@ -753,7 +710,7 @@ async fn csv2descend_reports_matched_and_skipped_rows() -> TbResult<()> {
     store.expect_get_by_user_and_time().returning(|_uid, t| {
         if t.unix_timestamp() == activity_start().unix_timestamp() {
             Ok(Activity {
-                id: ActivityId::new(301),
+                id: ActivityId::from("301"),
                 name: "Matched Ride".to_string(),
                 start: activity_start(),
                 ..sample_activity()
@@ -785,7 +742,7 @@ async fn csv2descend_reports_matched_and_skipped_rows() -> TbResult<()> {
     assert_eq!(
         summary
             .activities
-            .get(&ActivityId::new(301))
+            .get(&ActivityId::from("301"))
             .unwrap()
             .descend,
         Some(300)
@@ -842,7 +799,7 @@ async fn set_default_part_assigns_gear_to_matching_activities() -> TbResult<()> 
     let summary = Activity::set_default_part(bike, &test_session(), &mut store).await?;
 
     assert_eq!(
-        summary.activities.get(&ActivityId::new(1)).unwrap().gear,
+        summary.activities.get(&ActivityId::from("1")).unwrap().gear,
         Some(bike)
     );
     assert_eq!(
@@ -923,7 +880,7 @@ async fn set_default_part_empty_returns_zero_usage() -> TbResult<()> {
 async fn set_default_part_accounts_usage_for_newly_assigned_activities() -> TbResult<()> {
     let bike = PartId::from(1);
     let act = Activity {
-        id: ActivityId::new(101),
+        id: ActivityId::from("101"),
         name: "Unassigned Ride".to_string(),
         start: time::macros::datetime!(2023-05-20 10:00 UTC),
         time: Some(1000),
@@ -951,7 +908,11 @@ async fn set_default_part_accounts_usage_for_newly_assigned_activities() -> TbRe
     let summary = Activity::set_default_part(bike, &test_session(), &mut store).await?;
 
     assert_eq!(
-        summary.activities.get(&ActivityId::new(101)).unwrap().gear,
+        summary
+            .activities
+            .get(&ActivityId::from("101"))
+            .unwrap()
+            .gear,
         Some(bike)
     );
     // The bike usage row is incremented by the newly assigned activity:

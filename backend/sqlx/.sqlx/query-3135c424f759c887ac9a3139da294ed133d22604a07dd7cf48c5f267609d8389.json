@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO icu_users (tbid, icu_athlete_id, access_token, disabled)\n             VALUES ($1, $2, $3, $4)\n             RETURNING *",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "tbid",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "icu_athlete_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "access_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "disabled",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "3135c424f759c887ac9a3139da294ed133d22604a07dd7cf48c5f267609d8389"
+}

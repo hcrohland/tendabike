@@ -1,4 +1,4 @@
-//! The `ApiRead` dispatch over a canned [`MockStore`] (issue #639).
+//! The `ApiRead` dispatch over a canned [`MockStore`].
 //!
 //! Each test runs the real `read` dispatch — the `ReadOutcome`/projections/
 //! filters/access-checks the read handlers rely on — over a [`MockStore`]
@@ -37,6 +37,7 @@ fn user_row(id: UserId) -> User {
         avatar: None,
         is_admin: false,
         onboarding_status: OnboardingStatus::Pending,
+        provider: "strava".to_string(),
     }
 }
 
@@ -148,8 +149,8 @@ async fn user_read_returns_user_state() -> TbResult<()> {
     store.expect_user_get().returning(move |_| Ok(user_row(me)));
     store.expect_activity_get_all().returning(move |_| {
         Ok(vec![
-            activity_row(ActivityId::new(1), me, "Morning Ride"),
-            activity_row(ActivityId::new(2), me, "Evening Ride"),
+            activity_row(ActivityId::from("1"), me, "Morning Ride"),
+            activity_row(ActivityId::from("2"), me, "Evening Ride"),
         ])
     });
     store
@@ -245,7 +246,7 @@ async fn user_read_shop_filter_limits_parts() -> TbResult<()> {
         .expect_notification_all_for_user()
         .returning(|_| Ok(vec![]));
 
-    // The acting session carries the shop (spec #517, ticket #588): the read
+    // The acting session carries the shop (spec #517): the read
     // filters the summary to the session's shop, not an in-message parameter.
     let shop_session = mock_session_with_shop(me, shop);
     let outcome = read(ApiRead::User, &shop_session, &mut store).await?;
@@ -286,14 +287,14 @@ async fn user_read_missing_is_not_found() -> TbResult<()> {
 async fn activity_read_dispatches() -> TbResult<()> {
     let mut store = MockStore::new();
     let me = test_user();
-    let act = activity_row(ActivityId::new(1), me, "Morning Ride");
+    let act = activity_row(ActivityId::from("1"), me, "Morning Ride");
     let act_read = act.clone();
     store
         .expect_activity_read_by_id()
         .returning(move |_| Ok(Some(act_read.clone())));
 
     let outcome = read(
-        ApiRead::Activity(ActivityId::new(1)),
+        ApiRead::Activity(ActivityId::from("1")),
         &test_session(),
         &mut store,
     )
@@ -301,7 +302,7 @@ async fn activity_read_dispatches() -> TbResult<()> {
     let ReadOutcome::Activity(got) = outcome else {
         panic!("the Activity read returns the Activity");
     };
-    assert_eq!(got.id, ActivityId::new(1));
+    assert_eq!(got.id, ActivityId::from("1"));
     assert_eq!(got.name, "Morning Ride");
     assert_eq!(got.user_id, me);
     Ok(())
@@ -313,7 +314,7 @@ async fn activity_read_missing_is_not_found() -> TbResult<()> {
     let mut store = MockStore::new();
     store.expect_activity_read_by_id().returning(|_| Ok(None));
     let err = read(
-        ApiRead::Activity(ActivityId::new(999_999)),
+        ApiRead::Activity(ActivityId::from("999_999")),
         &test_session(),
         &mut store,
     )
@@ -329,16 +330,20 @@ async fn activity_read_missing_is_not_found() -> TbResult<()> {
 async fn activity_read_foreign_is_forbidden() -> TbResult<()> {
     let mut store = MockStore::new();
     // The activity belongs to user 1; user 2 may not read it.
-    let act = activity_row(ActivityId::new(1), test_user(), "Morning Ride");
+    let act = activity_row(ActivityId::from("1"), test_user(), "Morning Ride");
     let act_read = act.clone();
     store
         .expect_activity_read_by_id()
         .returning(move |_| Ok(Some(act_read.clone())));
 
     let session = mock_session(UserId::from(2));
-    let err = read(ApiRead::Activity(ActivityId::new(1)), &session, &mut store)
-        .await
-        .unwrap_err();
+    let err = read(
+        ApiRead::Activity(ActivityId::from("1")),
+        &session,
+        &mut store,
+    )
+    .await
+    .unwrap_err();
     assert!(matches!(err, Error::Forbidden(_)));
     Ok(())
 }

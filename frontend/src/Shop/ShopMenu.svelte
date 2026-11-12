@@ -1,25 +1,12 @@
 <script lang="ts">
   import { Dropdown, DropdownDivider, DropdownItem } from "flowbite-svelte";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
-  import { goto } from "$app/navigation";
   import * as m from "../../paraglide/messages";
 
-  import { Shop, shops, getShop, setShop } from "../lib/shop";
-  import { refresh, getUser } from "../lib/user";
+  import { Shop, shops, getShop, enterShop } from "../lib/shop.svelte";
   import { stateValues } from "../lib/mapable.svelte";
 
   let myshops = $derived(stateValues(shops));
-
-  // Enter shop mode: replaces stores with shop-specific data. The refresh's
-  // shop scope rides the `X-Active-Shop` header the fetch layer injects from
-  // the tab's shop (ADR-0009).
-  async function enterShop(myshop: Shop) {
-    setShop(myshop);
-    if (myshop.owner == getUser()?.id) await refresh();
-
-    // Navigate to main page
-    goto("/cat");
-  }
 </script>
 
 {#if !getShop()}

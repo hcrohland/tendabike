@@ -34,7 +34,10 @@ use tb_domain::{
     SubscriptionStatus, Summary, TbResult, UsageId, User, UserId, UserPublic, UserState,
     WriteOutcome,
 };
-use tb_exec::{ExecutorStatus, MockServiceApi, ServiceApi};
+use tb_exec::{
+    ExecutorStatus, IcuService, MockIcuService, MockProviderService, MockServiceApi,
+    ProviderService, ServiceApi,
+};
 use time::macros::datetime;
 use tower::ServiceExt;
 
@@ -46,22 +49,30 @@ use crate::strava::RequestSession;
 
 const SESSION_KEY: &str = "session";
 
-/// Dummies the OAuth client environment variables so the `STRAVACLIENT` lazy
-/// static does not panic when it is first used in a test.
+/// Dummies the OAuth client environment variables so the `STRAVACLIENT` and
+/// `ICU_CLIENT` lazy statics do not panic when they are first used in a test.
 fn set_oauth_env_once() {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| unsafe {
         std::env::set_var("CLIENT_ID", "test-client-id");
         std::env::set_var("CLIENT_SECRET", "test-client-secret");
+        std::env::set_var("ICU_CLIENT_ID", "test-icu-client-id");
+        std::env::set_var("ICU_CLIENT_SECRET", "test-icu-client-secret");
+        std::env::set_var("ICU_WEBHOOK_SECRET", "test-icu-webhook-secret");
     });
 }
 
 /// Builds the production routes over the service API and a `MemoryStore`
 /// session layer.
-fn test_app(store: MemoryStore, api: Arc<dyn ServiceApi>) -> Router {
+fn test_app(
+    store: MemoryStore,
+    api: Arc<dyn ServiceApi>,
+    provider: Arc<dyn ProviderService>,
+    icu: Arc<dyn IcuService>,
+) -> Router {
     set_oauth_env_once();
     let session_layer = SessionManagerLayer::new(store);
-    routes(AppState::new(api), None).layer(session_layer)
+    routes(AppState::new(api, provider, icu), None).layer(session_layer)
 }
 
 /// Creates a session in `store` containing `value` and returns the cookie
@@ -264,6 +275,7 @@ fn user() -> User {
         avatar: None,
         is_admin: false,
         onboarding_status: OnboardingStatus::Pending,
+        provider: "strava".to_string(),
     }
 }
 
@@ -351,7 +363,7 @@ fn file_note() -> PartNote {
 /// The suite's activity.
 fn activity() -> Activity {
     Activity {
-        id: ActivityId::from(1),
+        id: ActivityId::from("strava:1"),
         user_id: UserId::from(1),
         what: ActTypeId::from(1),
         name: "Morning Ride".to_string(),
@@ -440,18 +452,36 @@ fn user_state_reply() -> impl Fn(Box<dyn TbSession>, ApiRead) -> TbResult<ReadOu
     }
 }
 
-/// One contract test's fixture: the session store and the mock. The test
-/// sets up expectations on the mock, then calls [`build_app`] to get the
+/// One contract test's fixture: the session store, the generic service API
+/// mock, the Strava-specific mock, and the icu-specific mock. The test sets
+/// up expectations on the mocks, then calls [`build_app`] to get the
 /// production router.
-fn mock_ctx() -> (MemoryStore, MockServiceApi) {
-    (MemoryStore::default(), MockServiceApi::new())
+fn mock_ctx() -> (
+    MemoryStore,
+    MockServiceApi,
+    MockProviderService,
+    MockIcuService,
+) {
+    (
+        MemoryStore::default(),
+        MockServiceApi::new(),
+        MockProviderService::new(),
+        MockIcuService::new(),
+    )
 }
 
-/// Build the production router over the mock (call after setting up
+/// Build the production router over the mocks (call after setting up
 /// expectations).
-fn build_app(store: &MemoryStore, mock: MockServiceApi) -> Router {
+fn build_app(
+    store: &MemoryStore,
+    mock: MockServiceApi,
+    provider: MockProviderService,
+    icu: MockIcuService,
+) -> Router {
     let api: Arc<dyn tb_exec::ServiceApi> = Arc::new(mock);
-    test_app(store.clone(), api)
+    let provider: Arc<dyn tb_exec::ProviderService> = Arc::new(provider);
+    let icu: Arc<dyn tb_exec::IcuService> = Arc::new(icu);
+    test_app(store.clone(), api, provider, icu)
 }
 
 /// An unauthenticated request to an authenticated route answers `401` with
@@ -459,8 +489,8 @@ fn build_app(store: &MemoryStore, mock: MockServiceApi) -> Router {
 /// extractor rejects it first; the mock has no expectations, so any call
 /// would panic).
 async fn expect_unauth(method: Method, uri: &str) {
-    let (store, mock) = mock_ctx();
-    let app = build_app(&store, mock);
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
     let (status, _headers, body) = run(app, method, uri, None).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(body, "Please login".as_bytes());
@@ -469,8 +499,8 @@ async fn expect_unauth(method: Method, uri: &str) {
 /// An authenticated non-admin request to an admin route answers `404`
 /// (hidden, not forbidden) — and never reaches the service API.
 async fn expect_hidden_from_non_admin(method: Method, uri: &str) {
-    let (store, mock) = mock_ctx();
-    let app = build_app(&store, mock);
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(app, method, uri, Some(&cookie)).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
@@ -480,8 +510,8 @@ async fn expect_hidden_from_non_admin(method: Method, uri: &str) {
 
 #[tokio::test]
 async fn types_part_returns_part_types() {
-    let (store, mock) = mock_ctx();
-    let app = build_app(&store, mock);
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
     let (status, _headers, body) = run(app, Method::GET, "/api/types/part", None).await;
     assert_eq!(status, StatusCode::OK);
     let types: Vec<serde_json::Value> = serde_json::from_slice(&body).expect("part types are json");
@@ -490,8 +520,8 @@ async fn types_part_returns_part_types() {
 
 #[tokio::test]
 async fn types_activity_returns_activity_types() {
-    let (store, mock) = mock_ctx();
-    let app = build_app(&store, mock);
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
     let (status, _headers, body) = run(app, Method::GET, "/api/types/activity", None).await;
     assert_eq!(status, StatusCode::OK);
     let types: Vec<serde_json::Value> =
@@ -501,8 +531,8 @@ async fn types_activity_returns_activity_types() {
 
 #[tokio::test]
 async fn callback_validation_echoes_challenge() {
-    let (store, mock) = mock_ctx();
-    let app = build_app(&store, mock);
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
     let (status, _headers, body) = run(
         app,
         Method::GET,
@@ -517,8 +547,8 @@ async fn callback_validation_echoes_challenge() {
 
 #[tokio::test]
 async fn callback_validation_rejects_wrong_token() {
-    let (store, mock) = mock_ctx();
-    let app = build_app(&store, mock);
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
     let (status, _headers, _body) = run(
         app,
         Method::GET,
@@ -531,8 +561,8 @@ async fn callback_validation_rejects_wrong_token() {
 
 #[tokio::test]
 async fn login_redirects_to_strava_authorize() {
-    let (store, mock) = mock_ctx();
-    let app = build_app(&store, mock);
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
     let (status, headers, _body) = run(app, Method::GET, "/strava/login", None).await;
     assert_eq!(status, StatusCode::SEE_OTHER);
     let location = headers["location"].to_str().expect("location").to_owned();
@@ -546,8 +576,8 @@ async fn login_redirects_to_strava_authorize() {
 
 #[tokio::test]
 async fn token_error_redirects_to_root() {
-    let (store, mock) = mock_ctx();
-    let app = build_app(&store, mock);
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
     let (status, headers, _body) = run(
         app,
         Method::GET,
@@ -561,8 +591,8 @@ async fn token_error_redirects_to_root() {
 
 #[tokio::test]
 async fn token_wrong_scope_redirects_to_root() {
-    let (store, mock) = mock_ctx();
-    let app = build_app(&store, mock);
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
     let (status, headers, _body) = run(
         app,
         Method::GET,
@@ -576,11 +606,86 @@ async fn token_wrong_scope_redirects_to_root() {
 
 #[tokio::test]
 async fn logout_redirects_to_root() {
-    let (store, mock) = mock_ctx();
-    let app = build_app(&store, mock);
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
     let (status, headers, _body) = run(app, Method::GET, "/strava/logout", None).await;
     assert_eq!(status, StatusCode::SEE_OTHER);
     assert_eq!(headers["location"], "/");
+}
+
+// ─── intervals.icu OAuth (spec #763) ──────────────────────────────────────
+
+#[tokio::test]
+async fn icu_login_redirects_to_icu_authorize() {
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
+    let (status, headers, _body) = run(app, Method::GET, "/icu/login", None).await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+    let location = headers["location"].to_str().expect("location").to_owned();
+    assert!(
+        location.starts_with("https://intervals.icu/oauth/authorize?"),
+        "unexpected location {location}"
+    );
+    assert!(location.contains("client_id=test-icu-client-id"));
+    assert!(location.contains("state="));
+}
+
+#[tokio::test]
+async fn icu_token_error_redirects_to_root() {
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
+    let (status, headers, _body) = run(
+        app,
+        Method::GET,
+        "/icu/token?error=access_denied&state=foo",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+    assert_eq!(headers["location"], "/");
+}
+
+#[tokio::test]
+async fn icu_token_wrong_scope_redirects_to_root() {
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
+    let (status, headers, _body) = run(
+        app,
+        Method::GET,
+        "/icu/token?code=abc&state=foo&scope=read",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+    assert_eq!(headers["location"], "/");
+}
+
+/// `POST /icu/onboarding/sync?time=N` enqueues the
+/// `UserOnboardingSync` write, then reads the `User` record back and answers
+/// `200` with the user.
+#[tokio::test]
+async fn icu_onboarding_sync_returns_200_and_user() {
+    let (store, mut mock, provider, icu) = mock_ctx();
+    mock.expect_write()
+        .times(1)
+        .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
+    mock.expect_read()
+        .times(1)
+        .returning(|_session, _read| Ok(ReadOutcome::UserRecord(user())));
+    let app = build_app(&store, mock, provider, icu);
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, body) = run(
+        app,
+        Method::POST,
+        "/icu/onboarding/sync?time=1700000000",
+        Some(&cookie),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        String::from_utf8_lossy(&body).contains("\"id\":1"),
+        "the updated user is returned"
+    );
 }
 
 // ─── Auth gates (401/404 before the service API) ──────────────────────────
@@ -687,8 +792,8 @@ async fn strava_sync_hidden_from_non_admin() {
 
 #[tokio::test]
 async fn admin_sync_requires_admin() {
-    let (store, mock) = mock_ctx();
-    let app = build_app(&store, mock);
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(app, Method::GET, "/strava/sync/1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
@@ -696,16 +801,16 @@ async fn admin_sync_requires_admin() {
 
 #[tokio::test]
 async fn wrong_method_not_allowed() {
-    let (store, mock) = mock_ctx();
-    let app = build_app(&store, mock);
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
     let (status, _headers, _body) = run(app, Method::POST, "/api/user", None).await;
     assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
 }
 
 #[tokio::test]
 async fn unknown_path_not_found() {
-    let (store, mock) = mock_ctx();
-    let app = build_app(&store, mock);
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
     let (status, _headers, _body) = run(app, Method::GET, "/api/does-not-exist", None).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
@@ -718,7 +823,7 @@ async fn unknown_path_not_found() {
 /// `Summary`).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_user_returns_200_and_userstate_body() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_hydrate_gear()
         .times(1)
         .returning(|_session| Ok(Summary::default()));
@@ -728,13 +833,13 @@ async fn get_user_returns_200_and_userstate_body() {
             summary: Summary::default(),
         })))
     });
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::GET, "/api/user", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"},"summary":{"activities":{},"parts":{},"attachments":{},"usages":{},"services":{},"plans":{},"part_notes":{},"shops":{},"users":{},"notifications":{}}}"#
+        r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending","provider":"strava"},"summary":{"activities":{},"parts":{},"attachments":{},"usages":{},"services":{},"plans":{},"part_notes":{},"shops":{},"users":{},"notifications":{}}}"#
     );
 }
 
@@ -744,20 +849,20 @@ async fn get_user_returns_200_and_userstate_body() {
 /// (all empty for this user).
 #[tokio::test]
 async fn get_user_export_returns_200_and_export_body() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_read().times(1).returning(|_session, _read| {
         Ok(ReadOutcome::User(Box::new(UserState {
             user: user(),
             summary: Summary::default(),
         })))
     });
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::GET, "/api/user/export", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"},"parts":[],"attachments":[],"services":[],"plans":[],"usages":[],"activities":[],"shops":[]}"#
+        r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending","provider":"strava"},"parts":[],"attachments":[],"services":[],"plans":[],"usages":[],"activities":[],"shops":[]}"#
     );
 }
 
@@ -767,7 +872,7 @@ async fn get_user_export_returns_200_and_export_body() {
 /// `Summary`).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn summary_returns_200_and_summary_body() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_hydrate_gear()
         .times(1)
         .returning(|_session| Ok(Summary::default()));
@@ -777,13 +882,13 @@ async fn summary_returns_200_and_summary_body() {
             summary: Summary::default(),
         })))
     });
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::GET, "/api/user", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"},"summary":{"activities":{},"parts":{},"attachments":{},"usages":{},"services":{},"plans":{},"part_notes":{},"shops":{},"users":{},"notifications":{}}}"#
+        r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending","provider":"strava"},"summary":{"activities":{},"parts":{},"attachments":{},"usages":{},"services":{},"plans":{},"part_notes":{},"shops":{},"users":{},"notifications":{}}}"#
     );
 }
 
@@ -792,7 +897,7 @@ async fn summary_returns_200_and_summary_body() {
 /// read is shop-scoped by the per-request context, not the cookie.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn active_shop_header_scopes_the_read_session() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_hydrate_gear()
         .times(1)
         .withf(|session| session.shop() == Some(ShopId::from(1)))
@@ -801,7 +906,7 @@ async fn active_shop_header_scopes_the_read_session() {
         .times(1)
         .withf(|session, _read| session.shop() == Some(ShopId::from(1)))
         .returning(user_state_reply());
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_headers(
         app,
@@ -819,7 +924,7 @@ async fn active_shop_header_scopes_the_read_session() {
 /// messages with no shop on the acting sessions: the full, unfiltered read.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn read_without_active_shop_header_has_no_shop() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_hydrate_gear()
         .times(1)
         .withf(|session| session.shop().is_none())
@@ -828,7 +933,7 @@ async fn read_without_active_shop_header_has_no_shop() {
         .times(1)
         .withf(|session, _read| session.shop().is_none())
         .returning(user_state_reply());
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(app, Method::GET, "/api/user", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
@@ -840,7 +945,7 @@ async fn read_without_active_shop_header_has_no_shop() {
 /// cross-tab leak is gone.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn active_shop_header_does_not_leak_across_requests() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_hydrate_gear()
         .times(2)
         .returning(|_session| Ok(Summary::default()));
@@ -855,7 +960,7 @@ async fn active_shop_header_does_not_leak_across_requests() {
         .times(1)
         .withf(|session, _read| session.shop().is_none())
         .returning(user_state_reply());
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_headers(
         app.clone(),
@@ -875,8 +980,8 @@ async fn active_shop_header_does_not_leak_across_requests() {
 /// `204` for an authenticated session, no body, no DB work.
 #[tokio::test]
 async fn user_ping_returns_204() {
-    let (store, mock) = mock_ctx();
-    let app = build_app(&store, mock);
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::GET, "/api/user/ping", Some(&cookie)).await;
     assert_eq!(status, StatusCode::NO_CONTENT);
@@ -888,12 +993,12 @@ async fn user_ping_returns_204() {
 /// per-user stats — empty for the mock's canned reply.
 #[tokio::test]
 async fn user_all_returns_200_and_stats() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_all_stats()
         .times(1)
         .returning(|_session| Ok(vec![]));
     let cookie = admin_cookie(&store).await;
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let (status, _headers, body) = run(app, Method::GET, "/api/user/all", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(String::from_utf8_lossy(&body), "[]");
@@ -903,17 +1008,18 @@ async fn user_all_returns_200_and_stats() {
 /// `200` with the activity's JSON body.
 #[tokio::test]
 async fn get_activity_returns_200_and_activity_body() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_read()
         .times(1)
         .returning(|_session, _read| Ok(ReadOutcome::Activity(activity())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
-    let (status, _headers, body) = run(app, Method::GET, "/api/activ/1", Some(&cookie)).await;
+    let (status, _headers, body) =
+        run(app, Method::GET, "/api/activ/strava:1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"id":1,"user_id":1,"what":1,"name":"Morning Ride","start":"2024-01-01T08:00:00Z","duration":3600,"time":null,"distance":20000,"climb":100,"descend":100,"energy":5000,"gear":null,"device_name":null,"external_id":null}"#
+        r#"{"id":"strava:1","user_id":1,"what":1,"name":"Morning Ride","start":"2024-01-01T08:00:00Z","duration":3600,"time":null,"distance":20000,"climb":100,"descend":100,"energy":5000,"gear":null,"device_name":null,"external_id":null}"#
     );
 }
 
@@ -921,11 +1027,11 @@ async fn get_activity_returns_200_and_activity_body() {
 /// with the part's JSON body.
 #[tokio::test]
 async fn get_part_returns_200_and_part_body() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_read()
         .times(1)
         .returning(|_session, _read| Ok(ReadOutcome::Part(part())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::GET, "/api/part/1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
@@ -940,7 +1046,7 @@ async fn get_part_returns_200_and_part_body() {
 /// use.
 #[tokio::test]
 async fn get_part_categories_returns_200_and_categories() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     let mut categories = std::collections::HashSet::new();
     categories.insert(PartTypeId::from(1));
     mock.expect_read()
@@ -948,7 +1054,7 @@ async fn get_part_categories_returns_200_and_categories() {
         .returning(move |_session, _read| {
             Ok(ReadOutcome::PartCategories(std::mem::take(&mut categories)))
         });
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) =
         run(app, Method::GET, "/api/part/categories", Some(&cookie)).await;
@@ -960,11 +1066,11 @@ async fn get_part_categories_returns_200_and_categories() {
 /// answers `200` with the part's notes.
 #[tokio::test]
 async fn get_part_notes_returns_200_and_notes() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_read()
         .times(1)
         .returning(|_session, _read| Ok(ReadOutcome::PartNotes(vec![note()])));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::GET, "/api/part/1/notes", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
@@ -980,11 +1086,11 @@ async fn get_part_notes_returns_200_and_notes() {
 /// canned bytes.
 #[tokio::test]
 async fn get_note_file_returns_200_file_body_and_headers() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_read().times(1).returning(|_session, _read| {
         Ok(ReadOutcome::PartNoteFile(file_note(), b"PDFDATA".to_vec()))
     });
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, headers, body) =
         run(app, Method::GET, "/api/part/notes/1/file", Some(&cookie)).await;
@@ -1008,11 +1114,11 @@ async fn get_note_file_returns_200_file_body_and_headers() {
 /// user's shops.
 #[tokio::test]
 async fn get_shops_returns_200_and_shops() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_read()
         .times(1)
         .returning(|_session, _read| Ok(ReadOutcome::Shops(vec![shop()])));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::GET, "/api/shop", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
@@ -1026,11 +1132,11 @@ async fn get_shops_returns_200_and_shops() {
 /// with the shop's JSON body.
 #[tokio::test]
 async fn get_shop_returns_200_and_shop() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_read()
         .times(1)
         .returning(|_session, _read| Ok(ReadOutcome::Shop(shop())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::GET, "/api/shop/1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
@@ -1044,11 +1150,11 @@ async fn get_shop_returns_200_and_shop() {
 /// answers `200` with the shop's registered parts.
 #[tokio::test]
 async fn get_shop_parts_returns_200_and_parts() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_read()
         .times(1)
         .returning(|_session, _read| Ok(ReadOutcome::ShopParts(vec![part()])));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::GET, "/api/shop/1/parts", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
@@ -1061,7 +1167,7 @@ async fn get_shop_parts_returns_200_and_parts() {
 /// then their owners' public user records.
 #[tokio::test]
 async fn get_shop_search_returns_200_and_search() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_read().times(1).returning(|_session, _read| {
         Ok(ReadOutcome::ShopSearch {
             shops: vec![shop()],
@@ -1073,7 +1179,7 @@ async fn get_shop_search_returns_200_and_search() {
             }],
         })
     });
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) =
         run(app, Method::GET, "/api/shop/search?q=Bike", Some(&cookie)).await;
@@ -1089,13 +1195,13 @@ async fn get_shop_search_returns_200_and_search() {
 /// carrying its shop details.
 #[tokio::test]
 async fn get_my_subscriptions_returns_200_and_subs() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_read().times(1).returning(|_session, _read| {
         Ok(ReadOutcome::ShopSubscriptions(vec![
             subscription_with_details(),
         ]))
     });
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) =
         run(app, Method::GET, "/api/shop/subscriptions", Some(&cookie)).await;
@@ -1114,13 +1220,13 @@ async fn get_my_subscriptions_returns_200_and_subs() {
 /// owner's view) and answers `200` with them.
 #[tokio::test]
 async fn get_shop_subscriptions_returns_200_and_subs() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_read().times(1).returning(|_session, _read| {
         Ok(ReadOutcome::ShopSubscriptions(vec![
             subscription_with_details(),
         ]))
     });
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) =
         run(app, Method::GET, "/api/shop/1/subscriptions", Some(&cookie)).await;
@@ -1136,11 +1242,11 @@ async fn get_shop_subscriptions_returns_200_and_subs() {
 /// message and answers `200` with the subscription's JSON body.
 #[tokio::test]
 async fn get_subscription_returns_200_and_subscription() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_read()
         .times(1)
         .returning(|_session, _read| Ok(ReadOutcome::ShopSubscription(subscription())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) =
         run(app, Method::GET, "/api/shop/subscriptions/1", Some(&cookie)).await;
@@ -1163,11 +1269,11 @@ fn part_body(name: &str) -> String {
 /// the created part (extracted from the write's `Summary`).
 #[tokio::test]
 async fn create_part_returns_201_and_entity() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(summary_with_part())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run_json(
         app,
@@ -1188,11 +1294,11 @@ async fn create_part_returns_201_and_entity() {
 /// `204 No Content`.
 #[tokio::test]
 async fn update_part_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
         app,
@@ -1210,12 +1316,12 @@ async fn update_part_returns_204() {
 /// write's frame to the shop stream from that session's shop.
 #[tokio::test]
 async fn write_with_active_shop_header_rides_the_shop_session() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .withf(|session, _write| session.shop() == Some(ShopId::from(1)))
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_headers(
         app,
@@ -1234,12 +1340,12 @@ async fn write_with_active_shop_header_rides_the_shop_session() {
 /// stream only.
 #[tokio::test]
 async fn write_without_active_shop_header_rides_the_personal_session() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .withf(|session, _write| session.shop().is_none())
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
         app,
@@ -1256,11 +1362,11 @@ async fn write_without_active_shop_header_rides_the_personal_session() {
 /// `204`.
 #[tokio::test]
 async fn delete_part_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(app, Method::DELETE, "/api/part/1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::NO_CONTENT);
@@ -1270,11 +1376,11 @@ async fn delete_part_returns_204() {
 /// and answers `201` with the created note.
 #[tokio::test]
 async fn create_text_note_returns_201_and_entity() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(summary_with_note())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run_json(
         app,
@@ -1296,7 +1402,7 @@ async fn create_text_note_returns_201_and_entity() {
 /// answers `201` with the created note.
 #[tokio::test]
 async fn create_file_note_returns_201_and_entity() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write().times(1).returning(|_session, _write| {
         Ok(WriteOutcome::Summary(Summary {
             part_notes: {
@@ -1307,7 +1413,7 @@ async fn create_file_note_returns_201_and_entity() {
             ..Summary::default()
         }))
     });
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let multipart = concat!(
         "--tbnote\r\n",
@@ -1340,11 +1446,11 @@ async fn create_file_note_returns_201_and_entity() {
 /// answers `204`.
 #[tokio::test]
 async fn update_text_note_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
         app,
@@ -1361,11 +1467,11 @@ async fn update_text_note_returns_204() {
 /// the `PartNoteUpdateFile` write and answers `204`.
 #[tokio::test]
 async fn update_file_note_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let multipart = concat!(
         "--tbnote\r\n",
@@ -1391,11 +1497,11 @@ async fn update_file_note_returns_204() {
 /// write and answers `204`.
 #[tokio::test]
 async fn remove_file_note_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) =
         run(app, Method::DELETE, "/api/part/notes/1/file", Some(&cookie)).await;
@@ -1406,11 +1512,11 @@ async fn remove_file_note_returns_204() {
 /// answers `204`.
 #[tokio::test]
 async fn delete_note_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) =
         run(app, Method::DELETE, "/api/part/notes/1", Some(&cookie)).await;
@@ -1421,11 +1527,11 @@ async fn delete_note_returns_204() {
 /// the created shop.
 #[tokio::test]
 async fn create_shop_returns_201_and_entity() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(summary_with_shop())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run_json(
         app,
@@ -1446,11 +1552,11 @@ async fn create_shop_returns_201_and_entity() {
 /// `204`.
 #[tokio::test]
 async fn update_shop_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
         app,
@@ -1467,11 +1573,11 @@ async fn update_shop_returns_204() {
 /// `204`.
 #[tokio::test]
 async fn delete_shop_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(app, Method::DELETE, "/api/shop/1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::NO_CONTENT);
@@ -1481,11 +1587,11 @@ async fn delete_shop_returns_204() {
 /// answers `204`.
 #[tokio::test]
 async fn register_shop_part_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
         app,
@@ -1502,11 +1608,11 @@ async fn register_shop_part_returns_204() {
 /// `ShopUnregisterPart` write and answers `204`.
 #[tokio::test]
 async fn unregister_shop_part_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) =
         run(app, Method::DELETE, "/api/shop/1/parts/1", Some(&cookie)).await;
@@ -1519,7 +1625,7 @@ async fn unregister_shop_part_returns_204() {
 /// subscription projected from the with-details composite.
 #[tokio::test]
 async fn create_subscription_returns_201_and_entity() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
@@ -1528,7 +1634,7 @@ async fn create_subscription_returns_201_and_entity() {
             subscription_with_details(),
         ]))
     });
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run_json(
         app,
@@ -1549,11 +1655,11 @@ async fn create_subscription_returns_201_and_entity() {
 /// `ShopSubscriptionApprove` write and answers `204`.
 #[tokio::test]
 async fn approve_subscription_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
         app,
@@ -1570,11 +1676,11 @@ async fn approve_subscription_returns_204() {
 /// `ShopSubscriptionReject` write and answers `204`.
 #[tokio::test]
 async fn reject_subscription_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
         app,
@@ -1591,11 +1697,11 @@ async fn reject_subscription_returns_204() {
 /// `ShopSubscriptionCancel` write and answers `204`.
 #[tokio::test]
 async fn cancel_subscription_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(
         app,
@@ -1611,18 +1717,18 @@ async fn cancel_subscription_returns_204() {
 /// id and the body's id must agree) and answers `204`.
 #[tokio::test]
 async fn update_activity_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
         app,
         Method::PUT,
-        "/api/activ/1",
+        "/api/activ/strava:1",
         Some(&cookie),
-        r#"{"id":1,"user_id":1,"what":1,"name":"Morning Ride","start":"2024-01-01T08:00:00Z","duration":3600,"time":null,"distance":20000,"climb":100,"descend":100,"energy":5000,"gear":null,"device_name":null,"external_id":null}"#,
+        r#"{"id":"strava:1","user_id":1,"what":1,"name":"Morning Ride","start":"2024-01-01T08:00:00Z","duration":3600,"time":null,"distance":20000,"climb":100,"descend":100,"energy":5000,"gear":null,"device_name":null,"external_id":null}"#,
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
@@ -1633,16 +1739,16 @@ async fn update_activity_returns_204() {
 /// and it fires before any write is enqueued (the op has no path-id concept).
 #[tokio::test]
 async fn update_activity_id_mismatch_returns_400() {
-    let (store, mock) = mock_ctx();
-    let app = build_app(&store, mock);
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
-    // Path id 1, body id 2: the mismatch is the presentation's guard.
+    // Path id strava:1, body id strava:2: the mismatch is the presentation's guard.
     let (status, _headers, _body) = run_json(
         app,
         Method::PUT,
-        "/api/activ/1",
+        "/api/activ/strava:1",
         Some(&cookie),
-        r#"{"id":2,"user_id":1,"what":1,"name":"Morning Ride","start":"2024-01-01T08:00:00Z","duration":3600,"time":null,"distance":20000,"climb":100,"descend":100,"energy":5000,"gear":null,"device_name":null,"external_id":null}"#,
+        r#"{"id":"strava:2","user_id":1,"what":1,"name":"Morning Ride","start":"2024-01-01T08:00:00Z","duration":3600,"time":null,"distance":20000,"climb":100,"descend":100,"energy":5000,"gear":null,"device_name":null,"external_id":null}"#,
     )
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -1652,13 +1758,14 @@ async fn update_activity_id_mismatch_returns_400() {
 /// answers `204`.
 #[tokio::test]
 async fn delete_activity_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
-    let (status, _headers, _body) = run(app, Method::DELETE, "/api/activ/1", Some(&cookie)).await;
+    let (status, _headers, _body) =
+        run(app, Method::DELETE, "/api/activ/strava:1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::NO_CONTENT);
 }
 
@@ -1666,11 +1773,11 @@ async fn delete_activity_returns_204() {
 /// and answers `204`.
 #[tokio::test]
 async fn default_gear_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
         app,
@@ -1685,12 +1792,12 @@ async fn default_gear_returns_204() {
 
 /// `POST /api/activ/descend` enqueues the `ActivityDescend` write (the raw
 /// CSV body) and answers `200` with the match report `{good, bad}` (the
-/// spec §6.2 deviation recorded on issue #446): the report is an operation
+/// spec §6.2 deviation): the report is an operation
 /// result, not `Summary` state — the matched activity's updated state
 /// arrives as the executor's stream frame (the seam suite's territory).
 #[tokio::test]
 async fn descend_answers_with_match_report() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write().times(1).returning(|_session, _write| {
         Ok(WriteOutcome::Descend {
             summary: Summary::default(),
@@ -1700,7 +1807,7 @@ async fn descend_answers_with_match_report() {
             },
         })
     });
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let csv = "Date,Title,Total Descent\n2023-05-18 22:13:20,Morning Ride,900\n2023-06-01 08:00:00,Phantom Ride,500\n";
     let (status, _headers, body) =
@@ -1716,11 +1823,11 @@ async fn descend_answers_with_match_report() {
 /// answers `204`.
 #[tokio::test]
 async fn attach_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
         app,
@@ -1737,11 +1844,11 @@ async fn attach_returns_204() {
 /// answers `204`.
 #[tokio::test]
 async fn detach_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
         app,
@@ -1758,11 +1865,11 @@ async fn detach_returns_204() {
 /// answers `204`.
 #[tokio::test]
 async fn dispose_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
         app,
@@ -1779,11 +1886,11 @@ async fn dispose_returns_204() {
 /// answers `204`.
 #[tokio::test]
 async fn recover_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
         app,
@@ -1800,11 +1907,11 @@ async fn recover_returns_204() {
 /// `201` with the created service.
 #[tokio::test]
 async fn create_service_returns_201_and_entity() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(summary_with_service())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run_json(
         app,
@@ -1825,11 +1932,11 @@ async fn create_service_returns_201_and_entity() {
 /// `204`.
 #[tokio::test]
 async fn update_service_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
         app,
@@ -1846,11 +1953,11 @@ async fn update_service_returns_204() {
 /// answers `204`.
 #[tokio::test]
 async fn delete_service_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(
         app,
@@ -1866,11 +1973,11 @@ async fn delete_service_returns_204() {
 /// `204`.
 #[tokio::test]
 async fn redo_service_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
         app,
@@ -1887,11 +1994,11 @@ async fn redo_service_returns_204() {
 /// `201` with the created plan.
 #[tokio::test]
 async fn create_plan_returns_201_and_entity() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(summary_with_plan())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run_json(
         app,
@@ -1912,11 +2019,11 @@ async fn create_plan_returns_201_and_entity() {
 /// `204`.
 #[tokio::test]
 async fn update_plan_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
         app,
@@ -1933,11 +2040,11 @@ async fn update_plan_returns_204() {
 /// answers `204`.
 #[tokio::test]
 async fn delete_plan_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(
         app,
@@ -1967,11 +2074,11 @@ async fn notification_read_all_requires_auth() {
 /// and answers `204`.
 #[tokio::test]
 async fn read_notification_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(
         app,
@@ -1987,11 +2094,11 @@ async fn read_notification_returns_204() {
 /// write and answers `204`.
 #[tokio::test]
 async fn read_all_notifications_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(
         app,
@@ -2007,11 +2114,11 @@ async fn read_all_notifications_returns_204() {
 /// belong to the acting user) maps to `404`.
 #[tokio::test]
 async fn notification_read_not_found_maps_to_404() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write().times(1).returning(|_session, _write| {
         Err(tb_domain::Error::NotFound("notification 1".to_string()))
     });
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(
         app,
@@ -2034,11 +2141,11 @@ async fn notification_delete_requires_auth() {
 /// and answers `204`.
 #[tokio::test]
 async fn delete_notification_returns_204() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(
         app,
@@ -2054,11 +2161,11 @@ async fn delete_notification_returns_204() {
 /// belong to the acting user) maps to `404`.
 #[tokio::test]
 async fn notification_delete_not_found_maps_to_404() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write().times(1).returning(|_session, _write| {
         Err(tb_domain::Error::NotFound("notification 1".to_string()))
     });
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(
         app,
@@ -2078,14 +2185,14 @@ async fn notification_delete_not_found_maps_to_404() {
 /// record-only read) and answers `200` with the user.
 #[tokio::test]
 async fn onboarding_sync_returns_200_and_user() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
     mock.expect_read()
         .times(1)
         .returning(|_session, _read| Ok(ReadOutcome::UserRecord(user())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(
         app,
@@ -2097,7 +2204,7 @@ async fn onboarding_sync_returns_200_and_user() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"}"#
+        r#"{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending","provider":"strava"}"#
     );
 }
 
@@ -2106,14 +2213,14 @@ async fn onboarding_sync_returns_200_and_user() {
 /// (the light record-only read) and answers `200` with the user.
 #[tokio::test]
 async fn onboarding_postpone_returns_200_and_user() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
     mock.expect_read()
         .times(1)
         .returning(|_session, _read| Ok(ReadOutcome::UserRecord(user())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(
         app,
@@ -2125,7 +2232,7 @@ async fn onboarding_postpone_returns_200_and_user() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"}"#
+        r#"{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending","provider":"strava"}"#
     );
 }
 
@@ -2134,9 +2241,12 @@ async fn onboarding_postpone_returns_200_and_user() {
 /// streams end, the clients re-hydrate) is the seam suite's territory.
 #[tokio::test]
 async fn rescan_answers_204() {
-    let (store, mut mock) = mock_ctx();
-    mock.expect_rescan().times(1).returning(|_session| Ok(()));
-    let app = build_app(&store, mock);
+    let (store, mock, mut provider, icu) = mock_ctx();
+    provider
+        .expect_rescan()
+        .times(1)
+        .returning(|_session| Ok(()));
+    let app = build_app(&store, mock, provider, icu);
     let admin = admin_cookie(&store).await;
     let (status, _headers, _body) = run(app, Method::GET, "/api/activ/rescan", Some(&admin)).await;
     assert_eq!(status, StatusCode::NO_CONTENT);
@@ -2147,11 +2257,12 @@ async fn rescan_answers_204() {
 /// mechanism is the seam suite's territory.
 #[tokio::test]
 async fn admin_sync_returns_204() {
-    let (store, mut mock) = mock_ctx();
-    mock.expect_sync()
+    let (store, mock, mut provider, icu) = mock_ctx();
+    provider
+        .expect_sync()
         .times(1)
         .returning(|_session, _uid, _time| Ok(()));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let admin = admin_cookie(&store).await;
     let (status, _headers, _body) = run(
         app,
@@ -2167,16 +2278,18 @@ async fn admin_sync_returns_204() {
 /// answers `200`; the `?user_id=` query narrows it.
 #[tokio::test]
 async fn admin_trigger_processing_returns_200() {
-    let (store, mut mock) = mock_ctx();
-    mock.expect_trigger_processing()
+    let (store, mock, mut provider, icu) = mock_ctx();
+    provider
+        .expect_trigger_processing()
         .times(1)
         .withf(|_session, user, time, _migrate| user.is_none() && *time == 0)
         .returning(|_session, _u, _t, _m| Ok(()));
-    mock.expect_trigger_processing()
+    provider
+        .expect_trigger_processing()
         .times(1)
         .withf(|_session, user, time, _migrate| user == &Some(UserId::from(1)) && *time == 0)
         .returning(|_session, _u, _t, _m| Ok(()));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let admin = admin_cookie(&store).await;
     let (status, _headers, body) = run(
         app.clone(),
@@ -2202,11 +2315,12 @@ async fn admin_trigger_processing_returns_200() {
 /// insert + wake is the seam suite's territory.
 #[tokio::test]
 async fn webhook_accepts_the_event() {
-    let (store, mut mock) = mock_ctx();
-    mock.expect_accept_event()
+    let (store, mock, mut provider, icu) = mock_ctx();
+    provider
+        .expect_accept_event()
         .times(1)
         .returning(|_event| Ok(()));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let (status, _headers, body) = run_json(
         app,
         Method::POST,
@@ -2223,13 +2337,13 @@ async fn webhook_accepts_the_event() {
 /// the mock's `Err` direct, no failing `begin` anywhere.
 #[tokio::test]
 async fn webhook_ingest_failure_500s() {
-    let (store, mut mock) = mock_ctx();
-    mock.expect_accept_event().times(1).returning(|_event| {
+    let (store, mock, mut provider, icu) = mock_ctx();
+    provider.expect_accept_event().times(1).returning(|_event| {
         Err(tb_domain::Error::AnyFailure(anyhow::anyhow!(
             "ingest failed"
         )))
     });
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let (status, _headers, _body) = run_json(
         app,
         Method::POST,
@@ -2241,20 +2355,83 @@ async fn webhook_ingest_failure_500s() {
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
 }
 
+/// The intervals.icu webhook's wire shape: the shared `secret` plus an array
+/// of `events` (each an `athlete_id`, a `type`, a `timestamp`, and an
+/// `activity`).
+const ICU_WEBHOOK_BODY: &str = r#"{"secret":"test-icu-webhook-secret","events":[{"athlete_id":"i123456","type":"ACTIVITY_ANALYZED","timestamp":"2024-12-06T06:40:47.011+00:00","activity":{"id":"i55751783"}}]}"#;
+
+/// `POST /icu/callback` (the webhook, spec #764): a valid `secret` and an
+/// `ACTIVITY_ANALYZED` event queue the `icu_events` row (the `icu_accept_event`
+/// direct op) and answer `200`.
+#[tokio::test]
+async fn icu_webhook_accepts_the_event() {
+    let (store, mock, provider, mut icu) = mock_ctx();
+    icu.expect_icu_accept_event()
+        .times(1)
+        .returning(|_event| Ok(()));
+    let app = build_app(&store, mock, provider, icu);
+    let (status, _headers, body) =
+        run_json(app, Method::POST, "/icu/callback", None, ICU_WEBHOOK_BODY).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(String::from_utf8_lossy(&body), "null");
+}
+
+/// A webhook delivery with the wrong `secret` is refused with `401` and never
+/// reaches the accept op (the mock has no expectations, so any call would
+/// panic).
+#[tokio::test]
+async fn icu_webhook_bad_secret_401s() {
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
+    let body = r#"{"secret":"wrong-secret","events":[{"athlete_id":"i123456","type":"ACTIVITY_ANALYZED","timestamp":"2024-12-06T06:40:47.011+00:00","activity":{"id":"i55751783"}}]}"#;
+    let (status, _headers, _body) = run_json(app, Method::POST, "/icu/callback", None, body).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+/// A delivery whose events are not `ACTIVITY_ANALYZED` is answered `200` but
+/// queues nothing (the accept op is never called — the mock has no
+/// expectations, so any call would panic).
+#[tokio::test]
+async fn icu_webhook_ignores_non_analyzed_events() {
+    let (store, mock, provider, icu) = mock_ctx();
+    let app = build_app(&store, mock, provider, icu);
+    let body = r#"{"secret":"test-icu-webhook-secret","events":[{"athlete_id":"i123456","type":"WELLNESS_UPDATED","timestamp":"2024-12-06T06:40:47.011+00:00","activity":{"id":"i55751783"}}]}"#;
+    let (status, _headers, _body) = run_json(app, Method::POST, "/icu/callback", None, body).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+/// A failed icu webhook ingest 500s to intervals.icu (its own retry policy
+/// applies) — the mock's `Err` direct, no failing `begin` anywhere.
+#[tokio::test]
+async fn icu_webhook_ingest_failure_500s() {
+    let (store, mock, provider, mut icu) = mock_ctx();
+    icu.expect_icu_accept_event().times(1).returning(|_event| {
+        Err(tb_domain::Error::AnyFailure(anyhow::anyhow!(
+            "ingest failed"
+        )))
+    });
+    let app = build_app(&store, mock, provider, icu);
+    let (status, _headers, _body) =
+        run_json(app, Method::POST, "/icu/callback", None, ICU_WEBHOOK_BODY).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+}
+
 /// `GET /strava/bikes/{id}` is the gear redirect direct op: the Strava URL
 /// permanent-redirects, and a failed op goes home (`/`).
 #[tokio::test]
 async fn redirect_gear_permains_to_strava_url() {
-    let (store, mut mock) = mock_ctx();
-    mock.expect_gear_url()
+    let (store, mock, mut provider, icu) = mock_ctx();
+    provider
+        .expect_gear_url()
         .times(1)
         .withf(|_session, id| *id == PartId::from(7))
         .returning(|_session, _id| Ok("https://www.strava.com/bikes/7".to_string()));
-    mock.expect_gear_url()
+    provider
+        .expect_gear_url()
         .times(1)
         .withf(|_session, id| *id == PartId::from(9))
         .returning(|_session, _id| Err(tb_domain::Error::NotFound("part 9".to_string())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, headers, _body) =
         run(app.clone(), Method::GET, "/strava/bikes/7", Some(&cookie)).await;
@@ -2265,18 +2442,24 @@ async fn redirect_gear_permains_to_strava_url() {
     assert_eq!(headers["location"], "/");
 }
 
-/// `GET /strava/activities/{id}` is the activity redirect direct op: the
-/// Strava URL permanent-redirects.
+/// `GET /source/activities/{id}` is the activity redirect direct op: the
+/// prefixed id routes to the provider URL, which permanent-redirects.
 #[tokio::test]
 async fn redirect_activity_permains_to_strava_url() {
-    let (store, mut mock) = mock_ctx();
-    mock.expect_activity_url()
+    let (store, mock, mut provider, icu) = mock_ctx();
+    provider
+        .expect_activity_url()
         .times(1)
         .returning(|_session, _id| Ok("https://www.strava.com/activities/8".to_string()));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
-    let (status, headers, _body) =
-        run(app, Method::GET, "/strava/activities/8", Some(&cookie)).await;
+    let (status, headers, _body) = run(
+        app,
+        Method::GET,
+        "/source/activities/strava:8",
+        Some(&cookie),
+    )
+    .await;
     assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
     assert_eq!(headers["location"], "https://www.strava.com/activities/8");
 }
@@ -2285,11 +2468,12 @@ async fn redirect_activity_permains_to_strava_url() {
 /// context — the route is public): the Strava URL permanent-redirects.
 #[tokio::test]
 async fn redirect_user_permains_to_strava_url() {
-    let (store, mut mock) = mock_ctx();
-    mock.expect_user_url()
+    let (store, mock, mut provider, icu) = mock_ctx();
+    provider
+        .expect_user_url()
         .times(1)
         .returning(|_id| Ok("https://www.strava.com/athletes/3".to_string()));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let (status, headers, _body) = run(app, Method::GET, "/strava/users/3", None).await;
     assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
     assert_eq!(headers["location"], "https://www.strava.com/athletes/3");
@@ -2299,11 +2483,12 @@ async fn redirect_user_permains_to_strava_url() {
 /// answers `200`.
 #[tokio::test]
 async fn deauthorize_answers_200() {
-    let (store, mut mock) = mock_ctx();
-    mock.expect_deauthorize()
+    let (store, mock, mut provider, icu) = mock_ctx();
+    provider
+        .expect_deauthorize()
         .times(1)
         .returning(|_session, _id| Ok(()));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let admin = admin_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::POST, "/strava/disable/1", Some(&admin)).await;
     assert_eq!(status, StatusCode::OK);
@@ -2314,11 +2499,12 @@ async fn deauthorize_answers_200() {
 /// answers `200`.
 #[tokio::test]
 async fn delete_user_answers_200() {
-    let (store, mut mock) = mock_ctx();
-    mock.expect_delete_user()
+    let (store, mock, mut provider, icu) = mock_ctx();
+    provider
+        .expect_delete_user()
         .times(1)
         .returning(|_session, _id| Ok(()));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let admin = admin_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::DELETE, "/strava/delete/1", Some(&admin)).await;
     assert_eq!(status, StatusCode::OK);
@@ -2330,11 +2516,11 @@ async fn delete_user_answers_200() {
 /// A read's `NotFound` maps to `404` (the mock's `Err` direct).
 #[tokio::test]
 async fn read_not_found_maps_to_404() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_read()
         .times(1)
         .returning(|_session, _read| Err(tb_domain::Error::NotFound("part 1".to_string())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::GET, "/api/part/1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
@@ -2344,13 +2530,13 @@ async fn read_not_found_maps_to_404() {
 /// A read's `DatabaseFailure` maps to `500`.
 #[tokio::test]
 async fn read_database_failure_maps_to_500() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_read().times(1).returning(|_session, _read| {
         Err(tb_domain::Error::DatabaseFailure(anyhow::anyhow!(
             "db down"
         )))
     });
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(app, Method::GET, "/api/part/1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
@@ -2359,11 +2545,11 @@ async fn read_database_failure_maps_to_500() {
 /// A read's `Forbidden` maps to `403`.
 #[tokio::test]
 async fn read_forbidden_maps_to_403() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_read()
         .times(1)
         .returning(|_session, _read| Err(tb_domain::Error::Forbidden("not yours".to_string())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(app, Method::GET, "/api/shop/1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
@@ -2372,11 +2558,11 @@ async fn read_forbidden_maps_to_403() {
 /// A read's `TryAgain` maps to `429`.
 #[tokio::test]
 async fn read_try_again_maps_to_429() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_read()
         .times(1)
         .returning(|_session, _read| Err(tb_domain::Error::TryAgain("rate limited")));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(app, Method::GET, "/api/part/1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
@@ -2385,11 +2571,11 @@ async fn read_try_again_maps_to_429() {
 /// A write's `BadRequest` maps to `400`.
 #[tokio::test]
 async fn write_bad_request_maps_to_400() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Err(tb_domain::Error::BadRequest("malformed".to_string())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
         app,
@@ -2405,11 +2591,11 @@ async fn write_bad_request_maps_to_400() {
 /// A write's `Conflict` maps to `409`.
 #[tokio::test]
 async fn write_conflict_maps_to_409() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     mock.expect_write()
         .times(1)
         .returning(|_session, _write| Err(tb_domain::Error::Conflict("in use".to_string())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
         app,
@@ -2447,12 +2633,13 @@ fn mock_sse(
 
 /// Set up the mock's `expect_subscribe_shop` with a real broadcast channel
 /// (the shop stream is a standalone channel — no `ExecutorStatus`, spec
-/// #517, ticket #583). Returns the frame sender (push `Summary` frames) and
+/// #517). Returns the frame sender (push `Summary` frames) and
 /// the mock ready for [`build_app`].
-fn mock_sse_shop(mock: &mut MockServiceApi) -> tokio::sync::broadcast::Sender<Summary> {
+fn mock_sse_shop(provider: &mut MockProviderService) -> tokio::sync::broadcast::Sender<Summary> {
     let (frame_tx, _) = tokio::sync::broadcast::channel(16);
     let frame_tx_inner = frame_tx.clone();
-    mock.expect_subscribe_shop()
+    provider
+        .expect_subscribe_shop()
         .times(1..)
         .returning(move |_uid, _sid| Ok(frame_tx_inner.subscribe()));
     frame_tx
@@ -2463,9 +2650,9 @@ fn mock_sse_shop(mock: &mut MockServiceApi) -> tokio::sync::broadcast::Sender<Su
 /// constant, spec #558 §2.1, so the window spans one full cadence).
 #[tokio::test]
 async fn stream_is_event_stream_and_heartbeats() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     let (_frame_tx, _fate_tx) = mock_sse(&mut mock);
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, headers, mut body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
@@ -2486,9 +2673,9 @@ async fn stream_is_event_stream_and_heartbeats() {
 /// JSON (spec §2, §4.5).
 #[tokio::test]
 async fn stream_forwards_summary_frames() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     let (frame_tx, _fate_tx) = mock_sse(&mut mock);
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, mut body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
@@ -2512,9 +2699,9 @@ async fn stream_forwards_summary_frames() {
 /// the endpoint re-subscribes, and a later frame is still forwarded.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn stream_survives_a_reaped_executor() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     let (frame_tx, fate_tx) = mock_sse(&mut mock);
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, mut body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
@@ -2548,9 +2735,9 @@ async fn stream_survives_a_reaped_executor() {
 /// executor and re-hydrates).
 #[tokio::test]
 async fn stream_ends_on_a_dead_executor() {
-    let (store, mut mock) = mock_ctx();
+    let (store, mut mock, provider, icu) = mock_ctx();
     let (_frame_tx, fate_tx) = mock_sse(&mut mock);
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, mut body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
@@ -2575,13 +2762,13 @@ async fn assert_stream_ends(body: &mut axum::body::Body) {
 }
 
 /// `GET /api/user/stream?shop=X` with the shop owner's session returns a 200
-/// `text/event-stream` and forwards the shop channel's frames (spec #517,
-/// ticket #583). The shop stream is a standalone channel — no `ExecutorStatus`.
+/// `text/event-stream` and forwards the shop channel's frames (spec #517).
+/// The shop stream is a standalone channel — no `ExecutorStatus`.
 #[tokio::test]
 async fn shop_stream_owner_forwards_frames() {
-    let (store, mut mock) = mock_ctx();
-    let frame_tx = mock_sse_shop(&mut mock);
-    let app = build_app(&store, mock);
+    let (store, mock, mut provider, icu) = mock_ctx();
+    let frame_tx = mock_sse_shop(&mut provider);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, headers, mut body) = run_sse(app, "/api/user/stream?shop=1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
@@ -2606,14 +2793,15 @@ async fn shop_stream_owner_forwards_frames() {
 }
 
 /// `GET /api/user/stream?shop=X` with a non-owner's session returns a 403
-/// (the `subscribe_shop`'s `Forbidden` maps to 403, spec #517, ticket #583).
+/// (the `subscribe_shop`'s `Forbidden` maps to 403, spec #517).
 #[tokio::test]
 async fn shop_stream_non_owner_is_forbidden() {
-    let (store, mut mock) = mock_ctx();
-    mock.expect_subscribe_shop()
+    let (store, mock, mut provider, icu) = mock_ctx();
+    provider
+        .expect_subscribe_shop()
         .times(1)
         .returning(|_uid, _sid| Err(tb_domain::Error::Forbidden("not yours".to_string())));
-    let app = build_app(&store, mock);
+    let app = build_app(&store, mock, provider, icu);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_sse(app, "/api/user/stream?shop=1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
@@ -2626,7 +2814,7 @@ async fn shop_stream_non_owner_is_forbidden() {
 /// unaffected.
 #[tokio::test]
 async fn spa_fallback_serves_entry_document() {
-    let (store, mock) = mock_ctx();
+    let (store, mock, provider, icu) = mock_ctx();
 
     // Create a temp dir with the SPA entry document and a real static asset.
     let temp_dir = std::env::temp_dir().join(format!("tendabike_spa_test_{}", std::process::id()));
@@ -2635,8 +2823,11 @@ async fn spa_fallback_serves_entry_document() {
     std::fs::write(temp_dir.join("asset.txt"), "asset content").unwrap();
 
     let api: Arc<dyn ServiceApi> = Arc::new(mock);
+    let provider: Arc<dyn ProviderService> = Arc::new(provider);
+    let icu: Arc<dyn IcuService> = Arc::new(icu);
     let session_layer = SessionManagerLayer::new(store);
-    let app = routes(AppState::new(api), Some(temp_dir.clone())).layer(session_layer);
+    let app =
+        routes(AppState::new(api, provider, icu), Some(temp_dir.clone())).layer(session_layer);
 
     // Client-side route gets the SPA entry document.
     let (status, _headers, body) = run(app.clone(), Method::GET, "/part/123", None).await;

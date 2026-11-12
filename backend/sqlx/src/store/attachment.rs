@@ -6,7 +6,7 @@ use crate::{SqlxConn, into_domain, vec_into};
 use tb_domain::{Attachment, PartId, PartTypeId, TbResult};
 
 #[derive(Clone, Copy, Debug, PartialEq, FromRow)]
-pub struct DbAttachment {
+struct DbAttachment {
     part_id: i32,
     attached: OffsetDateTime,
     gear: i32,

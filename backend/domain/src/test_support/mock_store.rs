@@ -1,4 +1,4 @@
-//! A `mockall` `mock!` witness for the `Store` seam (issue #630).
+//! A `mockall` `mock!` witness for the `Store` seam.
 //!
 //! [`MockStore`] is a single type implementing the full `Store` seam — the nine
 //! sub-traits (`PartStore`, `UserStore`, `ShopStore`, `ActivityStore`,
@@ -10,9 +10,8 @@
 //! `#[async_trait]` on each impl block is the trick that makes the `async fn`
 //! methods desugar correctly in the generated code (see
 //! `docs/research/mockall-conn-witness.md` §1). The seam is collision-free
-//! (post-recipe: renamed methods, `usages_update(&[Usage])`, `stravauser_update_token`
-//! owning its token), so `mock!`'s flat `expect_<name>` API can express every
-//! method on one type.
+//! (post-recipe: renamed methods, `usages_update(&[Usage])`), so `mock!`'s
+//! flat `expect_<name>` API can express every method on one type.
 //!
 //! The declared struct name is `Store`, so `mock!` emits `MockStore`; the impl
 //! blocks reference `Store` (the macro rewrites it to `MockStore`), and the
@@ -48,7 +47,7 @@ mockall::mock! {
         async fn part_update(&mut self, part: Part) -> TbResult<Part>;
         async fn part_delete(&mut self, part: PartId) -> TbResult<PartId>;
         async fn parts_delete(&mut self, parts: &[Part]) -> TbResult<usize>;
-        async fn partid_get_by_source(&mut self, strava_id: &str) -> TbResult<Option<PartId>>;
+        async fn partid_get_by_source(&mut self, source: &str) -> TbResult<Option<PartId>>;
         async fn parts_register_shop(
             &mut self,
             shop_id: ShopId,
@@ -66,6 +65,7 @@ mockall::mock! {
             firstname: &str,
             lastname: &str,
             avatar: &Option<String>,
+            provider: &str,
         ) -> TbResult<User>;
         async fn user_update(
             &mut self,
@@ -136,9 +136,9 @@ mockall::mock! {
     #[async_trait::async_trait]
     impl ActivityStore for Store {
         async fn activity_create(&mut self, act: Activity) -> TbResult<Activity>;
-        async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Option<Activity>>;
+        async fn activity_read_by_id(&mut self, aid: &ActivityId) -> TbResult<Option<Activity>>;
         async fn activity_update(&mut self, act: Activity) -> TbResult<Activity>;
-        async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize>;
+        async fn activity_delete(&mut self, aid: &ActivityId) -> TbResult<usize>;
         async fn activities_delete(&mut self, activities: &[Activity]) -> TbResult<usize>;
         async fn activity_get_all(&mut self, uid: &UserId) -> TbResult<Vec<Activity>>;
         async fn activities_find_by_gear_and_time(

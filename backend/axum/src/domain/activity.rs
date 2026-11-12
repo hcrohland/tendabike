@@ -46,9 +46,9 @@ async fn rescan(admin: AxumAdmin, State(state): State<AppState>) -> Result<Statu
     // spec §3/§6.4 carve-out): the service API's direct op runs the one
     // transaction (`Activity::rescan_all`), then stops every live executor
     // — open streams end, and each client's native reconnect + catch-up
-    // snapshot re-hydrates it (issue #446). The admin's acting session rides
-    // along (carried for the admin-verification `tb_strava` change).
-    state.api.rescan(Box::new(admin.session())).await?;
+    // snapshot re-hydrates it. The admin's acting session rides
+    // along (carried for the admin-verification `tb_provider::strava` change).
+    state.provider.rescan(Box::new(admin.session())).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -56,11 +56,11 @@ async fn rescan(admin: AxumAdmin, State(state): State<AppState>) -> Result<Statu
 async fn act_get(
     user: RequestSession,
     State(state): State<AppState>,
-    Path(id): Path<i64>,
+    Path(id): Path<String>,
 ) -> ApiResult<Activity> {
     match state
         .api
-        .read(Box::new(user), ApiRead::Activity(ActivityId::new(id)))
+        .read(Box::new(user), ApiRead::Activity(ActivityId::from(id)))
         .await?
     {
         ReadOutcome::Activity(activity) => Ok(Json(activity)),
@@ -70,7 +70,7 @@ async fn act_get(
 
 /// web interface to change an activity
 async fn act_put(
-    Path(id): Path<i64>,
+    Path(id): Path<String>,
     user: RequestSession,
     State(state): State<AppState>,
     Json(activity): Json<Activity>,
@@ -89,7 +89,7 @@ async fn act_put(
 
 /// web interface to delete an activity
 async fn act_delete(
-    Path(id): Path<i64>,
+    Path(id): Path<String>,
     user: RequestSession,
     State(state): State<AppState>,
 ) -> Result<StatusCode, AppError> {
@@ -98,7 +98,7 @@ async fn act_delete(
         .write(
             Box::new(user),
             ApiWrite::ActivityDelete {
-                id: ActivityId::new(id),
+                id: ActivityId::from(id),
             },
         )
         .await?;
@@ -107,8 +107,8 @@ async fn act_delete(
 
 /// `POST /api/activ/descend` — the raw CSV body. The write rides the
 /// user's executor (like every write), and the handler answers `200` with
-/// the match report `{good, bad}` (the spec §6.2 deviation recorded on
-/// issue #446): the report is an operation result, not `Summary` state —
+/// the match report `{good, bad}` (the spec §6.2 deviation): the report is
+/// an operation result, not `Summary` state —
 /// the matched activities' updated state arrives as the stream frame the
 /// executor publishes.
 async fn descend(

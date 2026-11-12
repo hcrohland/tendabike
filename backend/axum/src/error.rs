@@ -18,10 +18,10 @@ use log::{debug, error, info, warn};
 
 use tb_domain::Error;
 
-pub type ApiResult<T> = Result<Json<T>, AppError>;
+pub(crate) type ApiResult<T> = Result<Json<T>, AppError>;
 
 #[derive(Debug, thiserror::Error)]
-pub enum AppError {
+pub(crate) enum AppError {
     #[error(transparent)]
     TbError(#[from] Error),
     #[error(transparent)]

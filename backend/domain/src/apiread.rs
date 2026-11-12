@@ -28,9 +28,9 @@
 //! §3.4): `User { shop }` covers `GET /user`, `GET /user/summary`, and
 //! `GET /user/export`, and `ShopSubscriptions(Option<ShopId>)` covers the
 //! mine route and the shop's route. The admin `GET /user/all` is not a
-//! variant: `get_all_stats` is a Strava-driver op, and the domain cannot
-//! depend on the Strava driver (the dependency direction is
-//! `domain ← strava`).
+//! variant: `get_all_stats` is a provider-driver op, and the domain cannot
+//! depend on a provider driver (the dependency direction is
+//! `domain ← provider`).
 //!
 //! No variant carries a `user_id`: the channel is per-user, the loop runs in
 //! that user's context, and the `Session` the caller supplies carries the
@@ -67,7 +67,7 @@ pub enum ApiRead {
     /// `GET /user`, `GET /user/summary` (after the hydrate write, spec
     /// #558 §4), and `GET /user/export` — the unified user read (spec
     /// #558 §3.5). The `?shop=` filter is the acting session's own shop
-    /// (spec #517, ticket #588): `None` (personal mode) reads the user's
+    /// (spec #517): `None` (personal mode) reads the user's
     /// whole state, `Some` filters the summary to the shop's parts. The
     /// routes project `User`, `Summary`, and the export composite from the
     /// one message.
@@ -180,7 +180,7 @@ pub async fn read(
         // --- user ---
         // The unified user read (spec #558 §3.5): the `UserState` composite —
         // the full `User` plus the `Summary` of everything the user owns,
-        // filtered by the acting session's shop (spec #517, ticket #588).
+        // filtered by the acting session's shop (spec #517).
         ApiRead::User => {
             let state = session.user_id().read(session.shop(), store).await?;
             Ok(ReadOutcome::User(Box::new(state)))

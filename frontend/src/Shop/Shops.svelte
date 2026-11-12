@@ -4,7 +4,7 @@
 
   import ShopList from "./ShopList.svelte";
   import Subscriptions from "./Subscriptions.svelte";
-  import { Shop, shops } from "../lib/shop";
+  import { Shop, shops } from "../lib/shop.svelte";
   import { createShop } from "./ShopModal.svelte";
   import { getUser, users } from "../lib/user";
   import { stateValues } from "../lib/mapable.svelte";

@@ -14,8 +14,8 @@
 // along with TendaBike. If not, see <https://www.gnu.org/licenses/>.
 
 //! The scratch-database plumbing shared by the `tb_sqlx` integration
-//! suites: the store seam suite (`store_seam.rs`, issue #406/#411) and the
-//! per-user executor suite (`executor_seam.rs`, issue #453).
+//! suites: the store seam suite (`store_seam.rs`) and the
+//! per-user executor suite (`executor_seam.rs`).
 //!
 //! Each suite pulls this module in with `#[path = "common/scratch.rs"]`
 //! (a test binary cannot pull a file outside its own directory tree any
@@ -59,8 +59,8 @@
 
 use sqlx::migrate::MigrateDatabase;
 use std::time::Duration;
-use tb_domain::{ActivityStore, AttachmentStore, SNAPSHOT_JSON, StoreSnapshot, UsageStore};
-use tb_sqlx::{DbPool, SqlxConn};
+use tb_domain::{ActivityStore, AttachmentStore, UsageStore};
+use tb_sqlx::{DbPool, SNAPSHOT_JSON, SqlxConn, StoreSnapshot};
 use tokio::sync::{Mutex, OnceCell};
 use uuid::Uuid;
 
@@ -293,8 +293,8 @@ pub async fn load_fixture(tx: &mut SqlxConn<'_>, snap: &StoreSnapshot) -> tb_dom
 
     for user in &snap.users {
         sqlx::query(
-            "INSERT INTO users (id, name, firstname, is_admin, avatar, onboarding_status)
-             VALUES ($1, $2, $3, $4, $5, $6)",
+            "INSERT INTO users (id, name, firstname, is_admin, avatar, onboarding_status, provider)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)",
         )
         .bind(i32::from(user.id))
         .bind(&user.name)
@@ -302,6 +302,7 @@ pub async fn load_fixture(tx: &mut SqlxConn<'_>, snap: &StoreSnapshot) -> tb_dom
         .bind(user.is_admin)
         .bind(&user.avatar)
         .bind(i32::from(user.onboarding_status))
+        .bind(&user.provider)
         .execute(&mut *exec)
         .await
         .map_err(db_err)?;
@@ -361,7 +362,7 @@ pub async fn reset_sequences(
     Ok(())
 }
 
-/// The executor suite's per-test reset (issue #453): truncate every table
+/// The executor suite's per-test reset: truncate every table
 /// in the schema and re-seed the standard fixture in one committed
 /// transaction.
 ///
@@ -418,7 +419,7 @@ pub async fn fresh_fixture(pool: &DbPool) -> tb_domain::TbResult<()> {
     Ok(())
 }
 
-/// The fixture builder (issue #647): seeds a scratch Postgres DB from the
+/// The fixture builder: seeds a scratch Postgres DB from the
 /// relocated `StoreSnapshot` fixture and returns a `Store` over that
 /// Postgres connection.
 ///

@@ -132,7 +132,7 @@ fn settled_event(status: ExecutorStatus) -> Option<Result<Event, Infallible>> {
     }
 }
 
-/// One shop-stream connection's `unfold` (spec #517, ticket #583): the current
+/// One shop-stream connection's `unfold` (spec #517): the current
 /// frame subscription on the shop's standalone `broadcast` channel. A `None`
 /// frame subscription means "subscribe on the next step". Unlike the personal
 /// stream there is no `ExecutorStatus` — the shop channel is not tied to an
@@ -154,7 +154,7 @@ async fn next_shop_event(seed: &mut ShopStreamSeed) -> Option<Result<Event, Infa
         Some(rx) => rx,
         None => match seed
             .app
-            .api
+            .provider
             .subscribe_shop(seed.user_id, seed.shop_id)
             .await
         {
@@ -204,7 +204,7 @@ where
         .into_response()
 }
 
-/// The `?shop=` query on the stream route (spec #517, ticket #583): present
+/// The `?shop=` query on the stream route (spec #517): present
 /// means the shop stream (owner-only), absent means the personal stream.
 #[derive(serde::Deserialize)]
 pub(crate) struct ShopQuery {
@@ -266,12 +266,12 @@ async fn personal_endpoint(user: RequestSession, state: AppState) -> Response {
     sse_response(stream)
 }
 
-/// The shop stream (spec #517, ticket #583): open the shop's standalone
+/// The shop stream (spec #517): open the shop's standalone
 /// channel (owner-only — a non-owner is `Forbidden`, mapped to a 403) and
 /// forward its frames. The shop channel has no executor fate, so the stream
 /// ends when the channel closes (the shop was deleted).
 async fn shop_endpoint(user_id: UserId, state: AppState, shop_id: ShopId) -> Response {
-    let rx = match state.api.subscribe_shop(user_id, shop_id).await {
+    let rx = match state.provider.subscribe_shop(user_id, shop_id).await {
         Ok(rx) => rx,
         Err(err) => return AppError::from(err).into_response(),
     };
