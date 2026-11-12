@@ -33,9 +33,9 @@ use tokio::sync::{broadcast, watch};
 use tb_domain::{Session, ShopId, Summary, UserId};
 use tb_exec::{ExecutorStatus, HEARTBEAT_INTERVAL};
 
+use crate::RequestSession;
 use crate::appstate::AppState;
 use crate::error::AppError;
-use crate::strava::RequestSession;
 
 /// One SSE connection's `unfold`: the current frame subscription
 /// and its executor's fate channel. A `None` frame subscription means "the

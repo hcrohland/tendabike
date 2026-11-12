@@ -29,7 +29,7 @@ use anyhow::Context;
 use axum::Router;
 use sqlx::PgPool;
 use tb_domain::TbResult;
-use tb_exec::{IcuService, ProviderService, ServiceApi};
+use tb_exec::{ServiceApi, providerservice::ProviderService};
 use tb_provider::Provider;
 use tower_sessions::{ExpiredDeletion, SessionManagerLayer};
 use tower_sessions_sqlx_store::PostgresStore;
@@ -43,8 +43,10 @@ mod redirect;
 
 mod source;
 
+mod session;
+use session::{AxumAdmin, RequestSession};
+
 mod strava;
-use strava::{AxumAdmin, RequestSession};
 
 mod appstate;
 use appstate::*;
@@ -76,9 +78,7 @@ fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> Route
 
 pub async fn start(
     api: Arc<dyn ServiceApi>,
-    provider: Arc<dyn tb_exec::providerservice::ProviderService>,
-    strava: Arc<dyn ProviderService>,
-    icu: Arc<dyn IcuService>,
+    provider: Arc<dyn ProviderService>,
     pool: PgPool,
     path: std::path::PathBuf,
     addr: SocketAddr,
@@ -93,7 +93,7 @@ pub async fn start(
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let app_state = AppState::new(api, provider, strava, icu);
+    let app_state = AppState::new(api, provider);
 
     // The web layer chose a `PostgresStore` for its sessions, so the
     // caller hands over the postgres connection — the same pool the

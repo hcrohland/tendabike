@@ -16,9 +16,6 @@ use crate::appstate::AppState;
 
 mod oauth;
 
-mod session;
-pub(crate) use session::*;
-
 mod redirect;
 mod webhook;
 

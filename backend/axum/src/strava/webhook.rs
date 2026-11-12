@@ -21,7 +21,7 @@
 //! This module contains the implementation of the Strava webhook API endpoints.
 //!
 //! The webhook API is used by Strava to notify Tendabike of new activities and other events.
-//! The endpoints in this module handle the incoming webhook requests, validate them, and
+//! The endpoints in this module handle the incoming webhook requests and
 //! process the events.
 //!
 //! The following endpoints are defined in this module:
@@ -32,15 +32,19 @@
 //! - `sync_api`: An endpoint that triggers a manual sync of Strava data for all users.
 //! - `sync`: An endpoint that triggers a manual sync of Strava data for a specific user.
 //!
-//! The `create_event` endpoint is the main entry point for incoming webhook events. It is responsible
-//! for validating the incoming request, extracting the event data, and storing incoming events in the
-//! database. This endpoint is not meant to be called directly.
+//! The `create_event` endpoint is the main entry point for incoming webhook events. The web
+//! shell keeps only the protocol (ADR-0014): it forwards the raw body opaquely to the
+//! provider service's `accept_event` op — the envelope parse, the queue insert (or the
+//! athlete-deauth branch), and the wake are the provider layer's work. This endpoint is not
+//! meant to be called directly.
 //!
 //! The `hooks` endpoint is the main entry point for clients to process incoming events and return the resulting changes.
 //!
 //! The `validate_subscription` endpoint is called by Strava to validate the webhook subscription.
 //! When a new subscription is created, Strava sends a validation request to this endpoint. The
-//! endpoint must respond with the `hub.challenge` value that was sent in the request.
+//! endpoint must respond with the `hub.challenge` value that was sent in the request. The
+//! handshake stays in the web shell (ADR-0014): a protocol comparison with no provider
+//! behaviour behind it.
 //!
 //! The `sync_api` endpoint triggers a manual sync of Strava data for all users. This endpoint is
 //! only accessible to users with the `admin` role.
@@ -53,7 +57,7 @@ use axum::{
     Json,
     extract::{Path, Query, State},
 };
-use log::{info, trace};
+use log::info;
 use serde_derive::{Deserialize, Serialize};
 
 use http::StatusCode;
@@ -63,7 +67,7 @@ use crate::{
     error::AppError,
 };
 use tb_domain::{ApiRead, ApiWrite, Error, ReadOutcome, TbResult};
-use tb_provider::strava::event::InEvent;
+use tb_provider::Provider;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct Hub {
@@ -94,16 +98,14 @@ impl Hub {
 
 const VERIFY_TOKEN: &str = "tendabike_strava";
 
-pub(crate) async fn create_event(
-    State(state): State<AppState>,
-    Json(event): axum::extract::Json<InEvent>,
-) -> ApiResult<()> {
-    trace!("Received {event:#?}");
-    // The service API's direct op (spec #558 §5.2): one transaction
-    // (`InEvent::accept` — the queue insert, or the athlete-deauth
-    // branch), then the wake if a user was queued (fire-and-forget). A
+pub(crate) async fn create_event(State(state): State<AppState>, body: String) -> ApiResult<()> {
+    // The provider-agnostic direct op (ADR-0014): one transaction — the
+    // provider layer's dispatch does the provider's webhook work (the
+    // envelope parse, the queue insert, or the athlete-deauth branch), then
+    // the registry wakes each queued user (fire-and-forget). The web shell
+    // forwards the raw body — no driver wire type crosses the seam. A
     // failed ingest 500s to Strava (its own retry policy applies).
-    state.strava.accept_event(event).await?;
+    state.provider.accept_event(Provider::Strava, &body).await?;
     Ok(Json(()))
 }
 
