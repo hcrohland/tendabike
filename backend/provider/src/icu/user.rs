@@ -174,5 +174,12 @@ pub async fn login<D: EntityFacade<S>, S: IcuDataStore + UserStore>(
     Ok((user.user_id(), is_admin))
 }
 
+/// The icu half of the provider-agnostic `user_url` dispatch (ADR-0014): the
+/// public athlete profile page for the icu user's athlete id.
+pub async fn user_url<S: IcuStore + 'static>(id: UserId, store: &mut S) -> TbResult<String> {
+    let icu_id = super::event::get_icu_id(id, store).await?;
+    Ok(format!("https://intervals.icu/athletes/{icu_id}"))
+}
+
 #[cfg(test)]
 mod user_tests;

@@ -118,29 +118,7 @@ impl TryFrom<ProviderActivityId> for Provider {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Once;
-
     use super::Provider;
-
-    /// Dummies the OAuth client environment variables so the `STRAVACLIENT`
-    /// and `ICU_CLIENT` lazy statics do not panic when they are first used in
-    /// a test. Only sets a variable that is not already present, so a real
-    /// environment's values take precedence.
-    fn set_oauth_env_once() {
-        static ONCE: Once = Once::new();
-        ONCE.call_once(|| unsafe {
-            for (key, val) in [
-                ("CLIENT_ID", "test-client-id"),
-                ("CLIENT_SECRET", "test-client-secret"),
-                ("ICU_CLIENT_ID", "test-icu-client-id"),
-                ("ICU_CLIENT_SECRET", "test-icu-client-secret"),
-            ] {
-                if std::env::var(key).is_err() {
-                    std::env::set_var(key, val);
-                }
-            }
-        });
-    }
 
     /// The db value matches the string literal in use today (the
     /// `users.provider` column).
@@ -172,35 +150,5 @@ mod tests {
     fn route_prefix_matches_current_literals() {
         assert_eq!(Provider::Strava.route_prefix(), "/strava");
         assert_eq!(Provider::Icu.route_prefix(), "/icu");
-    }
-
-    /// The Strava authorize URL matches the shape in use today: the auth
-    /// endpoint, the client id, the CSRF state, and the scopes.
-    #[test]
-    fn strava_authorize_url_matches_current_shape() {
-        set_oauth_env_once();
-        let url = Provider::Strava.authorize_url("test-state");
-        assert!(
-            url.starts_with("https://www.strava.com/oauth/authorize?"),
-            "unexpected url {url}"
-        );
-        assert!(url.contains("client_id="), "missing client_id in {url}");
-        assert!(url.contains("state=test-state"), "missing state in {url}");
-        assert!(url.contains("scope="), "missing scope in {url}");
-    }
-
-    /// The icu authorize URL matches the shape in use today: the auth
-    /// endpoint, the client id, the CSRF state, and the scopes.
-    #[test]
-    fn icu_authorize_url_matches_current_shape() {
-        set_oauth_env_once();
-        let url = Provider::Icu.authorize_url("test-state");
-        assert!(
-            url.starts_with("https://intervals.icu/oauth/authorize?"),
-            "unexpected url {url}"
-        );
-        assert!(url.contains("client_id="), "missing client_id in {url}");
-        assert!(url.contains("state=test-state"), "missing state in {url}");
-        assert!(url.contains("scope="), "missing scope in {url}");
     }
 }

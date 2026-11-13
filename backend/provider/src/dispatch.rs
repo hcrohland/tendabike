@@ -43,7 +43,7 @@ use tb_domain::{ActivityId, PartId, Session, TbResult, UserId};
 
 use crate::Provider;
 use crate::ProviderLane;
-use crate::icu::{IcuLane, IcuStore, event::get_icu_id};
+use crate::icu::{IcuLane, IcuStore};
 use crate::strava::{StravaLane, StravaStore, gear, strava_url, user_deauthorize, user_delete};
 
 /// The user's provider, read from the `users.provider` column (through the
@@ -189,7 +189,7 @@ where
         Provider::Strava => {
             gear::strava_url(i32::from(id), session, &crate::EntityFacadeImpl, store).await
         }
-        Provider::Icu => Ok(None),
+        Provider::Icu => crate::icu::gear::gear_url(id, session, store).await,
     }
 }
 
@@ -203,10 +203,7 @@ where
 {
     match provider {
         Provider::Strava => strava_url(id, store).await,
-        Provider::Icu => {
-            let icu_id = get_icu_id(id, store).await?;
-            Ok(format!("https://intervals.icu/athletes/{icu_id}"))
-        }
+        Provider::Icu => crate::icu::user::user_url(id, store).await,
     }
 }
 
