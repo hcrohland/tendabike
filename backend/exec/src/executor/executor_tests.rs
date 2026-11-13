@@ -104,6 +104,8 @@ mockall::mock! {
     impl ProviderLane for Lane {
         type Event = Event;
         type Store = MockConn;
+        type Facade = tb_provider::MockEntityFacade<MockConn>;
+        fn facade(&self) -> &tb_provider::MockEntityFacade<MockConn>;
         async fn probe(&self, user_id: UserId, store: &mut MockConn) -> Probe<Event>;
         async fn process(&self, user_id: UserId, store: &mut MockConn) -> Option<Summary>;
         async fn insert_sync(

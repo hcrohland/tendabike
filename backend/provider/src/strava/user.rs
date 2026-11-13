@@ -217,7 +217,7 @@ pub async fn get_all_stats<D: EntityFacade<S>, S: StravaDataStore>(
 /// upsert, returning the identity and the admin flag. `code` and `scope` are
 /// the opaque callback values the presentation layer forwards (no driver
 /// wire type crosses the seam).
-pub async fn login<D: EntityFacade<S>, S: StravaDataStore + UserStore>(
+pub async fn login<D: EntityFacade<S>, S: StravaDataStore>(
     code: &str,
     scope: &str,
     facade: &D,
@@ -258,7 +258,7 @@ pub async fn login<D: EntityFacade<S>, S: StravaDataStore + UserStore>(
         store,
     )
     .await?;
-    let is_admin = user.user_id().is_admin(store).await?;
+    let is_admin = facade.user_admin(&user.user_id(), store).await?;
     Ok((user.user_id(), is_admin))
 }
 

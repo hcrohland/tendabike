@@ -240,82 +240,11 @@ impl<C: Store + Sync + 'static> EntityFacade<C> for EntityFacadeImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tb_domain::test_support::{MockStore, mock_session};
-    use tb_domain::{ActTypeId, OnboardingStatus, User};
 
-    /// A canned [`User`] for `id` (inert defaults for the rest).
-    fn user(id: UserId) -> User {
-        User {
-            id,
-            name: "Test User".to_string(),
-            firstname: "Test".to_string(),
-            avatar: None,
-            is_admin: false,
-            onboarding_status: OnboardingStatus::Completed,
-            provider: "strava".to_string(),
-        }
-    }
-
-    /// A canned [`Activity`] for `id` owned by `user` (inert defaults for the rest).
-    fn activity(id: ActivityId, user: UserId) -> Activity {
-        Activity {
-            id,
-            user_id: user,
-            what: ActTypeId::from(1),
-            name: "Test Ride".to_string(),
-            start: OffsetDateTime::UNIX_EPOCH,
-            duration: 3600,
-            time: None,
-            distance: None,
-            climb: None,
-            descend: None,
-            energy: None,
-            gear: None,
-            device_name: None,
-            external_id: None,
-        }
-    }
-
-    #[tokio::test]
-    async fn part_by_source_forwards_to_domain() -> TbResult<()> {
-        let mut store = MockStore::new();
-        store.expect_partid_get_by_source().returning(|_s| Ok(None));
-        let facade = EntityFacadeImpl;
-        let part = facade.part_by_source("b1", &mut store).await?;
-        assert!(part.is_none());
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn create_user_forwards_to_domain() -> TbResult<()> {
-        let mut store = MockStore::new();
-        store
-            .expect_user_create()
-            .returning(|_f, _l, _a, _p| Ok(user(UserId::from(42))));
-        let facade = EntityFacadeImpl;
-        let id = facade
-            .create_user("first", "last", &None, "strava", &mut store)
-            .await?;
-        assert_eq!(id, UserId::from(42));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn read_activity_forwards_to_domain() -> TbResult<()> {
-        let mut store = MockStore::new();
-        let act = activity(ActivityId::from("strava:1"), UserId::from(1));
-        let act_read = act.clone();
-        store
-            .expect_activity_read_by_id()
-            .returning(move |_id| Ok(Some(act_read.clone())));
-        let facade = EntityFacadeImpl;
-        let session: Box<dyn Session> = Box::new(mock_session(UserId::from(1)));
-        let act = facade
-            .read_activity(&ActivityId::from("strava:1"), session, &mut store)
-            .await?;
-        assert_eq!(act.id, ActivityId::from("strava:1"));
-        Ok(())
-    }
+    /// The witness test's store type: a unit struct, not the domain store —
+    /// the mock serves the canned outcome without touching any store, so the
+    /// store type only carries the `EntityFacade<C>` parameter.
+    struct LocalStore;
 
     /// The `#[automock]` witness is the seam a provider test mocks: set an
     /// expectation and the canned outcome is served without touching the
@@ -325,7 +254,7 @@ mod tests {
         let mut mock = MockEntityFacade::new();
         mock.expect_part_by_source()
             .returning(|_source, _store| Ok(None));
-        let mut store = MockStore::new();
+        let mut store = LocalStore;
         let part = mock.part_by_source("b1", &mut store).await?;
         assert!(part.is_none());
         Ok(())

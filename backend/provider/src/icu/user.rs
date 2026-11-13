@@ -140,7 +140,7 @@ impl IcuUser {
 ///
 /// intervals.icu omits the `scope` query param on some callbacks: an absent
 /// scope (the empty string) is accepted, a present one must match.
-pub async fn login<D: EntityFacade<S>, S: IcuDataStore + UserStore>(
+pub async fn login<D: EntityFacade<S>, S: IcuDataStore>(
     code: &str,
     scope: &str,
     facade: &D,
@@ -170,13 +170,48 @@ pub async fn login<D: EntityFacade<S>, S: IcuDataStore + UserStore>(
     let access_token = token.access_token().secret().to_string();
 
     let user = IcuUser::upsert(athlete.id, &athlete.name, &access_token, facade, store).await?;
-    let is_admin = user.user_id().is_admin(store).await?;
+    let is_admin = facade.user_admin(&user.user_id(), store).await?;
     Ok((user.user_id(), is_admin))
+}
+
+/// The onboarding cutover's provider side (spec #765/#766): import the
+/// user's icu gear, then run the activity backfill — the date-window walk
+/// that queues the user's past activities as `icu_events` rows for the
+/// normal event loop to import one at a time.
+pub async fn onboard<D: EntityFacade<S>, S: IcuDataStore>(
+    user_id: UserId,
+    time: i64,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<()> {
+    super::gear::update_gear(user_id, facade, store).await?;
+    super::backfill::backfill(user_id, time, facade, store).await?;
+    Ok(())
+}
+
+/// The all-user icu stat read (spec #764): every icu user's provider-neutral
+/// [`UserStat`] — the domain stat plus this provider's queued-event count and
+/// disabled flag.
+pub async fn get_all_stats<D: EntityFacade<S>, S: IcuDataStore>(
+    facade: &D,
+    store: &mut S,
+) -> TbResult<Vec<UserStat>> {
+    let users = store.icuser_get_all().await?;
+    let mut res = Vec::new();
+    for u in users {
+        let events = store.icu_events_get_count_for_user(&u.id).await?;
+        res.push(UserStat {
+            stat: facade.get_stat(&u.tendabike_id, store).await?,
+            events,
+            disabled: u.disabled(),
+        });
+    }
+    Ok(res)
 }
 
 /// The icu half of the provider-agnostic `user_url` dispatch (ADR-0014): the
 /// public athlete profile page for the icu user's athlete id.
-pub async fn user_url<S: IcuStore + 'static>(id: UserId, store: &mut S) -> TbResult<String> {
+pub async fn user_url<S: IcuDataStore>(id: UserId, store: &mut S) -> TbResult<String> {
     let icu_id = super::event::get_icu_id(id, store).await?;
     Ok(format!("https://intervals.icu/athletes/{icu_id}"))
 }

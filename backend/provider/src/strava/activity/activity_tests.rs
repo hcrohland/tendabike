@@ -198,7 +198,7 @@ async fn activity_strava_url() -> TbResult<()> {
         .expect_read_activity()
         .returning(move |_id, _user, _store| Ok(activity(strava_id(10), UserId::from(1))));
     let url = strava_url(
-        StravaActivityId::from(10),
+        ActivityId::from("strava:10"),
         Box::new(session),
         &facade,
         &mut store,
@@ -216,7 +216,7 @@ async fn activity_strava_url_missing() {
         .expect_read_activity()
         .returning(|_id, _user, _store| Err(Error::NotFound("".to_string())));
     let res = strava_url(
-        StravaActivityId::from(99),
+        ActivityId::from("strava:99"),
         Box::new(session),
         &facade,
         &mut store,

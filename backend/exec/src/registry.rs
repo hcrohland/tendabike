@@ -426,10 +426,11 @@ where
 
 /// The provider-agnostic provider service's impl for the registry (ADR-0014):
 /// the eight direct ops are a thin forward — each opens the transaction, hands
-/// the connection to the provider layer's dispatch free function (the single
-/// `match provider`), and commits. No provider dispatch and no driver naming
-/// in this crate. The connection is a complete store for both providers
-/// (`StravaStore + IcuStore`), which the dispatch's arms each bound on.
+/// the connection (and the concrete entity-op facade) to the provider
+/// layer's dispatch free function (the single `match provider`), and commits.
+/// No provider dispatch and no driver naming in this crate. The registry owns
+/// the store (the transaction boundary, ADR-0014); the dispatch bounds on the
+/// two providers' local data stores and takes the facade as a parameter.
 #[async_trait::async_trait]
 impl<S, P, D> crate::providerservice::ProviderService for Registry<S, P, D>
 where
@@ -444,7 +445,14 @@ where
     /// identity and the admin flag.
     async fn login(&self, provider: Provider, code: &str, scope: &str) -> TbResult<(UserId, bool)> {
         let mut store = self.source.begin().await?;
-        let result = tb_provider::dispatch::login(provider, code, scope, &mut store).await?;
+        let result = tb_provider::dispatch::login(
+            provider,
+            code,
+            scope,
+            &tb_provider::EntityFacadeImpl,
+            &mut store,
+        )
+        .await?;
         store.commit().await?;
         Ok(result)
     }
@@ -477,7 +485,13 @@ where
         event_time: i64,
     ) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_provider::dispatch::sync(user_id, event_time, &mut store).await?;
+        tb_provider::dispatch::sync(
+            user_id,
+            event_time,
+            &tb_provider::EntityFacadeImpl,
+            &mut store,
+        )
+        .await?;
         store.commit().await?;
         Ok(())
     }
@@ -487,7 +501,13 @@ where
     /// in-txn, then deauthorizes.
     async fn deauthorize(&self, mut session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_provider::dispatch::deauthorize(&mut *session, tbid, &mut store).await?;
+        tb_provider::dispatch::deauthorize(
+            &mut *session,
+            tbid,
+            &tb_provider::EntityFacadeImpl,
+            &mut store,
+        )
+        .await?;
         store.commit().await?;
         Ok(())
     }
@@ -497,7 +517,13 @@ where
     /// then deletes.
     async fn delete_user(&self, mut session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_provider::dispatch::delete_user(&mut *session, tbid, &mut store).await?;
+        tb_provider::dispatch::delete_user(
+            &mut *session,
+            tbid,
+            &tb_provider::EntityFacadeImpl,
+            &mut store,
+        )
+        .await?;
         store.commit().await?;
         Ok(())
     }
@@ -512,7 +538,14 @@ where
         id: ActivityId,
     ) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let uri = tb_provider::dispatch::activity_url(provider, session, id, &mut store).await?;
+        let uri = tb_provider::dispatch::activity_url(
+            provider,
+            session,
+            id,
+            &tb_provider::EntityFacadeImpl,
+            &mut store,
+        )
+        .await?;
         store.commit().await?;
         Ok(uri)
     }
@@ -527,7 +560,14 @@ where
         id: PartId,
     ) -> TbResult<Option<String>> {
         let mut store = self.source.begin().await?;
-        let uri = tb_provider::dispatch::gear_url(provider, session, id, &mut store).await?;
+        let uri = tb_provider::dispatch::gear_url(
+            provider,
+            session,
+            id,
+            &tb_provider::EntityFacadeImpl,
+            &mut store,
+        )
+        .await?;
         store.commit().await?;
         Ok(uri)
     }
