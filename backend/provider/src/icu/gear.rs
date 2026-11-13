@@ -114,5 +114,16 @@ pub async fn update_gear<D: EntityFacade<S>, S: IcuDataStore>(
     Ok(parts)
 }
 
+/// The icu half of the provider-agnostic `gear_url` dispatch (ADR-0014): icu
+/// gear is a private settings item with no public page, so the URL is the
+/// typed absence (`None`) — the route maps it to a no-op.
+pub async fn gear_url<S: IcuStore + 'static>(
+    _id: PartId,
+    _session: Box<dyn Session>,
+    _store: &mut S,
+) -> TbResult<Option<String>> {
+    Ok(None)
+}
+
 #[cfg(test)]
 mod gear_tests;

@@ -91,6 +91,22 @@ impl InEvent {
     }
 }
 
+/// The webhook intake (ADR-0014): the provider's webhook work behind the
+/// seam — the envelope parse of the raw body, then the accept (the queue
+/// insert, or the athlete-deauth branch). `body` is the raw webhook body the
+/// presentation layer forwards (no driver wire type crosses the seam).
+/// Returns the owner's TendaBike [`UserId`] when a row was queued (the
+/// caller's wake), or `None` for an athlete (de)authorization.
+pub async fn accept_event(
+    body: &str,
+    store: &mut impl StravaDataStore,
+) -> TbResult<Option<UserId>> {
+    let event: InEvent = serde_json::from_str(body)
+        .map_err(|e| Error::BadRequest(format!("invalid strava webhook envelope: {e}")))?;
+    trace!("Received {event:#?}");
+    event.accept(store).await
+}
+
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ObjectType {
     #[default]

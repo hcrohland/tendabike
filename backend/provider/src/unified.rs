@@ -1,22 +1,46 @@
-//! The per-user provider lane: the [`ProviderLane`] impl the executor loop
-//! runs in production.
+/*
+   tendabike - the bike maintenance tracker
+
+   Copyright (C) 2023  Christoph Rohland
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as published
+   by the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+*/
+
+//! The unified provider lane (ADR-0014): the [`ProviderLane`] impl the
+//! executor loop runs in production — the third impl of the [`Lane<S, E>`]
+//! seam, beside the two per-provider lanes.
 //!
 //! The loop is generic over a single [`ProviderLane`] type, but a user has
 //! exactly one provider (the `users.provider` column, immutable). This lane
 //! wraps both provider lanes — [`StravaLane`] and [`IcuLane`] — and selects
-//! between them per call from the user's `provider` column, so the loop's
-//! control flow (the biased select, the backoff, the idle policy, the frame
-//! push) is unchanged and provider-agnostic.
+//! between them per call from the user's `provider` column (a typed switch
+//! on [`Provider`]), so the loop's control flow (the biased select, the
+//! backoff, the idle policy, the frame push) is unchanged and
+//! provider-agnostic.
 //!
-//! The unified event type ([`LaneEvent`]) is the loop's `P::Event`: an
-//! enum over the two providers' event rows, so the loop's `Select`, the
+//! The unified event type ([`LaneEvent`]) is the loop's `P::Event`: an enum
+//! over the two providers' event rows, so the loop's `Select`, the
 //! consumed-event channel, and the `run_event` dispatch are all
 //! provider-agnostic.
 
 use tb_domain::{ActivityId, PartId, Session, Summary, TbResult, UserId, UserStat};
-use tb_provider::icu::{IcuLane, IcuStore, event::IcuEvent};
-use tb_provider::strava::{StravaLane, StravaStore, event::Event as StravaEvent};
-use tb_provider::{Probe, ProviderLane};
+
+use crate::Provider;
+use crate::icu::{IcuLane, IcuStore, event::IcuEvent};
+use crate::strava::{StravaLane, StravaStore, event::Event as StravaEvent};
+use crate::{Lane, Probe, ProviderLane};
 
 /// The unified provider event the per-user lane reports: the two providers'
 /// event rows under one type, so the loop's `P::Event` is provider-agnostic
@@ -40,77 +64,35 @@ impl From<LaneEvent> for Option<StravaEvent> {
     }
 }
 
-/// The per-user provider lane: wraps [`StravaLane`] and [`IcuLane`] and
-/// selects between them per call from the user's `provider` column (spec
-/// #764). The loop is generic over this single type; it never names a
-/// concrete provider.
+/// The unified provider lane: [`Lane<S, LaneEvent>`](Lane) — the third
+/// [`ProviderLane`] impl (ADR-0014), beside the two per-provider lanes. It
+/// wraps both provider lanes and selects between them per call from the
+/// user's `provider` column (a typed switch on [`Provider`]); the loop is
+/// generic over this single type and never names a concrete provider.
 ///
 /// Generic over the store type `S` (the transaction's connection):
 /// `type Store = S`, so the loop's transaction connection ties to `S` and
 /// `probe`/`process` operate on it. `S` must be a complete store for both
 /// providers (`StravaStore + IcuStore`), which also carries the domain
 /// `Store` (the `user_get` the per-call selection reads).
-///
-/// The marker-field impls (`Clone`/`Copy`/`Debug`/`Default`) are written by
-/// hand rather than derived: both sub-lanes hold no `S` data (only a
-/// `PhantomData<S>` marker) and are `Clone`/`Copy`/`Debug`/`Default` for any
-/// `S`, so the wrapper is too — including for a database connection, which is
-/// neither `Clone` nor `Debug`.
-pub struct Lane<S: StravaStore + IcuStore> {
-    strava: StravaLane<S>,
-    icu: IcuLane<S>,
-}
+pub type UnifiedLane<S> = Lane<S, LaneEvent>;
 
-impl<S: StravaStore + IcuStore> Clone for Lane<S> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<S: StravaStore + IcuStore> Copy for Lane<S> {}
-
-impl<S: StravaStore + IcuStore> std::fmt::Debug for Lane<S> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Lane").finish()
-    }
-}
-
-impl<S: StravaStore + IcuStore> Default for Lane<S> {
-    fn default() -> Self {
-        Self {
-            strava: StravaLane::default(),
-            icu: IcuLane::default(),
-        }
-    }
-}
-
-// `Lane<S>` holds no `S` data (both sub-lanes are `PhantomData<S>` markers),
-// so it is safe to share across threads even when `S` is not `Sync`. The
-// auto-derived `Sync` would require `S: Sync`; this sound `unsafe impl`
-// provides the unconditional `Sync` the `ProviderLane: Send + Sync` bound
-// needs.
-unsafe impl<S: StravaStore + IcuStore> Sync for Lane<S> {}
-
-impl<S: StravaStore + IcuStore> Lane<S> {
-    /// The per-user lane over a store of type `S` (both provider lanes).
-    pub fn new() -> Self {
-        Self {
-            strava: StravaLane::new(),
-            icu: IcuLane::new(),
-        }
-    }
-
-    /// The user's provider (`'strava'` | `'icu'`), read from the
-    /// `users.provider` column (through the owning entity's
-    /// [`UserId::provider`] read, ADR-0010). A read failure is a DB failure
-    /// the caller classifies.
-    async fn provider_of(store: &mut S, user_id: UserId) -> TbResult<String> {
-        user_id.provider(store).await
+impl<S> Lane<S, LaneEvent>
+where
+    S: StravaStore + IcuStore,
+{
+    /// The user's provider, read from the `users.provider` column (through
+    /// the owning entity's [`UserId::provider`] read, ADR-0010) and parsed
+    /// into the typed [`Provider`] (the single dispatch mechanism, ADR-0014).
+    /// A read failure is a DB failure the caller classifies.
+    async fn provider_of(store: &mut S, user_id: UserId) -> TbResult<Provider> {
+        let s = user_id.provider(store).await?;
+        Provider::try_from(s.as_str())
     }
 }
 
 #[async_trait::async_trait]
-impl<S> ProviderLane for Lane<S>
+impl<S> ProviderLane for Lane<S, LaneEvent>
 where
     S: StravaStore + IcuStore + Send + 'static,
 {
@@ -125,20 +107,19 @@ where
             Ok(provider) => provider,
             Err(_) => return Probe::Error,
         };
-        if provider == "icu" {
-            match self.icu.probe(user_id, store).await {
+        match provider {
+            Provider::Icu => match IcuLane::new().probe(user_id, store).await {
                 Probe::Event(event) => Probe::Event(LaneEvent::Icu(event)),
                 Probe::Limited(until) => Probe::Limited(until),
                 Probe::Empty => Probe::Empty,
                 Probe::Error => Probe::Error,
-            }
-        } else {
-            match self.strava.probe(user_id, store).await {
+            },
+            Provider::Strava => match StravaLane::new().probe(user_id, store).await {
                 Probe::Event(event) => Probe::Event(LaneEvent::Strava(event)),
                 Probe::Limited(until) => Probe::Limited(until),
                 Probe::Empty => Probe::Empty,
                 Probe::Error => Probe::Error,
-            }
+            },
         }
     }
 
@@ -149,10 +130,9 @@ where
             Ok(provider) => provider,
             Err(_) => return None,
         };
-        if provider == "icu" {
-            self.icu.process(user_id, store).await
-        } else {
-            self.strava.process(user_id, store).await
+        match provider {
+            Provider::Icu => IcuLane::new().process(user_id, store).await,
+            Provider::Strava => StravaLane::new().process(user_id, store).await,
         }
     }
 
@@ -166,10 +146,13 @@ where
         store: &mut S,
     ) -> TbResult<()> {
         let provider = Self::provider_of(store, user_id).await?;
-        if provider == "icu" {
-            self.icu.insert_sync(user_id, time, auto, store).await
-        } else {
-            self.strava.insert_sync(user_id, time, auto, store).await
+        match provider {
+            Provider::Icu => IcuLane::new().insert_sync(user_id, time, auto, store).await,
+            Provider::Strava => {
+                StravaLane::new()
+                    .insert_sync(user_id, time, auto, store)
+                    .await
+            }
         }
     }
 
@@ -177,10 +160,9 @@ where
     /// provider side): delegate to the user's provider's lane.
     async fn update_gear(&self, user_id: UserId, store: &mut S) -> TbResult<Vec<PartId>> {
         let provider = Self::provider_of(store, user_id).await?;
-        if provider == "icu" {
-            self.icu.update_gear(user_id, store).await
-        } else {
-            self.strava.update_gear(user_id, store).await
+        match provider {
+            Provider::Icu => IcuLane::new().update_gear(user_id, store).await,
+            Provider::Strava => StravaLane::new().update_gear(user_id, store).await,
         }
     }
 
@@ -188,8 +170,8 @@ where
     /// side): the union of the Strava users' stats and the icu users' stats
     /// (each user's stat is sourced from their own provider).
     async fn all_stats(&self, store: &mut S) -> TbResult<Vec<UserStat>> {
-        let mut stats = self.strava.all_stats(store).await?;
-        stats.extend(self.icu.all_stats(store).await?);
+        let mut stats = StravaLane::new().all_stats(store).await?;
+        stats.extend(IcuLane::new().all_stats(store).await?);
         Ok(stats)
     }
 
@@ -202,10 +184,9 @@ where
         store: &mut S,
     ) -> TbResult<String> {
         let provider = Self::provider_of(store, session.user_id()).await?;
-        if provider == "icu" {
-            self.icu.activity_url(id, session, store).await
-        } else {
-            self.strava.activity_url(id, session, store).await
+        match provider {
+            Provider::Icu => IcuLane::new().activity_url(id, session, store).await,
+            Provider::Strava => StravaLane::new().activity_url(id, session, store).await,
         }
     }
 }

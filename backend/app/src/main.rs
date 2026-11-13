@@ -43,15 +43,16 @@ async fn main() -> anyhow::Result<()> {
     let registry = tb_exec::Registry::with_defaults(
         tb_exec::DetachedBegin::new(pool),
         tb_exec::DomainFacadeImpl,
-        // The per-user provider lane: wraps the Strava and icu lanes and
-        // selects between them per user from the `users.provider` column
-        // (spec #764), so the loop is provider-agnostic.
-        tb_exec::Lane::new(),
+        // The unified provider lane (ADR-0014): the third `ProviderLane`
+        // impl in the provider layer — it wraps the Strava and icu lanes
+        // and selects between them per user from the `users.provider`
+        // column (a typed switch on `Provider`), so the loop is
+        // provider-agnostic.
+        tb_provider::UnifiedLane::new(),
     );
     let api = std::sync::Arc::new(registry.clone()) as std::sync::Arc<dyn tb_exec::ServiceApi>;
-    let provider =
-        std::sync::Arc::new(registry.clone()) as std::sync::Arc<dyn tb_exec::ProviderService>;
-    let icu = std::sync::Arc::new(registry) as std::sync::Arc<dyn tb_exec::IcuService>;
+    let provider = std::sync::Arc::new(registry)
+        as std::sync::Arc<dyn tb_exec::providerservice::ProviderService>;
 
-    Ok(tb_axum::start(api, provider, icu, db, path, addr).await?)
+    Ok(tb_axum::start(api, provider, db, path, addr).await?)
 }

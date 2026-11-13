@@ -79,14 +79,16 @@ use tb_domain::test_support::{
     mock_session, mock_session_admin, mock_session_with_shop, part_type_ids::CHAIN, sole_live,
 };
 use tb_domain::{ApiRead, ApiWrite, Part, PartId, ReadOutcome, ShopId, Summary, UsageId, UserId};
+use tb_exec::providerservice::ProviderService;
 use tb_exec::{
     DeliveryContext, DetachedBegin, DomainFacadeImpl, ExecutorStatus, FramePusher, LoopContext,
-    ProviderService, Registry, Request, RequestReceiver, ServiceApi, request_channel,
+    Registry, Request, RequestReceiver, ServiceApi, request_channel,
 };
+use tb_provider::Provider;
 use tb_provider::ProviderLane;
 use tb_provider::strava::{
     StravaId, StravaLane,
-    event::{Event, InEvent},
+    event::Event,
     test_support::{canned_strava, seed_token_cache},
 };
 use tb_sqlx::{DbPool, SNAPSHOT_JSON, SqlxConn};
@@ -818,15 +820,14 @@ async fn queue_sync_count(pool: &DbPool, strava: StravaId, event_time: i64) -> i
     n
 }
 
-/// The per-user admin sync direct op end to end on the live adapter (spec
-/// #558 §5.2/§8): the enqueue transaction — the target's Strava id lookup
-/// **and** the `Sync` event, committed together — then the wake, then the
-/// await on the consumed-event broadcast (unbounded). The awaited work
-/// runs in the target user's loop transaction; the offline seam's canned
-/// empty-activities response completes the sync without the Strava API.
+/// The per-user sync direct op end to end on the live adapter (ADR-0014):
+/// the enqueue transaction — the provider layer's dispatch reads the user's
+/// real provider in-transaction and enqueues the `Sync` event, committed.
+/// The op returns once the event is queued; the loop consumes it in the
+/// background.
 #[tokio::test]
 #[ignore]
-async fn sync_enqueues_wakes_and_awaits() {
+async fn sync_enqueues() {
     let seam = ready().await;
     let (user, strava) = test_identity();
     // The user's Strava row (the enqueue txn's lookup).
@@ -842,13 +843,6 @@ async fn sync_enqueues_wakes_and_awaits() {
         .expect("seeding the strava user");
         conn.commit().await.expect("committing the seed");
     }
-    // The offline seam: the sync's activities fetch (the `after` cursor is
-    // the event time) returns nothing, so the loop's processing deletes
-    // the event (consumed) and commits.
-    canned_strava("/activities?after=100&per_page=25", "[]");
-    // The long idle window: with no stream attached the spawned executor's
-    // first probe drains the queue — the wake is the signal that keeps the
-    // mechanism intact for a running, idle-waiting executor.
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
@@ -861,13 +855,12 @@ async fn sync_enqueues_wakes_and_awaits() {
         registry.sync(Box::new(mock_session(UserId::from(1))), user, 100),
     )
     .await
-    .expect("the admin sync must complete in time");
+    .expect("the sync must complete in time");
     outcome.expect("the sync must succeed");
 
-    // The awaited work ran in the target user's loop transaction: the
-    // consumed event is gone from the queue for good.
+    // The event is queued (the DB queue is the source of truth).
     let n = queue_sync_count(&seam.pool, strava, 100).await;
-    assert_eq!(n, 0, "the consumed sync must be gone from the queue");
+    assert_eq!(n, 1, "the enqueued sync must be in the queue");
 }
 
 /// The all-users admin sync direct op (spec #558 §5.2/§8): one transaction
@@ -938,7 +931,8 @@ async fn trigger_processing_drains_each_queued_user() {
 
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
-        registry.trigger_processing(
+        ServiceApi::trigger_processing(
+            &registry,
             Box::new(mock_session_admin(UserId::from(1))),
             None,
             200,
@@ -1045,7 +1039,7 @@ async fn rescan_stops_the_executors() {
 
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
-        reg.rescan(Box::new(mock_session(UserId::from(1)))),
+        ServiceApi::rescan(&reg, Box::new(mock_session(UserId::from(1)))),
     )
     .await
     .expect("the rescan must finish in time");
@@ -1086,7 +1080,7 @@ async fn accept_event_queues_the_event() {
 
     // A valid activity event (the webhook's wire shape, deserialized the
     // way the route does).
-    let event: InEvent = serde_json::from_value(serde_json::json!({
+    let body = serde_json::json!({
         "object_type": "activity",
         "object_id": 7,
         "aspect_type": "create",
@@ -1094,9 +1088,9 @@ async fn accept_event_queues_the_event() {
         "owner_id": i32::from(strava),
         "subscription_id": 0,
         "event_time": 100
-    }))
-    .expect("a valid event");
-    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.accept_event(event))
+    })
+    .to_string();
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.accept_event(Provider::Strava, &body))
         .await
         .expect("the accept must finish in time");
     outcome.expect("the accept must succeed");
@@ -1107,7 +1101,7 @@ async fn accept_event_queues_the_event() {
     assert_eq!(n, 1, "the accepted event must be queued");
 
     // An unknown owner: the ingest fails (the 500 to Strava).
-    let bad: InEvent = serde_json::from_value(serde_json::json!({
+    let bad = serde_json::json!({
         "object_type": "activity",
         "object_id": 7,
         "aspect_type": "create",
@@ -1115,9 +1109,12 @@ async fn accept_event_queues_the_event() {
         "owner_id": 999,
         "subscription_id": 0,
         "event_time": 100
-    }))
-    .expect("a valid event");
-    let err = reg.accept_event(bad).await.expect_err("unknown owner");
+    })
+    .to_string();
+    let err = reg
+        .accept_event(Provider::Strava, &bad)
+        .await
+        .expect_err("unknown owner");
     assert!(
         matches!(err, tb_domain::Error::BadRequest(_)),
         "the unknown-owner ingest must fail, got {err:?}"
@@ -1135,7 +1132,7 @@ async fn accept_event_athlete_deauth_disables_the_user() {
     seed_strava_user(&seam.pool, true).await;
     let reg = registry(&seam.pool);
 
-    let event: InEvent = serde_json::from_value(serde_json::json!({
+    let body = serde_json::json!({
         "object_type": "athlete",
         "object_id": 0,
         "aspect_type": "update",
@@ -1143,9 +1140,9 @@ async fn accept_event_athlete_deauth_disables_the_user() {
         "owner_id": i32::from(strava),
         "subscription_id": 0,
         "event_time": 100
-    }))
-    .expect("a valid event");
-    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.accept_event(event))
+    })
+    .to_string();
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.accept_event(Provider::Strava, &body))
         .await
         .expect("the accept must finish in time");
     outcome.expect("the accept must succeed");
@@ -1291,8 +1288,7 @@ async fn shop_subscribe_policy() {
 
     // (a) A non-owner is forbidden: the ownership read runs against the
     // shop row just seeded (owner 1), so user 2 is rejected.
-    let err = registry
-        .subscribe_shop(UserId::from(2), shop)
+    let err = ServiceApi::subscribe_shop(&registry, UserId::from(2), shop)
         .await
         .expect_err("a non-owner's subscribe must be forbidden");
     assert!(
@@ -1301,8 +1297,7 @@ async fn shop_subscribe_policy() {
     );
 
     // (b) The owner subscribes and receives a stream receiver.
-    let mut rx = registry
-        .subscribe_shop(UserId::from(1), shop)
+    let mut rx = ServiceApi::subscribe_shop(&registry, UserId::from(1), shop)
         .await
         .expect("the owner can subscribe");
 

@@ -33,9 +33,9 @@ use tokio::sync::{broadcast, watch};
 use tb_domain::{Session, ShopId, Summary, UserId};
 use tb_exec::{ExecutorStatus, HEARTBEAT_INTERVAL};
 
+use crate::RequestSession;
 use crate::appstate::AppState;
 use crate::error::AppError;
-use crate::strava::RequestSession;
 
 /// One SSE connection's `unfold`: the current frame subscription
 /// and its executor's fate channel. A `None` frame subscription means "the
@@ -154,7 +154,7 @@ async fn next_shop_event(seed: &mut ShopStreamSeed) -> Option<Result<Event, Infa
         Some(rx) => rx,
         None => match seed
             .app
-            .provider
+            .api
             .subscribe_shop(seed.user_id, seed.shop_id)
             .await
         {
@@ -271,7 +271,7 @@ async fn personal_endpoint(user: RequestSession, state: AppState) -> Response {
 /// forward its frames. The shop channel has no executor fate, so the stream
 /// ends when the channel closes (the shop was deleted).
 async fn shop_endpoint(user_id: UserId, state: AppState, shop_id: ShopId) -> Response {
-    let rx = match state.provider.subscribe_shop(user_id, shop_id).await {
+    let rx = match state.api.subscribe_shop(user_id, shop_id).await {
         Ok(rx) => rx,
         Err(err) => return AppError::from(err).into_response(),
     };

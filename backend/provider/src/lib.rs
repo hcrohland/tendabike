@@ -33,15 +33,36 @@
 //! executor loop calls through to probe and process a provider's event queue.
 //! Each provider module implements it for its own lane; the executor is generic
 //! over whichever lane it is given and never names a concrete provider.
+//!
+//! [`unified`] — the unified lane (ADR-0014): the third [`ProviderLane`] impl,
+//! keyed by the [`LaneEvent`] the two providers' event rows share. The lane the
+//! executor loop runs in production: it selects between the two per-provider
+//! lanes per call, with a typed switch on [`Provider`].
 
 mod activity_id;
 pub use activity_id::*;
+
+mod provider;
+pub use provider::*;
 
 mod facade;
 pub use facade::*;
 
 mod lane;
 pub use lane::*;
+
+#[cfg(all(feature = "strava", feature = "icu"))]
+mod unified;
+#[cfg(all(feature = "strava", feature = "icu"))]
+pub use unified::*;
+
+/// The provider-agnostic direct-op dispatch (ADR-0014): the eight free
+/// functions the executor's provider-agnostic `ProviderService` impl forwards
+/// to — a sibling of the unified lane seam. A public module (not re-exported
+/// at the crate root) so the dispatch's generic names (`sync`, `delete_user`,
+/// …) stay namespaced under `dispatch` rather than polluting the crate root.
+#[cfg(all(feature = "strava", feature = "icu"))]
+pub mod dispatch;
 
 mod ratelimit;
 pub use ratelimit::{Cadence, RateLimitShim, RateLimiter, WindowSpec};
