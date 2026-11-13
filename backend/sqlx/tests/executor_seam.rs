@@ -84,7 +84,6 @@ use tb_exec::{
     DeliveryContext, DetachedBegin, DomainFacadeImpl, ExecutorStatus, FramePusher, LoopContext,
     Registry, Request, RequestReceiver, ServiceApi, request_channel,
 };
-use tb_provider::EntityFacadeImpl;
 use tb_provider::Provider;
 use tb_provider::ProviderLane;
 use tb_provider::strava::{
@@ -143,7 +142,7 @@ fn loop_ctx(
         UserId::from(1),
         frames,
         Box::new(NoopPusher),
-        StravaLane::new(EntityFacadeImpl),
+        StravaLane::new(),
         events,
         IDLE_TIMEOUT,
         Arc::new(Notify::new()),
@@ -847,7 +846,7 @@ async fn sync_enqueues() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        StravaLane::new(EntityFacadeImpl),
+        StravaLane::new(),
         Duration::from_secs(3600),
     );
 
@@ -912,7 +911,7 @@ async fn trigger_processing_drains_each_queued_user() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        StravaLane::new(EntityFacadeImpl),
+        StravaLane::new(),
         Duration::from_secs(3600),
     );
     // Both executors running and idle-waiting (streams attached keep them
@@ -1001,7 +1000,7 @@ fn registry(
     Registry::new(
         DetachedBegin::new(pool.clone()),
         DomainFacadeImpl,
-        StravaLane::new(EntityFacadeImpl),
+        StravaLane::new(),
         IDLE_TIMEOUT,
     )
 }
@@ -1283,7 +1282,7 @@ async fn shop_subscribe_policy() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        StravaLane::new(EntityFacadeImpl),
+        StravaLane::new(),
         Duration::from_secs(3600),
     );
 
@@ -1385,7 +1384,7 @@ async fn attached_stream_keeps_the_executor_alive() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        StravaLane::new(EntityFacadeImpl),
+        StravaLane::new(),
         Duration::from_millis(300),
     );
 
@@ -1438,7 +1437,7 @@ async fn stream_survives_executor_reap() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        StravaLane::new(EntityFacadeImpl),
+        StravaLane::new(),
         Duration::from_millis(300),
     );
 

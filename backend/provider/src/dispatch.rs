@@ -41,7 +41,6 @@
 
 use tb_domain::{ActivityId, PartId, Session, TbResult, UserId};
 
-use crate::EntityFacadeImpl;
 use crate::Provider;
 use crate::ProviderLane;
 use crate::icu::{IcuLane, IcuStore, event::get_icu_id};
@@ -114,12 +113,12 @@ where
     let provider = provider_of(store, user_id).await?;
     match provider {
         Provider::Strava => {
-            StravaLane::new(EntityFacadeImpl)
+            StravaLane::new()
                 .insert_sync(user_id, event_time, false, store)
                 .await
         }
         Provider::Icu => {
-            IcuLane::new(EntityFacadeImpl)
+            IcuLane::new()
                 .insert_sync(user_id, event_time, false, store)
                 .await
         }
@@ -168,16 +167,8 @@ where
     S: StravaStore + IcuStore + Send + Sync + 'static,
 {
     match provider {
-        Provider::Strava => {
-            StravaLane::new(EntityFacadeImpl)
-                .activity_url(id, session, store)
-                .await
-        }
-        Provider::Icu => {
-            IcuLane::new(EntityFacadeImpl)
-                .activity_url(id, session, store)
-                .await
-        }
+        Provider::Strava => StravaLane::new().activity_url(id, session, store).await,
+        Provider::Icu => IcuLane::new().activity_url(id, session, store).await,
     }
 }
 

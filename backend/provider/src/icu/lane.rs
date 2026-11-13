@@ -8,30 +8,24 @@
 //! transaction's connection): `type Store = S`, so the loop's transaction
 //! connection ties to `S` and `probe`/`process` operate on it.
 
-use crate::{EntityFacade, EntityFacadeImpl, Lane, Probe, ProviderActivityId, ProviderLane};
+use crate::{EntityFacade, Lane, Probe, ProviderActivityId, ProviderLane};
 use tb_domain::{ActivityId, Error, PartId, Session, Summary, TbResult, UserId, UserStat};
 
 use super::event::{QueueRead, get_event, process};
 use super::{IcuEvent, IcuStore};
 
-/// The icu provider lane: [`Lane<S, IcuEvent, EntityFacadeImpl>`](Lane) — the
-/// [`ProviderLane`] impl for the icu driver. The distinct event type `IcuEvent`
-/// keeps this impl apart from the Strava lane's.
-pub type IcuLane<S> = Lane<S, IcuEvent, EntityFacadeImpl>;
+/// The icu provider lane: [`Lane<S, IcuEvent>`](Lane) — the [`ProviderLane`]
+/// impl for the icu driver. The distinct event type `IcuEvent` keeps this impl
+/// apart from the Strava lane's.
+pub type IcuLane<S> = Lane<S, IcuEvent>;
 
 #[async_trait::async_trait]
-impl<S, F> ProviderLane for Lane<S, IcuEvent, F>
+impl<S> ProviderLane for Lane<S, IcuEvent>
 where
     S: IcuStore + Send + 'static,
-    F: EntityFacade<S> + Clone + Send + Sync + 'static,
 {
     type Event = IcuEvent;
     type Store = S;
-    type Facade = F;
-
-    fn facade(&self) -> &F {
-        &self.facade
-    }
 
     /// Probe the icu event queue (one transaction's housekeeping): the
     /// rate-limit gate, then the next queued event. Delegates to
@@ -49,7 +43,7 @@ where
     /// queue, importing each activity. Delegates to [`event::process`].
     /// Returns the batch's [`Summary`] on success, or `None` on a DB failure.
     async fn process(&self, user_id: UserId, store: &mut S) -> Option<Summary> {
-        process(user_id, self.facade(), store).await.ok()
+        process(user_id, &crate::EntityFacadeImpl, store).await.ok()
     }
 
     /// The onboarding cutover's provider side (spec #765/#766): import the
@@ -63,8 +57,8 @@ where
         _auto: bool,
         store: &mut S,
     ) -> TbResult<()> {
-        super::gear::update_gear(user_id, self.facade(), store).await?;
-        super::backfill::backfill(user_id, time, self.facade(), store).await?;
+        super::gear::update_gear(user_id, &crate::EntityFacadeImpl, store).await?;
+        super::backfill::backfill(user_id, time, &crate::EntityFacadeImpl, store).await?;
         Ok(())
     }
 
@@ -72,14 +66,14 @@ where
     /// #765): `GET /athlete/{id}/gear`, importing each supported gear.
     /// Delegates to [`super::gear::update_gear`].
     async fn update_gear(&self, user_id: UserId, store: &mut S) -> TbResult<Vec<PartId>> {
-        super::gear::update_gear(user_id, self.facade(), store).await
+        super::gear::update_gear(user_id, &crate::EntityFacadeImpl, store).await
     }
 
     /// Read every user's provider-neutral stat (the admin read's provider
     /// side): the domain [`UserStat`] — the stat plus the provider's
     /// queued-event count and disabled flag.
     async fn all_stats(&self, store: &mut S) -> TbResult<Vec<UserStat>> {
-        all_stats(self.facade(), store).await
+        all_stats(store).await
     }
 
     /// The icu half of [`ProviderLane::activity_url`]: the `icu:` URL for
@@ -94,24 +88,22 @@ where
         let ProviderActivityId::Icu(raw) = ProviderActivityId::try_from(id)? else {
             return Err(Error::BadRequest("not an icu activity".to_string()));
         };
-        super::activity::activity_url(raw, session, self.facade(), store).await
+        super::activity::activity_url(raw, session, &crate::EntityFacadeImpl, store).await
     }
 }
 
 /// The all-user icu stat read (spec #764): every icu user's provider-neutral
 /// [`UserStat`] — the domain stat plus this provider's queued-event count and
 /// disabled flag.
-async fn all_stats<S, F>(facade: &F, store: &mut S) -> TbResult<Vec<UserStat>>
-where
-    S: IcuStore + Sync + 'static,
-    F: EntityFacade<S>,
-{
+async fn all_stats<S: IcuStore + Sync + 'static>(store: &mut S) -> TbResult<Vec<UserStat>> {
     let users = store.icuser_get_all().await?;
     let mut res = Vec::new();
     for u in users {
         let events = store.icu_events_get_count_for_user(&u.id).await?;
         res.push(UserStat {
-            stat: facade.get_stat(&u.tendabike_id, store).await?,
+            stat: crate::EntityFacadeImpl
+                .get_stat(&u.tendabike_id, store)
+                .await?,
             events,
             disabled: u.disabled(),
         });

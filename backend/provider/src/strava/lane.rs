@@ -27,32 +27,26 @@
 //! transaction's connection): `type Store = S`, so the loop's transaction
 //! connection ties to `S` and `probe`/`process` operate on it.
 
-use crate::{EntityFacade, EntityFacadeImpl, Lane, Probe, ProviderActivityId, ProviderLane};
+use crate::{Lane, Probe, ProviderActivityId, ProviderLane};
 use tb_domain::{ActivityId, Error, PartId, Session, Summary, TbResult, UserId, UserStat};
 
 use super::StravaStore;
 use super::event::{Event, QueueRead, get_event, process};
 
-/// The Strava provider lane: [`Lane<S, Event, EntityFacadeImpl>`](Lane) — the
-/// [`ProviderLane`] impl for the Strava driver. The distinct event type `Event`
-/// keeps this impl apart from the icu lane's. The loop calls through it; a
-/// second provider (a new feature module) implements [`ProviderLane`] too, and
-/// the loop works with it unchanged.
-pub type StravaLane<S> = Lane<S, Event, EntityFacadeImpl>;
+/// The Strava provider lane: [`Lane<S, Event>`](Lane) — the [`ProviderLane`]
+/// impl for the Strava driver. The distinct event type `Event` keeps this impl
+/// apart from the icu lane's. The loop calls through it; a second provider (a
+/// new feature module) implements [`ProviderLane`] too, and the loop works
+/// with it unchanged.
+pub type StravaLane<S> = Lane<S, Event>;
 
 #[async_trait::async_trait]
-impl<S, F> ProviderLane for Lane<S, Event, F>
+impl<S> ProviderLane for Lane<S, Event>
 where
     S: StravaStore + Send + 'static,
-    F: EntityFacade<S> + Clone + Send + Sync + 'static,
 {
     type Event = Event;
     type Store = S;
-    type Facade = F;
-
-    fn facade(&self) -> &F {
-        &self.facade
-    }
 
     /// Probe the Strava event queue (one transaction's housekeeping): read
     /// the next event, applying the queue's read-side rules (the rate-limit
@@ -72,7 +66,7 @@ where
     /// Delegates to [`crate::event::process`]. Returns the event's
     /// [`Summary`] on success, or `None` on a DB failure.
     async fn process(&self, user_id: UserId, store: &mut S) -> Option<Summary> {
-        process(user_id, self.facade(), store).await.ok()
+        process(user_id, &crate::EntityFacadeImpl, store).await.ok()
     }
 
     /// Queue a sync event on the Strava event queue (the onboarding cutover's
@@ -94,7 +88,7 @@ where
     /// transaction and reads the parts it created for the frame. Delegates to
     /// [`crate::user::StravaUser::update_gear`].
     async fn update_gear(&self, user_id: UserId, store: &mut S) -> TbResult<Vec<PartId>> {
-        super::user::StravaUser::update_gear(user_id, self.facade(), store).await
+        super::user::StravaUser::update_gear(user_id, &crate::EntityFacadeImpl, store).await
     }
 
     /// Read every user's provider-neutral stat (the admin read's provider
@@ -102,7 +96,7 @@ where
     /// queued-event count and disabled flag. Delegates to
     /// [`crate::user::get_all_stats`].
     async fn all_stats(&self, store: &mut S) -> TbResult<Vec<UserStat>> {
-        super::user::get_all_stats(self.facade(), store).await
+        super::user::get_all_stats(&crate::EntityFacadeImpl, store).await
     }
 
     /// The Strava half of [`ProviderLane::activity_url`]: the `strava:` URL
@@ -117,6 +111,6 @@ where
         let ProviderActivityId::Strava(raw) = ProviderActivityId::try_from(id)? else {
             return Err(Error::BadRequest("not a strava activity".to_string()));
         };
-        super::activity::strava_url(raw, session, self.facade(), store).await
+        super::activity::strava_url(raw, session, &crate::EntityFacadeImpl, store).await
     }
 }

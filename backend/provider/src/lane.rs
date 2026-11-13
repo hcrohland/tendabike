@@ -33,59 +33,60 @@ use std::marker::PhantomData;
 
 use tb_domain::{ActivityId, PartId, Session, Summary, TbResult, UserId, UserStat};
 
-use crate::EntityFacade;
-
-/// The provider lane: a `PhantomData` marker over the store type `S` and the
-/// provider's event type `E`, plus the lane's [`EntityFacade`] (the door the
-/// lane's ops go through to reach the domain). Written once in the kit; each
-/// provider re-exports a type alias (e.g. `StravaLane<S> = Lane<S,
-/// StravaEvent, EntityFacadeImpl>`) so existing names keep working. The
-/// distinct `E` keeps the per-provider [`ProviderLane`] impls apart (a plain
-/// `Lane<S>` would hit conflicting implementations, since the production
-/// store implements both store traits).
+/// The provider lane marker: a `PhantomData` over the store type `S` and the
+/// provider's event type `E`. Written once in the kit; each provider re-exports
+/// a type alias (e.g. `StravaLane<S> = Lane<S, StravaEvent>`) so existing names
+/// keep working. The distinct `E` keeps the per-provider [`ProviderLane`] impls
+/// apart (a plain `Lane<S>` would hit conflicting implementations, since the
+/// production store implements both store traits).
 ///
-/// The marker fields carry no data: the `S` marker is a `fn() -> S` pointer
-/// (unconditionally `Send + Sync`, even when `S` is a database connection —
-/// which is `Send` but not `Sync`), so the auto-derived `Send`/`Sync` work
-/// for any `S` and `E`. The `Clone`/`Debug` impls are written by hand rather
-/// than derived: a derive would add an `S: Clone`/`S: Debug` bound, but the
-/// lane holds no `S` or `E` data — only `PhantomData` markers and the
-/// facade — so it is `Clone` (for any `F: Clone`) and `Debug` for any `S`
-/// and `E`, including a database connection, which is neither `Clone` nor
-/// `Debug`.
-pub struct Lane<S, E, F> {
-    _store: PhantomData<fn() -> S>,
+/// The marker-field impls (`Clone`/`Copy`/`Debug`/`Default`) are written by
+/// hand rather than derived: a derive would add an `S: Clone`/`S: Debug`
+/// bound, but the lane holds no `S` or `E` data (only `PhantomData` markers),
+/// so it is `Clone`/`Copy`/`Debug`/`Default` for any `S` and `E` — including
+/// a database connection, which is neither `Clone` nor `Debug`.
+pub struct Lane<S, E> {
+    _store: PhantomData<S>,
     _event: PhantomData<E>,
-    /// The lane's door into the domain: production is the concrete
-    /// [`EntityFacadeImpl`]; a test swaps in the `MockEntityFacade` (under
-    /// `test-support`) to drive the lane's domain calls in isolation.
-    pub(crate) facade: F,
 }
 
-impl<S, E, F: Clone> Clone for Lane<S, E, F> {
+impl<S, E> Clone for Lane<S, E> {
     fn clone(&self) -> Self {
-        Self {
-            _store: PhantomData,
-            _event: PhantomData,
-            facade: self.facade.clone(),
-        }
+        *self
     }
 }
 
-impl<S, E, F> std::fmt::Debug for Lane<S, E, F> {
+impl<S, E> Copy for Lane<S, E> {}
+
+impl<S, E> std::fmt::Debug for Lane<S, E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Lane").finish()
     }
 }
 
-impl<S, E, F> Lane<S, E, F> {
-    /// The lane for a store of type `S`, event type `E`, and facade `F`
-    /// (the door the lane's ops go through to reach the domain).
-    pub fn new(facade: F) -> Self {
+impl<S, E> Default for Lane<S, E> {
+    fn default() -> Self {
         Self {
             _store: PhantomData,
             _event: PhantomData,
-            facade,
+        }
+    }
+}
+
+// `Lane<S, E>` holds no `S` or `E` data (only `PhantomData` markers), so it is
+// safe to share across threads even when `S` is not `Sync` (a database
+// connection, like the Postgres one, is `Send` but not `Sync`). The
+// auto-derived `Sync` would require `S: Sync`; this sound `unsafe impl`
+// provides the unconditional `Sync` the `ProviderLane: Send + Sync` bound
+// needs.
+unsafe impl<S, E> Sync for Lane<S, E> {}
+
+impl<S, E> Lane<S, E> {
+    /// The lane for a store of type `S` and event type `E`.
+    pub fn new() -> Self {
+        Self {
+            _store: PhantomData,
+            _event: PhantomData,
         }
     }
 }
@@ -132,19 +133,7 @@ pub trait ProviderLane: Send + Sync {
     /// this type (`T::Conn = Self::Store`), so `probe` and `process` operate
     /// on the loop's own transaction connection — the lane never names a
     /// concrete provider's store.
-    type Store: Send + Sync;
-
-    /// The lane's door into the domain: the [`EntityFacade`] the lane's ops
-    /// (`process`, `insert_sync`, `update_gear`, `all_stats`, `activity_url`)
-    /// go through to reach the domain. Production is the concrete
-    /// [`EntityFacadeImpl`]; a test swaps in the `MockEntityFacade` (under
-    /// `test-support`) to drive the lane's domain calls in isolation.
-    ///
-    /// [`EntityFacadeImpl`]: crate::EntityFacadeImpl
-    type Facade: EntityFacade<Self::Store>;
-
-    /// The lane's [`EntityFacade`].
-    fn facade(&self) -> &Self::Facade;
+    type Store;
 
     /// Probe the provider's event queue for the user (one transaction): read
     /// the next event, applying the queue's read-side rules (the rate-limit
