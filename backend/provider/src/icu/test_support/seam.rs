@@ -1,4 +1,5 @@
-//! The icu HTTP test seam: thread-local canned responses.
+//! The icu HTTP test seam: a `thread_local` over the kit's canned-response
+//! machinery (spec #838).
 //!
 //! Available in both build modes:
 //! - `test-support` feature: consumer crates map canned responses for the URIs
@@ -6,22 +7,17 @@
 //! - `#[cfg(test)]`: the in-memory icu-logic tests queue per-thread canned
 //!   responses and record the requested URIs they assert on.
 //!
-//! Unlike the Strava driver there is no token cache to seed (intervals.icu
-//! tokens are durable, read straight from `icu_users`), so the seam is just
-//! the canned-response map plus the request recorder.
+//! The common machinery (`CannedState`, `begin_test`, `queue`, `pop_test_canned`,
+//! `requests`) lives in the kit's [`crate::test_support`]; this seam owns the
+//! per-provider `thread_local` (a thread-local can't live in a struct instance)
+//! and the thin free functions that reach it. There is no token cache to seed
+//! (intervals.icu tokens are durable, read straight from `icu_users`), so the
+//! seam is just the canned-response map plus the request recorder.
 
 use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
 
 use super::super::*;
-
-/// The per-thread canned-response state.
-#[derive(Default)]
-struct CannedState {
-    test_mode: bool,
-    responses: HashMap<String, VecDeque<TbResult<String>>>,
-    requests: Vec<String>,
-}
+use crate::test_support::{self as kit, CannedState};
 
 thread_local! {
     static CANNED: RefCell<CannedState> = RefCell::new(CannedState::default());
@@ -31,37 +27,22 @@ thread_local! {
 /// any canned responses/records a previous test left on this thread
 /// (per-test isolation — each test runs on its own thread).
 pub fn begin_test() {
-    CANNED.with(|c| {
-        *c.borrow_mut() = CannedState::default();
-        c.borrow_mut().test_mode = true;
-    });
+    kit::begin_test(&CANNED);
 }
 
 /// Whether the current thread is in test mode.
 pub fn in_test_mode() -> bool {
-    CANNED.with(|c| c.borrow().test_mode)
+    kit::in_test_mode(&CANNED)
 }
 
 /// Queue a canned JSON response for an exact request URI (FIFO per URI).
 pub fn queue(uri: &str, json: &str) {
-    CANNED.with(|c| {
-        c.borrow_mut()
-            .responses
-            .entry(uri.to_string())
-            .or_default()
-            .push_back(Ok(json.to_string()));
-    });
+    kit::queue(&CANNED, uri, json);
 }
 
 /// Queue an error for an exact request URI.
 pub fn queue_error(uri: &str, err: Error) {
-    CANNED.with(|c| {
-        c.borrow_mut()
-            .responses
-            .entry(uri.to_string())
-            .or_default()
-            .push_back(Err(err));
-    });
+    kit::queue_error(&CANNED, uri, err);
 }
 
 /// Pop the canned response for `uri` (the free function's thread-local offline
@@ -72,24 +53,10 @@ pub fn queue_error(uri: &str, err: Error) {
 /// recording the request; an unqueued URI records the request and yields the
 /// "unexpected request" error.
 pub fn pop_test_canned(uri: &str) -> Option<TbResult<String>> {
-    CANNED.with(|c| {
-        let mut c = c.borrow_mut();
-        if !c.test_mode {
-            return None;
-        }
-        c.requests.push(uri.to_string());
-        Some(
-            c.responses
-                .get_mut(uri)
-                .and_then(|q| q.pop_front())
-                .unwrap_or(Err(Error::BadRequest(format!(
-                    "unexpected icu request: {uri}"
-                )))),
-        )
-    })
+    kit::pop_test_canned(&CANNED, uri, "icu")
 }
 
 /// The requested URIs, in order (assert on these to verify API calls).
 pub fn requests() -> Vec<String> {
-    CANNED.with(|c| c.borrow().requests.clone())
+    kit::requests(&CANNED)
 }

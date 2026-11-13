@@ -7,11 +7,11 @@
 //! checking the validity of the user's access token.
 
 use derive_more::{Display, From, Into};
-use oauth2::RefreshToken;
+use oauth2::{AuthorizationCode, RefreshToken, TokenResponse};
 use serde::Deserialize;
 
 use super::*;
-use crate::DomainFacade;
+use crate::EntityFacade;
 
 #[derive(
     Clone, Copy, Debug, Display, From, Into, Default, Hash, PartialEq, Eq, Serialize, Deserialize,
@@ -109,7 +109,7 @@ impl StravaUser {
     /// # Returns
     ///
     /// An `TbResult` containing a `StravaUser` representing the upserted user.
-    pub async fn upsert<D: DomainFacade<S>, S: StravaDataStore>(
+    pub async fn upsert<D: EntityFacade<S>, S: StravaDataStore>(
         id: StravaId,
         firstname: &str,
         lastname: &str,
@@ -153,7 +153,7 @@ impl StravaUser {
     /// Skips the Strava call silently when the rate limiter reports no
     /// budget: hydration is best-effort and must not be blocked by a
     /// non-essential API call.
-    pub async fn update_gear<D: DomainFacade<S>, S: StravaDataStore>(
+    pub async fn update_gear<D: EntityFacade<S>, S: StravaDataStore>(
         user_id: UserId,
         facade: &D,
         store: &mut S,
@@ -192,7 +192,7 @@ impl StravaUser {
 /// event count and disabled flag. The [`UserStat`] type is provider-neutral
 /// (it lives in `tb_domain`, beside [`Stat`]), so a second provider's
 /// `all_stats` op returns the same type.
-pub async fn get_all_stats<D: DomainFacade<S>, S: StravaDataStore>(
+pub async fn get_all_stats<D: EntityFacade<S>, S: StravaDataStore>(
     facade: &D,
     store: &mut S,
 ) -> TbResult<Vec<UserStat>> {
@@ -209,6 +209,57 @@ pub async fn get_all_stats<D: DomainFacade<S>, S: StravaDataStore>(
         });
     }
     Ok(res)
+}
+
+/// The login (ADR-0014): the provider's login work behind the seam — the
+/// scope check, the token exchange, the wire-shape parsing of the athlete
+/// (plus the avatar normalization: a non-`http` avatar is dropped), and the
+/// upsert, returning the identity and the admin flag. `code` and `scope` are
+/// the opaque callback values the presentation layer forwards (no driver
+/// wire type crosses the seam).
+pub async fn login<D: EntityFacade<S>, S: StravaDataStore + UserStore>(
+    code: &str,
+    scope: &str,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<(UserId, bool)> {
+    if scope != SCOPES {
+        return Err(Error::BadRequest(format!(
+            "insufficient authorization {scope}"
+        )));
+    }
+
+    let token = STRAVACLIENT
+        .exchange_code(AuthorizationCode::new(code.to_string()))
+        .request_async(&*HTTP_CLIENT)
+        .await
+        .context("token exchange failed")?;
+
+    let mut athlete: StravaAthleteInfo = token
+        .extra_fields()
+        .athlete
+        .clone()
+        .ok_or(Error::BadRequest("No Athlete Info from Strava".to_string()))?;
+    // make sure you have a non-local url
+    if let Some(a) = &athlete.avatar
+        && !a.starts_with("http")
+    {
+        athlete.avatar = None;
+    }
+    let refresh_token = token.refresh_token().cloned();
+
+    let user = StravaUser::upsert(
+        athlete.id,
+        &athlete.firstname,
+        &athlete.lastname,
+        &athlete.avatar,
+        refresh_token.as_ref(),
+        facade,
+        store,
+    )
+    .await?;
+    let is_admin = user.user_id().is_admin(store).await?;
+    Ok((user.user_id(), is_admin))
 }
 
 /// Deauthorize a user: revoke their Strava token and disable their local
@@ -261,7 +312,7 @@ pub async fn strava_url(user_id: UserId, store: &mut impl StravaDataStore) -> Tb
 /// Delete a user: deauthorize them (admin-only) plus delete their rows.
 /// Admin-only — the acting `session` must be an admin; `tbid` is the target
 /// user.
-pub async fn user_delete<D: DomainFacade<S>, S: StravaDataStore>(
+pub async fn user_delete<D: EntityFacade<S>, S: StravaDataStore>(
     session: &mut dyn Session,
     tbid: UserId,
     facade: &D,

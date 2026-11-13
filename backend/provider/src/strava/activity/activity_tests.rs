@@ -9,6 +9,10 @@ fn strava_activity(gear: Option<&str>) -> StravaActivity {
     serde_json::from_str(&activity_json(10, "Ride", gear)).unwrap()
 }
 
+fn strava_id(n: i64) -> ActivityId {
+    ProviderActivityId::Strava(StravaActivityId::from(n)).into()
+}
+
 #[test]
 fn get_type_maps_strava_types() {
     assert_eq!(StravaActivity::get_type("Ride").unwrap(), 1.into());
@@ -28,24 +32,6 @@ fn get_type_rejects_unknown() {
     ));
 }
 
-/// activity_id renders the prefixed form "strava:<n>"
-#[test]
-fn activity_id_renders_prefixed() {
-    assert_eq!(format!("{}", activity_id(12345)), "strava:12345");
-}
-
-/// numeric_id recovers the raw numeric id from a strava id
-#[test]
-fn numeric_id_recovers_raw() {
-    assert_eq!(numeric_id(&activity_id(12345)), Some(12345));
-}
-
-/// numeric_id is None for a non-strava id
-#[test]
-fn numeric_id_none_for_non_strava() {
-    assert_eq!(numeric_id(&ActivityId::from("icu:i55751783")), None);
-}
-
 #[tokio::test]
 async fn into_activity_maps_fields() -> TbResult<()> {
     // No gear: `into_activity` is a pure field mapping (no store read), so the
@@ -54,7 +40,7 @@ async fn into_activity_maps_fields() -> TbResult<()> {
     let act = strava_activity(None)
         .into_activity(UserId::from(1), &_facade, &mut _store)
         .await?;
-    assert_eq!(act.id, activity_id(10));
+    assert_eq!(act.id, strava_id(10));
     assert_eq!(act.what, 1.into());
     assert_eq!(act.user_id, UserId::from(1));
     assert!(act.gear.is_none());
@@ -167,7 +153,7 @@ async fn upsert_activity_stores_new() -> TbResult<()> {
         });
     let summary = upsert_activity(10, UserId::from(1), &facade, &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
-    assert!(summary.activities.get(&activity_id(10)).is_some());
+    assert!(summary.activities.get(&strava_id(10)).is_some());
     Ok(())
 }
 
@@ -189,7 +175,7 @@ async fn upsert_activity_updates_existing() -> TbResult<()> {
     queue("/activities/10", &json);
     let summary = upsert_activity(10, UserId::from(1), &facade, &mut store).await?;
     assert!(
-        summary.activities.get(&activity_id(10)).is_some(),
+        summary.activities.get(&strava_id(10)).is_some(),
         "the updated activity is in the summary"
     );
     Ok(())
@@ -210,8 +196,14 @@ async fn activity_strava_url() -> TbResult<()> {
     // The facade's read returns the activity (the ownership check passes).
     facade
         .expect_read_activity()
-        .returning(move |_id, _user, _store| Ok(activity(activity_id(10), UserId::from(1))));
-    let url = strava_url(activity_id(10), Box::new(session), &facade, &mut store).await?;
+        .returning(move |_id, _user, _store| Ok(activity(strava_id(10), UserId::from(1))));
+    let url = strava_url(
+        StravaActivityId::from(10),
+        Box::new(session),
+        &facade,
+        &mut store,
+    )
+    .await?;
     assert_eq!(url, "https://strava.com/activities/10");
     Ok(())
 }
@@ -223,7 +215,13 @@ async fn activity_strava_url_missing() {
     facade
         .expect_read_activity()
         .returning(|_id, _user, _store| Err(Error::NotFound("".to_string())));
-    let res = strava_url(activity_id(99), Box::new(session), &facade, &mut store).await;
+    let res = strava_url(
+        StravaActivityId::from(99),
+        Box::new(session),
+        &facade,
+        &mut store,
+    )
+    .await;
     assert!(matches!(res, Err(Error::NotFound(_))));
 }
 
@@ -240,7 +238,7 @@ async fn delete_activity_removes() -> TbResult<()> {
         });
     let summary = delete_activity(10, UserId::from(1), &facade, &mut store).await?;
     assert!(
-        summary.activities.is_tombstoned(&activity_id(10)),
+        summary.activities.is_tombstoned(&strava_id(10)),
         "the deleted activity is reported as a tombstone"
     );
     Ok(())

@@ -5,7 +5,7 @@
 use time::OffsetDateTime;
 
 use super::*;
-use crate::DomainFacade;
+use crate::EntityFacade;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct StravaGear {
@@ -18,17 +18,24 @@ struct StravaGear {
     frame_type: Option<i32>,
 }
 
-pub async fn strava_url<D: DomainFacade<S>, S: StravaDataStore>(
+/// The Strava gear page for the part `gear`, gated on the acting session's
+/// ownership (the `part` read is the ownership check). The one non-total
+/// URL op (ADR-0014): a part with no provider source (a manual part) is the
+/// typed absence (`None`) — the route maps it to a no-op; an unrecognized
+/// source prefix is a `NotFound`.
+pub async fn strava_url<D: EntityFacade<S>, S: StravaDataStore>(
     gear: i32,
     user: Box<dyn Session>,
     facade: &D,
     store: &mut S,
-) -> TbResult<String> {
+) -> TbResult<Option<String>> {
     let part = facade.part(PartId::from(gear), user, store).await?;
-    let g = part.source.ok_or(Error::NotFound("".to_string()))?;
+    let Some(g) = part.source else {
+        return Ok(None);
+    };
     match &g[0..1] {
-        "b" => Ok(format!("https://strava.com/bikes/{}", &g[1..])),
-        "g" => Ok("https://www.strava.com/settings/gear".into()),
+        "b" => Ok(Some(format!("https://strava.com/bikes/{}", &g[1..]))),
+        "g" => Ok(Some("https://www.strava.com/settings/gear".into())),
         _ => Err(Error::NotFound("".to_string())),
     }
 }
@@ -47,7 +54,7 @@ impl StravaGear {
 ///
 /// If it does not exist create it at tb
 /// None will return None
-pub(crate) async fn into_partid<D: DomainFacade<S>, S: StravaDataStore>(
+pub(crate) async fn into_partid<D: EntityFacade<S>, S: StravaDataStore>(
     strava_id: String,
     user_id: UserId,
     facade: &D,

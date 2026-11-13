@@ -1,14 +1,20 @@
-//! The HTTP test seam: thread-local canned responses, the `TokenCache` seeder,
-//! and the `CANNED_STRAVA` global.
+//! The Strava HTTP test seam: `thread_local`s over the kit's canned-response
+//! machinery (spec #838), plus Strava's extras — the `TokenCache` seeder, the
+//! deauthorization recorder, the `CANNED_STRAVA` global, and the test fixtures.
 //!
 //! Available in both build modes:
 //! - `test-support` feature: the `tb_exec`/`tb_sqlx` seam suites map canned
 //!   responses for the URIs the real loop asks for.
 //! - `#[cfg(test)]`: the in-memory Strava-logic tests queue per-thread canned
 //!   responses and record the requested URIs / deauthorizations they assert on.
+//!
+//! The common machinery (`CannedState`, `begin_test`, `queue`, `pop_test_canned`,
+//! `requests`) lives in the kit's [`crate::test_support`]; this seam owns the
+//! per-provider `thread_local`s (a thread-local can't live in a struct
+//! instance) and the thin free functions that reach them.
 
 use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 
 use oauth2::RefreshToken;
 use tb_domain::{
@@ -18,6 +24,7 @@ use tb_domain::{
 use time::OffsetDateTime;
 
 use super::super::*;
+use crate::test_support::{self as kit, CannedState};
 
 // ─── Thread-local canned responses ──────────────────────────────────────────
 //
@@ -30,17 +37,14 @@ use super::super::*;
 // separate seam for the seam suite's session, which runs in a spawned
 // task on a thread this map never reaches.
 
-/// The per-thread canned-response state (see the section docs).
-#[derive(Default)]
-struct CannedState {
-    test_mode: bool,
-    responses: HashMap<String, VecDeque<TbResult<String>>>,
-    requests: Vec<String>,
-    deauthorizes: Vec<StravaId>,
-}
-
 thread_local! {
     static CANNED: RefCell<CannedState> = RefCell::new(CannedState::default());
+}
+
+// The recorded `deauthorize()` calls — Strava's extra, kept in its own
+// thread-local (the kit's `CannedState` carries no provider-specific fields).
+thread_local! {
+    static DEAUTHORIZES: RefCell<Vec<StravaId>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Begin a test's thread-local scope: marks the thread in test mode and clears
@@ -52,10 +56,8 @@ thread_local! {
 /// [`seed_token_cache`]), so a per-test clear would let one test's clear race
 /// another test's `get_token` (a cache miss would force a real refresh).
 pub fn begin_test() {
-    CANNED.with(|c| {
-        *c.borrow_mut() = CannedState::default();
-        c.borrow_mut().test_mode = true;
-    });
+    kit::begin_test(&CANNED);
+    DEAUTHORIZES.with(|d| *d.borrow_mut() = Vec::new());
 }
 
 /// Seed the `TokenCache` with a warm token for `user_id` (test-only): prevents
@@ -74,29 +76,17 @@ pub fn seed_token_cache(user_id: UserId, strava_id: StravaId, access_token: &str
 /// Whether the current thread is in test mode (`strava_session` was built,
 /// or `begin_test` was called).
 pub fn in_test_mode() -> bool {
-    CANNED.with(|c| c.borrow().test_mode)
+    kit::in_test_mode(&CANNED)
 }
 
 /// Queue a canned JSON response for an exact request URI (FIFO per URI).
 pub fn queue(uri: &str, json: &str) {
-    CANNED.with(|c| {
-        c.borrow_mut()
-            .responses
-            .entry(uri.to_string())
-            .or_default()
-            .push_back(Ok(json.to_string()));
-    });
+    kit::queue(&CANNED, uri, json);
 }
 
 /// Queue an error for an exact request URI.
 pub fn queue_error(uri: &str, err: Error) {
-    CANNED.with(|c| {
-        c.borrow_mut()
-            .responses
-            .entry(uri.to_string())
-            .or_default()
-            .push_back(Err(err));
-    });
+    kit::queue_error(&CANNED, uri, err);
 }
 
 /// Pop the canned response for `uri` (the free function's thread-local offline
@@ -108,37 +98,23 @@ pub fn queue_error(uri: &str, err: Error) {
 /// an unqueued URI records the request and yields the "unexpected request"
 /// error.
 pub fn pop_test_canned(uri: &str) -> Option<TbResult<String>> {
-    CANNED.with(|c| {
-        let mut c = c.borrow_mut();
-        if !c.test_mode {
-            return None;
-        }
-        c.requests.push(uri.to_string());
-        Some(
-            c.responses
-                .get_mut(uri)
-                .and_then(|q| q.pop_front())
-                .unwrap_or(Err(Error::BadRequest(format!(
-                    "unexpected strava request: {uri}"
-                )))),
-        )
-    })
+    kit::pop_test_canned(&CANNED, uri, "strava")
 }
 
 /// Record a deauthorization in the thread-local map (the free function's
 /// offline seam).
 pub fn record_deauthorize(strava: StravaId) {
-    CANNED.with(|c| c.borrow_mut().deauthorizes.push(strava));
+    DEAUTHORIZES.with(|d| d.borrow_mut().push(strava));
 }
 
 /// The requested URIs, in order (assert on these to verify API calls).
 pub fn requests() -> Vec<String> {
-    CANNED.with(|c| c.borrow().requests.clone())
+    kit::requests(&CANNED)
 }
 
 /// The recorded `deauthorize()` calls.
 pub fn deauthorizes() -> Vec<StravaId> {
-    CANNED.with(|c| c.borrow().deauthorizes.clone())
+    DEAUTHORIZES.with(|d| d.borrow().clone())
 }
 
 /// A [`MockSession`] for `user` with a warm token seeded for `strava`
@@ -162,16 +138,16 @@ pub fn strava_admin_session(user: UserId, strava: StravaId) -> MockSession {
 }
 
 /// The standard test triple: a fresh `MockStravaDataStore`, a
-/// `MockDomainFacade` (with `C` = `MockStravaDataStore`), and a
+/// `MockEntityFacade` (with `C` = `MockStravaDataStore`), and a
 /// [`strava_session`] for user 1 / Strava ID 42.
 #[cfg(test)]
 pub fn setup() -> (
     super::super::traits::MockStravaDataStore,
-    crate::MockDomainFacade<super::super::traits::MockStravaDataStore>,
+    crate::MockEntityFacade<super::super::traits::MockStravaDataStore>,
     MockSession,
 ) {
     let store = super::super::traits::MockStravaDataStore::new();
-    let facade = crate::MockDomainFacade::<super::super::traits::MockStravaDataStore>::new();
+    let facade = crate::MockEntityFacade::<super::super::traits::MockStravaDataStore>::new();
     let session = strava_session(UserId::from(1), 42.into());
     (store, facade, session)
 }

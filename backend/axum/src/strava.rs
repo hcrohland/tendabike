@@ -16,9 +16,6 @@ use crate::appstate::AppState;
 
 mod oauth;
 
-mod session;
-pub(crate) use session::*;
-
 mod redirect;
 mod webhook;
 
@@ -35,8 +32,8 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/sync/{id}", get(webhook::sync))
         .route("/onboarding/sync", post(webhook::trigger_initial_sync))
         .route("/onboarding/postpone", post(webhook::postpone_initial_sync))
-        .route("/bikes/{id}", get(redirect::redirect_gear))
-        .route("/users/{id}", get(redirect::redirect_user))
+        .route("/bikes/{id}", get(crate::redirect::strava_gear_redirect))
+        .route("/users/{id}", get(crate::redirect::strava_user_redirect))
         .route("/disable/{id}", post(redirect::revoke_user))
         .route("/delete/{id}", delete(redirect::deleteuser))
 }

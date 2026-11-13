@@ -1,5 +1,5 @@
 //! Proactive intervals.icu rate limiting: a thin shim over the shared
-//! [`tb_provider::RateLimiter`] kernel.
+//! [`tb_provider::RateLimitShim`] kit module.
 //!
 //! The process-wide limiter is constructed with intervals.icu's header
 //! mapping — a 15-minute and a daily window, both reading the
@@ -16,11 +16,10 @@
 //! observe each other's process-global state.
 
 use std::cell::RefCell;
-use std::sync::Mutex;
 
 use http::{HeaderMap, HeaderName};
 
-use crate::{Cadence, RateLimiter, UsageKind, WindowSpec};
+use crate::{Cadence, RateLimitShim, RateLimiter, UsageKind, WindowSpec};
 
 /// intervals.icu's 2-window header mapping: a 15-minute and a daily window,
 /// both reading the `X-RateLimit-Limit` / `X-RateLimit-Remaining` pair. The
@@ -44,8 +43,8 @@ fn icu_specs() -> Vec<WindowSpec> {
 }
 
 /// The process-wide icu rate limiter (shared across all executors).
-static RATE_LIMITER: std::sync::LazyLock<Mutex<RateLimiter>> =
-    std::sync::LazyLock::new(|| Mutex::new(RateLimiter::new("icu", icu_specs())));
+static RATE_LIMITER: std::sync::LazyLock<RateLimitShim> =
+    std::sync::LazyLock::new(|| RateLimitShim::new("icu", icu_specs()));
 
 // A per-thread override limiter, set by the test hooks
 // (`test_set_limited` / `test_set_not_limited`). When `Some`, `limited_until`
@@ -67,8 +66,7 @@ pub fn limited_until() -> Option<i64> {
     if let Some(until) = TEST_OVERRIDE.with(|o| o.borrow().as_ref().map(|l| l.gate())) {
         return until;
     }
-    let mut limiter = RATE_LIMITER.lock().unwrap();
-    limiter.limited_until()
+    RATE_LIMITER.limited_until()
 }
 
 /// Parses intervals.icu's `X-RateLimit-*` response headers into the shared
@@ -76,8 +74,7 @@ pub fn limited_until() -> Option<i64> {
 /// Missing or malformed headers are ignored (the state keeps its previous
 /// values for those fields).
 pub fn update_from_headers(headers: &HeaderMap) {
-    let mut limiter = RATE_LIMITER.lock().unwrap();
-    limiter.update_from_headers(headers);
+    RATE_LIMITER.update_from_headers(headers);
 }
 
 #[cfg(test)]
@@ -85,10 +82,14 @@ pub fn update_from_headers(headers: &HeaderMap) {
 /// 0 remaining), so [`limited_until`] reports a boundary.
 pub fn test_set_limited() {
     TEST_OVERRIDE.with(|o| {
-        *o.borrow_mut() = Some(limiter_from_headers(&[
-            ("X-RateLimit-Limit", "100,1000"),
-            ("X-RateLimit-Remaining", "0,500"),
-        ]));
+        *o.borrow_mut() = Some(RateLimitShim::limiter_from_headers(
+            "icu",
+            &icu_specs(),
+            &[
+                ("X-RateLimit-Limit", "100,1000"),
+                ("X-RateLimit-Remaining", "0,500"),
+            ],
+        ));
     });
 }
 
@@ -97,25 +98,15 @@ pub fn test_set_limited() {
 /// requests), so [`limited_until`] reports no limit.
 pub fn test_set_not_limited() {
     TEST_OVERRIDE.with(|o| {
-        *o.borrow_mut() = Some(limiter_from_headers(&[
-            ("X-RateLimit-Limit", "100,1000"),
-            ("X-RateLimit-Remaining", "100,1000"),
-        ]));
+        *o.borrow_mut() = Some(RateLimitShim::limiter_from_headers(
+            "icu",
+            &icu_specs(),
+            &[
+                ("X-RateLimit-Limit", "100,1000"),
+                ("X-RateLimit-Remaining", "100,1000"),
+            ],
+        ));
     });
-}
-
-/// A fresh process-limiter-shaped limiter populated from the given headers
-/// (test helper for the per-thread override).
-#[cfg(test)]
-fn limiter_from_headers(pairs: &[(&str, &str)]) -> RateLimiter {
-    let mut m = HeaderMap::new();
-    for (k, v) in pairs {
-        let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
-        m.insert(name, http::HeaderValue::from_str(v).unwrap());
-    }
-    let mut limiter = RateLimiter::new("icu", icu_specs());
-    limiter.update_from_headers(&m);
-    limiter
 }
 
 #[cfg(test)]

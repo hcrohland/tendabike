@@ -1,20 +1,20 @@
 /*
-   tendabike - the bike maintenance tracker
+  tendabike - the bike maintenance tracker
 
-   Copyright (C) 2023  Christoph Rohland
+  Copyright (C) 2023  Christoph Rohland
 
-   This program is free software: you can redistribute it and/or modify
-   it under the terms of the GNU Affero General Public License as published
-   by the Free Software Foundation, either version 3 of the License, or
-   (at your option) any later version.
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published
+  by the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU Affero General Public License for more details.
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Affero General Public License for more details.
 
-   You should have received a copy of the GNU Affero General Public License
-   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+  You should have received a copy of the GNU Affero General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 */
 
@@ -27,75 +27,21 @@
 //! transaction's connection): `type Store = S`, so the loop's transaction
 //! connection ties to `S` and `probe`/`process` operate on it.
 
-use std::marker::PhantomData;
-
-use crate::{Probe, ProviderLane};
-use tb_domain::{PartId, Summary, TbResult, UserId, UserStat};
+use crate::{Lane, Probe, ProviderActivityId, ProviderLane};
+use tb_domain::{ActivityId, Error, PartId, Session, Summary, TbResult, UserId, UserStat};
 
 use super::StravaStore;
 use super::event::{Event, QueueRead, get_event, process};
 
-/// The Strava provider lane: the [`ProviderLane`] impl for the Strava driver.
-/// The loop calls through it; a second provider (a new feature module)
-/// implements [`ProviderLane`] too, and the loop works with it unchanged.
-///
-/// Generic over the store type `S` (the provider's full store — the
-/// transaction's connection): `type Store = S`, so the loop's transaction
-/// connection ties to `S`. `S` is the connection the loop's transaction
-/// source opens (the Postgres connection in production, the test double in
-/// the suites), which is why the lane is generic over it rather than naming
-/// a concrete store.
-///
-/// The marker-field impls (`Clone`/`Copy`/`Debug`/`Default`) are written by
-/// hand rather than derived: a derive would add an `S: Clone`/`S: Debug`
-/// bound, but the lane holds no `S` data (only a `PhantomData<S>` marker), so
-/// it is `Clone`/`Copy`/`Debug`/`Default` for any `S` — including a database
-/// connection, which is neither `Clone` nor `Debug`.
-pub struct StravaLane<S: StravaStore> {
-    _store: PhantomData<S>,
-}
-
-impl<S: StravaStore> Clone for StravaLane<S> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<S: StravaStore> Copy for StravaLane<S> {}
-
-impl<S: StravaStore> std::fmt::Debug for StravaLane<S> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("StravaLane").finish()
-    }
-}
-
-impl<S: StravaStore> Default for StravaLane<S> {
-    fn default() -> Self {
-        Self {
-            _store: PhantomData,
-        }
-    }
-}
-
-// `StravaLane<S>` holds no `S` data (only a `PhantomData<S>` marker), so it is
-// safe to share across threads even when `S` is not `Sync` (a database
-// connection, like the Postgres one, is `Send` but not `Sync`). The
-// auto-derived `Sync` would require `S: Sync`; this sound `unsafe impl`
-// provides the unconditional `Sync` the `ProviderLane: Send + Sync` bound
-// needs.
-unsafe impl<S: StravaStore> Sync for StravaLane<S> {}
-
-impl<S: StravaStore> StravaLane<S> {
-    /// The lane for a store of type `S`.
-    pub fn new() -> Self {
-        Self {
-            _store: PhantomData,
-        }
-    }
-}
+/// The Strava provider lane: [`Lane<S, Event>`](Lane) — the [`ProviderLane`]
+/// impl for the Strava driver. The distinct event type `Event` keeps this impl
+/// apart from the icu lane's. The loop calls through it; a second provider (a
+/// new feature module) implements [`ProviderLane`] too, and the loop works
+/// with it unchanged.
+pub type StravaLane<S> = Lane<S, Event>;
 
 #[async_trait::async_trait]
-impl<S> ProviderLane for StravaLane<S>
+impl<S> ProviderLane for Lane<S, Event>
 where
     S: StravaStore + Send + 'static,
 {
@@ -120,7 +66,7 @@ where
     /// Delegates to [`crate::event::process`]. Returns the event's
     /// [`Summary`] on success, or `None` on a DB failure.
     async fn process(&self, user_id: UserId, store: &mut S) -> Option<Summary> {
-        process(user_id, &crate::DomainFacadeImpl, store).await.ok()
+        process(user_id, &crate::EntityFacadeImpl, store).await.ok()
     }
 
     /// Queue a sync event on the Strava event queue (the onboarding cutover's
@@ -142,7 +88,7 @@ where
     /// transaction and reads the parts it created for the frame. Delegates to
     /// [`crate::user::StravaUser::update_gear`].
     async fn update_gear(&self, user_id: UserId, store: &mut S) -> TbResult<Vec<PartId>> {
-        super::user::StravaUser::update_gear(user_id, &crate::DomainFacadeImpl, store).await
+        super::user::StravaUser::update_gear(user_id, &crate::EntityFacadeImpl, store).await
     }
 
     /// Read every user's provider-neutral stat (the admin read's provider
@@ -150,6 +96,21 @@ where
     /// queued-event count and disabled flag. Delegates to
     /// [`crate::user::get_all_stats`].
     async fn all_stats(&self, store: &mut S) -> TbResult<Vec<UserStat>> {
-        super::user::get_all_stats(&crate::DomainFacadeImpl, store).await
+        super::user::get_all_stats(&crate::EntityFacadeImpl, store).await
+    }
+
+    /// The Strava half of [`ProviderLane::activity_url`]: the `strava:` URL
+    /// for `id`, gated on the acting session's ownership of the activity.
+    /// Delegates to [`crate::activity::strava_url`].
+    async fn activity_url(
+        &self,
+        id: ActivityId,
+        session: Box<dyn Session>,
+        store: &mut S,
+    ) -> TbResult<String> {
+        let ProviderActivityId::Strava(raw) = ProviderActivityId::try_from(id)? else {
+            return Err(Error::BadRequest("not a strava activity".to_string()));
+        };
+        super::activity::strava_url(raw, session, &crate::EntityFacadeImpl, store).await
     }
 }

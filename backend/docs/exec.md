@@ -101,14 +101,19 @@ exit — the stream keeps its connection, heartbeats, re-subscribes), or
 `Dead` (a lifecycle error or panic — the stream ends so the client
 reconnects and respawns).
 
-**`ServiceApi`** is the surface a presentation layer calls — 15 methods in
+**`ServiceApi`** is the surface a presentation layer calls — 8 methods in
 two groups:
 
 - **Channel ops** (ride the per-user FIFO): `read`, `write`,
   `hydrate_gear`, `subscribe`, `all_stats`.
 - **Direct ops** (own their own transactions): `subscribe_shop`, `rescan`,
-  `sync`, `trigger_processing`, `login_from_token`, `accept_event`,
-  `gear_url`, `activity_url`, `user_url`, `deauthorize`, `delete_user`.
+  `trigger_processing`.
+
+The provider-specific direct ops (login, webhook intake, sync,
+deauthorize, delete, the redirect URLs) live in
+**`ProviderService`** (`providerservice.rs`) — the provider-agnostic
+surface (ADR-0014) that the `Registry` implements as a thin forward to the
+provider layer's dispatch.
 
 The inclusion rule is *only what a presentation layer calls*: lifecycle
 internals (`wake`, `stop_all`, …) stay off the trait.

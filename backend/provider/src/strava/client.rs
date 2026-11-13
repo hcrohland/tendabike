@@ -25,16 +25,15 @@
 //! stays in the web layer, beside the exchange it feeds.
 
 use oauth2::{
-    AuthUrl, Client, ClientId, ClientSecret, EndpointNotSet, EndpointSet, ExtraTokenFields,
-    RedirectUrl, RevocationUrl, StandardRevocableToken, StandardTokenResponse, TokenUrl,
-    basic::{
-        BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
-        BasicTokenType,
-    },
-    reqwest,
+    AuthUrl, ClientId, ClientSecret, EndpointNotSet, EndpointSet, ExtraTokenFields, RedirectUrl,
+    RevocationUrl, StandardTokenResponse, TokenUrl, basic::BasicTokenType,
 };
 use serde::{Deserialize, Serialize};
 use std::{env, sync::LazyLock};
+
+use crate::client::ProviderClient;
+
+pub use crate::client::HTTP_CLIENT;
 
 /// The Strava athlete info carried in the token response's extra fields.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -80,12 +79,8 @@ pub type StravaClient<
     HasIntrospectionUrl = EndpointNotSet,
     HasRevocationUrl = EndpointSet,
     HasTokenUrl = EndpointSet,
-> = Client<
-    BasicErrorResponse,
+> = ProviderClient<
     StravaTokenResponse,
-    BasicTokenIntrospectionResponse,
-    StandardRevocableToken,
-    BasicRevocationErrorResponse,
     HasAuthUrl,
     HasDeviceAuthUrl,
     HasIntrospectionUrl,
@@ -95,10 +90,6 @@ pub type StravaClient<
 
 /// The shared Strava oauth client (built once from the process environment).
 pub static STRAVACLIENT: LazyLock<StravaClient> = LazyLock::new(strava_oauth_client);
-
-/// The shared reqwest client for the Strava API (no redirects: following
-/// them opens the client up to SSRF vulnerabilities).
-pub static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(http_client);
 
 fn strava_oauth_client() -> StravaClient {
     // Environment variables (* = required):
@@ -128,14 +119,6 @@ fn strava_oauth_client() -> StravaClient {
         .set_auth_type(oauth2::AuthType::RequestBody)
         .set_redirect_uri(redirect_url)
         .set_revocation_url(revocation_url)
-}
-
-fn http_client() -> reqwest::Client {
-    reqwest::ClientBuilder::new()
-        // Following redirects opens the client up to SSRF vulnerabilities.
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .expect("Client should build")
 }
 
 /// The scope string the login exchange requests.

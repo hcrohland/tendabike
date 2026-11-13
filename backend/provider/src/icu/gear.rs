@@ -9,7 +9,7 @@
 use time::OffsetDateTime;
 
 use super::*;
-use crate::DomainFacade;
+use crate::EntityFacade;
 use tb_domain::{PartId, PartTypeId, TbResult, UserId};
 
 /// The intervals.icu wire shape of a gear (`GET /athlete/{id}/gear`).
@@ -52,7 +52,7 @@ impl IcuGear {
 /// Maps an icu gear to a Tendabike [`PartId`]: reuses the part carrying the
 /// namespaced `icu:{id}` source, or creates it (vendor and model left empty).
 /// `None` for unsupported types (the gear is skipped).
-pub(crate) async fn into_partid<D: DomainFacade<S>, S: IcuDataStore>(
+pub(crate) async fn into_partid<D: EntityFacade<S>, S: IcuDataStore>(
     gear: &IcuGear,
     user_id: UserId,
     facade: &D,
@@ -93,7 +93,7 @@ pub(crate) async fn into_partid<D: DomainFacade<S>, S: IcuDataStore>(
 /// Skips the icu call silently when the rate limiter reports no budget:
 /// hydration is best-effort and must not be blocked by a non-essential API
 /// call (mirrors the Strava driver's `update_gear`).
-pub async fn update_gear<D: DomainFacade<S>, S: IcuDataStore>(
+pub async fn update_gear<D: EntityFacade<S>, S: IcuDataStore>(
     user_id: UserId,
     facade: &D,
     store: &mut S,
@@ -112,6 +112,17 @@ pub async fn update_gear<D: DomainFacade<S>, S: IcuDataStore>(
         }
     }
     Ok(parts)
+}
+
+/// The icu half of the provider-agnostic `gear_url` dispatch (ADR-0014): icu
+/// gear is a private settings item with no public page, so the URL is the
+/// typed absence (`None`) — the route maps it to a no-op.
+pub async fn gear_url<S: IcuStore + 'static>(
+    _id: PartId,
+    _session: Box<dyn Session>,
+    _store: &mut S,
+) -> TbResult<Option<String>> {
+    Ok(None)
 }
 
 #[cfg(test)]

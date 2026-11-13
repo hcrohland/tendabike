@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use super::activity::StravaActivity;
 use super::*;
-use crate::DomainFacade;
+use crate::EntityFacade;
 
 #[derive(Debug, Serialize, Deserialize)]
 /// A struct representing an incoming Strava event.
@@ -89,6 +89,22 @@ impl InEvent {
             Ok(Some(user_id))
         }
     }
+}
+
+/// The webhook intake (ADR-0014): the provider's webhook work behind the
+/// seam — the envelope parse of the raw body, then the accept (the queue
+/// insert, or the athlete-deauth branch). `body` is the raw webhook body the
+/// presentation layer forwards (no driver wire type crosses the seam).
+/// Returns the owner's TendaBike [`UserId`] when a row was queued (the
+/// caller's wake), or `None` for an athlete (de)authorization.
+pub async fn accept_event(
+    body: &str,
+    store: &mut impl StravaDataStore,
+) -> TbResult<Option<UserId>> {
+    let event: InEvent = serde_json::from_str(body)
+        .map_err(|e| Error::BadRequest(format!("invalid strava webhook envelope: {e}")))?;
+    trace!("Received {event:#?}");
+    event.accept(store).await
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
@@ -202,7 +218,7 @@ impl Event {
         store.strava_event_set_time(self.id, self.event_time).await
     }
 
-    async fn process_activity<D: DomainFacade<S>, S: StravaDataStore>(
+    async fn process_activity<D: EntityFacade<S>, S: StravaDataStore>(
         &self,
         user_id: UserId,
         facade: &D,
@@ -228,7 +244,7 @@ impl Event {
     /// # Examples
     ///
     ///
-    async fn process_hook<D: DomainFacade<S>, S: StravaDataStore>(
+    async fn process_hook<D: EntityFacade<S>, S: StravaDataStore>(
         &self,
         user_id: UserId,
         facade: &D,
@@ -252,7 +268,7 @@ impl Event {
         Ok(res)
     }
 
-    async fn sync<D: DomainFacade<S>, S: StravaDataStore>(
+    async fn sync<D: EntityFacade<S>, S: StravaDataStore>(
         &mut self,
         user_id: UserId,
         facade: &D,
@@ -275,9 +291,9 @@ impl Event {
                     match a.send_to_tb(user_id, facade, store).await {
                         Ok(ps) => summary += ps,
                         // Rate limit, dead auth, or DB failure: bubble up to
-                        // the classifier (`fail_event`) — the Stop keeps the
-                        // event at the last good cursor, the disable drops the
-                        // queue, the DB failure backs off in the loop.
+                        // the failure policy (`fail_event`) — the Stop keeps
+                        // the event at the last good cursor, the disable drops
+                        // the queue, the DB failure backs off in the loop.
                         Err(err)
                             if matches!(
                                 err,
@@ -302,7 +318,7 @@ impl Event {
         Ok(summary)
     }
 
-    async fn process_sync<D: DomainFacade<S>, S: StravaDataStore>(
+    async fn process_sync<D: EntityFacade<S>, S: StravaDataStore>(
         mut self,
         user_id: UserId,
         facade: &D,
@@ -314,43 +330,33 @@ impl Event {
         }
     }
 
-    /// The failure semantics of a failed Strava message (spec #446 §4.6) —
-    /// drop on permanent failure, no dead-letter table:
-    ///
-    /// - `TryAgain` (rate limited) → insert the global `Stop` and keep the
-    ///   event queued: it is retried after the backoff.
-    /// - `NotAuth` (401 after a token refresh) → disable the user's Strava
-    ///   integration, which drops all their queued events: the data freezes
-    ///   (stale but consistent), and no event-by-event 401s follow.
-    /// - A DB failure → propagate: the caller rolls back (the event
-    ///   stays queued) and applies its in-memory backoff.
-    /// - Anything else is permanent (a 404 means the activity is gone; a parse
-    ///   error will not heal): delete the event, log it, and move on — the
-    ///   admin sync endpoint re-covers a gap if the user cares.
+    /// Applies the kit's failure decision ([`crate::failure`], spec #446
+    /// §4.6) to Strava's tables: the disable and the delete commit with the
+    /// loop's transaction.
     ///
     /// Every arm returns `Ok` except the DB failure: the queue-side effects
-    /// (the `Stop`, the disable, the delete) are committed by the loop's
-    /// transaction, and the loop continues.
+    /// (the disable, the delete) are committed by the loop's transaction,
+    /// and the loop continues.
     async fn fail_event(&self, err: Error, store: &mut impl StravaDataStore) -> TbResult<Summary> {
-        match err {
-            Error::TryAgain(msg) => {
+        match crate::failure::classify(&err) {
+            crate::failure::FailureDecision::KeepQueued => {
                 // The rate-limit state is already updated from the 429
                 // response headers (in `get_strava`); the event stays queued
                 // and the next `get_event` probe will report `Limited`.
-                warn!("Strava rate limited ({msg}); event stays queued until the window resets");
+                warn!("Strava rate limited ({err}); event stays queued until the window resets");
                 Ok(Summary::default())
             }
-            Error::NotAuth(msg) => {
+            crate::failure::FailureDecision::DisableUser => {
                 warn!(
-                    "Strava auth is dead ({msg}); disabling user {}",
+                    "Strava auth is dead ({err}); disabling user {}",
                     self.owner_id
                 );
                 self.owner_id.disable(store).await?;
                 Ok(Summary::default())
             }
-            Error::DatabaseFailure(_) => Err(err),
-            other => {
-                warn!("dropping poison event {self}: {other:#}");
+            crate::failure::FailureDecision::Propagate => Err(err),
+            crate::failure::FailureDecision::DropEvent => {
+                warn!("dropping poison event {self}: {err:#}");
                 self.delete(store).await?;
                 Ok(Summary::default())
             }
@@ -526,7 +532,7 @@ async fn next_activities(
     .await
 }
 
-pub(crate) async fn process<D: DomainFacade<S>, S: StravaDataStore>(
+pub(crate) async fn process<D: EntityFacade<S>, S: StravaDataStore>(
     user_id: UserId,
     facade: &D,
     store: &mut S,

@@ -4,42 +4,35 @@
 //! reference resolution.
 //!
 //! The `icu:` [`ActivityId`] prefix is an icu concern: the domain's
-//! `ActivityId` is an opaque string (ADR-0013), so the prefix construction
-//! lives here, private to the icu module.
+//! `ActivityId` is an opaque string (ADR-0013), so the prefix knowledge
+//! lives in the crate-level `activity_id` module (the `ProviderActivityId`
+//! the opaque id converts to and from).
 
 use time::OffsetDateTime;
 
 use super::*;
-use crate::DomainFacade;
+use crate::{EntityFacade, IcuActivityId, ProviderActivityId};
 use tb_domain::{
     ActTypeId, Activity, Error, Notification, NotificationKind, NotificationLifecycle,
     NotificationSubject, PartId, Summary, UserId,
 };
 
-/// The [`ActivityId`] for an icu activity, rendered as `"icu:<id>"`.
-fn activity_id(id: &str) -> ActivityId {
-    ActivityId::from(format!("icu:{id}"))
-}
-
 /// The intervals.icu URL for an activity (the `/source/activities/{id}`
 /// redirect target): verifies ownership via the facade, then builds the
 /// provider URL from the raw id.
 pub async fn activity_url<D, S>(
-    id: ActivityId,
+    id: IcuActivityId,
     user: Box<dyn Session>,
     facade: &D,
     store: &mut S,
 ) -> TbResult<String>
 where
-    D: DomainFacade<S>,
+    D: EntityFacade<S>,
     S: Send + Sync,
 {
-    facade.read_activity(&id, user, store).await?;
-    let s = id.to_string();
-    let raw = s
-        .strip_prefix("icu:")
-        .ok_or_else(|| tb_domain::Error::BadRequest(format!("not an icu activity: {s}")))?;
-    Ok(format!("https://intervals.icu/activities/{raw}"))
+    let full: ActivityId = ProviderActivityId::Icu(id.clone()).into();
+    facade.read_activity(&full, user, store).await?;
+    Ok(format!("https://intervals.icu/activities/{id}"))
 }
 
 /// A gear reference carried by an icu activity.
@@ -89,7 +82,7 @@ impl IcuActivity {
     }
 
     /// Maps the icu activity to the domain [`Activity`].
-    async fn into_activity<D: DomainFacade<S>, S: IcuDataStore>(
+    async fn into_activity<D: EntityFacade<S>, S: IcuDataStore>(
         self,
         user_id: UserId,
         facade: &D,
@@ -114,7 +107,7 @@ impl IcuActivity {
             None => None,
         };
         Ok(Activity {
-            id: activity_id(&id),
+            id: ProviderActivityId::Icu(IcuActivityId::from(id)).into(),
             what,
             gear,
             user_id,
@@ -131,55 +124,21 @@ impl IcuActivity {
         })
     }
 
-    /// Maps intervals.icu activity type strings to Tendabike types.
-    ///
-    /// Mirrors the Strava driver's mapping for all shared types (including the
-    /// non-cycling ones), plus the cycling-subtype arms:
-    /// `Ride`→1, `MountainBikeRide`/`EMountainBikeRide`→11, `GravelRide`→12,
-    /// `Cyclocross`→13, `EBikeRide`→9, `VirtualRide`→5, and the
-    /// `Handcycle`/`TrackRide`/`Velomobile`/`NordicSki`/`RollerSki` fallback to
-    /// 0. Unknown types are `Err(BadRequest)`.
+    /// Maps intervals.icu activity type strings to Tendabike types: the
+    /// common wire-name arms from the provider kit's table
+    /// ([`crate::activity_type::common_type`]), plus the cycling-subtype arms
+    /// that are icu-specific — `MountainBikeRide`/`EMountainBikeRide`→11,
+    /// `GravelRide`→12, `Cyclocross`→13, and `TrackRide`→0. Unknown types are
+    /// `Err(BadRequest)`.
     fn get_type(t: &str) -> TbResult<ActTypeId> {
+        if let Some(id) = crate::activity_type::common_type(t) {
+            return Ok(id);
+        }
         Ok(match t {
-            // ── cycling subtypes ──────────────────────────────────────────
-            "Ride" => 1,
             "MountainBikeRide" | "EMountainBikeRide" => 11,
             "GravelRide" => 12,
             "Cyclocross" => 13,
-            "EBikeRide" => 9,
-            "VirtualRide" => 5,
-            "Handcycle" | "TrackRide" | "Velomobile" | "NordicSki" | "RollerSki" => 0,
-            // ── shared (non-cycling) types ────────────────────────────────
-            "Snowboard" => 2,
-            "Run" | "VirtualRun" => 3,
-            "Hike" => 4,
-            "AlpineSki" => 6,
-            "Walk" => 8,
-            "BackcountrySki" => 10,
-            "Workout" => 0,
-            "StandUpPaddling" => 0,
-            "Windsurf" => 0,
-            "Kitesurf" => 0,
-            "Rowing" => 0,
-            "WaterSport" => 0,
-            "RockClimbing" => 0,
-            "Canoeing" => 0,
-            "Crossfit" => 0,
-            "Elliptical" => 0,
-            "Golf" => 0,
-            "IceSkate" => 0,
-            "InlineSkate" => 0,
-            "Kayaking" => 0,
-            "Sail" => 0,
-            "Skateboard" => 0,
-            "Snowshoe" => 0,
-            "Soccer" => 0,
-            "StairStepper" => 0,
-            "Surfing" => 0,
-            "Swim" => 0,
-            "WeightTraining" => 0,
-            "Wheelchair" => 0,
-            "Yoga" => 0,
+            "TrackRide" => 0,
             _ => return Err(Error::BadRequest(format!("unsupported activity {t}"))),
         }
         .into())
@@ -191,7 +150,7 @@ impl IcuActivity {
 /// the gear part has not been imported yet (the activity's gear reference is
 /// dropped — the gear `Part` itself imports via the gear endpoint, a later
 /// ticket).
-async fn gear_into_partid<D: DomainFacade<S>, S: IcuDataStore>(
+async fn gear_into_partid<D: EntityFacade<S>, S: IcuDataStore>(
     id: &str,
     facade: &D,
     store: &mut S,
@@ -207,7 +166,7 @@ async fn gear_into_partid<D: DomainFacade<S>, S: IcuDataStore>(
 /// Imports an icu activity that is already in hand (no HTTP fetch): stub
 /// check → map → upsert. Used by the backfill (the list response carries all
 /// the fields the domain records).
-pub(crate) async fn import_activity_data<D: DomainFacade<S>, S: IcuDataStore>(
+pub(crate) async fn import_activity_data<D: EntityFacade<S>, S: IcuDataStore>(
     act: IcuActivity,
     user_id: UserId,
     facade: &D,
@@ -226,7 +185,7 @@ pub(crate) async fn import_activity_data<D: DomainFacade<S>, S: IcuDataStore>(
 
 /// the upsert's `Summary` for a real activity. Errors (a 401, a 429, a DB
 /// failure) bubble up for the caller to classify.
-pub(crate) async fn import_activity<D: DomainFacade<S>, S: IcuDataStore>(
+pub(crate) async fn import_activity<D: EntityFacade<S>, S: IcuDataStore>(
     activity_id: &str,
     user_id: UserId,
     facade: &D,
@@ -247,7 +206,7 @@ pub(crate) async fn import_activity<D: DomainFacade<S>, S: IcuDataStore>(
 
 /// The one transient notification a stub-skip batch carries (spec #764): the
 /// `message` is the skip count. A stub batch (≥1 skipped) creates exactly one.
-pub(crate) async fn stub_notice<D: DomainFacade<S>, S: IcuDataStore>(
+pub(crate) async fn stub_notice<D: EntityFacade<S>, S: IcuDataStore>(
     user_id: UserId,
     skipped: usize,
     facade: &D,

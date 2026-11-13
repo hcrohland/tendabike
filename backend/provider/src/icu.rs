@@ -5,7 +5,7 @@
 //! including OAuth authentication, webhook acceptance, and activity import
 //! (spec #763/#764). It is a feature-gated peer to the `strava` module: same
 //! feature-gate pattern, same store-trait pattern, depends only on
-//! `tb_domain` via the `DomainFacade` (ADR-0013).
+//! `tb_domain` via the `EntityFacade` (ADR-0013).
 //!
 //! The module is divided into submodules, each responsible for a specific
 //! functionality:

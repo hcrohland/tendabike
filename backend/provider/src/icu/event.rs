@@ -8,11 +8,13 @@
 //! event); [`process`] drains the queue in one call, importing each activity,
 //! and carries the one stub-skip notice a batch produces.
 
-use log::{info, warn};
+use log::{info, trace, warn};
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 use super::{IcuDataStore, IcuId};
-use crate::DomainFacade;
+use crate::EntityFacade;
 use tb_domain::{Error, Summary, TbResult, UserId};
 
 /// A queued icu event (a row in the `icu_events` table).
@@ -52,6 +54,106 @@ impl IcuEvent {
         store.icu_event_create(self).await?;
         Ok(user.tendabike_id)
     }
+}
+
+/// The intervals.icu webhook envelope (the `POST /icu/callback` body,
+/// ADR-0014): the app's shared `secret` and the array of `events`.
+#[derive(Debug, Deserialize)]
+struct IcuWebhook {
+    /// The app's shared webhook secret (verified against
+    /// `ICU_WEBHOOK_SECRET`).
+    secret: String,
+    /// The events in the delivery (an intervals.icu app has one webhook URL
+    /// for every athlete who authorized it, so a delivery can carry several).
+    events: Vec<IcuWebhookEvent>,
+}
+
+/// One event in an intervals.icu webhook delivery.
+#[derive(Debug, Deserialize)]
+struct IcuWebhookEvent {
+    /// The icu athlete the event belongs to.
+    athlete_id: String,
+    /// The event type (e.g. `ACTIVITY_ANALYZED`); only `ACTIVITY_ANALYZED` is
+    /// subscribed.
+    #[serde(rename = "type")]
+    type_: String,
+    /// The event's RFC 3339 timestamp.
+    timestamp: String,
+    /// The activity the event refers to (its id is the `icu_events` key).
+    activity: IcuWebhookActivity,
+}
+
+/// The activity an intervals.icu activity event refers to.
+#[derive(Debug, Deserialize)]
+struct IcuWebhookActivity {
+    id: String,
+}
+
+/// The `ACTIVITY_ANALYZED` event type: the only event the webhook subscribes
+/// to (spec #764).
+const ACTIVITY_ANALYZED: &str = "ACTIVITY_ANALYZED";
+
+/// The shared webhook secret (the app's intervals.icu webhook secret, the
+/// `ICU_WEBHOOK_SECRET` env var).
+fn webhook_secret() -> String {
+    std::env::var("ICU_WEBHOOK_SECRET").unwrap_or_default()
+}
+
+/// A constant-time byte equality (the webhook secret check, spec #764): avoids
+/// a timing side-channel on the shared secret. A length mismatch is not secret
+/// (the secret's length is fixed per app), so it short-circuits.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
+/// Verify the webhook's shared secret (spec #764): a constant-time compare
+/// against `ICU_WEBHOOK_SECRET`. A mismatch (or an unset secret) is a `401`.
+fn verify_secret(secret: &str) -> TbResult<()> {
+    let expected = webhook_secret();
+    if !constant_time_eq(secret.as_bytes(), expected.as_bytes()) {
+        return Err(Error::NotAuth("invalid icu webhook secret".to_string()));
+    }
+    Ok(())
+}
+
+/// Parse an intervals.icu webhook timestamp (RFC 3339) to a unix second.
+fn parse_timestamp(timestamp: &str) -> TbResult<i64> {
+    OffsetDateTime::parse(timestamp, &Rfc3339)
+        .map(|dt| dt.unix_timestamp())
+        .map_err(|_| Error::BadRequest(format!("invalid icu webhook timestamp {timestamp}")))
+}
+
+/// The webhook intake (ADR-0014): the provider's webhook work behind the
+/// seam — the envelope parse of the raw body, the secret verification, the
+/// event filtering (only `ACTIVITY_ANALYZED` is subscribed), the timestamp
+/// parse, and the queue insert. `body` is the raw webhook body the
+/// presentation layer forwards (no driver wire type crosses the seam).
+/// Returns the TendaBike users a row was queued for (the caller's wake list).
+pub async fn accept_event(body: &str, store: &mut impl IcuDataStore) -> TbResult<Vec<UserId>> {
+    let envelope: IcuWebhook = serde_json::from_str(body)
+        .map_err(|e| Error::BadRequest(format!("invalid icu webhook envelope: {e}")))?;
+    trace!("Received icu webhook with {} events", envelope.events.len());
+    verify_secret(&envelope.secret)?;
+    let mut queued = Vec::new();
+    for event in &envelope.events {
+        if event.type_ != ACTIVITY_ANALYZED {
+            continue; // only ACTIVITY_ANALYZED is subscribed (spec #764)
+        }
+        let icu_event = IcuEvent::new(
+            IcuId::from(event.athlete_id.as_str()),
+            event.activity.id.clone(),
+            parse_timestamp(&event.timestamp)?,
+        );
+        queued.push(icu_event.accept(store).await?);
+    }
+    Ok(queued)
 }
 
 /// The icu athlete id for a TendaBike user (the `icu_events` queue's key).
@@ -106,7 +208,7 @@ pub(crate) async fn get_event(
 /// - **401 / dead auth** → disable the user (drops all their queued events).
 /// - **permanent** (a 404, a parse error) → drop the event and continue.
 /// - **DB failure** → propagate: the caller rolls back and backs off.
-pub(crate) async fn process<D: DomainFacade<S>, S: IcuDataStore>(
+pub(crate) async fn process<D: EntityFacade<S>, S: IcuDataStore>(
     user_id: UserId,
     facade: &D,
     store: &mut S,
@@ -128,7 +230,7 @@ pub(crate) async fn process<D: DomainFacade<S>, S: IcuDataStore>(
         match super::activity::import_activity(&event.activity_id, user_id, facade, store).await {
             Ok(Some(s)) => summary += s,
             Ok(None) => stubs += 1, // a stub: skipped (gear ref dropped)
-            Err(err) => match classify(err, &event, &icu_id, store).await? {
+            Err(err) => match apply_failure(err, &event, &icu_id, store).await? {
                 BatchOutcome::Stop => break, // 429 (event stays queued) or 401 (user disabled)
                 BatchOutcome::Continue => {} // permanent: the event was dropped, continue
             },
@@ -154,32 +256,28 @@ enum BatchOutcome {
     Continue,
 }
 
-/// Classifies a failed import (the batch's failure semantics, spec #764).
-///
-/// - `TryAgain` (429) → stop; the event stays queued (the probe reports
-///   `Limited`).
-/// - `NotAuth` (401) → disable the user (drops all their queued events); stop.
-/// - `DatabaseFailure` → propagate (the caller rolls back and backs off).
-/// - anything else is permanent (a 404, a parse) → drop the event; continue.
-async fn classify(
+/// Applies the kit's failure decision ([`crate::failure`], the batch's
+/// failure semantics, spec #764) to icu's tables: the disable and the drop
+/// commit with the batch's transaction.
+async fn apply_failure(
     err: Error,
     event: &IcuEvent,
     icu_id: &IcuId,
     store: &mut impl IcuDataStore,
 ) -> TbResult<BatchOutcome> {
-    match err {
-        Error::TryAgain(msg) => {
-            warn!("icu rate limited ({msg}); event stays queued until the window resets");
+    match crate::failure::classify(&err) {
+        crate::failure::FailureDecision::KeepQueued => {
+            warn!("icu rate limited ({err}); event stays queued until the window resets");
             Ok(BatchOutcome::Stop)
         }
-        Error::NotAuth(msg) => {
-            warn!("icu auth is dead ({msg}); disabling user {icu_id}");
+        crate::failure::FailureDecision::DisableUser => {
+            warn!("icu auth is dead ({err}); disabling user {icu_id}");
             icu_id.disable(store).await?;
             Ok(BatchOutcome::Stop)
         }
-        Error::DatabaseFailure(_) => Err(err),
-        other => {
-            warn!("dropping poison icu event {}: {other:#}", event.activity_id);
+        crate::failure::FailureDecision::Propagate => Err(err),
+        crate::failure::FailureDecision::DropEvent => {
+            warn!("dropping poison icu event {}: {err:#}", event.activity_id);
             store.icu_event_delete(event.id).await?;
             Ok(BatchOutcome::Continue)
         }

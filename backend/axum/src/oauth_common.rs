@@ -1,13 +1,18 @@
-//! Shared OAuth CSRF state handling: the HMAC-signed state token used by both
-//! the Strava and intervals.icu OAuth flows. The token encodes the return path
-//! and a random nonce, signed with the `CSRF_SECRET` (or a random key in
-//! development).
+//! Shared OAuth handling for both the Strava and intervals.icu flows: the
+//! HMAC-signed CSRF state token (the token encodes the return path and a
+//! random nonce, signed with the `CSRF_SECRET` (or a random key in
+//! development)) and the shared callback completion (the provider-agnostic
+//! `login` direct op, the tower-session write, and the redirect).
 
-use log::warn;
+use axum::response::Redirect;
+use log::{debug, warn};
 use oauth2::CsrfToken;
 use std::sync::LazyLock;
-
 use tb_domain::{Error, TbResult};
+use tb_provider::Provider;
+use tower_sessions::Session;
+
+use crate::{RequestSession, appstate::AppState, error::AppError};
 
 static CSRF_KEY: LazyLock<Vec<u8>> = LazyLock::new(|| {
     if let Ok(secret) = std::env::var("CSRF_SECRET") {
@@ -52,6 +57,27 @@ pub fn getpath(state: String) -> TbResult<String> {
         )));
     };
     Ok(msg[0].split('+').next().unwrap_or("").to_owned())
+}
+
+/// Complete the OAuth callback for a provider (ADR-0014): the provider-agnostic
+/// `login` direct op — the provider layer's dispatch does the provider's login
+/// work (the scope check, the token exchange, the athlete wire-shape parsing,
+/// and the upsert), returning the identity and the admin flag. The web shell
+/// forwards the opaque callback values — no driver wire type crosses the seam.
+/// The tower-session write stays in axum (the token is stored in the provider
+/// layer's user row, not the cookie), then the redirect to the return path.
+pub async fn login_and_redirect(
+    state: AppState,
+    session: Session,
+    provider: Provider,
+    code: String,
+    scope: String,
+    path: String,
+) -> Result<Redirect, AppError> {
+    let (user_id, is_admin) = state.provider.login(provider, &code, &scope).await?;
+    RequestSession::create_from_token(user_id, is_admin, session).await?;
+    debug!("Redirecting to {path}");
+    Ok(Redirect::to(&path))
 }
 
 #[cfg(test)]

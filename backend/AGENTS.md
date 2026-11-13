@@ -7,7 +7,7 @@
 
 ## Architecture
 
-- **Crates**: `app` (binary), `axum` (web layer), `domain` (business logic), `provider` (provider-agnostic seams: the `DomainFacade` domain door, the `ProviderLane` lane seam, and the `strava` driver), `exec` (per-user executor — the `Txn`/`TxnSource` transaction seam), `sqlx` (PostgreSQL); workspace root at [`Cargo.toml`](../Cargo.toml). A human-readable tour of `tb_exec` (the loop, the Registry, the seams) lives in [`docs/exec.md`](docs/exec.md).
+- **Crates**: `app` (binary), `axum` (web layer), `domain` (business logic), `provider` (provider-agnostic seams: the `EntityFacade` entity-op door, the `ProviderLane` lane seam, and the `strava` driver), `exec` (per-user executor — the `Txn`/`TxnSource` transaction seam), `sqlx` (PostgreSQL); workspace root at [`Cargo.toml`](../Cargo.toml). A human-readable tour of `tb_exec` (the loop, the Registry, the seams) lives in [`docs/exec.md`](docs/exec.md).
 - **Concepts follow the dependency graph (ADR-0013)**: a crate names only concepts from crates it depends on — in code and in doc comments; a concept crossing a missing edge is hidden coupling. [`ADR-0013`](../docs/adr/0013-concepts-follow-the-dependency-graph.md).
 - **Layering**: domain traits in [`domain/src/traits/`](domain/src/traits/) → sqlx impls in [`sqlx/src/store/`](sqlx/src/store/) → axum handlers in [`axum/src/domain/`](axum/src/domain/); spec #446 §1 edges: `exec` → `domain` + `provider`, `sqlx` → `exec`, `axum` → `exec` (never `tb_sqlx` — it takes the `PgPool` for its `PostgresStore` session store).
 - **The entity owns its store (ADR-0010)**: a store method (`<entity>_<op>`) is called only from its owning entity's code; a cross-entity need goes through the callee's entity method, never its store. Enforced by `.githooks/check-store-access.py`.
@@ -29,7 +29,7 @@
 
 ## Tests
 
-To verify your changes: `SQLX_OFFLINE=true cargo test -q -- --include-ignored 2>&1 | grep "test result:"` — every line should say `ok` and `0 failed`.
+To verify your changes: `SQLX_OFFLINE=true cargo test -q -- --include-ignored | grep "test result:"` — every line should say `ok` and `0 failed`.
 
 The DB-free suites (domain, provider, axum) run against `mockall` `mock!` doubles; the `#[ignore]`d seam suites in `tb_sqlx` run against a real Postgres and are the behavioral bar — they need `--include-ignored` and `SCRATCH_DATABASE_URL`. If `SCRATCH_DATABASE_URL` is set in the environment, a database is available and the full suite runs locally as it does in CI.
 

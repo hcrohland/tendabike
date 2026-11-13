@@ -9,11 +9,13 @@
 //! creates the domain user (with `provider = 'icu'`) plus the `icu_users`
 //! row, or updates both for an existing connection.
 
+use anyhow::Context;
 use derive_more::{Display, From, Into};
+use oauth2::{AuthorizationCode, TokenResponse};
 use serde::Deserialize;
 
 use super::*;
-use crate::DomainFacade;
+use crate::EntityFacade;
 
 /// The icu athlete ID: a provider text id (intervals.icu ids are not
 /// integers), wrapped as an opaque newtype. The inner value is private —
@@ -90,7 +92,7 @@ impl IcuUser {
     /// # Returns
     ///
     /// An `TbResult` containing the upserted [`IcuUser`].
-    pub async fn upsert<D: DomainFacade<S>, S: IcuDataStore>(
+    pub async fn upsert<D: EntityFacade<S>, S: IcuDataStore>(
         id: IcuId,
         name: &str,
         access_token: &str,
@@ -128,6 +130,55 @@ impl IcuUser {
         let user = store.icuser_create(user).await?;
         Ok(user)
     }
+}
+
+/// The login (ADR-0014): the provider's login work behind the seam — the
+/// scope check, the token exchange, the wire-shape parsing of the athlete,
+/// and the upsert, returning the identity and the admin flag. `code` and
+/// `scope` are the opaque callback values the presentation layer forwards
+/// (no driver wire type crosses the seam).
+///
+/// intervals.icu omits the `scope` query param on some callbacks: an absent
+/// scope (the empty string) is accepted, a present one must match.
+pub async fn login<D: EntityFacade<S>, S: IcuDataStore + UserStore>(
+    code: &str,
+    scope: &str,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<(UserId, bool)> {
+    if !scope.is_empty() && scope != SCOPES {
+        return Err(Error::BadRequest(format!(
+            "insufficient authorization {scope}"
+        )));
+    }
+
+    let token = ICU_CLIENT
+        .exchange_code(AuthorizationCode::new(code.to_string()))
+        .request_async(&*HTTP_CLIENT)
+        .await
+        .context("token exchange failed")?;
+
+    let athlete: IcuAthleteInfo = token
+        .extra_fields()
+        .athlete
+        .clone()
+        .ok_or(Error::BadRequest(
+            "No Athlete Info from intervals.icu".to_string(),
+        ))?;
+    // intervals.icu tokens are durable: there is no refresh token. The
+    // access token is stored as-is.
+    let access_token = token.access_token().secret().to_string();
+
+    let user = IcuUser::upsert(athlete.id, &athlete.name, &access_token, facade, store).await?;
+    let is_admin = user.user_id().is_admin(store).await?;
+    Ok((user.user_id(), is_admin))
+}
+
+/// The icu half of the provider-agnostic `user_url` dispatch (ADR-0014): the
+/// public athlete profile page for the icu user's athlete id.
+pub async fn user_url<S: IcuStore + 'static>(id: UserId, store: &mut S) -> TbResult<String> {
+    let icu_id = super::event::get_icu_id(id, store).await?;
+    Ok(format!("https://intervals.icu/athletes/{icu_id}"))
 }
 
 #[cfg(test)]

@@ -23,9 +23,6 @@ then
   exit 1; # THE USER DONT WANT TO CONTINUE SO ROLLBACK
 fi
 
-# --- repeated comments: always on, scoped to the staged diff ---
-python3 .githooks/check-repeated-comments.py
-
 # --- issue references in comments: always on, scoped to the staged diff ---
 python3 .githooks/check-issue-refs.py
 

@@ -1,3 +1,9 @@
+//! The acting session type (ADR-0009): the tower-session-backed identity the
+//! authenticated routes extract. It is shared by both OAuth flows (the
+//! Strava and intervals.icu callback handlers write it, every authenticated
+//! route reads it), so it lives in a neutral home — not owned by a driver
+//! module (ADR-0014).
+
 use anyhow::Context;
 use axum::{
     extract::FromRequestParts,
@@ -39,10 +45,9 @@ const SESSION_NEXT_UPDATE: &str = "update";
 
 impl RequestSession {
     /// Write the tower session for a just-logged-in user (spec #558 §5.2):
-    /// the identity upsert is the service API's `login_from_token` op (one
-    /// transaction — `StravaUser::upsert` + `is_admin`); this keeps only the
-    /// tower-session half (the token flows through the `tb_provider::strava`
-    /// `TokenCache`, not the cookie).
+    /// the identity upsert is the provider service's `login` op (one
+    /// transaction — the provider layer's dispatch does the driver's upsert
+    /// + `is_admin`); this keeps only the tower-session half.
     pub(crate) async fn create_from_token(
         user_id: UserId,
         is_admin: bool,

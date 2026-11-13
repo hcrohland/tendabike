@@ -4,7 +4,7 @@ use super::super::test_support::{
     gear_json, part, queue, queue_error, requests, setup, strava_session,
 };
 use super::*;
-use crate::MockDomainFacade;
+use crate::MockEntityFacade;
 
 #[tokio::test]
 async fn into_partid_creates_bike() -> TbResult<()> {
@@ -132,7 +132,7 @@ async fn into_partid_propagates_error() {
 
 async fn seed_part(
     store: &mut MockStravaDataStore,
-    facade: &mut MockDomainFacade<MockStravaDataStore>,
+    facade: &mut MockEntityFacade<MockStravaDataStore>,
     source: &str,
 ) -> TbResult<PartId> {
     // A part carrying `source` is created: no existing part for the source,
@@ -169,7 +169,7 @@ async fn gear_strava_url_bike() -> TbResult<()> {
         .expect_part()
         .returning(move |_pid, _user, _store| Ok(sourced_part("b42", UserId::from(1))));
     let url = strava_url(i32::from(part_id), Box::new(session), &facade, &mut store).await?;
-    assert_eq!(url, "https://strava.com/bikes/42");
+    assert_eq!(url, Some("https://strava.com/bikes/42".to_string()));
     Ok(())
 }
 
@@ -181,7 +181,10 @@ async fn gear_strava_url_shoes() -> TbResult<()> {
         .expect_part()
         .returning(move |_pid, _user, _store| Ok(sourced_part("g1", UserId::from(1))));
     let url = strava_url(i32::from(part_id), Box::new(session), &facade, &mut store).await?;
-    assert_eq!(url, "https://www.strava.com/settings/gear");
+    assert_eq!(
+        url,
+        Some("https://www.strava.com/settings/gear".to_string())
+    );
     Ok(())
 }
 
@@ -198,14 +201,16 @@ async fn gear_strava_url_unknown_source() -> TbResult<()> {
 }
 
 #[tokio::test]
-async fn gear_strava_url_missing_source() {
+async fn gear_strava_url_missing_source() -> TbResult<()> {
     let (mut store, mut facade, session) = setup();
-    // A locally created part (no Strava source): `strava_url` is `NotFound`.
+    // A locally created part (no Strava source): `strava_url` is the typed
+    // absence (`None`) — the route maps it to a no-op (ADR-0014).
     facade.expect_part().returning(move |_pid, _user, _store| {
         Ok(part(PartId::from(1), UserId::from(1), 1.into(), None))
     });
-    let res = strava_url(1, Box::new(session), &facade, &mut store).await;
-    assert!(matches!(res, Err(Error::NotFound(_))));
+    let res = strava_url(1, Box::new(session), &facade, &mut store).await?;
+    assert_eq!(res, None);
+    Ok(())
 }
 
 #[tokio::test]

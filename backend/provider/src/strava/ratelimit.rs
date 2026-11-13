@@ -1,5 +1,5 @@
 //! Proactive Strava rate limiting: a thin shim over the shared
-//! [`tb_provider::RateLimiter`] kernel.
+//! [`tb_provider::RateLimitShim`] kit module.
 //!
 //! The process-wide limiter is constructed with Strava's 4-window header
 //! mapping — the overall and read scopes, each a 15-minute and a daily window
@@ -15,11 +15,10 @@
 //! observe each other's process-global state.
 
 use std::cell::RefCell;
-use std::sync::Mutex;
 
 use http::{HeaderMap, HeaderName};
 
-use crate::{Cadence, RateLimiter, UsageKind, WindowSpec};
+use crate::{Cadence, RateLimitShim, RateLimiter, UsageKind, WindowSpec};
 
 /// Strava's 4-window header mapping: the overall and read scopes, each a
 /// 15-minute and a daily window reading the same header pair. Strava reports
@@ -54,8 +53,8 @@ fn strava_specs() -> Vec<WindowSpec> {
 }
 
 /// The process-wide Strava rate limiter (shared across all executors).
-static RATE_LIMITER: std::sync::LazyLock<Mutex<RateLimiter>> =
-    std::sync::LazyLock::new(|| Mutex::new(RateLimiter::new("strava", strava_specs())));
+static RATE_LIMITER: std::sync::LazyLock<RateLimitShim> =
+    std::sync::LazyLock::new(|| RateLimitShim::new("strava", strava_specs()));
 
 // A per-thread override limiter, set by the test hooks
 // (`test_set_limited` / `test_set_not_limited`). When `Some`, `limited_until`
@@ -78,8 +77,7 @@ pub fn limited_until() -> Option<i64> {
     if let Some(until) = TEST_OVERRIDE.with(|o| o.borrow().as_ref().map(|l| l.gate())) {
         return until;
     }
-    let mut limiter = RATE_LIMITER.lock().unwrap();
-    limiter.limited_until()
+    RATE_LIMITER.limited_until()
 }
 
 /// Parses Strava's `X-RateLimit-*` response headers into the shared state.
@@ -88,8 +86,7 @@ pub fn limited_until() -> Option<i64> {
 /// Missing or malformed headers are ignored (the state keeps its previous
 /// values for those fields).
 pub fn update_from_headers(headers: &HeaderMap) {
-    let mut limiter = RATE_LIMITER.lock().unwrap();
-    limiter.update_from_headers(headers);
+    RATE_LIMITER.update_from_headers(headers);
 }
 
 #[cfg(test)]
@@ -97,10 +94,14 @@ pub fn update_from_headers(headers: &HeaderMap) {
 /// exhausted), so [`limited_until`] reports a boundary.
 pub fn test_set_limited() {
     TEST_OVERRIDE.with(|o| {
-        *o.borrow_mut() = Some(limiter_from_headers(&[
-            ("X-ReadRateLimit-Limit", "100,1000"),
-            ("X-ReadRateLimit-Usage", "100,500"),
-        ]));
+        *o.borrow_mut() = Some(RateLimitShim::limiter_from_headers(
+            "strava",
+            &strava_specs(),
+            &[
+                ("X-ReadRateLimit-Limit", "100,1000"),
+                ("X-ReadRateLimit-Usage", "100,500"),
+            ],
+        ));
     });
 }
 
@@ -109,23 +110,13 @@ pub fn test_set_limited() {
 /// requests), so [`limited_until`] reports no limit.
 pub fn test_set_not_limited() {
     TEST_OVERRIDE.with(|o| {
-        *o.borrow_mut() = Some(limiter_from_headers(&[
-            ("X-ReadRateLimit-Limit", "100,1000"),
-            ("X-ReadRateLimit-Usage", "0,0"),
-        ]));
+        *o.borrow_mut() = Some(RateLimitShim::limiter_from_headers(
+            "strava",
+            &strava_specs(),
+            &[
+                ("X-ReadRateLimit-Limit", "100,1000"),
+                ("X-ReadRateLimit-Usage", "0,0"),
+            ],
+        ));
     });
-}
-
-/// A fresh process-limiter-shaped limiter populated from the given headers
-/// (test helper for the per-thread override).
-#[cfg(test)]
-fn limiter_from_headers(pairs: &[(&str, &str)]) -> RateLimiter {
-    let mut m = HeaderMap::new();
-    for (k, v) in pairs {
-        let name = HeaderName::from_bytes(k.as_bytes()).unwrap();
-        m.insert(name, http::HeaderValue::from_str(v).unwrap());
-    }
-    let mut limiter = RateLimiter::new("strava", strava_specs());
-    limiter.update_from_headers(&m);
-    limiter
 }

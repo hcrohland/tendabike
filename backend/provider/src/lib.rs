@@ -20,15 +20,30 @@
 
 //! The provider-agnostic seams shared by every activity provider (spec #781).
 //!
-//! [`facade`] — [`DomainFacade`], the trait a provider goes through to reach
+//! [`activity_id`] — [`ProviderActivityId`], the cross-provider typed activity
+//! id: the form the domain's opaque `ActivityId` converts to and from, and the
+//! single home for the `strava:` / `icu:` prefix knowledge (ADR-0013).
+//!
+//! [`facade`] — [`EntityFacade`], the trait a provider goes through to reach
 //! the domain, and its concrete implementation. A provider function is generic
-//! over `D: DomainFacade` (static dispatch); tests swap in the
-//! [`MockDomainFacade`] (under `test-support`).
+//! over `D: EntityFacade` (static dispatch); tests swap in the
+//! [`MockEntityFacade`] (under `test-support`).
 //!
 //! [`lane`] — [`ProviderLane`] + its [`Probe`] outcome, the narrow seam the
 //! executor loop calls through to probe and process a provider's event queue.
 //! Each provider module implements it for its own lane; the executor is generic
 //! over whichever lane it is given and never names a concrete provider.
+//!
+//! [`unified`] — the unified lane (ADR-0014): the third [`ProviderLane`] impl,
+//! keyed by the [`LaneEvent`] the two providers' event rows share. The lane the
+//! executor loop runs in production: it selects between the two per-provider
+//! lanes per call, with a typed switch on [`Provider`].
+
+mod activity_id;
+pub use activity_id::*;
+
+mod provider;
+pub use provider::*;
 
 mod facade;
 pub use facade::*;
@@ -36,8 +51,33 @@ pub use facade::*;
 mod lane;
 pub use lane::*;
 
+#[cfg(all(feature = "strava", feature = "icu"))]
+mod unified;
+#[cfg(all(feature = "strava", feature = "icu"))]
+pub use unified::*;
+
+/// The provider-agnostic direct-op dispatch (ADR-0014): the eight free
+/// functions the executor's provider-agnostic `ProviderService` impl forwards
+/// to — a sibling of the unified lane seam. A public module (not re-exported
+/// at the crate root) so the dispatch's generic names (`sync`, `delete_user`,
+/// …) stay namespaced under `dispatch` rather than polluting the crate root.
+#[cfg(all(feature = "strava", feature = "icu"))]
+pub mod dispatch;
+
 mod ratelimit;
-pub(crate) use ratelimit::{Cadence, RateLimiter, UsageKind, WindowSpec};
+pub(crate) use ratelimit::{Cadence, RateLimitShim, RateLimiter, UsageKind, WindowSpec};
+
+mod failure;
+pub use failure::*;
+
+mod http;
+pub use http::*;
+
+mod client;
+pub use client::*;
+
+mod activity_type;
+pub use activity_type::*;
 
 #[cfg(feature = "strava")]
 pub mod strava;
