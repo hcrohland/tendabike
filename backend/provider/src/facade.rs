@@ -105,6 +105,12 @@ pub trait EntityFacade<C: Send + Sync>: Send + Sync {
     /// Read the user's stat (the domain's `UserId::get_stat`).
     async fn get_stat(&self, id: &UserId, store: &mut C) -> TbResult<Stat>;
 
+    /// Read the user's admin flag (the domain's `UserId::is_admin`).
+    async fn user_admin(&self, id: &UserId, store: &mut C) -> TbResult<bool>;
+
+    /// Read the user's provider identity (the domain's `UserId::provider`).
+    async fn user_provider(&self, id: &UserId, store: &mut C) -> TbResult<String>;
+
     /// Delete the user plus everything they own (the domain's
     /// `UserId::delete`).
     async fn delete_user(&self, id: &UserId, store: &mut C) -> TbResult<()>;
@@ -204,6 +210,14 @@ impl<C: Store + Sync + 'static> EntityFacade<C> for EntityFacadeImpl {
 
     async fn get_stat(&self, id: &UserId, store: &mut C) -> TbResult<Stat> {
         id.get_stat(store).await
+    }
+
+    async fn user_admin(&self, id: &UserId, store: &mut C) -> TbResult<bool> {
+        id.is_admin(store).await
+    }
+
+    async fn user_provider(&self, id: &UserId, store: &mut C) -> TbResult<String> {
+        id.provider(store).await
     }
 
     async fn delete_user(&self, id: &UserId, store: &mut C) -> TbResult<()> {
