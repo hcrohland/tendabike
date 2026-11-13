@@ -32,10 +32,10 @@ async fn redirect_act(
     // ownership. The handler maps `Err` (and an unparseable prefix) → a
     // permanent redirect to "/".
     let activity_id = ActivityId::from(id);
-    let provider = match ProviderActivityId::try_from(activity_id.clone()) {
-        Ok(ProviderActivityId::Strava(_)) => Provider::Strava,
-        Ok(ProviderActivityId::Icu(_)) => Provider::Icu,
-        Err(_) => return Ok(Redirect::permanent("/")),
+    let Ok(provider) =
+        ProviderActivityId::try_from(activity_id.clone()).and_then(Provider::try_from)
+    else {
+        return Ok(Redirect::permanent("/"));
     };
     let uri = state
         .provider

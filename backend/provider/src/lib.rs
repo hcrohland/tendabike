@@ -56,7 +56,7 @@ mod unified;
 #[cfg(all(feature = "strava", feature = "icu"))]
 pub use unified::*;
 
-/// The provider-agnostic direct-op dispatch (ADR-0014): the six free
+/// The provider-agnostic direct-op dispatch (ADR-0014): the eight free
 /// functions the executor's provider-agnostic `ProviderService` impl forwards
 /// to — a sibling of the unified lane seam. A public module (not re-exported
 /// at the crate root) so the dispatch's generic names (`sync`, `delete_user`,

@@ -14,6 +14,8 @@ use tb_domain::Error;
 #[cfg(any(feature = "strava", feature = "icu"))]
 use oauth2::{CsrfToken, Scope};
 
+use crate::ProviderActivityId;
+
 /// The provider's identity: the typed form of the domain concept (a user has
 /// exactly one provider, chosen at signup and immutable). The domain stores
 /// the provider as a string; the provider layer owns the typing (ADR-0014).
@@ -95,6 +97,21 @@ impl TryFrom<&str> for Provider {
             "strava" => Ok(Provider::Strava),
             "icu" => Ok(Provider::Icu),
             _ => Err(Error::BadRequest(format!("unknown provider: {s}"))),
+        }
+    }
+}
+
+impl TryFrom<ProviderActivityId> for Provider {
+    type Error = Error;
+
+    /// The provider an activity id belongs to: [`ProviderActivityId::Strava`]
+    /// → [`Provider::Strava`], [`ProviderActivityId::Icu`] →
+    /// [`Provider::Icu`]. The mapping is total (the enum's variants are the
+    /// provider's variants).
+    fn try_from(id: ProviderActivityId) -> Result<Self, Self::Error> {
+        match id {
+            ProviderActivityId::Strava(_) => Ok(Provider::Strava),
+            ProviderActivityId::Icu(_) => Ok(Provider::Icu),
         }
     }
 }

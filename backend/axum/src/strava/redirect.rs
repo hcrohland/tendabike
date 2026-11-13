@@ -1,5 +1,5 @@
 //! The Strava admin redirect routes (ADR-0014): the deauthorization and
-//! delete direct ops. The gear and user redirect routes moved to the
+//! delete direct ops. The gear and user redirect routes live in the
 //! provider-neutral [`crate::redirect`] module, shared by the per-provider
 //! route tables.
 

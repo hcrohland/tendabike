@@ -425,7 +425,7 @@ where
 }
 
 /// The provider-agnostic provider service's impl for the registry (ADR-0014):
-/// the six direct ops are a thin forward — each opens the transaction, hands
+/// the eight direct ops are a thin forward — each opens the transaction, hands
 /// the connection to the provider layer's dispatch free function (the single
 /// `match provider`), and commits. No provider dispatch and no driver naming
 /// in this crate. The connection is a complete store for both providers

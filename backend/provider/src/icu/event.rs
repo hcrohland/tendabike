@@ -59,7 +59,7 @@ impl IcuEvent {
 /// The intervals.icu webhook envelope (the `POST /icu/callback` body,
 /// ADR-0014): the app's shared `secret` and the array of `events`.
 #[derive(Debug, Deserialize)]
-pub struct IcuWebhook {
+struct IcuWebhook {
     /// The app's shared webhook secret (verified against
     /// `ICU_WEBHOOK_SECRET`).
     secret: String,
@@ -70,7 +70,7 @@ pub struct IcuWebhook {
 
 /// One event in an intervals.icu webhook delivery.
 #[derive(Debug, Deserialize)]
-pub struct IcuWebhookEvent {
+struct IcuWebhookEvent {
     /// The icu athlete the event belongs to.
     athlete_id: String,
     /// The event type (e.g. `ACTIVITY_ANALYZED`); only `ACTIVITY_ANALYZED` is
@@ -85,7 +85,7 @@ pub struct IcuWebhookEvent {
 
 /// The activity an intervals.icu activity event refers to.
 #[derive(Debug, Deserialize)]
-pub struct IcuWebhookActivity {
+struct IcuWebhookActivity {
     id: String,
 }
 

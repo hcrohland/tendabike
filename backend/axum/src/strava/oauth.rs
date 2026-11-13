@@ -13,15 +13,14 @@ use axum::{
     extract::{Query, State},
     response::{IntoResponse, Redirect},
 };
-use log::{debug, error, warn};
+use log::{error, warn};
 use serde::{Deserialize, Serialize};
 use tower_sessions::Session;
 
 use crate::{
-    RequestSession,
     appstate::AppState,
     error::AppError,
-    oauth_common::{gentoken, getpath},
+    oauth_common::{gentoken, getpath, login_and_redirect},
 };
 use tb_provider::Provider;
 
@@ -67,23 +66,7 @@ pub(crate) async fn login_authorized(
         }
         AuthResponse::Request { code, state, scope } => (code, scope, getpath(state)?),
     };
-
-    // The provider-agnostic direct op (ADR-0014): one transaction — the
-    // provider layer's dispatch does the provider's login work (the scope
-    // check, the token exchange, the athlete wire-shape parsing, and the
-    // upsert), returning the identity and the admin flag. The web shell
-    // forwards the opaque callback values — no driver wire type crosses the
-    // seam.
-    let (user_id, is_admin) = state
-        .provider
-        .login(Provider::Strava, &code, &scope)
-        .await?;
-
-    // The tower-session write stays in axum (spec #558 §5.2).
-    RequestSession::create_from_token(user_id, is_admin, session).await?;
-
-    debug!("Redirecting to {path}");
-    Ok(Redirect::to(&path))
+    login_and_redirect(state, session, Provider::Strava, code, scope, path).await
 }
 
 pub(crate) async fn logout(session: Session) -> impl IntoResponse {
