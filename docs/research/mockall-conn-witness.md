@@ -149,3 +149,45 @@ lines; `FakeSource` is unchanged. `mockall` becomes a dev-dependency of
   not boilerplate.
 - No ADR was added for the mockall question itself: it is cheap to reverse,
   and this document carries the rationale at the right altitude.
+
+## 6. Follow-up: `#[automock]` on `ProviderLane` and `Txn` (2026-11-14)
+
+**Question.** Can the two remaining hand-written `mock!` witnesses — `MockLane`
+(the `ProviderLane` seam) and `MockConn` (the `Txn` lifecycle) — be replaced by
+`#[automock]`, matching `EntityFacade` / `DomainFacade`?
+
+**Bottom line.** `Txn` **yes**; `ProviderLane` **no**. The blocker is not the
+trait's *shape* — it is the *associated-type binding*.
+
+- **The shape is `#[automock]`-compatible.** A scratch crate reproducing
+  `ProviderLane` exactly (three associated types, `type Facade:
+  EntityFacade<Self::Store>`, `fn facade(&self) -> &Self::Facade`, and the
+  `&mut Self::Store` async ops) compiles under
+  `#[automock(type Event = …; type Store = …; type Facade = …;)]`, and the
+  generated `MockProviderLane` drives an op. So the docs' "can't mock a trait
+  with trait bounds" line is *not* the blocker — an associated-type bound and a
+  `&Self::AssociatedType` return both pass.
+- **The associated-type binding is.** `#[automock]` freezes each associated
+  type to a concrete value *at the trait-definition site*; the mock is not
+  generic over them. `ProviderLane` lives in `tb_provider`, so the metaitem can
+  only name `tb_provider`-local types. The executor's tests need `Store =
+  MockConn` and `Facade = MockEntityFacade<MockConn>` — `tb_exec`-local types
+  `tb_provider` cannot name. A two-crate scratch crate (a `provider` crate
+  holding the trait + `#[automock]` bound to a local `FakeStore`; an `exec`
+  crate with a local `LocalConn`) reproduces it exactly:
+  `E0271: type mismatch resolving <MockProviderLane as ProviderLane>::Store ==
+  LocalConn — expected LocalConn, found FakeStore`.
+
+This is why the codebase already splits the two ways: `EntityFacade` is
+`#[automock]` because it is *generic* over `C` (a generic `MockEntityFacade<C>`
+any consumer can instantiate); `ProviderLane` uses *associated types*, which are
+consumer-bound, so it needs the hand-written `mock!` in `tb_exec`. `Txn` has no
+associated types, so `#[automock]` would generate a clean `MockTxn` — a valid
+but cosmetic change (the mock would be named `MockTxn`, not `MockConn`).
+
+**Verdict.** No code change. `ProviderLane` stays a hand-written `mock!` in
+`tb_exec`; the question was exploratory. The only route to an automockable
+`ProviderLane` is a redesign from associated types to type parameters
+(`trait ProviderLane<S, E, F>`), which touches the `unified` impl and the
+loop's `P: ProviderLane<Store = T::Conn>` bound — a trait change, not a
+mockall win.
