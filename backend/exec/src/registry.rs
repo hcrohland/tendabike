@@ -38,8 +38,8 @@
 //! The core is source-agnostic: the facade owns the [`TxnSource`] and the
 //! `Box<dyn FramePusher>` the loop routes committed `Summary`s through, and
 //! passes both to the core's spawn. The facade's `subscribe_shop` keeps the
-//! ownership check (a `ShopId` store call, ADR-0010) and delegates only the
-//! channel creation to the core. The [`ExecutorStatus`] settled-fate enum
+//! ownership check (through the domain facade, ADR-0013) and delegates only
+//! the channel creation to the core. The [`ExecutorStatus`] settled-fate enum
 //! lives in the core and is re-exported here so `crate::ExecutorStatus`
 //! resolves unchanged.
 
@@ -48,12 +48,12 @@ use std::time::Duration;
 use tokio::sync::{broadcast, oneshot, watch};
 
 use tb_domain::{
-    Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, Store,
-    Summary, TbResult, UserId, UserStat, WriteOutcome,
+    ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, Summary, TbResult,
+    UserId, UserStat, WriteOutcome,
 };
 use tb_provider::Provider;
 use tb_provider::ProviderLane;
-use tb_provider::strava::{StravaStore, event::sync_users};
+use tb_provider::strava::{StravaDataStore, event::sync_users};
 
 use crate::api::ServiceApi;
 use crate::message::Request;
@@ -225,13 +225,13 @@ where
 }
 
 /// The shop-stream subscription (spec #517): the inherent
-/// surface with the narrow `ShopStore + Txn` bound (the ownership read
-/// needs only the shop sub-trait). The [`ServiceApi`] impl delegates
+/// surface with the narrow `Txn` bound (the ownership check goes through
+/// the domain facade). The [`ServiceApi`] impl delegates
 /// to this; the web layer calls it through the trait.
 impl<S, P, D> Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: tb_domain::ShopStore + Txn,
+    S::Conn: Txn,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
@@ -244,10 +244,12 @@ where
         user_id: UserId,
         shop_id: ShopId,
     ) -> TbResult<broadcast::Receiver<Summary>> {
-        // Verify ownership in a transaction (the web layer maps `Forbidden`
-        // to a 403).
+        // Verify ownership in a transaction through the domain facade (the
+        // web layer maps `Forbidden` to a 403).
         let mut store = self.source.begin().await?;
-        shop_id.check_owner(user_id, &mut store).await?;
+        self.facade
+            .check_owner(shop_id, user_id, &mut store)
+            .await?;
         store.commit().await?;
 
         // Create the shop channel on demand and subscribe (the "open shop"
@@ -288,13 +290,12 @@ where
     // `all_stats`) ride the executor and need only `Txn` (their domain work
     // rides the facade and the lane). The three provider-neutral direct ops
     // (`rescan`, `subscribe_shop`, `trigger_processing`, ADR-0014) own their
-    // own transactions and do their work directly — the rescan's
-    // `Activity::rescan_all` (a full `Store`), the shop-ownership read
-    // (`ShopStore + Txn`, carried by `Store`), and the `sync_users` queue op
-    // (`StravaStore`) — so this impl carries the full `Store + StravaStore +
-    // Txn` bound.
+    // own transactions — the rescan's `rescan_all` and the shop-ownership
+    // check ride the domain facade (no store bound), and the `sync_users`
+    // queue op rides the Strava data store — so this impl carries the
+    // `StravaDataStore + Txn` bound.
     S: TxnSource + Clone + 'static,
-    S::Conn: Store + StravaStore + Txn,
+    S::Conn: StravaDataStore + Txn,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
@@ -376,7 +377,7 @@ where
     /// re-hydrates it.
     async fn rescan(&self, _session: Box<dyn Session>) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        Activity::rescan_all(&mut store).await?;
+        self.facade.rescan_all(&mut store).await?;
         store.commit().await?;
         self.stop_all().await;
         Ok(())
@@ -435,7 +436,11 @@ where
 impl<S, P, D> crate::providerservice::ProviderService for Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: tb_provider::strava::StravaStore + tb_provider::icu::IcuStore + Send + Sync + 'static,
+    S::Conn: tb_provider::strava::StravaDataStore
+        + tb_provider::icu::IcuDataStore
+        + Send
+        + Sync
+        + 'static,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
@@ -445,14 +450,9 @@ where
     /// identity and the admin flag.
     async fn login(&self, provider: Provider, code: &str, scope: &str) -> TbResult<(UserId, bool)> {
         let mut store = self.source.begin().await?;
-        let result = tb_provider::dispatch::login(
-            provider,
-            code,
-            scope,
-            &tb_provider::EntityFacadeImpl,
-            &mut store,
-        )
-        .await?;
+        let result =
+            tb_provider::dispatch::login(provider, code, scope, self.lane.facade(), &mut store)
+                .await?;
         store.commit().await?;
         Ok(result)
     }
@@ -485,13 +485,7 @@ where
         event_time: i64,
     ) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_provider::dispatch::sync(
-            user_id,
-            event_time,
-            &tb_provider::EntityFacadeImpl,
-            &mut store,
-        )
-        .await?;
+        tb_provider::dispatch::sync(user_id, event_time, self.lane.facade(), &mut store).await?;
         store.commit().await?;
         Ok(())
     }
@@ -501,13 +495,8 @@ where
     /// in-txn, then deauthorizes.
     async fn deauthorize(&self, mut session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_provider::dispatch::deauthorize(
-            &mut *session,
-            tbid,
-            &tb_provider::EntityFacadeImpl,
-            &mut store,
-        )
-        .await?;
+        tb_provider::dispatch::deauthorize(&mut *session, tbid, self.lane.facade(), &mut store)
+            .await?;
         store.commit().await?;
         Ok(())
     }
@@ -517,13 +506,8 @@ where
     /// then deletes.
     async fn delete_user(&self, mut session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_provider::dispatch::delete_user(
-            &mut *session,
-            tbid,
-            &tb_provider::EntityFacadeImpl,
-            &mut store,
-        )
-        .await?;
+        tb_provider::dispatch::delete_user(&mut *session, tbid, self.lane.facade(), &mut store)
+            .await?;
         store.commit().await?;
         Ok(())
     }
@@ -542,7 +526,7 @@ where
             provider,
             session,
             id,
-            &tb_provider::EntityFacadeImpl,
+            self.lane.facade(),
             &mut store,
         )
         .await?;
@@ -560,14 +544,9 @@ where
         id: PartId,
     ) -> TbResult<Option<String>> {
         let mut store = self.source.begin().await?;
-        let uri = tb_provider::dispatch::gear_url(
-            provider,
-            session,
-            id,
-            &tb_provider::EntityFacadeImpl,
-            &mut store,
-        )
-        .await?;
+        let uri =
+            tb_provider::dispatch::gear_url(provider, session, id, self.lane.facade(), &mut store)
+                .await?;
         store.commit().await?;
         Ok(uri)
     }
