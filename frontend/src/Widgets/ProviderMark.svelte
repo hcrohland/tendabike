@@ -30,11 +30,11 @@
   <img
     src={colored ? "/strava.png" : "/strava_grey.png"}
     alt=""
-    class="inline {img} -translate-y-px"
+    class="inline {img} align-middle"
   />
 {:else}
   <span
-    class="inline-flex items-center justify-center {box} rounded font-bold -translate-y-px {colored
+    class="inline-flex items-center justify-center {box} rounded font-bold align-middle {colored
       ? 'bg-white/20 text-white'
       : 'bg-black/10 text-black dark:bg-white/10 dark:text-white'}">icu</span
   >

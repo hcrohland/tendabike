@@ -146,7 +146,7 @@ where
     let provider = crate::provider_of(store, tbid, facade).await?;
     match provider {
         Provider::Strava => crate::strava::user_deauthorize(session, tbid, store).await,
-        Provider::Icu => todo!("icu deauthorize"),
+        Provider::Icu => crate::icu::user_deauthorize(session, tbid, store).await,
     }
 }
 
@@ -165,7 +165,7 @@ where
     let provider = crate::provider_of(store, tbid, facade).await?;
     match provider {
         Provider::Strava => crate::strava::user_delete(session, tbid, facade, store).await,
-        Provider::Icu => todo!("icu delete user"),
+        Provider::Icu => crate::icu::user_delete(session, tbid, facade, store).await,
     }
 }
 
