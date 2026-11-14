@@ -77,18 +77,20 @@
 
   <div class="p-2 sm:p-4 bg-surface-1">
     <!-- Meta line: model · type · date range -->
-    <p class="text-sm mb-3">
-      {model(part)}{typeName(part) ? " · " + typeName(part) : ""}
+    <p class="text-sm mb-3 flex flex-wrap items-center gap-x-1.5">
+      <span>
+        {model(part)}{typeName(part) ? " · " + typeName(part) : ""}
+      </span>
       {#if gearProvider && gearUrl}
-        <a href={gearUrl} target="_blank">
-          <span
-            class="inline ml-1 align-middle"
-            title={m.gearcard_view_on({
-              provider: providerMeta[gearProvider].name,
-            })}
-          >
-            <ProviderMark provider={gearProvider} size="sm" />
-          </span>
+        <a
+          href={gearUrl}
+          target="_blank"
+          class="inline-flex items-center"
+          title={m.gearcard_view_on({
+            provider: providerMeta[gearProvider].name,
+          })}
+        >
+          <ProviderMark provider={gearProvider} size="sm" />
         </a>
       {/if}
       <span class="text-text-1">

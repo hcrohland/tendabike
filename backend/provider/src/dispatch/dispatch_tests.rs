@@ -22,7 +22,7 @@ use crate::strava::test_support::MockStravaDataStore;
 use crate::strava::{StravaDataStore, StravaId, StravaUser};
 use crate::test_support::MockEntityFacade;
 
-use super::{accept_event, login};
+use super::{accept_event, deauthorize, delete_user, login};
 
 // ─── The composite store double ─────────────────────────────────────────────
 //
@@ -377,6 +377,76 @@ async fn accept_event_icu_rejects_an_invalid_timestamp() -> TbResult<()> {
         .await
         .expect_err("an invalid timestamp is rejected");
     assert!(matches!(err, tb_domain::Error::BadRequest(_)));
+    Ok(())
+}
+
+// ─── deauthorize / delete_user: the icu arm ─────────────────────────────────
+
+/// The icu deauthorize arm disables the user (their queued events dropped,
+/// their durable token cleared) — the admin "disable user" op that used to
+/// `todo!()`-panic for icu users.
+#[tokio::test]
+async fn deauthorize_icu_disables_the_user() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let mut facade = MockEntityFacade::new();
+    facade
+        .expect_user_provider()
+        .returning(|_, _| Ok("icu".to_string()));
+    let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    let icu_read = icu.clone();
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .returning(move |_| Ok(icu_read.clone()));
+    store
+        .icu
+        .expect_icu_events_delete_for_user()
+        .returning(|_id| Ok(0));
+    let icu_token = icu.clone();
+    store
+        .icu
+        .expect_icuser_update_token()
+        .returning(move |_id, token| {
+            assert!(token.is_none(), "the deauth clears the token");
+            Ok(icu_token.clone())
+        });
+
+    let mut session = tb_domain::test_support::mock_session_admin(UserId::from(1));
+    deauthorize(&mut session, UserId::from(9), &facade, &mut store).await?;
+    Ok(())
+}
+
+/// The icu delete arm deauthorizes the user, deletes their `icu_users` row,
+/// and deletes their domain rows — the admin "delete user" op that used to
+/// `todo!()`-panic for icu users.
+#[tokio::test]
+async fn delete_user_icu_deletes_the_user() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let mut facade = MockEntityFacade::new();
+    facade
+        .expect_user_provider()
+        .returning(|_, _| Ok("icu".to_string()));
+    // The domain delete is the entity-op facade's work (ADR-0012).
+    facade.expect_delete_user().returning(|_, _| Ok(()));
+    let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    let icu_read = icu.clone();
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .returning(move |_| Ok(icu_read.clone()));
+    store
+        .icu
+        .expect_icu_events_delete_for_user()
+        .returning(|_id| Ok(0));
+    let icu_token = icu.clone();
+    store
+        .icu
+        .expect_icuser_update_token()
+        .returning(move |_id, _token| Ok(icu_token.clone()));
+    store.icu.expect_icuser_delete().returning(|_id| Ok(1));
+
+    let mut session = tb_domain::test_support::mock_session_admin(UserId::from(1));
+    delete_user(&mut session, UserId::from(9), &facade, &mut store).await?;
     Ok(())
 }
 

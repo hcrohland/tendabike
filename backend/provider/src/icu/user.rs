@@ -209,6 +209,51 @@ pub async fn get_all_stats<D: EntityFacade<S>, S: IcuDataStore>(
     Ok(res)
 }
 
+/// Deauthorize a user: disable their local row (their queued events dropped,
+/// their durable token cleared). Admin-only — the acting `session` must be an
+/// admin (the domain enforces the invariant, defense-in-depth over the web
+/// layer's `AxumAdmin` guard); `user_id` is the target user.
+///
+/// Unlike the Strava driver, intervals.icu tokens are durable and there is no
+/// revocation API, so the deauthorization is purely local: the cleared token
+/// is the disable signal ([`IcuUser::disabled`]).
+pub async fn user_deauthorize(
+    session: &mut dyn Session,
+    user_id: UserId,
+    store: &mut impl IcuDataStore,
+) -> TbResult<()> {
+    if !session.is_admin() {
+        return Err(Error::Forbidden(
+            "only an admin can deauthorize a user".to_string(),
+        ));
+    }
+
+    let icu_id = super::event::get_icu_id(user_id, store).await?;
+    warn!("User {user_id} deauthorized");
+    icu_id.disable(store).await
+}
+
+/// Delete a user: deauthorize them (admin-only) plus delete their rows.
+/// Admin-only — the acting `session` must be an admin; `tbid` is the target
+/// user.
+pub async fn user_delete<D: EntityFacade<S>, S: IcuDataStore>(
+    session: &mut dyn Session,
+    tbid: UserId,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<()> {
+    if !session.is_admin() {
+        return Err(Error::Forbidden(
+            "only an admin can delete a user".to_string(),
+        ));
+    }
+    debug!("Deauthorizing user {tbid}");
+    user_deauthorize(session, tbid, store).await?;
+    let n = store.icuser_delete(tbid).await?;
+    debug!("Deleted {n} icu user");
+    facade.delete_user(&tbid, store).await
+}
+
 /// The icu half of the provider-agnostic `user_url` dispatch (ADR-0014): the
 /// public athlete profile page for the icu user's athlete id.
 pub async fn user_url<S: IcuDataStore>(id: UserId, store: &mut S) -> TbResult<String> {
