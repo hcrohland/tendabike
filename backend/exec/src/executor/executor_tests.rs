@@ -23,9 +23,9 @@
 //! selection, reclaim decision, frame construction — is structured as pure
 //! units testable with a channel and dummy futures (no store, no database).
 //!
-//! The transaction seam is a `mockall` `mock!` witness: [`MockConn`] is a
-//! single type accumulating the full `Store` (nine sub-traits + the marker)
-//! plus `StravaStore` and `Txn` — the `TxnSource::Conn` bound. The per-request
+//! The transaction seam is a `mockall` `mock!` witness: [`MockConn`] carries
+//! only the `Txn` lifecycle (commit/rollback) — the `TxnSource::Conn` bound —
+//! with the domain and provider seams mocked separately. The per-request
 //! tests (`run_request`) assert on **canned `mock!` outcomes** (the store
 //! returns the values the test sets on `expect_*`): they verify the
 //! **executor's** behavior — how it drives the store (`begin` → work →
