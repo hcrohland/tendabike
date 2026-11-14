@@ -28,11 +28,11 @@ use http_body_util::BodyExt;
 use tower_sessions::{MemoryStore, Session, SessionManagerLayer};
 
 use tb_domain::{
-    ActTypeId, Activity, ActivityId, ApiRead, DescendReport, OnboardingStatus, Part, PartId,
-    PartNote, PartNoteId, PartTypeId, ReadOutcome, Service, ServicePlan, Session as TbSession,
-    Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails, SubscriptionId,
-    SubscriptionStatus, Summary, TbResult, UsageId, User, UserId, UserPublic, UserState,
-    WriteOutcome,
+    ActTypeId, Activity, ActivityId, ApiRead, DescendReport, GearItem, OnboardingStatus, Part,
+    PartId, PartNote, PartNoteId, PartTypeId, ReadOutcome, Service, ServicePlan,
+    Session as TbSession, Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails,
+    SubscriptionId, SubscriptionStatus, Summary, TbResult, UsageId, User, UserId, UserPublic,
+    UserState, WriteOutcome,
 };
 use tb_exec::{ExecutorStatus, MockServiceApi, ServiceApi};
 use tb_provider::Provider;
@@ -711,13 +711,20 @@ async fn icu_token_forwards_the_opaque_callback_to_login() {
 
 /// `POST /icu/onboarding/sync?time=N` enqueues the
 /// `UserOnboardingSync` write, then reads the `User` record back and answers
-/// `200` with the user.
+/// `200` with the user **plus** the gear items the provider import discovered
+/// (spec #829).
 #[tokio::test]
-async fn icu_onboarding_sync_returns_200_and_user() {
+async fn icu_onboarding_sync_returns_200_and_user_and_gear() {
     let (store, mut mock, provider) = mock_ctx();
-    mock.expect_write()
-        .times(1)
-        .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
+    mock.expect_write().times(1).returning(|_session, _write| {
+        Ok(WriteOutcome::OnboardingSync {
+            summary: Summary::default(),
+            gear: vec![GearItem {
+                name: "Icu Bike".to_string(),
+                what: PartTypeId::from(1),
+            }],
+        })
+    });
     mock.expect_read()
         .times(1)
         .returning(|_session, _read| Ok(ReadOutcome::UserRecord(user())));
@@ -731,9 +738,14 @@ async fn icu_onboarding_sync_returns_200_and_user() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
+    let body = String::from_utf8_lossy(&body);
     assert!(
-        String::from_utf8_lossy(&body).contains("\"id\":1"),
-        "the updated user is returned"
+        body.contains("\"user\":{\"id\":1"),
+        "the updated user is returned: {body}"
+    );
+    assert!(
+        body.contains("\"gear\":[{\"name\":\"Icu Bike\",\"what\":1}]"),
+        "the discovered gear is returned: {body}"
     );
 }
 
@@ -866,16 +878,13 @@ async fn unknown_path_not_found() {
 
 // ─── Read routes (canned `ReadOutcome` in, status + body) ─────────────────
 
-/// `GET /api/user` runs the hydration write, then the unified `User` read
-/// — two FIFO-ordered messages on the user's executor (spec #558 §4) — and
-/// answers `200` with the full `UserState` (the user record plus the
-/// `Summary`).
+/// `GET /api/user` is a pure read (spec #829): it runs the unified `User`
+/// read on the user's executor and answers `200` with the full `UserState`
+/// (the user record plus the `Summary`). No hydration write — the read
+/// makes no outbound provider call for gear.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_user_returns_200_and_userstate_body() {
     let (store, mut mock, provider) = mock_ctx();
-    mock.expect_hydrate_gear()
-        .times(1)
-        .returning(|_session| Ok(Summary::default()));
     mock.expect_read().times(1).returning(|_session, _read| {
         Ok(ReadOutcome::User(Box::new(UserState {
             user: user(),
@@ -915,16 +924,11 @@ async fn get_user_export_returns_200_and_export_body() {
     );
 }
 
-/// `GET /api/user` runs the hydration write, then the unified `User` read
-/// — two FIFO-ordered messages on the user's executor (spec #558 §4) — and
-/// answers `200` with the full `UserState` (the user record plus the
-/// `Summary`).
+/// `GET /api/user` is a pure read (spec #829) and answers `200` with the
+/// full `UserState` (the user record plus the `Summary`).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn summary_returns_200_and_summary_body() {
     let (store, mut mock, provider) = mock_ctx();
-    mock.expect_hydrate_gear()
-        .times(1)
-        .returning(|_session| Ok(Summary::default()));
     mock.expect_read().times(1).returning(|_session, _read| {
         Ok(ReadOutcome::User(Box::new(UserState {
             user: user(),
@@ -941,16 +945,12 @@ async fn summary_returns_200_and_summary_body() {
     );
 }
 
-/// `GET /api/user` with the `X-Active-Shop` header rides the same two
-/// messages, with the header's shop on both acting sessions (ADR-0009): the
-/// read is shop-scoped by the per-request context, not the cookie.
+/// `GET /api/user` with the `X-Active-Shop` header runs the shop-scoped
+/// read: the read is shop-scoped by the per-request context, not the cookie
+/// (ADR-0009).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn active_shop_header_scopes_the_read_session() {
     let (store, mut mock, provider) = mock_ctx();
-    mock.expect_hydrate_gear()
-        .times(1)
-        .withf(|session| session.shop() == Some(ShopId::from(1)))
-        .returning(|_session| Ok(Summary::default()));
     mock.expect_read()
         .times(1)
         .withf(|session, _read| session.shop() == Some(ShopId::from(1)))
@@ -969,15 +969,11 @@ async fn active_shop_header_scopes_the_read_session() {
     assert_eq!(status, StatusCode::OK);
 }
 
-/// `GET /api/user` without the `X-Active-Shop` header rides the same two
-/// messages with no shop on the acting sessions: the full, unfiltered read.
+/// `GET /api/user` without the `X-Active-Shop` header runs the read with no
+/// shop on the acting session: the full, unfiltered read.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn read_without_active_shop_header_has_no_shop() {
     let (store, mut mock, provider) = mock_ctx();
-    mock.expect_hydrate_gear()
-        .times(1)
-        .withf(|session| session.shop().is_none())
-        .returning(|_session| Ok(Summary::default()));
     mock.expect_read()
         .times(1)
         .withf(|session, _read| session.shop().is_none())
@@ -995,9 +991,6 @@ async fn read_without_active_shop_header_has_no_shop() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn active_shop_header_does_not_leak_across_requests() {
     let (store, mut mock, provider) = mock_ctx();
-    mock.expect_hydrate_gear()
-        .times(2)
-        .returning(|_session| Ok(Summary::default()));
     // Ordered expectations: the first read (the headered request) must be
     // shop-scoped, the second (headerless) must not — the first request
     // persisted nothing.
@@ -2231,13 +2224,20 @@ async fn notification_delete_not_found_maps_to_404() {
 
 /// `POST /strava/onboarding/sync?time=N` enqueues the
 /// `UserOnboardingSync` write, then reads the `User` record back (the light
-/// record-only read) and answers `200` with the user.
+/// record-only read) and answers `200` with the user **plus** the gear items
+/// the provider import discovered (spec #829).
 #[tokio::test]
-async fn onboarding_sync_returns_200_and_user() {
+async fn onboarding_sync_returns_200_and_user_and_gear() {
     let (store, mut mock, provider) = mock_ctx();
-    mock.expect_write()
-        .times(1)
-        .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
+    mock.expect_write().times(1).returning(|_session, _write| {
+        Ok(WriteOutcome::OnboardingSync {
+            summary: Summary::default(),
+            gear: vec![GearItem {
+                name: "Test Bike".to_string(),
+                what: PartTypeId::from(1),
+            }],
+        })
+    });
     mock.expect_read()
         .times(1)
         .returning(|_session, _read| Ok(ReadOutcome::UserRecord(user())));
@@ -2253,7 +2253,7 @@ async fn onboarding_sync_returns_200_and_user() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending","provider":"strava"}"#
+        r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending","provider":"strava"},"gear":[{"name":"Test Bike","what":1}]}"#
     );
 }
 

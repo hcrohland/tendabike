@@ -107,9 +107,9 @@ pub enum Probe<E> {
 ///
 /// Beyond the queue's two-step (`probe`/`process`), the lane carries the
 /// provider-specific ops the loop drives in its own transaction — `insert_sync`
-/// (the onboarding cutover's provider side), `update_gear` (the hydration
-/// write), and `all_stats` (the admin read). These are provider-specific: a
-/// second provider implements them for its own domain.
+/// (the onboarding cutover's provider side: the gear import plus the queued
+/// activity sync) and `all_stats` (the admin read). These are provider-specific:
+/// a second provider implements them for its own domain.
 ///
 /// The unified lane ([`crate::unified`]) is the seam's single impl (ADR-0014,
 /// amended): it selects between the two providers per call from the user's
@@ -154,18 +154,15 @@ pub trait ProviderLane: Send + Sync {
     /// Queue a sync event on the provider's event queue (the onboarding
     /// cutover's provider side, spec #558 §5.1): the loop runs it in the
     /// write's own transaction, so the queued event commits with the domain
-    /// half.
+    /// half. Imports the user's gear (bikes + shoes) from the provider and
+    /// returns the created part ids (spec #829) — the onboarding response
+    /// lists them, and the loop reads the parts back for the frame.
     async fn insert_sync(
         &self,
         user_id: UserId,
         time: i64,
         store: &mut Self::Store,
-    ) -> TbResult<()>;
-
-    /// Import the user's gear from the provider, returning the created part
-    /// ids (the hydration write's provider side, spec #558 §4): the loop runs
-    /// it in its own transaction and reads the parts it created for the frame.
-    async fn update_gear(&self, user_id: UserId, store: &mut Self::Store) -> TbResult<Vec<PartId>>;
+    ) -> TbResult<Vec<PartId>>;
 
     /// Read every user's provider-neutral stat (the admin read's provider
     /// side, spec #558 §3.3): the domain [`UserStat`] — the stat plus the

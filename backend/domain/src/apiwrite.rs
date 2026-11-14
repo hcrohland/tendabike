@@ -57,6 +57,7 @@
 //!   skipped (the [`DescendReport`]) ride the HTTP response body — the
 //!   matched activities' state still rides the frame (the §6.2 deviation).
 
+use serde_derive::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
 use crate::*;
@@ -241,25 +242,44 @@ pub enum ApiWrite {
     UserOnboardingPostpone,
 }
 
+/// A gear item discovered by the onboarding gear import (spec #829): the
+/// name and the part type (the category — a bike, a shoe). The onboarding
+/// sync's response body lists them so the dialog can present the gear; the
+/// parts themselves ride the write's `Summary` frame.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct GearItem {
+    /// The gear's display name.
+    pub name: String,
+    /// The gear's part type (the category: a bike, a shoe).
+    pub what: PartTypeId,
+}
+
 /// The outcome of one applied [`ApiWrite`]: the `Summary` of everything the
 /// operation touched (the SSE frame the caller pushes to the user's
 /// streams), plus — for the writes whose result is an operation outcome the
 /// `Summary` cannot carry — that outcome.
 ///
-/// Today that is [`ApiWrite::ActivityDescend`] alone: the CSV rows the
-/// domain matched and skipped (the [`DescendReport`]) are the handler's
-/// response body (`200 + {good, bad}`), not `Summary` state — the matched
-/// activities' updated state still rides the frame (the spec #446 §6.2
-/// deviation).
+/// Today that is [`ApiWrite::ActivityDescend`] (the CSV rows the domain
+/// matched and skipped, the [`DescendReport`]) and [`ApiWrite::UserOnboardingSync`]
+/// (the discovered gear items, the [`GearItem`]s the onboarding dialog
+/// presents). The matched/created state still rides the frame (the spec
+/// #446 §6.2 deviation).
 #[derive(Clone, Debug, PartialEq)]
 pub enum WriteOutcome {
-    /// The write's `Summary` (every write except the descend).
+    /// The write's `Summary` (every write except the descend and the
+    /// onboarding sync).
     Summary(Summary),
     /// `ActivityDescend`: the `Summary` plus the match report of the CSV
     /// rows.
     Descend {
         summary: Summary,
         report: DescendReport,
+    },
+    /// `UserOnboardingSync`: the `Summary` (the created gear parts) plus the
+    /// list of discovered gear items (the onboarding dialog's response body).
+    OnboardingSync {
+        summary: Summary,
+        gear: Vec<GearItem>,
     },
 }
 
@@ -270,6 +290,7 @@ impl WriteOutcome {
         match self {
             Self::Summary(summary) => summary,
             Self::Descend { summary, .. } => summary,
+            Self::OnboardingSync { summary, .. } => summary,
         }
     }
 }

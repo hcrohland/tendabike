@@ -11,8 +11,12 @@ use axum::{
     extract::{Query, State},
 };
 
-use crate::{ApiResult, RequestSession, appstate::AppState, domain::result_mismatch};
-use tb_domain::{ApiRead, ApiWrite, ReadOutcome};
+use crate::{
+    ApiResult, RequestSession,
+    appstate::AppState,
+    domain::{result_mismatch, user::OnboardingResponse},
+};
+use tb_domain::{ApiRead, ApiWrite, ReadOutcome, WriteOutcome};
 
 #[derive(serde::Deserialize)]
 pub(super) struct InitialSyncQuery {
@@ -23,21 +27,26 @@ pub(super) struct InitialSyncQuery {
 /// `POST /icu/onboarding/sync`: trigger the icu onboarding backfill (the gear
 /// import + the activity walk). The domain's status guard and completion
 /// update run on the user's executor in one loop-owned transaction alongside
-/// the icu-side `insert_sync`. Returns the updated user.
+/// the icu-side `insert_sync`. Returns the updated user plus the gear items
+/// the provider import discovered (spec #829).
 pub(crate) async fn trigger_initial_sync(
     user: RequestSession,
     State(state): State<AppState>,
     Query(query): Query<InitialSyncQuery>,
-) -> ApiResult<tb_domain::User> {
-    state
+) -> ApiResult<OnboardingResponse> {
+    let outcome = state
         .api
         .write(
             Box::new(user.clone()),
             ApiWrite::UserOnboardingSync { time: query.time },
         )
         .await?;
+    let gear = match outcome {
+        WriteOutcome::OnboardingSync { gear, .. } => gear,
+        _ => return Err(result_mismatch("onboarding sync", "gear list")),
+    };
     match state.api.read(Box::new(user), ApiRead::UserRecord).await? {
-        ReadOutcome::UserRecord(user) => Ok(Json(user)),
+        ReadOutcome::UserRecord(user) => Ok(Json(OnboardingResponse { user, gear })),
         _ => Err(result_mismatch("user", "user record")),
     }
 }

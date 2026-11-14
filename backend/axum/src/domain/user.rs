@@ -23,16 +23,11 @@ pub(super) fn router() -> Router<AppState> {
 
 /// `GET /api/user` — the one-call initial state (spec #572): returns the
 /// full `UserState` (the user record plus the `Summary`). Replaces the old
-/// bare-user and summary-only routes. The handler runs `hydrate_gear`
-/// (the hydration write) before the read, so a read can change state —
-/// the committed hydration is visible to the pure-FIFO snapshot.
+/// bare-user and summary-only routes. A pure read (spec #829): it makes no
+/// outbound provider call for gear — the gear import moved to onboarding.
 async fn getuser(session: RequestSession, State(state): State<AppState>) -> ApiResult<UserState> {
-    // The hydration write (spec #558 §4), then the unified user read (spec
-    // #558 §3.5): two FIFO-ordered messages on the user's executor — the
-    // loop runs `update_gear` in its own transaction, and the read's
-    // pure-FIFO snapshot (spec #558 §3.7) sees the committed hydration, so
-    // the response body carries the new parts exactly as today.
-    state.api.hydrate_gear(Box::new(session.clone())).await?;
+    // The unified user read (spec #558 §3.5): a single FIFO-ordered message
+    // on the user's executor — the pure-FIFO snapshot (spec #558 §3.7).
     match state.api.read(Box::new(session), ApiRead::User).await? {
         ReadOutcome::User(state) => Ok(Json(*state)),
         _ => Err(result_mismatch("user", "user state")),
@@ -56,6 +51,16 @@ struct Export {
     pub usages: Vec<tb_domain::Usage>,
     pub activities: Vec<tb_domain::Activity>,
     pub shops: Vec<tb_domain::Shop>,
+}
+
+/// The onboarding sync response (spec #829): the updated `User` plus the
+/// list of gear items the provider import discovered (name + type), so the
+/// onboarding dialog can present them. The gear parts themselves ride the
+/// write's `Summary` frame; this is the dialog's response body.
+#[derive(Serialize, Debug)]
+pub(crate) struct OnboardingResponse {
+    pub user: tb_domain::User,
+    pub gear: Vec<tb_domain::GearItem>,
 }
 
 async fn export(user: RequestSession, State(state): State<AppState>) -> ApiResult<Export> {

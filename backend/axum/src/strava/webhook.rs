@@ -63,10 +63,12 @@ use serde_derive::{Deserialize, Serialize};
 use http::StatusCode;
 
 use crate::{
-    ApiResult, AxumAdmin, RequestSession, appstate::AppState, domain::result_mismatch,
+    ApiResult, AxumAdmin, RequestSession,
+    appstate::AppState,
+    domain::{result_mismatch, user::OnboardingResponse},
     error::AppError,
 };
-use tb_domain::{ApiRead, ApiWrite, Error, ReadOutcome, TbResult};
+use tb_domain::{ApiRead, ApiWrite, Error, ReadOutcome, TbResult, WriteOutcome};
 use tb_provider::Provider;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -176,27 +178,32 @@ pub(super) struct InitialSyncQuery {
 /// Trigger initial sync for a user
 /// This endpoint allows users to trigger their first activity sync after registration.
 /// It can only be called once - if the user has already completed initial sync, it returns an error.
-/// Returns the updated user object.
+/// Returns the updated user plus the gear items the provider import discovered (spec #829).
 pub(crate) async fn trigger_initial_sync(
     user: RequestSession,
     State(state): State<AppState>,
     Query(query): Query<InitialSyncQuery>,
-) -> ApiResult<tb_domain::User> {
+) -> ApiResult<OnboardingResponse> {
     // The domain's status guard and completion update — **and** the
-    // Strava-side `insert_sync` — run on the user's executor in one
-    // loop-owned transaction (spec #558 §5.1: one message = one loop-owned
-    // transaction containing the message's entire work, domain + Strava).
-    // The 200 body reads the `User` record back (the light record-only
-    // read — no `Summary` computation needed).
-    state
+    // provider-side gear import + `insert_sync` — run on the user's executor
+    // in one loop-owned transaction (spec #558 §5.1, #829: one message = one
+    // loop-owned transaction containing the message's entire work, domain +
+    // provider). The write's outcome carries the discovered gear items (the
+    // response body); the 200 body reads the `User` record back (the light
+    // record-only read — no `Summary` computation needed).
+    let outcome = state
         .api
         .write(
             Box::new(user.clone()),
             ApiWrite::UserOnboardingSync { time: query.time },
         )
         .await?;
+    let gear = match outcome {
+        WriteOutcome::OnboardingSync { gear, .. } => gear,
+        _ => return Err(result_mismatch("onboarding sync", "gear list")),
+    };
     match state.api.read(Box::new(user), ApiRead::UserRecord).await? {
-        ReadOutcome::UserRecord(user) => Ok(Json(user)),
+        ReadOutcome::UserRecord(user) => Ok(Json(OnboardingResponse { user, gear })),
         _ => Err(result_mismatch("user", "user record")),
     }
 }

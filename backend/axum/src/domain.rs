@@ -12,7 +12,7 @@ mod service;
 mod serviceplan;
 mod shop;
 mod types;
-mod user;
+pub(crate) mod user;
 
 /// The single live entity in a `Summary` map a create write returns (spec
 /// §6.2: a `201` body is the created entity extracted from the write's

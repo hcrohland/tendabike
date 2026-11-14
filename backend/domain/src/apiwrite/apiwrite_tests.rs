@@ -35,6 +35,7 @@ fn outcome_summary(outcome: WriteOutcome) -> Summary {
     match outcome {
         WriteOutcome::Summary(summary) => summary,
         WriteOutcome::Descend { summary, .. } => summary,
+        WriteOutcome::OnboardingSync { summary, .. } => summary,
     }
 }
 

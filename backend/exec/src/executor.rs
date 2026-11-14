@@ -37,8 +37,8 @@ use std::time::Duration;
 
 use log::{debug, error, warn};
 use tb_domain::{
-    ApiRead, ApiWrite, Error, ReadOutcome, Session, ShopId, Summary, TbResult, UserId, UserStat,
-    WriteOutcome,
+    ApiRead, ApiWrite, Error, GearItem, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
+    UserStat, WriteOutcome,
 };
 use tb_provider::{Probe, ProviderLane};
 use tokio::sync::{broadcast, oneshot};
@@ -673,7 +673,6 @@ where
             session,
             reply,
         } => run_read(ctx, session, read, reply).await,
-        Request::Gear { session, reply } => run_gear(ctx, session, reply).await,
         Request::AllStats { session, reply } => run_all_stats(ctx, session, reply).await,
     }
 }
@@ -803,11 +802,14 @@ where
 /// outcome either way, and a successful `Summary` is delivered through the
 /// pusher (an empty one pushes nothing — the pusher's guard).
 ///
-/// The onboarding cutover's Strava side (spec #558 §5.1): one message = one
-/// loop-owned transaction containing the message's entire work — the
-/// `UserOnboardingSync`'s transaction does the domain half (`exec`) and the
-/// `insert_sync` in the same transaction, so the queued event commits with
-/// the domain half (a failed write leaves neither behind).
+/// The onboarding cutover's provider side (spec #558 §5.1, #829): one
+/// message = one loop-owned transaction containing the message's entire
+/// work — the `UserOnboardingSync`'s transaction does the domain half
+/// (`exec`) and the `insert_sync` (the gear import + the queued activity
+/// sync) in the same transaction, so the queued event and the imported gear
+/// commit with the domain half (a failed write leaves neither behind). The
+/// created gear parts ride the frame, and the outcome carries the discovered
+/// gear items (the onboarding dialog's response body).
 ///
 /// Fail fast (spec §6.2, §4.6): the oneshot always resolves, the message is
 /// consumed, and the loop continues — the client is the retry layer. A
@@ -851,7 +853,24 @@ where
                 let outcome = async {
                     let outcome = facade.exec(write, &*session, &mut conn).await?;
                     if let Some(time) = onboarding_time {
-                        lane.insert_sync(user_id, time, &mut conn).await?;
+                        // The onboarding gear import (spec #829): the lane
+                        // imports the gear (bikes + shoes) and queues the
+                        // activity sync, returning the created part ids. The
+                        // frame is the created parts' union (read back), and
+                        // the outcome carries the discovered gear items (the
+                        // response body).
+                        let gear_ids = lane.insert_sync(user_id, time, &mut conn).await?;
+                        let mut summary = outcome.summary().clone();
+                        let mut gear = Vec::new();
+                        for id in gear_ids {
+                            let part = facade.part(id, &*session, &mut conn).await?;
+                            gear.push(GearItem {
+                                name: part.name.clone(),
+                                what: part.what,
+                            });
+                            summary.parts.upsert(part);
+                        }
+                        return Ok(WriteOutcome::OnboardingSync { summary, gear });
                     }
                     Ok(outcome)
                 }
@@ -926,70 +945,11 @@ where
     .await
 }
 
-/// The hydration write in the loop's own transaction (spec #558 §4):
-/// `begin` → [`StravaUser::update_gear`] → read the parts it created →
-/// `commit`. `update_gear` is a `tb_provider::strava` op (the session's
-/// `request_json` plus the `into_partid` store work), so it is dispatched
-/// loop-side — not an `ApiWrite` variant.
-///
-/// The frame is uniform (like every other write): the hydrate's `Summary`
-/// is the **union of the parts it created** — one entry per part, empty
-/// when nothing is new (the common case: the delivered summary is empty and
-/// the pusher's guard sends nothing) — and it is delivered on commit,
-/// before the oneshot reply (the client already buffers frames that race the
-/// snapshot). The backoff discipline is the
-/// write's: a `begin`/`commit` failure records it, a completed transaction
-/// (committed, or rolled back after an error) resets it, and only a failed
-/// `rollback` ends the loop.
-async fn run_gear<T, P, D>(
-    ctx: &mut LoopContext<T, P, D>,
-    session: Box<dyn Session>,
-    reply: oneshot::Sender<TbResult<Summary>>,
-) -> Result<(), Error>
-where
-    T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane<Store = T::Conn> + Send + Sync + 'static,
-    D: DomainFacade<T::Conn> + Send + Sync + 'static,
-{
-    debug!("user {}: Hydrating the user's gear", session.user_id());
-    // The hydration's work in the loop's transaction: import the Strava
-    // gear, then read back the parts it created — the frame is their union
-    // (one entry per part, empty when nothing is new, spec #558 §4).
-    let mut summary = Summary::default();
-    let shop = session.shop();
-    let user_id = session.user_id();
-    run_message(
-        ctx,
-        "hydration",
-        "hydration write",
-        reply,
-        true,
-        shop,
-        |summary| Some(summary),
-        |mut conn, facade, lane| {
-            Box::pin(async move {
-                let outcome = async {
-                    let created = lane.update_gear(user_id, &mut conn).await?;
-                    for id in created {
-                        summary
-                            .parts
-                            .upsert(facade.part(id, &*session, &mut conn).await?);
-                    }
-                    Ok(())
-                }
-                .await;
-                (outcome.map(|()| summary), conn, None)
-            })
-        },
-    )
-    .await
-}
-
 /// The admin `AllStats` read in the loop's own transaction (spec #558
 /// §3.3): `begin` → [`get_all_stats`] → `commit`, read-only within it by
 /// spec. `get_all_stats` is a `tb_provider::strava` op, so it is dispatched loop-side
-/// — the same home the `Gear` hydration and the Strava events' `process`
-/// get — riding the admin user's channel. The backoff discipline is the
+/// — the same home the Strava events' `process`
+/// gets — riding the admin user's channel. The backoff discipline is the
 /// read's (spec #558 §3.7): a failure resolves the oneshot with the `Err`
 /// and never arms the backoff; a cleanly committed read resets it.
 async fn run_all_stats<T, P, D>(

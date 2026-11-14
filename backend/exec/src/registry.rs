@@ -286,7 +286,7 @@ where
 #[async_trait::async_trait]
 impl<S, P, D> ServiceApi for Registry<S, P, D>
 where
-    // The generic channel ops (`read`/`write`/`hydrate_gear`/`subscribe`/
+    // The generic channel ops (`read`/`write`/`subscribe`/
     // `all_stats`) ride the executor and need only `Txn` (their domain work
     // rides the facade and the lane). The three provider-neutral direct ops
     // (`rescan`, `subscribe_shop`, `trigger_processing`, ADR-0014) own their
@@ -321,22 +321,6 @@ where
         let user_id = session.user_id();
         let (request, reply) = Request::new_write(session, write);
         self.send_request(user_id, request, reply, "write").await
-    }
-
-    /// Enqueue the [`Gear`](Request::Gear) hydration write on the user's
-    /// executor and await its frame (spec #558 §4): the loop runs
-    /// `update_gear` in its own transaction with its own session (a
-    /// `tb_provider::strava` op — it cannot be an `ApiWrite` variant) and resolves
-    /// with the created parts' `Summary` — the frame (the union of the
-    /// parts it created, one entry per part, empty when nothing is new).
-    /// The `/user/summary` route runs this **before** its unified `User`
-    /// read, FIFO-ordered, so the snapshot body carries the new parts
-    /// exactly as today.
-    async fn hydrate_gear(&self, session: Box<dyn Session>) -> TbResult<Summary> {
-        let user_id = session.user_id();
-        let (request, reply) = Request::new_gear(session);
-        self.send_request(user_id, request, reply, "hydration")
-            .await
     }
 
     /// Register a stream for the user (spawning the executor if it is not
@@ -563,12 +547,12 @@ where
 }
 
 /// Enqueue a [`Request`] on the user's executor and await its oneshot
-/// — the shared shape of the registry's `read`, `hydrate_gear`,
-/// `all_stats`, and `write` (spec #558 §3): spawn-or-join the executor,
+/// — the shared shape of the registry's `read`, `all_stats`, and `write`
+/// (spec #558 §3): spawn-or-join the executor,
 /// send the request on the user's request channel, and await the oneshot
 /// (unbounded — the message is serialized behind any in-flight one,
 /// spec #558 §3.7). `dropped` names the message in the reply-drop
-/// error ("read", "hydration", "stats read", "write"). `exec_field`
+/// error ("read", "stats read", "write"). `exec_field`
 /// drops the registry lock on return, so the unbounded reply await
 /// runs without it.
 impl<S, P, D> Registry<S, P, D>

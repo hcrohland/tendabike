@@ -46,7 +46,7 @@ use tb_domain::test_support::{
     sole_live,
 };
 use tb_domain::{
-    ApiRead, ApiWrite, Error, Notification, NotificationId, NotificationKind,
+    ApiRead, ApiWrite, Error, GearItem, Notification, NotificationId, NotificationKind,
     NotificationLifecycle, NotificationState, NotificationSubject, OnboardingStatus, Part, PartId,
     PartTypeId, ReadOutcome, Service, ServiceId, Shop, ShopId, SubscriptionId, Summary, TbResult,
     Usage, UsageId, User, UserId, UserStat, UserState, WriteOutcome,
@@ -113,8 +113,7 @@ mockall::mock! {
             user_id: UserId,
             time: i64,
             store: &mut MockConn,
-        ) -> TbResult<()>;
-        async fn update_gear(&self, user_id: UserId, store: &mut MockConn) -> TbResult<Vec<PartId>>;
+        ) -> TbResult<Vec<PartId>>;
         async fn all_stats(&self, store: &mut MockConn) -> TbResult<Vec<UserStat>>;
     }
 }
@@ -1007,39 +1006,57 @@ async fn all_stats_round_trips_through_the_loop_transaction() {
     assert!(stats.is_empty(), "the canned store has no Strava users");
 }
 
+// --- The onboarding sync's provider side (spec #829) ---
+
 #[tokio::test]
-async fn gear_hydration_delivers_the_created_parts_frame() {
-    // The hydration write is dispatched loop-side (spec #558 §4): the
-    // created parts' union is the frame (delivered on commit, before the
-    // oneshot reply) and the reply carries the same summary. The lane is
-    // canned to import one bike (returning its created part id); the facade
-    // is canned to read the created part back (the frame's entry).
+async fn onboarding_sync_write_imports_gear_and_carries_the_gear_items() {
+    // The onboarding sync's provider side (spec #829): the lane's
+    // `insert_sync` imports the gear (bikes + shoes) and queues the activity
+    // sync, returning the created part ids. The loop reads the parts back —
+    // the frame is their union — and the outcome carries the discovered gear
+    // items (the onboarding dialog's response body). The domain half (`exec`)
+    // returns an empty summary (the onboarding's domain part is the status
+    // update, not a `Summary`).
     let mut conn = MockConn::new();
     conn.expect_commit().returning(|| Ok(()));
     let source = FakeSource::with(conn);
     let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_gear(Box::new(mock_session(UserId::from(1))));
-    // The lane imports one bike (the created part id); the facade reads the
-    // created part back (the frame's entry).
-    let mut lane = MockLane::new();
-    lane.expect_update_gear()
-        .returning(|_uid, _st| Ok(vec![PartId::from(1)]));
+    let pusher = RecordingPusher::new();
+    // The onboarding sync write (the request's session is personal).
+    let (request, reply) = Request::new_write(
+        Box::new(mock_session(UserId::from(1))),
+        ApiWrite::UserOnboardingSync {
+            time: 1_700_000_000,
+        },
+    );
+    // The domain half: the status update, an empty summary.
     let mut facade = MockDomainFacade::new();
+    facade.expect_exec().returning(|_w, _s, _st| {
+        Box::pin(async move { Ok(WriteOutcome::Summary(Summary::default())) })
+    });
+    // The facade reads the created part back (the frame's entry + the gear item).
     facade
         .expect_part()
         .returning(move |_id, _s, _st| Box::pin(async move { Ok(part_test_bike()) }));
-    let pusher = RecordingPusher::new();
+    // The lane imports one bike (the created part id) and queues the sync.
+    let mut lane = MockLane::new();
+    lane.expect_insert_sync()
+        .returning(|_uid, _time, _st| Ok(vec![PartId::from(1)]));
     let mut ctx = test_context(source, facade, lane, frames, Box::new(pusher.clone()));
     let result = run_request(&mut ctx, request).await;
     assert!(
         result.is_ok(),
-        "a committed hydration must not end the loop"
+        "a committed onboarding sync must not end the loop"
     );
-    let summary = reply
+    let outcome = reply
         .await
         .expect("the oneshot resolves")
-        .expect("the hydration succeeds");
-    // One entry per created part — the one bike from the canned Strava API.
+        .expect("the onboarding sync succeeds");
+    // The outcome is the onboarding variant: the frame's summary (the created
+    // part) plus the discovered gear items (the response body).
+    let WriteOutcome::OnboardingSync { summary, gear } = outcome else {
+        panic!("the onboarding sync carries the OnboardingSync outcome");
+    };
     assert_eq!(
         summary.parts.len(),
         1,
@@ -1047,107 +1064,24 @@ async fn gear_hydration_delivers_the_created_parts_frame() {
     );
     let part = sole_live(&summary.parts);
     assert_eq!(part.name, "Test Bike");
-    assert_eq!(part.source.as_deref(), Some("b123"));
-    // The frame was delivered on commit, before the reply resolved, with a
-    // personal context (the hydration's session has no shop).
+    assert_eq!(
+        gear,
+        vec![GearItem {
+            name: "Test Bike".to_string(),
+            what: PartTypeId::from(1),
+        }],
+        "the gear items list the discovered gear (name + type)"
+    );
+    // The frame was delivered on commit, with a personal context.
     let calls = pusher.calls();
     assert_eq!(
         calls.len(),
         1,
-        "the hydration delivers exactly one frame, got {calls:?}"
-    );
-    assert_eq!(
-        calls[0].context,
-        DeliveryContext {
-            user_id: UserId::from(1),
-            shop: None,
-            part_owner: None,
-        },
-        "the hydration's delivery context is personal"
+        "the onboarding sync delivers exactly one frame, got {calls:?}"
     );
     assert_eq!(
         calls[0].summary, summary,
         "the delivered frame is the created parts' union"
-    );
-}
-
-#[tokio::test]
-async fn failed_gear_arms_the_backoff_like_a_write() {
-    // The hydration is a write, not a read (spec #558 §4): a failed `begin`
-    // **arms** the backoff — unlike a read (spec #558 §3.7) — and the loop
-    // survives. The store is never reached: `begin` fails fast.
-    let source = FakeSource::failing();
-    let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_gear(Box::new(mock_session(UserId::from(1))));
-    let pusher = RecordingPusher::new();
-    let mut ctx = test_context(
-        source,
-        MockDomainFacade::new(),
-        MockLane::new(),
-        frames,
-        Box::new(pusher),
-    );
-    ctx.backoff.record_failure(); // prime: the next pause would be 2s
-    let result = run_request(&mut ctx, request).await;
-    assert!(result.is_ok(), "a failed hydration must not end the loop");
-    let err = reply
-        .await
-        .expect("the oneshot resolves")
-        .expect_err("a failed begin must 500 the hydration");
-    assert!(matches!(err, Error::AnyFailure(_)), "got {err:?}");
-    assert_eq!(
-        ctx.backoff.record_failure(),
-        Duration::from_secs(4),
-        "the hydration is a write: a failed begin arms the backoff (1s → 2s → 4s)"
-    );
-}
-
-#[tokio::test]
-async fn gear_hydration_without_new_gear_delivers_an_empty_summary() {
-    // The hydration's common case (spec #558 §4): the Strava athlete carries
-    // no new gear — `update_gear` creates nothing and the `Summary` is empty.
-    // The loop delivers it through the pusher as-is — the empty-`Summary`
-    // guard (which pushes nothing) is the pusher's, not the loop's (spec
-    // #706). The oneshot resolves with the empty summary. The lane is canned
-    // to create nothing; the store only commits.
-    let mut conn = MockConn::new();
-    conn.expect_commit().returning(|| Ok(()));
-    let source = FakeSource::with(conn);
-    let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_gear(Box::new(mock_session(UserId::from(1))));
-    // The lane creates nothing (no new gear): the summary is empty.
-    let mut lane = MockLane::new();
-    lane.expect_update_gear()
-        .returning(|_uid, _st| Ok(Vec::new()));
-    let pusher = RecordingPusher::new();
-    let mut ctx = test_context(
-        source,
-        MockDomainFacade::new(),
-        lane,
-        frames,
-        Box::new(pusher.clone()),
-    );
-    let result = run_request(&mut ctx, request).await;
-    assert!(
-        result.is_ok(),
-        "a committed hydration must not end the loop"
-    );
-    let summary = reply
-        .await
-        .expect("the oneshot resolves")
-        .expect("the hydration succeeds");
-    assert!(summary.is_empty(), "nothing new: the summary is empty");
-    // The loop delivers the empty summary as-is (the pusher's guard pushes
-    // nothing for it).
-    let calls = pusher.calls();
-    assert_eq!(
-        calls.len(),
-        1,
-        "the loop delivers the summary as-is, got {calls:?}"
-    );
-    assert!(
-        calls[0].summary.is_empty(),
-        "the delivered summary is empty"
     );
 }
 
