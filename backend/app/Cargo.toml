@@ -17,3 +17,6 @@ tb_axum = { workspace = true }
 tb_exec = { workspace = true }
 tb_sqlx = { workspace = true }
 tb_provider = { workspace = true, features = ["strava"] }
+
+[lints]
+workspace = true

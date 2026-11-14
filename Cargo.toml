@@ -10,6 +10,12 @@ members = [
     "backend/provider",
 ]
 
+[workspace.lints.clippy]
+# A `todo!()`/`unimplemented!()` in a production path is a live panic, not a
+# placeholder — deny them so they can't ship (restriction lints, off by default).
+todo = "deny"
+unimplemented = "deny"
+
 [workspace.dependencies]
 
 tb_domain = { path = "./backend/domain" }
