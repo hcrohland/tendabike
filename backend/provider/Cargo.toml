@@ -54,3 +54,6 @@ uuid = { workspace = true, features = ["v7"] }
 
 [lib]
 doctest = false
+
+[lints]
+workspace = true

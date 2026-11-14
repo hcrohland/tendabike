@@ -73,6 +73,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Format check
         run: cargo fmt --check
+      # Mirrors the pre-commit hook so the lint gate (incl. the workspace
+      # todo!/unimplemented! deny) holds on PRs, not just for hook-enabled devs.
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
       # -- --include-ignored runs the ignored store-seam suite the other test binaries
       # have no ignored tests, so this changes nothing for the in-memory suites.
       - name: Test

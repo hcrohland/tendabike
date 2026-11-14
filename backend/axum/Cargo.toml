@@ -68,3 +68,6 @@ serde_json = { workspace = true }
 
 [lib]
 doctest = false
+
+[lints]
+workspace = true
