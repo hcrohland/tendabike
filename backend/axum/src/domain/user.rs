@@ -10,7 +10,7 @@ use axum::{Json, Router, extract::State, http::StatusCode, routing::get};
 use serde::Serialize;
 
 use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, domain::result_mismatch};
-use tb_domain::{ApiRead, ReadOutcome, UserState};
+use tb_domain::{ApiRead, Error, ReadOutcome, UserState};
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
@@ -26,16 +26,25 @@ pub(super) fn router() -> Router<AppState> {
 /// bare-user and summary-only routes. The handler runs `hydrate_gear`
 /// (the hydration write) before the read, so a read can change state —
 /// the committed hydration is visible to the pure-FIFO snapshot.
+///
+/// A `NotFound` from either call means the user was deleted: the session
+/// is stale, so we reply 401.
 async fn getuser(session: RequestSession, State(state): State<AppState>) -> ApiResult<UserState> {
     // The hydration write (spec #558 §4), then the unified user read (spec
     // #558 §3.5): two FIFO-ordered messages on the user's executor — the
     // loop runs `update_gear` in its own transaction, and the read's
     // pure-FIFO snapshot (spec #558 §3.7) sees the committed hydration, so
     // the response body carries the new parts exactly as today.
-    state.api.hydrate_gear(Box::new(session.clone())).await?;
-    match state.api.read(Box::new(session), ApiRead::User).await? {
-        ReadOutcome::User(state) => Ok(Json(*state)),
-        _ => Err(result_mismatch("user", "user state")),
+    let hydrate = state.api.hydrate_gear(Box::new(session.clone())).await;
+    if let Err(Error::NotFound(_)) = hydrate {
+        return Err(Error::NotAuth("session expired".to_string()).into());
+    }
+    hydrate?;
+    match state.api.read(Box::new(session), ApiRead::User).await {
+        Ok(ReadOutcome::User(state)) => Ok(Json(*state)),
+        Ok(_) => Err(result_mismatch("user", "user state")),
+        Err(Error::NotFound(_)) => Err(Error::NotAuth("session expired".to_string()).into()),
+        Err(err) => Err(err.into()),
     }
 }
 
@@ -61,9 +70,10 @@ struct Export {
 async fn export(user: RequestSession, State(state): State<AppState>) -> ApiResult<Export> {
     // The unified user read (spec #558 §3.5): the export is a projection
     // of the `UserState` composite (the bare `User` plus the `Summary`),
-    // staying non-hydrating (spec #558 §3.4/§4).
-    match state.api.read(Box::new(user), ApiRead::User).await? {
-        ReadOutcome::User(state) => {
+    // staying non-hydrating (spec #558 §3.4/§4). A `NotFound` means the
+    // user was deleted: the session is stale, so we reply 401.
+    match state.api.read(Box::new(user), ApiRead::User).await {
+        Ok(ReadOutcome::User(state)) => {
             let summary = state.summary;
             Ok(Json(Export {
                 user: state.user,
@@ -76,7 +86,9 @@ async fn export(user: RequestSession, State(state): State<AppState>) -> ApiResul
                 shops: summary.shops.live(),
             }))
         }
-        _ => Err(result_mismatch("user", "user state")),
+        Ok(_) => Err(result_mismatch("user", "user state")),
+        Err(Error::NotFound(_)) => Err(Error::NotAuth("session expired".to_string()).into()),
+        Err(err) => Err(err.into()),
     }
 }
 

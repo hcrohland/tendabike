@@ -28,7 +28,7 @@ use http_body_util::BodyExt;
 use tower_sessions::{MemoryStore, Session, SessionManagerLayer};
 
 use tb_domain::{
-    ActTypeId, Activity, ActivityId, ApiRead, DescendReport, OnboardingStatus, Part, PartId,
+    ActTypeId, Activity, ActivityId, ApiRead, DescendReport, Error, OnboardingStatus, Part, PartId,
     PartNote, PartNoteId, PartTypeId, ReadOutcome, Service, ServicePlan, Session as TbSession,
     Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails, SubscriptionId,
     SubscriptionStatus, Summary, TbResult, UsageId, User, UserId, UserPublic, UserState,
@@ -890,6 +890,35 @@ async fn get_user_returns_200_and_userstate_body() {
         String::from_utf8_lossy(&body),
         r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending","provider":"strava"},"summary":{"activities":{},"parts":{},"attachments":{},"usages":{},"services":{},"plans":{},"part_notes":{},"shops":{},"users":{},"notifications":{}}}"#
     );
+}
+
+/// A stale session (the user was deleted) gets 401, not 404: the
+/// `hydrate_gear` fails with `NotFound` because the user's row is gone
+/// `NotFound` because the user's row is gone.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn get_user_stale_session_returns_401() {
+    let (store, mut mock, provider) = mock_ctx();
+    mock.expect_hydrate_gear()
+        .times(1)
+        .returning(|_session| Err(Error::NotFound("no rows returned".to_string())));
+    let app = build_app(&store, mock, provider);
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, _body) = run(app, Method::GET, "/api/user", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+/// A stale session (the user was deleted) gets 401, not 404: the `read`
+/// fails with `NotFound` because the user's row is gone.
+#[tokio::test]
+async fn get_user_export_stale_session_returns_401() {
+    let (store, mut mock, provider) = mock_ctx();
+    mock.expect_read()
+        .times(1)
+        .returning(|_session, _read| Err(Error::NotFound("no rows returned".to_string())));
+    let app = build_app(&store, mock, provider);
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, _body) = run(app, Method::GET, "/api/user/export", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
 
 /// `GET /api/user/export` rides the same unified `User` read (staying

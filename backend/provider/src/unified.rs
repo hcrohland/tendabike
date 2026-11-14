@@ -109,6 +109,7 @@ where
     async fn probe(&self, user_id: UserId, store: &mut S) -> Probe<LaneEvent> {
         let provider = match crate::provider_of(store, user_id, &self.facade).await {
             Ok(provider) => provider,
+            Err(tb_domain::Error::NotFound(_)) => return Probe::UserGone,
             Err(_) => return Probe::Error,
         };
         match provider {
