@@ -49,7 +49,7 @@ if [ "$run_rust" -eq 1 ]; then
     python3 .githooks/check-store-access.py
     cargo fmt --check
     # Live cache-vs-DB tripwire — only when a dev DB is available.
-    if [ -n "$DATABASE_URL" ]; then
+    if [ -n "${DATABASE_URL:-}" ]; then
         (cd backend/sqlx && cargo sqlx prepare --check)
     fi
     # --workspace --all-targets lints the #[cfg(test)]/test-support code too;
