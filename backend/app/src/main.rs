@@ -43,12 +43,6 @@ async fn main() -> anyhow::Result<()> {
     let registry = tb_exec::Registry::with_defaults(
         tb_exec::DetachedBegin::new(pool),
         tb_exec::DomainFacadeImpl,
-        // The unified provider lane (ADR-0014, amended): the provider
-        // layer's `ProviderLane` seam's single impl — it selects between
-        // the two providers per user from the `users.provider` column
-        // (a typed switch on `Provider`) and calls the driver functions
-        // directly, so the loop is provider-agnostic. It carries the
-        // concrete entity-op facade (the provider's door into the domain).
         tb_provider::UnifiedLane::new(tb_provider::EntityFacadeImpl),
     );
     let api = std::sync::Arc::new(registry.clone()) as std::sync::Arc<dyn tb_exec::ServiceApi>;
