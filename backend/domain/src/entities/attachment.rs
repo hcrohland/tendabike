@@ -89,7 +89,7 @@ impl IdKeyed for AttachmentDetail {
 
 impl Attachment {
     /// Deletes all attachments belonging to the given parts. The user-deletion
-    /// cascade (ADR-0010) uses this: the caller already owns these parts, so
+    /// cascade (ADR-0012) uses this: the caller already owns these parts, so
     /// no per-row check.
     pub(crate) async fn delete_by_parts(
         parts: &[Part],

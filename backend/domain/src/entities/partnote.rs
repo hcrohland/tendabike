@@ -84,7 +84,7 @@ impl PartNote {
     }
 
     /// All notes for a part, as a plain list. The session-less read used by
-    /// the summary assembly (ADR-0010): the caller already owns the part, so
+    /// the summary assembly (ADR-0012): the caller already owns the part, so
     /// no ownership check (contrast [`PartId::notes`], which checks access).
     pub(crate) async fn all_for_part(
         part: PartId,

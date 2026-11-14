@@ -291,7 +291,7 @@ impl UserId {
     }
 
     /// Sets the user's onboarding status. The single door for the status
-    /// transitions the write dispatch performs (ADR-0010) — it calls this
+    /// transitions the write dispatch performs (ADR-0012) — it calls this
     /// instead of the store directly.
     pub(crate) async fn set_onboarding_status(
         &self,

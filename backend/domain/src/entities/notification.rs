@@ -273,7 +273,7 @@ impl Notification {
 
     /// Creates a notification: the store assigns the id and timestamps it.
     /// This is the single door every side-effecting operation uses to create
-    /// a notification (ADR-0010) — notification creation lives here, not in
+    /// a notification (ADR-0012) — notification creation lives here, not in
     /// the calling entity. `pub` (not `pub(crate)`) because a provider's
     /// entity-op door forwards to it (the icu stub-skip notice, spec #764).
     pub async fn create(
@@ -290,7 +290,7 @@ impl Notification {
     }
 
     /// All of a user's notifications as a plain list (no lifecycle applied).
-    /// The session-less read used by the summary assembly (ADR-0010): the
+    /// The session-less read used by the summary assembly (ADR-0012): the
     /// caller already owns the recipient's data, so no ownership check.
     pub(crate) async fn all_for_user(
         recipient: UserId,

@@ -87,7 +87,7 @@ impl IdKeyed for Service {
 
 impl Service {
     /// Deletes a specific set of services. The user-deletion cascade
-    /// (ADR-0010) uses this: the caller already owns these services.
+    /// (ADR-0012) uses this: the caller already owns these services.
     pub(crate) async fn delete_many(
         services: &[Service],
         store: &mut impl ServiceStore,

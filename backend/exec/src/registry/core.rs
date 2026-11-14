@@ -288,7 +288,7 @@ where
     /// `subscribe_shop` just verified as the shop's owner: it lets a
     /// notification frame fan out to every open shop
     /// stream of its recipient. This method does only the channel creation
-    /// (no store call — the ownership read stays in the facade, ADR-0010).
+    /// (no store call — the ownership read stays in the facade, ADR-0012).
     pub(super) async fn subscribe_shop(
         &self,
         shop_id: ShopId,

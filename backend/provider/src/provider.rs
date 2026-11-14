@@ -119,7 +119,7 @@ impl TryFrom<ProviderActivityId> for Provider {
 
 /// The user's provider, read from the `users.provider` column (through the
 /// entity-op facade's [`EntityFacade::user_provider`] read — the owning
-/// entity's op, ADR-0010) and parsed into the typed [`Provider`] (the single
+/// entity's op, ADR-0012) and parsed into the typed [`Provider`] (the single
 /// dispatch mechanism, ADR-0014) — the same identity rule the unified lane
 /// and the dispatch use. A read failure is a DB failure the caller propagates.
 pub(crate) async fn provider_of<S, F: EntityFacade<S>>(

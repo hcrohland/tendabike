@@ -199,7 +199,7 @@ impl ActivityId {
 
 impl Activity {
     /// Deletes a specific set of activities. The user-deletion cascade
-    /// (ADR-0010) uses this: the caller already owns these activities.
+    /// (ADR-0012) uses this: the caller already owns these activities.
     pub(crate) async fn delete_many(
         activities: &[Activity],
         store: &mut impl ActivityStore,

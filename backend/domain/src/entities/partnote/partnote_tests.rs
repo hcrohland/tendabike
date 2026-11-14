@@ -81,7 +81,7 @@ fn file_args() -> (String, String, Option<String>, i64, Vec<u8>) {
     )
 }
 
-// === Session-less summary read (ADR-0010) ===
+// === Session-less summary read (ADR-0012) ===
 
 /// `PartNote::all_for_part` reads a part's notes via the store, with no
 /// ownership check (the summary assembly already owns the part).
