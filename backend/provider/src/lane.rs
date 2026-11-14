@@ -22,71 +22,62 @@
 //! probe and process a provider's event queue. The loop is generic over this
 //! trait: it calls `probe` to read the provider's queue (one transaction's
 //! housekeeping) and `process` to handle a queued event (the work
-//! transaction), and never names a concrete provider. Each provider
-//! implements it for its own lane (e.g. the Strava module in `tb_provider`);
-//! a second provider (a new feature module) implements it too, and the loop
-//! works with it unchanged. The
-//! [`Probe`] outcome is generic over the provider's event type, so the
-//! loop's select and reclaim policy are provider-agnostic.
+//! transaction), and never names a concrete provider. The unified lane
+//! ([`unified`]) is the seam's single impl (ADR-0014, amended): it selects
+//! between the two providers per call from the user's `provider` column, so
+//! the loop's control flow is unchanged and provider-agnostic. The
+//! [`Probe`] outcome is generic over the lane's event type.
+//!
+//! [`unified`]: crate::unified
 
 use std::marker::PhantomData;
 
-use tb_domain::{ActivityId, PartId, Session, Summary, TbResult, UserId, UserStat};
+use tb_domain::{PartId, Summary, TbResult, UserId, UserStat};
 
-/// The provider lane marker: a `PhantomData` over the store type `S` and the
-/// provider's event type `E`. Written once in the kit; each provider re-exports
-/// a type alias (e.g. `StravaLane<S> = Lane<S, StravaEvent>`) so existing names
-/// keep working. The distinct `E` keeps the per-provider [`ProviderLane`] impls
-/// apart (a plain `Lane<S>` would hit conflicting implementations, since the
-/// production store implements both store traits).
+use crate::EntityFacade;
+
+/// The provider lane: a `PhantomData` over the store type `S` and the lane's
+/// event type `E`, plus the lane's entity-op facade `F` (the provider's door
+/// into the domain, which the lane's ops forward domain work through). The
+/// unified lane is the single [`ProviderLane`] impl, keyed by the unified
+/// event type ([`crate::LaneEvent`]).
 ///
-/// The marker-field impls (`Clone`/`Copy`/`Debug`/`Default`) are written by
-/// hand rather than derived: a derive would add an `S: Clone`/`S: Debug`
-/// bound, but the lane holds no `S` or `E` data (only `PhantomData` markers),
-/// so it is `Clone`/`Copy`/`Debug`/`Default` for any `S` and `E` — including
-/// a database connection, which is neither `Clone` nor `Debug`.
-pub struct Lane<S, E> {
-    _store: PhantomData<S>,
+/// The store marker is a `PhantomData<fn() -> S>` (a function pointer, which
+/// is unconditionally `Send + Sync`) rather than a `PhantomData<S>`: the
+/// `ProviderLane: Send + Sync` bound must hold for the lane independent of
+/// the store type. The `Debug` impl is written by hand (just `Lane`): a
+/// derive would require `S: Debug`/`E: Debug`/`F: Debug`, but a database
+/// connection is not `Debug`.
+pub struct Lane<S, E, F> {
+    _store: PhantomData<fn() -> S>,
     _event: PhantomData<E>,
+    pub(crate) facade: F,
 }
 
-impl<S, E> Clone for Lane<S, E> {
+impl<S, E, F: Clone> Clone for Lane<S, E, F> {
     fn clone(&self) -> Self {
-        *self
+        Self {
+            _store: PhantomData,
+            _event: PhantomData,
+            facade: self.facade.clone(),
+        }
     }
 }
 
-impl<S, E> Copy for Lane<S, E> {}
-
-impl<S, E> std::fmt::Debug for Lane<S, E> {
+impl<S, E, F> std::fmt::Debug for Lane<S, E, F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Lane").finish()
     }
 }
 
-impl<S, E> Default for Lane<S, E> {
-    fn default() -> Self {
+impl<S, E, F> Lane<S, E, F> {
+    /// The lane for a store of type `S`, event type `E`, and entity-op
+    /// facade `F`.
+    pub fn new(facade: F) -> Self {
         Self {
             _store: PhantomData,
             _event: PhantomData,
-        }
-    }
-}
-
-// `Lane<S, E>` holds no `S` or `E` data (only `PhantomData` markers), so it is
-// safe to share across threads even when `S` is not `Sync` (a database
-// connection, like the Postgres one, is `Send` but not `Sync`). The
-// auto-derived `Sync` would require `S: Sync`; this sound `unsafe impl`
-// provides the unconditional `Sync` the `ProviderLane: Send + Sync` bound
-// needs.
-unsafe impl<S, E> Sync for Lane<S, E> {}
-
-impl<S, E> Lane<S, E> {
-    /// The lane for a store of type `S` and event type `E`.
-    pub fn new() -> Self {
-        Self {
-            _store: PhantomData,
-            _event: PhantomData,
+            facade,
         }
     }
 }
@@ -120,9 +111,12 @@ pub enum Probe<E> {
 /// write), and `all_stats` (the admin read). These are provider-specific: a
 /// second provider implements them for its own domain.
 ///
-/// Each provider module implements it for its own lane; a second provider (a
-/// new feature module implementing [`ProviderLane`] + its data store) plugs in
-/// without touching the loop.
+/// The unified lane ([`crate::unified`]) is the seam's single impl (ADR-0014,
+/// amended): it selects between the two providers per call from the user's
+/// `provider` column. The lane carries its entity-op facade
+/// ([`Facade`](ProviderLane::Facade) — the provider's door into the domain,
+/// ADR-0013), which its ops forward domain work through, so the impl bounds
+/// on the providers' local data stores, not the full domain store.
 #[async_trait::async_trait]
 pub trait ProviderLane: Send + Sync {
     /// The provider's event type.
@@ -132,8 +126,17 @@ pub trait ProviderLane: Send + Sync {
     /// transaction source opens. The loop ties its transaction connection to
     /// this type (`T::Conn = Self::Store`), so `probe` and `process` operate
     /// on the loop's own transaction connection — the lane never names a
-    /// concrete provider's store.
-    type Store;
+    /// concrete provider's store. `Send + Sync` (the entity-op facade's
+    /// store parameter bound): the production connection (a database
+    /// transaction) carries it.
+    type Store: Send + Sync;
+
+    /// The lane's entity-op facade: the provider's door into the domain
+    /// ([`EntityFacade`]), which the lane's ops forward domain work through.
+    type Facade: EntityFacade<Self::Store>;
+
+    /// The lane's entity-op facade.
+    fn facade(&self) -> &Self::Facade;
 
     /// Probe the provider's event queue for the user (one transaction): read
     /// the next event, applying the queue's read-side rules (the rate-limit
@@ -151,13 +154,11 @@ pub trait ProviderLane: Send + Sync {
     /// Queue a sync event on the provider's event queue (the onboarding
     /// cutover's provider side, spec #558 §5.1): the loop runs it in the
     /// write's own transaction, so the queued event commits with the domain
-    /// half. `auto` is the migration flag — a `true` sync is the one-time
-    /// onboarding backfill, a `false` sync a routine one.
+    /// half.
     async fn insert_sync(
         &self,
         user_id: UserId,
         time: i64,
-        auto: bool,
         store: &mut Self::Store,
     ) -> TbResult<()>;
 
@@ -170,17 +171,4 @@ pub trait ProviderLane: Send + Sync {
     /// side, spec #558 §3.3): the domain [`UserStat`] — the stat plus the
     /// provider's queued-event count and disabled flag.
     async fn all_stats(&self, store: &mut Self::Store) -> TbResult<Vec<UserStat>>;
-
-    /// The activity redirect URL (the `/source/activities/{id}` direct op's
-    /// provider side, spec #558 §5.2): the provider's URL for `id`, gated on
-    /// the acting session's ownership of the activity (the read is the
-    /// ownership check). The registry runs it in its own transaction and
-    /// delegates here — the dispatch and the per-provider URL building live
-    /// on the lane, not in the registry.
-    async fn activity_url(
-        &self,
-        id: ActivityId,
-        session: Box<dyn Session>,
-        store: &mut Self::Store,
-    ) -> TbResult<String>;
 }

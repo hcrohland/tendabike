@@ -31,13 +31,15 @@
 //!
 //! [`lane`] — [`ProviderLane`] + its [`Probe`] outcome, the narrow seam the
 //! executor loop calls through to probe and process a provider's event queue.
-//! Each provider module implements it for its own lane; the executor is generic
-//! over whichever lane it is given and never names a concrete provider.
+//! The unified lane is the seam's single impl (ADR-0014, amended); the
+//! executor is generic over the lane it is given and never names a concrete
+//! provider.
 //!
-//! [`unified`] — the unified lane (ADR-0014): the third [`ProviderLane`] impl,
-//! keyed by the [`LaneEvent`] the two providers' event rows share. The lane the
-//! executor loop runs in production: it selects between the two per-provider
-//! lanes per call, with a typed switch on [`Provider`].
+//! [`unified`] — the unified lane (ADR-0014): the [`ProviderLane`] impl,
+//! keyed by the [`LaneEvent`] the two providers' event rows share. The lane
+//! the executor loop runs in production: it selects between the two
+//! providers per call, with a typed switch on [`Provider`], and calls the
+//! driver functions directly.
 
 mod activity_id;
 pub use activity_id::*;

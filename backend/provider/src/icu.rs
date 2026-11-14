@@ -22,7 +22,6 @@
 //! - `gear`: the icu gear wire shape, its type mapping, and the import of the
 //!   user's gear list (`GET /athlete/{id}/gear`).
 //! - `ratelimit`: the icu rate-limit shim over the shared kernel.
-//! - `lane`: the `IcuLane` (`ProviderLane` impl).
 //!
 
 use log::{debug, info};
@@ -47,9 +46,6 @@ mod backfill;
 pub mod gear;
 pub mod http;
 mod ratelimit;
-
-mod lane;
-pub use lane::*;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;

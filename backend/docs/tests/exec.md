@@ -9,7 +9,7 @@ All `tb_exec` tests run in-memory (no database): the executor loop's control flo
 - **What it mocks** — the **three seams the loop drives**:
   - the **transaction** — [`MockConn`] is a `mockall` `mock!` witness carrying **only** the `Txn` lifecycle (`commit`/`rollback`), the `TxnSource::Conn` bound: the loop opens it, works in it, and closes it. It no longer carries the `Store`/`StravaStore` surface.
   - the **domain** — [`MockDomainFacade`] is the `mockall` `#[automock]` witness for the `DomainFacade` door (the `exec`/`read`/`part`/`part_owner` dispatches). The domain logic runs for real behind the concrete `DomainFacadeImpl`; the tests swap in the mock.
-  - the **provider lane** — [`MockLane`] is a `mockall` `mock!` witness for the `ProviderLane` seam (`probe`/`process`/`insert_sync`/`update_gear`/`all_stats`). **Strava** is stubbed (canned) through it for the gear-hydration / stats paths.
+  - the **provider lane** — [`MockLane`] is a `mockall` `mock!` witness for the `ProviderLane` seam (`facade`/`probe`/`process`/`insert_sync`/`update_gear`/`all_stats`/`activity_url`, and the `Facade` associated type). **Strava** is stubbed (canned) through it for the gear-hydration / stats paths.
 
   The per-request tests assert on canned outcomes from these mocks — they verify the executor's behavior (how it drives each seam: `begin` → work → `commit`/`rollback`, and what it does with the results), not the seams'.
 - **What it delegates to the seam** — the **store I/O** (real Postgres) lives in `tb_sqlx`'s `executor_seam.rs` (see [`sqlx.md`](sqlx.md)); the **domain-level results** live in the `tb_domain` suite (see [`domain.md`](domain.md)); the **Strava JSON → Part mapping** lives in the Strava module of `tb_provider` (see [`strava.md`](strava.md)).
@@ -33,7 +33,7 @@ All in `executor/executor_tests.rs` (the `#[cfg(test)]` module declared in `exec
 
 - **`MockConn`** — a `mockall` `mock!` witness (`#[cfg(test)]`) carrying **only** the `Txn` lifecycle (`commit`/`rollback`) — the `TxnSource::Conn` bound. The domain and provider work no longer rides it: it is just the transaction the loop opens, works in, and closes. `#[async_trait]` on the `impl Txn` block is what makes the `async fn` methods desugar (see [`docs/research/mockall-conn-witness.md`](../../../docs/research/mockall-conn-witness.md) §1).
 - **`MockDomainFacade`** — the `mockall` `#[automock]` witness for the `DomainFacade` door (the `exec`/`read`/`part`/`part_owner` dispatches), a crate-internal `cfg(test)` double generated on the `DomainFacade` trait in `facade.rs`. Generic over the store type `C`; the tests instantiate it over `MockConn` (the loop's transaction). Set expectations with the flat `expect_exec` / `expect_read` / `expect_part` / `expect_part_owner` API.
-- **`MockLane`** — a `mockall` `mock!` witness for the `ProviderLane` seam (`probe`/`process`/`insert_sync`/`update_gear`/`all_stats`): the executor's door into the provider ops. Its `Store` is `MockConn` (the `FakeSource`'s connection), so the loop's transaction ties to it.
+- **`MockLane`** — a `mockall` `mock!` witness for the `ProviderLane` seam (`facade`/`probe`/`process`/`insert_sync`/`update_gear`/`all_stats`/`activity_url`, and the `Facade` associated type): the executor's door into the provider ops. Its `Store` is `MockConn` (the `FakeSource`'s connection), so the loop's transaction ties to it; its `Facade` is `tb_provider::MockEntityFacade<MockConn>`.
 
 **The `TxnSource` / lane / pusher test doubles:**
 

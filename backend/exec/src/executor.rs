@@ -851,7 +851,7 @@ where
                 let outcome = async {
                     let outcome = facade.exec(write, &*session, &mut conn).await?;
                     if let Some(time) = onboarding_time {
-                        lane.insert_sync(user_id, time, false, &mut conn).await?;
+                        lane.insert_sync(user_id, time, &mut conn).await?;
                     }
                     Ok(outcome)
                 }

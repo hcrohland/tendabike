@@ -21,63 +21,52 @@
 //! The provider-agnostic direct-op dispatch (ADR-0014): the eight free
 //! functions the executor's provider-agnostic [`ProviderService`] impl
 //! forwards to. Each is a typed switch on [`Provider`] that delegates to the
-//! driver module (or the driver's [`ProviderLane`]) that does the actual work
-//! — the single home for the provider knowledge on the direct-op path, a
-//! sibling of the unified lane seam (`unified`). The executor is a thin
-//! forward: it opens the transaction, hands the connection to one of these,
-//! and commits; no `match provider` and no driver name appear in `tb_exec`.
+//! driver module that does the actual work — the single home for the
+//! provider knowledge on the direct-op path, a sibling of the unified lane
+//! seam (`unified`). The executor is a thin forward: it opens the
+//! transaction, hands the connection (and the entity-op facade) to one of
+//! these, and commits; no `match provider` and no driver name appear in
+//! `tb_exec`.
 //!
 //! The user-keyed ops (`sync`, `deauthorize`, `delete_user`) dispatch on the
-//! user's real provider, read in-transaction (the [`provider_of`] read — the
-//! same identity rule the unified lane uses), not on the route: a
+//! user's real provider, read in-transaction (the
+//! [`provider_of`](crate::provider_of) read — the same identity rule the
+//! unified lane uses), not on the route: a
 //! per-provider route acting on a user of the other provider follows the
 //! stated identity rule instead of failing on a missing lookup.
 //!
-//! The store is a complete store for both providers (`StravaStore +
-//! IcuStore`): each arm bounds on its own driver's store, and the switch is
-//! exhaustive over the enum.
+//! The store is the local data store for both providers
+//! (`StravaDataStore + IcuDataStore`): each arm bounds on its own driver's
+//! data store, and the switch is exhaustive over the enum. Domain work goes
+//! through the entity-op facade (a parameter — the registry passes the
+//! concrete one); the pure queue-intake ops (`accept_event`, `user_url`)
+//! need no facade.
 //!
 //! [`ProviderService`]: crate (re-exported in `tb_exec`)
 
 use tb_domain::{ActivityId, PartId, Session, TbResult, UserId};
 
+use crate::EntityFacade;
 use crate::Provider;
-use crate::ProviderLane;
-use crate::icu::{IcuLane, IcuStore};
-use crate::strava::{StravaLane, StravaStore, gear, strava_url, user_deauthorize, user_delete};
-
-/// The user's provider, read from the `users.provider` column (through the
-/// owning entity's `UserId::provider` read, ADR-0010) and parsed into the
-/// typed [`Provider`] (the single dispatch mechanism, ADR-0014) — the same
-/// identity rule the unified lane uses. A read failure is a DB failure the
-/// caller propagates.
-async fn provider_of<S>(store: &mut S, user_id: UserId) -> TbResult<Provider>
-where
-    S: StravaStore + IcuStore + Send + Sync + 'static,
-{
-    let s = user_id.provider(store).await?;
-    Provider::try_from(s.as_str())
-}
 
 /// The provider-agnostic `login` dispatch (ADR-0014): the provider's login
 /// work — the scope check, the token exchange, the athlete wire-shape
 /// parsing, and the upsert — returning the identity and the admin flag. The
 /// provider is the route's (it knows it from the URL); `code` and `scope`
 /// are the opaque callback values (no driver wire type crosses the seam).
-pub async fn login<S>(
+pub async fn login<S, D: EntityFacade<S>>(
     provider: Provider,
     code: &str,
     scope: &str,
+    facade: &D,
     store: &mut S,
 ) -> TbResult<(UserId, bool)>
 where
-    S: StravaStore + IcuStore + Send + Sync + 'static,
+    S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
     match provider {
-        Provider::Strava => {
-            crate::strava::login(code, scope, &crate::EntityFacadeImpl, store).await
-        }
-        Provider::Icu => crate::icu::login(code, scope, &crate::EntityFacadeImpl, store).await,
+        Provider::Strava => crate::strava::login(code, scope, facade, store).await,
+        Provider::Icu => crate::icu::login(code, scope, facade, store).await,
     }
 }
 
@@ -86,10 +75,11 @@ where
 /// event filtering, the timestamp parse, and the queue insert — returning
 /// the TendaBike users a row was queued for (the caller's wake list). The
 /// provider is the route's (it knows it from the URL); `body` is the raw
-/// webhook body (no driver wire type crosses the seam).
+/// webhook body (no driver wire type crosses the seam). A pure queue-intake
+/// op: it drives no domain work, so it takes no facade.
 pub async fn accept_event<S>(provider: Provider, body: &str, store: &mut S) -> TbResult<Vec<UserId>>
 where
-    S: StravaStore + IcuStore + Send + Sync + 'static,
+    S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
     match provider {
         Provider::Strava => {
@@ -100,42 +90,62 @@ where
     }
 }
 
-/// The provider-agnostic `sync` dispatch (ADR-0014): enqueue a `Sync` event
-/// on the user's provider queue. The provider is the user's real one, read
-/// in-transaction (a per-provider route acting on a user of the other
-/// provider follows the stated identity rule). The Strava arm queues the
-/// `strava_events` row; the icu arm runs the icu onboarding cutover (gear
-/// import + backfill) through its lane.
-pub async fn sync<S>(user_id: UserId, event_time: i64, store: &mut S) -> TbResult<()>
+/// The sync switch (ADR-0014): the single home for the user's provider
+/// identity read plus the Strava `insert_sync(…, false, …)` / icu `onboard`
+/// arms. The provider is the user's real one, read in-transaction (a
+/// per-provider route acting on a user of the other provider follows the
+/// stated identity rule). Both entry points delegate here: the registry's
+/// [`sync`](crate::dispatch::sync) and the unified lane's `insert_sync` (the
+/// onboarding cutover's provider side) — one `match` for the sync op, not two.
+pub(crate) async fn sync_user<S, D: EntityFacade<S>>(
+    user_id: UserId,
+    event_time: i64,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<()>
 where
-    S: StravaStore + IcuStore + Send + Sync + 'static,
+    S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
-    let provider = provider_of(store, user_id).await?;
+    let provider = crate::provider_of(store, user_id, facade).await?;
     match provider {
         Provider::Strava => {
-            StravaLane::new()
-                .insert_sync(user_id, event_time, false, store)
-                .await
+            crate::strava::event::insert_sync(user_id, event_time, false, store).await
         }
-        Provider::Icu => {
-            IcuLane::new()
-                .insert_sync(user_id, event_time, false, store)
-                .await
-        }
+        Provider::Icu => crate::icu::onboard(user_id, event_time, facade, store).await,
     }
+}
+
+/// The provider-agnostic `sync` dispatch (ADR-0014): enqueue a `Sync` event
+/// on the user's provider queue. Delegates to the sync switch
+/// ([`sync_user`](crate::dispatch::sync_user)).
+pub async fn sync<S, D: EntityFacade<S>>(
+    user_id: UserId,
+    event_time: i64,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<()>
+where
+    S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
+{
+    sync_user(user_id, event_time, facade, store).await
 }
 
 /// The provider-agnostic `deauthorize` dispatch (ADR-0014): revoke the
 /// target's provider token and disable their local row (admin-only — the
 /// driver verifies the acting session is an admin). The provider is the
 /// target's real one, read in-transaction.
-pub async fn deauthorize<S>(session: &mut dyn Session, tbid: UserId, store: &mut S) -> TbResult<()>
+pub async fn deauthorize<S, D: EntityFacade<S>>(
+    session: &mut dyn Session,
+    tbid: UserId,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<()>
 where
-    S: StravaStore + IcuStore + Send + Sync + 'static,
+    S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
-    let provider = provider_of(store, tbid).await?;
+    let provider = crate::provider_of(store, tbid, facade).await?;
     match provider {
-        Provider::Strava => user_deauthorize(session, tbid, store).await,
+        Provider::Strava => crate::strava::user_deauthorize(session, tbid, store).await,
         Provider::Icu => todo!("icu deauthorize"),
     }
 }
@@ -143,32 +153,38 @@ where
 /// The provider-agnostic `delete_user` dispatch (ADR-0014): deauthorize the
 /// target (admin-only) plus delete their provider and domain rows. The
 /// provider is the target's real one, read in-transaction.
-pub async fn delete_user<S>(session: &mut dyn Session, tbid: UserId, store: &mut S) -> TbResult<()>
+pub async fn delete_user<S, D: EntityFacade<S>>(
+    session: &mut dyn Session,
+    tbid: UserId,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<()>
 where
-    S: StravaStore + IcuStore + Send + Sync + 'static,
+    S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
-    let provider = provider_of(store, tbid).await?;
+    let provider = crate::provider_of(store, tbid, facade).await?;
     match provider {
-        Provider::Strava => user_delete(session, tbid, &crate::EntityFacadeImpl, store).await,
+        Provider::Strava => crate::strava::user_delete(session, tbid, facade, store).await,
         Provider::Icu => todo!("icu delete user"),
     }
 }
 
 /// The provider-agnostic `activity_url` dispatch (ADR-0014): the provider's
 /// URL for `id`, gated on the acting session's ownership (the read is the
-/// ownership check).
-pub async fn activity_url<S>(
+/// ownership check). The driver extracts the activity id's prefix.
+pub async fn activity_url<S, D: EntityFacade<S>>(
     provider: Provider,
     session: Box<dyn Session>,
     id: ActivityId,
+    facade: &D,
     store: &mut S,
 ) -> TbResult<String>
 where
-    S: StravaStore + IcuStore + Send + Sync + 'static,
+    S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
     match provider {
-        Provider::Strava => StravaLane::new().activity_url(id, session, store).await,
-        Provider::Icu => IcuLane::new().activity_url(id, session, store).await,
+        Provider::Strava => crate::strava::activity::strava_url(id, session, facade, store).await,
+        Provider::Icu => crate::icu::activity::activity_url(id, session, facade, store).await,
     }
 }
 
@@ -176,18 +192,19 @@ where
 /// page for the part `id`, gated on the acting session's ownership. The one
 /// non-total op: icu gear is a private settings item with no public page, so
 /// the icu arm is the typed absence (`None`) — the route maps it to a no-op.
-pub async fn gear_url<S>(
+pub async fn gear_url<S, D: EntityFacade<S>>(
     provider: Provider,
     session: Box<dyn Session>,
     id: PartId,
+    facade: &D,
     store: &mut S,
 ) -> TbResult<Option<String>>
 where
-    S: StravaStore + IcuStore + Send + Sync + 'static,
+    S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
     match provider {
         Provider::Strava => {
-            gear::strava_url(i32::from(id), session, &crate::EntityFacadeImpl, store).await
+            crate::strava::gear::strava_url(i32::from(id), session, facade, store).await
         }
         Provider::Icu => crate::icu::gear::gear_url(id, session, store).await,
     }
@@ -196,13 +213,14 @@ where
 /// The provider-agnostic `user_url` dispatch (ADR-0014): the provider's
 /// public athlete profile URL for the target `tbid` (no session: the route
 /// has no user context to gate on). The icu arm builds the public athlete
-/// profile page from the icu user row's athlete id.
+/// profile page from the icu user row's athlete id. A pure data-store read:
+/// it drives no domain work, so it takes no facade.
 pub async fn user_url<S>(provider: Provider, id: UserId, store: &mut S) -> TbResult<String>
 where
-    S: StravaStore + IcuStore + Send + Sync + 'static,
+    S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
     match provider {
-        Provider::Strava => strava_url(id, store).await,
+        Provider::Strava => crate::strava::strava_url(id, store).await,
         Provider::Icu => crate::icu::user::user_url(id, store).await,
     }
 }

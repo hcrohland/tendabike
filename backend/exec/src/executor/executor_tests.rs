@@ -23,9 +23,9 @@
 //! selection, reclaim decision, frame construction — is structured as pure
 //! units testable with a channel and dummy futures (no store, no database).
 //!
-//! The transaction seam is a `mockall` `mock!` witness: [`MockConn`] is a
-//! single type accumulating the full `Store` (nine sub-traits + the marker)
-//! plus `StravaStore` and `Txn` — the `TxnSource::Conn` bound. The per-request
+//! The transaction seam is a `mockall` `mock!` witness: [`MockConn`] carries
+//! only the `Txn` lifecycle (commit/rollback) — the `TxnSource::Conn` bound —
+//! with the domain and provider seams mocked separately. The per-request
 //! tests (`run_request`) assert on **canned `mock!` outcomes** (the store
 //! returns the values the test sets on `expect_*`): they verify the
 //! **executor's** behavior — how it drives the store (`begin` → work →
@@ -46,10 +46,10 @@ use tb_domain::test_support::{
     sole_live,
 };
 use tb_domain::{
-    ActivityId, ApiRead, ApiWrite, Error, Notification, NotificationId, NotificationKind,
+    ApiRead, ApiWrite, Error, Notification, NotificationId, NotificationKind,
     NotificationLifecycle, NotificationState, NotificationSubject, OnboardingStatus, Part, PartId,
-    PartTypeId, ReadOutcome, Service, ServiceId, Session, Shop, ShopId, SubscriptionId, Summary,
-    TbResult, Usage, UsageId, User, UserId, UserStat, UserState, WriteOutcome,
+    PartTypeId, ReadOutcome, Service, ServiceId, Shop, ShopId, SubscriptionId, Summary, TbResult,
+    Usage, UsageId, User, UserId, UserStat, UserState, WriteOutcome,
 };
 use tb_provider::strava::event::Event;
 use tb_provider::{Probe, ProviderLane};
@@ -104,23 +104,18 @@ mockall::mock! {
     impl ProviderLane for Lane {
         type Event = Event;
         type Store = MockConn;
+        type Facade = tb_provider::MockEntityFacade<MockConn>;
+        fn facade(&self) -> &tb_provider::MockEntityFacade<MockConn>;
         async fn probe(&self, user_id: UserId, store: &mut MockConn) -> Probe<Event>;
         async fn process(&self, user_id: UserId, store: &mut MockConn) -> Option<Summary>;
         async fn insert_sync(
             &self,
             user_id: UserId,
             time: i64,
-            auto: bool,
             store: &mut MockConn,
         ) -> TbResult<()>;
         async fn update_gear(&self, user_id: UserId, store: &mut MockConn) -> TbResult<Vec<PartId>>;
         async fn all_stats(&self, store: &mut MockConn) -> TbResult<Vec<UserStat>>;
-        async fn activity_url(
-            &self,
-            id: ActivityId,
-            session: Box<dyn Session>,
-            store: &mut MockConn,
-        ) -> TbResult<String>;
     }
 }
 

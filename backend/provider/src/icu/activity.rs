@@ -18,10 +18,11 @@ use tb_domain::{
 };
 
 /// The intervals.icu URL for an activity (the `/source/activities/{id}`
-/// redirect target): verifies ownership via the facade, then builds the
+/// redirect target): the driver extracts the raw id from the domain's opaque
+/// [`ActivityId`], verifies ownership via the facade, then builds the
 /// provider URL from the raw id.
 pub async fn activity_url<D, S>(
-    id: IcuActivityId,
+    id: ActivityId,
     user: Box<dyn Session>,
     facade: &D,
     store: &mut S,
@@ -30,9 +31,12 @@ where
     D: EntityFacade<S>,
     S: Send + Sync,
 {
-    let full: ActivityId = ProviderActivityId::Icu(id.clone()).into();
+    let ProviderActivityId::Icu(raw) = ProviderActivityId::try_from(id)? else {
+        return Err(Error::BadRequest("not an icu activity".to_string()));
+    };
+    let full: ActivityId = ProviderActivityId::Icu(raw.clone()).into();
     facade.read_activity(&full, user, store).await?;
-    Ok(format!("https://intervals.icu/activities/{id}"))
+    Ok(format!("https://intervals.icu/activities/{raw}"))
 }
 
 /// A gear reference carried by an icu activity.

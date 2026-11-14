@@ -116,17 +116,21 @@ impl StravaActivity {
     }
 }
 
-/// The Strava URL for a Strava activity: the read is the ownership check,
-/// and the URL is built from the raw (unprefixed) Strava id.
+/// The Strava URL for a Strava activity: the driver extracts the raw
+/// (unprefixed) Strava id from the domain's opaque [`ActivityId`], the read
+/// is the ownership check, and the URL is built from the raw id.
 pub async fn strava_url<D: EntityFacade<S>, S: StravaDataStore>(
-    id: StravaActivityId,
+    id: ActivityId,
     user: Box<dyn Session>,
     facade: &D,
     store: &mut S,
 ) -> TbResult<String> {
-    let full: ActivityId = ProviderActivityId::Strava(id).into();
+    let ProviderActivityId::Strava(raw) = ProviderActivityId::try_from(id)? else {
+        return Err(Error::BadRequest("not a strava activity".to_string()));
+    };
+    let full: ActivityId = ProviderActivityId::Strava(raw).into();
     facade.read_activity(&full, user, store).await?;
-    Ok(format!("https://strava.com/activities/{id}"))
+    Ok(format!("https://strava.com/activities/{raw}"))
 }
 
 pub(crate) async fn upsert_activity<D: EntityFacade<S>, S: StravaDataStore>(

@@ -37,9 +37,6 @@ pub mod event;
 pub mod gear;
 mod ratelimit;
 
-mod lane;
-pub use lane::*;
-
 mod user;
 pub use user::*;
 

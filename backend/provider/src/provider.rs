@@ -9,11 +9,12 @@
 //! prefix, and the OAuth entry URL. A third provider is a variant carrying all
 //! four encodings at once.
 
-use tb_domain::Error;
+use tb_domain::{Error, TbResult, UserId};
 
 #[cfg(any(feature = "strava", feature = "icu"))]
 use oauth2::{CsrfToken, Scope};
 
+use crate::EntityFacade;
 use crate::ProviderActivityId;
 
 /// The provider's identity: the typed form of the domain concept (a user has
@@ -114,6 +115,23 @@ impl TryFrom<ProviderActivityId> for Provider {
             ProviderActivityId::Icu(_) => Ok(Provider::Icu),
         }
     }
+}
+
+/// The user's provider, read from the `users.provider` column (through the
+/// entity-op facade's [`EntityFacade::user_provider`] read — the owning
+/// entity's op, ADR-0010) and parsed into the typed [`Provider`] (the single
+/// dispatch mechanism, ADR-0014) — the same identity rule the unified lane
+/// and the dispatch use. A read failure is a DB failure the caller propagates.
+pub(crate) async fn provider_of<S, F: EntityFacade<S>>(
+    store: &mut S,
+    user_id: UserId,
+    facade: &F,
+) -> TbResult<Provider>
+where
+    S: Send + Sync,
+{
+    let s = facade.user_provider(&user_id, store).await?;
+    Provider::try_from(s.as_str())
 }
 
 #[cfg(test)]

@@ -19,27 +19,34 @@
 */
 
 //! The unified provider lane (ADR-0014): the [`ProviderLane`] impl the
-//! executor loop runs in production — the third impl of the [`Lane<S, E>`]
-//! seam, beside the two per-provider lanes.
+//! executor loop runs in production — the seam's single impl.
 //!
 //! The loop is generic over a single [`ProviderLane`] type, but a user has
 //! exactly one provider (the `users.provider` column, immutable). This lane
-//! wraps both provider lanes — [`StravaLane`] and [`IcuLane`] — and selects
-//! between them per call from the user's `provider` column (a typed switch
-//! on [`Provider`]), so the loop's control flow (the biased select, the
-//! backoff, the idle policy, the frame push) is unchanged and
-//! provider-agnostic.
+//! selects between the two providers per call from the user's `provider`
+//! column (a typed switch on [`Provider`]), and calls the driver functions
+//! directly — so the loop's control flow (the biased select, the backoff, the
+//! idle policy, the frame push) is unchanged and provider-agnostic.
 //!
 //! The unified event type ([`LaneEvent`]) is the loop's `P::Event`: an enum
 //! over the two providers' event rows, so the loop's `Select`, the
 //! consumed-event channel, and the `run_event` dispatch are all
 //! provider-agnostic.
+//!
+//! The lane is generic over the store type `S` (the transaction's connection)
+//! and its entity-op facade `F` ([`EntityFacade`] — the provider's door into
+//! the domain): `type Store = S`, so the loop's transaction connection ties
+//! to `S`, and the lane's ops forward domain work (the per-call provider
+//! selection, the driver domain calls) through `F`. `S` must be the local
+//! data store for both providers (`StravaDataStore + IcuDataStore`) — the
+//! lane bounds on no full domain store.
 
-use tb_domain::{ActivityId, PartId, Session, Summary, TbResult, UserId, UserStat};
+use tb_domain::{PartId, Summary, TbResult, UserId, UserStat};
 
+use crate::EntityFacade;
 use crate::Provider;
-use crate::icu::{IcuLane, IcuStore, event::IcuEvent};
-use crate::strava::{StravaLane, StravaStore, event::Event as StravaEvent};
+use crate::icu::{IcuDataStore, event::IcuEvent};
+use crate::strava::{StravaDataStore, event::Event as StravaEvent};
 use crate::{Lane, Probe, ProviderLane};
 
 /// The unified provider event the per-user lane reports: the two providers'
@@ -64,105 +71,102 @@ impl From<LaneEvent> for Option<StravaEvent> {
     }
 }
 
-/// The unified provider lane: [`Lane<S, LaneEvent>`](Lane) — the third
-/// [`ProviderLane`] impl (ADR-0014), beside the two per-provider lanes. It
-/// wraps both provider lanes and selects between them per call from the
-/// user's `provider` column (a typed switch on [`Provider`]); the loop is
-/// generic over this single type and never names a concrete provider.
+/// The unified provider lane: [`Lane<S, LaneEvent, F>`](Lane) — the
+/// [`ProviderLane`] impl the executor loop runs (ADR-0014, amended: the seam's
+/// single impl). It selects between the two providers per call from the
+/// user's `provider` column (a typed switch on [`Provider`]) and calls the
+/// driver functions directly; the loop is generic over this single type and
+/// never names a concrete provider.
 ///
-/// Generic over the store type `S` (the transaction's connection):
-/// `type Store = S`, so the loop's transaction connection ties to `S` and
-/// `probe`/`process` operate on it. `S` must be a complete store for both
-/// providers (`StravaStore + IcuStore`), which also carries the domain
-/// `Store` (the `user_get` the per-call selection reads).
-pub type UnifiedLane<S> = Lane<S, LaneEvent>;
-
-impl<S> Lane<S, LaneEvent>
-where
-    S: StravaStore + IcuStore,
-{
-    /// The user's provider, read from the `users.provider` column (through
-    /// the owning entity's [`UserId::provider`] read, ADR-0010) and parsed
-    /// into the typed [`Provider`] (the single dispatch mechanism, ADR-0014).
-    /// A read failure is a DB failure the caller classifies.
-    async fn provider_of(store: &mut S, user_id: UserId) -> TbResult<Provider> {
-        let s = user_id.provider(store).await?;
-        Provider::try_from(s.as_str())
-    }
-}
+/// Generic over the store type `S` (the transaction's connection) and the
+/// entity-op facade `F` (the provider's door into the domain): `type Store =
+/// S`, so the loop's transaction connection ties to `S`; `S` must be the
+/// local data store for both providers (`StravaDataStore + IcuDataStore`).
+/// The production alias is concrete over the concrete facade
+/// ([`EntityFacadeImpl`]).
+///
+/// [`EntityFacadeImpl`]: crate::EntityFacadeImpl
+pub type UnifiedLane<S> = Lane<S, LaneEvent, crate::EntityFacadeImpl>;
 
 #[async_trait::async_trait]
-impl<S> ProviderLane for Lane<S, LaneEvent>
+impl<S, F> ProviderLane for Lane<S, LaneEvent, F>
 where
-    S: StravaStore + IcuStore + Send + 'static,
+    S: StravaDataStore + IcuDataStore + Send + 'static,
+    F: EntityFacade<S> + Clone + Send + Sync + 'static,
 {
     type Event = LaneEvent;
     type Store = S;
+    type Facade = F;
+
+    fn facade(&self) -> &F {
+        &self.facade
+    }
 
     /// Probe the user's provider event queue (one transaction's
-    /// housekeeping): read the user's `provider` column, then delegate to
-    /// that provider's lane. The returned event is wrapped in [`LaneEvent`].
+    /// housekeeping): read the user's `provider` column (through the facade),
+    /// then read that provider's queue. The returned event is wrapped in
+    /// [`LaneEvent`].
     async fn probe(&self, user_id: UserId, store: &mut S) -> Probe<LaneEvent> {
-        let provider = match Self::provider_of(store, user_id).await {
+        let provider = match crate::provider_of(store, user_id, &self.facade).await {
             Ok(provider) => provider,
             Err(_) => return Probe::Error,
         };
         match provider {
-            Provider::Icu => match IcuLane::new().probe(user_id, store).await {
-                Probe::Event(event) => Probe::Event(LaneEvent::Icu(event)),
-                Probe::Limited(until) => Probe::Limited(until),
-                Probe::Empty => Probe::Empty,
-                Probe::Error => Probe::Error,
+            Provider::Icu => match crate::icu::event::get_event(user_id, store).await {
+                Ok(crate::icu::event::QueueRead::Event(event)) => {
+                    Probe::Event(LaneEvent::Icu(event))
+                }
+                Ok(crate::icu::event::QueueRead::Limited { until }) => Probe::Limited(until),
+                Ok(crate::icu::event::QueueRead::Empty) => Probe::Empty,
+                Err(_) => Probe::Error,
             },
-            Provider::Strava => match StravaLane::new().probe(user_id, store).await {
-                Probe::Event(event) => Probe::Event(LaneEvent::Strava(event)),
-                Probe::Limited(until) => Probe::Limited(until),
-                Probe::Empty => Probe::Empty,
-                Probe::Error => Probe::Error,
+            Provider::Strava => match crate::strava::event::get_event(user_id, store).await {
+                Ok(crate::strava::event::QueueRead::Event(event)) => {
+                    Probe::Event(LaneEvent::Strava(event))
+                }
+                Ok(crate::strava::event::QueueRead::Limited { until }) => Probe::Limited(until),
+                Ok(crate::strava::event::QueueRead::Empty) => Probe::Empty,
+                Err(_) => Probe::Error,
             },
         }
     }
 
     /// Process the user's next queued event (the work transaction): read the
-    /// user's `provider` column, then delegate to that provider's lane.
+    /// user's `provider` column (through the facade), then handle the event
+    /// with that provider's driver.
     async fn process(&self, user_id: UserId, store: &mut S) -> Option<Summary> {
-        let provider = match Self::provider_of(store, user_id).await {
+        let provider = match crate::provider_of(store, user_id, &self.facade).await {
             Ok(provider) => provider,
             Err(_) => return None,
         };
         match provider {
-            Provider::Icu => IcuLane::new().process(user_id, store).await,
-            Provider::Strava => StravaLane::new().process(user_id, store).await,
+            Provider::Icu => crate::icu::event::process(user_id, &self.facade, store)
+                .await
+                .ok(),
+            Provider::Strava => crate::strava::event::process(user_id, &self.facade, store)
+                .await
+                .ok(),
         }
     }
 
     /// Queue a sync event on the user's provider event queue (the onboarding
-    /// cutover's provider side): delegate to the user's provider's lane.
-    async fn insert_sync(
-        &self,
-        user_id: UserId,
-        time: i64,
-        auto: bool,
-        store: &mut S,
-    ) -> TbResult<()> {
-        let provider = Self::provider_of(store, user_id).await?;
-        match provider {
-            Provider::Icu => IcuLane::new().insert_sync(user_id, time, auto, store).await,
-            Provider::Strava => {
-                StravaLane::new()
-                    .insert_sync(user_id, time, auto, store)
-                    .await
-            }
-        }
+    /// cutover's provider side): delegates to the sync switch
+    /// ([`crate::dispatch::sync_user`]) — the Strava arm queues the
+    /// `strava_events` row; the icu arm runs the icu onboarding (gear import
+    /// + backfill) through its driver.
+    async fn insert_sync(&self, user_id: UserId, time: i64, store: &mut S) -> TbResult<()> {
+        crate::dispatch::sync_user(user_id, time, &self.facade, store).await
     }
 
     /// Import the user's gear from their provider (the hydration write's
-    /// provider side): delegate to the user's provider's lane.
+    /// provider side): the user's provider's driver.
     async fn update_gear(&self, user_id: UserId, store: &mut S) -> TbResult<Vec<PartId>> {
-        let provider = Self::provider_of(store, user_id).await?;
+        let provider = crate::provider_of(store, user_id, &self.facade).await?;
         match provider {
-            Provider::Icu => IcuLane::new().update_gear(user_id, store).await,
-            Provider::Strava => StravaLane::new().update_gear(user_id, store).await,
+            Provider::Icu => crate::icu::gear::update_gear(user_id, &self.facade, store).await,
+            Provider::Strava => {
+                crate::strava::StravaUser::update_gear(user_id, &self.facade, store).await
+            }
         }
     }
 
@@ -170,23 +174,8 @@ where
     /// side): the union of the Strava users' stats and the icu users' stats
     /// (each user's stat is sourced from their own provider).
     async fn all_stats(&self, store: &mut S) -> TbResult<Vec<UserStat>> {
-        let mut stats = StravaLane::new().all_stats(store).await?;
-        stats.extend(IcuLane::new().all_stats(store).await?);
+        let mut stats = crate::strava::get_all_stats(&self.facade, store).await?;
+        stats.extend(crate::icu::get_all_stats(&self.facade, store).await?);
         Ok(stats)
-    }
-
-    /// The per-user half of [`ProviderLane::activity_url`]: read the user's
-    /// `provider` column, then delegate to that provider's lane.
-    async fn activity_url(
-        &self,
-        id: ActivityId,
-        session: Box<dyn Session>,
-        store: &mut S,
-    ) -> TbResult<String> {
-        let provider = Self::provider_of(store, session.user_id()).await?;
-        match provider {
-            Provider::Icu => IcuLane::new().activity_url(id, session, store).await,
-            Provider::Strava => StravaLane::new().activity_url(id, session, store).await,
-        }
     }
 }
