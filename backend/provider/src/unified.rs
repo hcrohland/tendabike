@@ -41,7 +41,7 @@
 //! data store for both providers (`StravaDataStore + IcuDataStore`) — the
 //! lane bounds on no full domain store.
 
-use tb_domain::{ActivityId, PartId, Session, Summary, TbResult, UserId, UserStat};
+use tb_domain::{PartId, Summary, TbResult, UserId, UserStat};
 
 use crate::EntityFacade;
 use crate::Provider;
@@ -88,22 +88,6 @@ impl From<LaneEvent> for Option<StravaEvent> {
 /// [`EntityFacadeImpl`]: crate::EntityFacadeImpl
 pub type UnifiedLane<S> = Lane<S, LaneEvent, crate::EntityFacadeImpl>;
 
-impl<S, F> Lane<S, LaneEvent, F>
-where
-    S: StravaDataStore + IcuDataStore,
-    F: EntityFacade<S>,
-{
-    /// The user's provider, read from the `users.provider` column (through
-    /// the entity-op facade's [`EntityFacade::user_provider`] read — the
-    /// owning entity's op, ADR-0010) and parsed into the typed [`Provider`]
-    /// (the single dispatch mechanism, ADR-0014). A read failure is a DB
-    /// failure the caller classifies.
-    async fn provider_of(store: &mut S, user_id: UserId, facade: &F) -> TbResult<Provider> {
-        let s = facade.user_provider(&user_id, store).await?;
-        Provider::try_from(s.as_str())
-    }
-}
-
 #[async_trait::async_trait]
 impl<S, F> ProviderLane for Lane<S, LaneEvent, F>
 where
@@ -123,7 +107,7 @@ where
     /// then read that provider's queue. The returned event is wrapped in
     /// [`LaneEvent`].
     async fn probe(&self, user_id: UserId, store: &mut S) -> Probe<LaneEvent> {
-        let provider = match Self::provider_of(store, user_id, &self.facade).await {
+        let provider = match crate::provider_of(store, user_id, &self.facade).await {
             Ok(provider) => provider,
             Err(_) => return Probe::Error,
         };
@@ -151,7 +135,7 @@ where
     /// user's `provider` column (through the facade), then handle the event
     /// with that provider's driver.
     async fn process(&self, user_id: UserId, store: &mut S) -> Option<Summary> {
-        let provider = match Self::provider_of(store, user_id, &self.facade).await {
+        let provider = match crate::provider_of(store, user_id, &self.facade).await {
             Ok(provider) => provider,
             Err(_) => return None,
         };
@@ -166,27 +150,18 @@ where
     }
 
     /// Queue a sync event on the user's provider event queue (the onboarding
-    /// cutover's provider side): the Strava arm queues the `strava_events`
-    /// row; the icu arm runs the icu onboarding (gear import + backfill)
-    /// through its driver.
-    async fn insert_sync(
-        &self,
-        user_id: UserId,
-        time: i64,
-        auto: bool,
-        store: &mut S,
-    ) -> TbResult<()> {
-        let provider = Self::provider_of(store, user_id, &self.facade).await?;
-        match provider {
-            Provider::Icu => crate::icu::onboard(user_id, time, &self.facade, store).await,
-            Provider::Strava => crate::strava::event::insert_sync(user_id, time, auto, store).await,
-        }
+    /// cutover's provider side): delegates to the sync switch
+    /// ([`crate::dispatch::sync_user`]) — the Strava arm queues the
+    /// `strava_events` row; the icu arm runs the icu onboarding (gear import
+    /// + backfill) through its driver.
+    async fn insert_sync(&self, user_id: UserId, time: i64, store: &mut S) -> TbResult<()> {
+        crate::dispatch::sync_user(user_id, time, &self.facade, store).await
     }
 
     /// Import the user's gear from their provider (the hydration write's
     /// provider side): the user's provider's driver.
     async fn update_gear(&self, user_id: UserId, store: &mut S) -> TbResult<Vec<PartId>> {
-        let provider = Self::provider_of(store, user_id, &self.facade).await?;
+        let provider = crate::provider_of(store, user_id, &self.facade).await?;
         match provider {
             Provider::Icu => crate::icu::gear::update_gear(user_id, &self.facade, store).await,
             Provider::Strava => {
@@ -202,25 +177,5 @@ where
         let mut stats = crate::strava::get_all_stats(&self.facade, store).await?;
         stats.extend(crate::icu::get_all_stats(&self.facade, store).await?);
         Ok(stats)
-    }
-
-    /// The per-user half of [`ProviderLane::activity_url`]: read the user's
-    /// `provider` column (through the facade), then build that provider's URL
-    /// (the driver extracts the activity id's prefix).
-    async fn activity_url(
-        &self,
-        id: ActivityId,
-        session: Box<dyn Session>,
-        store: &mut S,
-    ) -> TbResult<String> {
-        let provider = Self::provider_of(store, session.user_id(), &self.facade).await?;
-        match provider {
-            Provider::Icu => {
-                crate::icu::activity::activity_url(id, session, &self.facade, store).await
-            }
-            Provider::Strava => {
-                crate::strava::activity::strava_url(id, session, &self.facade, store).await
-            }
-        }
     }
 }

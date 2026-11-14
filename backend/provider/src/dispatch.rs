@@ -29,8 +29,9 @@
 //! `tb_exec`.
 //!
 //! The user-keyed ops (`sync`, `deauthorize`, `delete_user`) dispatch on the
-//! user's real provider, read in-transaction (the [`provider_of`] read — the
-//! same identity rule the unified lane uses), not on the route: a
+//! user's real provider, read in-transaction (the
+//! [`provider_of`](crate::provider_of) read — the same identity rule the
+//! unified lane uses), not on the route: a
 //! per-provider route acting on a user of the other provider follows the
 //! stated identity rule instead of failing on a missing lookup.
 //!
@@ -47,23 +48,6 @@ use tb_domain::{ActivityId, PartId, Session, TbResult, UserId};
 
 use crate::EntityFacade;
 use crate::Provider;
-
-/// The user's provider, read from the `users.provider` column (through the
-/// entity-op facade's [`EntityFacade::user_provider`] read — the owning
-/// entity's op, ADR-0010) and parsed into the typed [`Provider`] (the single
-/// dispatch mechanism, ADR-0014) — the same identity rule the unified lane
-/// uses. A read failure is a DB failure the caller propagates.
-async fn provider_of<S, F: EntityFacade<S>>(
-    store: &mut S,
-    user_id: UserId,
-    facade: &F,
-) -> TbResult<Provider>
-where
-    S: Send + Sync,
-{
-    let s = facade.user_provider(&user_id, store).await?;
-    Provider::try_from(s.as_str())
-}
 
 /// The provider-agnostic `login` dispatch (ADR-0014): the provider's login
 /// work — the scope check, the token exchange, the athlete wire-shape
@@ -106,12 +90,34 @@ where
     }
 }
 
+/// The sync switch (ADR-0014): the single home for the user's provider
+/// identity read plus the Strava `insert_sync(…, false, …)` / icu `onboard`
+/// arms. The provider is the user's real one, read in-transaction (a
+/// per-provider route acting on a user of the other provider follows the
+/// stated identity rule). Both entry points delegate here: the registry's
+/// [`sync`](crate::dispatch::sync) and the unified lane's `insert_sync` (the
+/// onboarding cutover's provider side) — one `match` for the sync op, not two.
+pub(crate) async fn sync_user<S, D: EntityFacade<S>>(
+    user_id: UserId,
+    event_time: i64,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<()>
+where
+    S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
+{
+    let provider = crate::provider_of(store, user_id, facade).await?;
+    match provider {
+        Provider::Strava => {
+            crate::strava::event::insert_sync(user_id, event_time, false, store).await
+        }
+        Provider::Icu => crate::icu::onboard(user_id, event_time, facade, store).await,
+    }
+}
+
 /// The provider-agnostic `sync` dispatch (ADR-0014): enqueue a `Sync` event
-/// on the user's provider queue. The provider is the user's real one, read
-/// in-transaction (a per-provider route acting on a user of the other
-/// provider follows the stated identity rule). The Strava arm queues the
-/// `strava_events` row; the icu arm runs the icu onboarding cutover (gear
-/// import + backfill) through its driver.
+/// on the user's provider queue. Delegates to the sync switch
+/// ([`sync_user`](crate::dispatch::sync_user)).
 pub async fn sync<S, D: EntityFacade<S>>(
     user_id: UserId,
     event_time: i64,
@@ -121,13 +127,7 @@ pub async fn sync<S, D: EntityFacade<S>>(
 where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
-    let provider = provider_of(store, user_id, facade).await?;
-    match provider {
-        Provider::Strava => {
-            crate::strava::event::insert_sync(user_id, event_time, false, store).await
-        }
-        Provider::Icu => crate::icu::onboard(user_id, event_time, facade, store).await,
-    }
+    sync_user(user_id, event_time, facade, store).await
 }
 
 /// The provider-agnostic `deauthorize` dispatch (ADR-0014): revoke the
@@ -143,7 +143,7 @@ pub async fn deauthorize<S, D: EntityFacade<S>>(
 where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
-    let provider = provider_of(store, tbid, facade).await?;
+    let provider = crate::provider_of(store, tbid, facade).await?;
     match provider {
         Provider::Strava => crate::strava::user_deauthorize(session, tbid, store).await,
         Provider::Icu => todo!("icu deauthorize"),
@@ -162,7 +162,7 @@ pub async fn delete_user<S, D: EntityFacade<S>>(
 where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
-    let provider = provider_of(store, tbid, facade).await?;
+    let provider = crate::provider_of(store, tbid, facade).await?;
     match provider {
         Provider::Strava => crate::strava::user_delete(session, tbid, facade, store).await,
         Provider::Icu => todo!("icu delete user"),

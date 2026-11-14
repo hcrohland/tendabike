@@ -46,10 +46,10 @@ use tb_domain::test_support::{
     sole_live,
 };
 use tb_domain::{
-    ActivityId, ApiRead, ApiWrite, Error, Notification, NotificationId, NotificationKind,
+    ApiRead, ApiWrite, Error, Notification, NotificationId, NotificationKind,
     NotificationLifecycle, NotificationState, NotificationSubject, OnboardingStatus, Part, PartId,
-    PartTypeId, ReadOutcome, Service, ServiceId, Session, Shop, ShopId, SubscriptionId, Summary,
-    TbResult, Usage, UsageId, User, UserId, UserStat, UserState, WriteOutcome,
+    PartTypeId, ReadOutcome, Service, ServiceId, Shop, ShopId, SubscriptionId, Summary, TbResult,
+    Usage, UsageId, User, UserId, UserStat, UserState, WriteOutcome,
 };
 use tb_provider::strava::event::Event;
 use tb_provider::{Probe, ProviderLane};
@@ -112,17 +112,10 @@ mockall::mock! {
             &self,
             user_id: UserId,
             time: i64,
-            auto: bool,
             store: &mut MockConn,
         ) -> TbResult<()>;
         async fn update_gear(&self, user_id: UserId, store: &mut MockConn) -> TbResult<Vec<PartId>>;
         async fn all_stats(&self, store: &mut MockConn) -> TbResult<Vec<UserStat>>;
-        async fn activity_url(
-            &self,
-            id: ActivityId,
-            session: Box<dyn Session>,
-            store: &mut MockConn,
-        ) -> TbResult<String>;
     }
 }
 

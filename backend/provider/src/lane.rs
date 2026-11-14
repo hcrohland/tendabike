@@ -32,7 +32,7 @@
 
 use std::marker::PhantomData;
 
-use tb_domain::{ActivityId, PartId, Session, Summary, TbResult, UserId, UserStat};
+use tb_domain::{PartId, Summary, TbResult, UserId, UserStat};
 
 use crate::EntityFacade;
 
@@ -154,13 +154,11 @@ pub trait ProviderLane: Send + Sync {
     /// Queue a sync event on the provider's event queue (the onboarding
     /// cutover's provider side, spec #558 §5.1): the loop runs it in the
     /// write's own transaction, so the queued event commits with the domain
-    /// half. `auto` is the migration flag — a `true` sync is the one-time
-    /// onboarding backfill, a `false` sync a routine one.
+    /// half.
     async fn insert_sync(
         &self,
         user_id: UserId,
         time: i64,
-        auto: bool,
         store: &mut Self::Store,
     ) -> TbResult<()>;
 
@@ -173,17 +171,4 @@ pub trait ProviderLane: Send + Sync {
     /// side, spec #558 §3.3): the domain [`UserStat`] — the stat plus the
     /// provider's queued-event count and disabled flag.
     async fn all_stats(&self, store: &mut Self::Store) -> TbResult<Vec<UserStat>>;
-
-    /// The activity redirect URL (the `/source/activities/{id}` direct op's
-    /// provider side, spec #558 §5.2): the provider's URL for `id`, gated on
-    /// the acting session's ownership of the activity (the read is the
-    /// ownership check). The registry runs it in its own transaction and
-    /// delegates here — the dispatch and the per-provider URL building live
-    /// on the lane, not in the registry.
-    async fn activity_url(
-        &self,
-        id: ActivityId,
-        session: Box<dyn Session>,
-        store: &mut Self::Store,
-    ) -> TbResult<String>;
 }
