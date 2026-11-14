@@ -22,8 +22,19 @@ describe("InitialSyncDialog", () => {
   beforeEach(() => {
     fetchMock = vi.fn().mockImplementation((url: string) => {
       if (url.includes("/onboarding/sync")) {
+        // The onboarding sync response (spec #829): the updated user plus the
+        // gear items the provider import discovered.
         return Promise.resolve(
-          resp({ ...pendingUser("strava"), onboarding_status: "completed" }),
+          resp({
+            user: {
+              ...pendingUser("strava"),
+              onboarding_status: "completed",
+            },
+            gear: [
+              { name: "Canyon Aeroad", what: 1 },
+              { name: "Shimano S-Phyre RC2", what: 301 },
+            ],
+          }),
         );
       }
       return Promise.resolve(resp(null));
@@ -71,5 +82,39 @@ describe("InitialSyncDialog", () => {
         expect.objectContaining({ method: "POST" }),
       );
     });
+  });
+
+  it("renders the discovered gear as chips after the onboarding sync", async () => {
+    setUser(pendingUser("strava"));
+    render(InitialSyncDialog);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Import Activities" }),
+    );
+    expect(await screen.findByText("Canyon Aeroad")).toBeTruthy();
+    expect(screen.getByText("Shimano S-Phyre RC2")).toBeTruthy();
+  });
+
+  it("renders each gear chip with its type icon", async () => {
+    setUser(pendingUser("strava"));
+    render(InitialSyncDialog);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Import Activities" }),
+    );
+    const bikeChip = (await screen.findByText("Canyon Aeroad")).closest("span");
+    expect(bikeChip?.querySelector("i")?.className).toBe(
+      "flaticon-mountain-bike",
+    );
+    const shoeChip = screen.getByText("Shimano S-Phyre RC2").closest("span");
+    expect(shoeChip?.querySelector("i")?.className).toBe("flaticon-run");
+  });
+
+  it("offers a close action once the gear is discovered", async () => {
+    setUser(pendingUser("strava"));
+    render(InitialSyncDialog);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Import Activities" }),
+    );
+    await screen.findByText("Canyon Aeroad");
+    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
   });
 });

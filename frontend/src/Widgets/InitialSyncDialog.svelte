@@ -19,7 +19,7 @@
  -->
 <script lang="ts">
   import { Modal, P, Heading, Button } from "flowbite-svelte";
-  import { myfetch, handleError } from "../lib/utils";
+  import { myfetch, handleError, icons } from "../lib/utils";
   import { getUser, setUser } from "../lib/user";
   import {
     providerMeta,
@@ -28,6 +28,14 @@
   } from "../lib/provider";
   import ProviderMark from "./ProviderMark.svelte";
   import { m } from "../../paraglide/messages";
+
+  /// A gear item the onboarding gear import discovered (spec #829): the
+  /// display name and the part type (the category — a bike, a shoe). The
+  /// onboarding sync's response lists them; the dialog presents them as chips.
+  interface GearItem {
+    name: string;
+    what: number;
+  }
 
   let open = $state(getUser()?.onboarding_status === "pending");
 
@@ -39,12 +47,20 @@
 
   let loading = $state(false);
 
+  /// The gear the onboarding import discovered, rendered as chips once the
+  /// sync's response lands.
+  let gear = $state<GearItem[]>([]);
+
   async function triggerSync() {
     loading = true;
     try {
-      const updatedUser = await myfetch(onboardingSyncUrl(provider), "POST");
-      setUser(updatedUser);
-      open = false;
+      // The onboarding sync's response (spec #829): the updated user plus the
+      // discovered gear items. The gear parts themselves ride the stream frame;
+      // the chips are the dialog's presentation of the import's result, so the
+      // dialog stays open to show them.
+      const res = await myfetch(onboardingSyncUrl(provider), "POST");
+      setUser(res.user);
+      gear = res.gear ?? [];
     } catch (e) {
       handleError(e as Error);
     } finally {
@@ -113,20 +129,54 @@
         <P class="mb-6 text-left text-sm text-text-1">
           {m.initialsync_desc4()} <br />
         </P>
-        <div class="flex justify-center gap-4">
-          <Button
-            color={provider === "strava" ? "orange" : "gray"}
-            disabled={loading}
-            onclick={triggerSync}
-          >
-            {loading ? m.action_importing() : m.header_import_activities()}
-          </Button>
-          {#if provider === "strava"}
-            <Button color="alternative" disabled={loading} onclick={skipSync}>
-              {m.initialsync_skip()}
+        {#if gear.length > 0}
+          <!-- The gear the import discovered (spec #829): compact chips in a
+               flex-wrap row, shown once the onboarding sync's response lands. -->
+          <div class="mb-6 text-left">
+            <div
+              class="text-xs font-medium text-text-1 uppercase tracking-wide mb-2"
+            >
+              {m.initialsync_gear()}
+            </div>
+            <div class="flex flex-wrap gap-2">
+              {#each gear as item (item.name)}
+                <span
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm bg-surface-2 border border-border-subtle text-text-2"
+                >
+                  <!-- The part type's flaticon (mountain-bike for a bike,
+                       run for a shoe, ...) via the shared icons map. -->
+                  <i class={icons.get(item.what)}></i>
+                  {item.name}
+                </span>
+              {/each}
+            </div>
+          </div>
+        {/if}
+        {#if gear.length === 0}
+          <div class="flex justify-center gap-4">
+            <Button
+              color={provider === "strava" ? "orange" : "gray"}
+              disabled={loading}
+              onclick={triggerSync}
+            >
+              {loading ? m.action_importing() : m.header_import_activities()}
             </Button>
-          {/if}
-        </div>
+            {#if provider === "strava"}
+              <Button color="alternative" disabled={loading} onclick={skipSync}>
+                {m.initialsync_skip()}
+              </Button>
+            {/if}
+          </div>
+        {:else}
+          <div class="flex justify-center">
+            <Button
+              color={provider === "strava" ? "orange" : "gray"}
+              onclick={() => (open = false)}
+            >
+              {m.action_close()}
+            </Button>
+          </div>
+        {/if}
       </div>
     </div>
   </div>
