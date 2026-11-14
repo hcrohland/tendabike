@@ -387,7 +387,7 @@ where
     /// the caller is the shop owner in a transaction (a non-owner is
     /// `Forbidden`, mapped to a 403 by the web layer), then create the shop
     /// channel on demand and return a subscription to it. The ownership check
-    /// is a `ShopId` store call (ADR-0010); the channel creation is delegated
+    /// is a `ShopId` store call (ADR-0012); the channel creation is delegated
     /// to the core.
     async fn subscribe_shop(
         &self,

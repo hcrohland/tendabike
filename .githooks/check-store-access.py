@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Enforce ADR-0010: the entity owns its store.
+"""Enforce ADR-0012: the entity owns its store.
 
 A store method (`<entity>_<op>`, defined in the store traits in
 `backend/domain/src/traits/` and `backend/strava/src/traits.rs`) may be called
@@ -123,7 +123,7 @@ def main():
                         violations.append((rel, lineno, name, line.strip()))
 
     if violations:
-        print("Store-access violations (ADR-0010: the entity owns its store):", file=sys.stderr)
+        print("Store-access violations (ADR-0012: the entity owns its store):", file=sys.stderr)
         for rel, lineno, name, line in violations:
             print(f"  {rel}:{lineno}: `{name}` outside its owning entity", file=sys.stderr)
             print(f"      {line}", file=sys.stderr)
@@ -134,7 +134,7 @@ def main():
             file=sys.stderr,
         )
         sys.exit(1)
-    print("Store access OK (ADR-0010: the entity owns its store)")
+    print("Store access OK (ADR-0012: the entity owns its store)")
 
 
 if __name__ == "__main__":

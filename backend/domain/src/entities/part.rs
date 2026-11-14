@@ -154,7 +154,7 @@ impl PartId {
 
     /// The part's owner, with no ownership check. The session-less read the
     /// executor uses to route a shop-context frame to the part's owner
-    /// (ADR-0010): the executor is not an entity, so it must not call the
+    /// (ADR-0012): the executor is not an entity, so it must not call the
     /// store directly.
     pub async fn owner(self, store: &mut impl PartStore) -> TbResult<UserId> {
         Ok(self.read(store).await?.owner)
@@ -259,7 +259,7 @@ impl PartId {
 }
 
 impl Part {
-    /// Deletes a specific set of parts. The user-deletion cascade (ADR-0010)
+    /// Deletes a specific set of parts. The user-deletion cascade (ADR-0012)
     /// uses this: the caller already owns these parts, so no per-row check.
     pub(crate) async fn delete_many(parts: &[Part], store: &mut impl PartStore) -> TbResult<usize> {
         store.parts_delete(parts).await

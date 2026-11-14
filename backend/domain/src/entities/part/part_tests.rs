@@ -80,7 +80,7 @@ async fn partid_owner_returns_owner() -> TbResult<()> {
     Ok(())
 }
 
-// === Part: shop registration / bulk delete (ADR-0010) ===
+// === Part: shop registration / bulk delete (ADR-0012) ===
 
 /// `Part::for_shop` reads the shop's parts via the store.
 #[tokio::test]

@@ -96,7 +96,7 @@ impl Usage {
         store.usage_delete_all().await
     }
 
-    /// Deletes a specific set of usages. The user-deletion cascade (ADR-0010)
+    /// Deletes a specific set of usages. The user-deletion cascade (ADR-0012)
     /// uses this: the caller already owns these usages, so no per-row check.
     pub(crate) async fn delete_many(
         usages: &[Usage],
