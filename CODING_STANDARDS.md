@@ -22,7 +22,7 @@ Each crate's test guide (`backend/docs/tests/<crate>.md`) is the navigation surf
 
 ## Public surface
 
-Every item has the narrowest visibility that compiles: `pub` only if a different crate names it, `pub(crate)` only if a different module names it, `private` otherwise. The rule reaches fields, not just functions and types. Enum variants are all-or-nothing (Rust has no per-variant visibility), so an enum stays `pub` if any variant is named externally.
+Every item has the narrowest visibility that compiles: `pub` only if a different crate names it, `pub(crate)` only if a different module names it, `private` otherwise.
 
 The test: drop the modifier. If it still compiles, the item was over-exposed. A public item no consumer names is case-specific weight exported past the seam (see [Generality](#generality)).
 
