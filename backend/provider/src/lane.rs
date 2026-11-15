@@ -106,8 +106,8 @@ pub enum Probe<E> {
 /// generic over this trait and never names a concrete provider.
 ///
 /// Beyond the queue's two-step (`probe`/`process`), the lane carries the
-/// provider-specific ops the loop drives in its own transaction — `insert_sync`
-/// (the onboarding cutover's provider side: the gear import plus the queued
+/// provider-specific ops the loop drives in its own transaction — `import_gear`
+/// and `queue_sync` (the onboarding's two steps: the gear import and the queued
 /// activity sync) and `all_stats` (the admin read). These are provider-specific:
 /// a second provider implements them for its own domain.
 ///
@@ -151,18 +151,21 @@ pub trait ProviderLane: Send + Sync {
     /// caller rolls back and backs off).
     async fn process(&self, user_id: UserId, store: &mut Self::Store) -> Option<Summary>;
 
-    /// Queue a sync event on the provider's event queue (the onboarding
-    /// cutover's provider side, spec #558 §5.1): the loop runs it in the
-    /// write's own transaction, so the queued event commits with the domain
-    /// half. Imports the user's gear (bikes + shoes) from the provider and
-    /// returns the created part ids (spec #829) — the onboarding response
-    /// lists them, and the loop reads the parts back for the frame.
-    async fn insert_sync(
-        &self,
-        user_id: UserId,
-        time: i64,
-        store: &mut Self::Store,
-    ) -> TbResult<Vec<PartId>>;
+    /// Import the user's gear (bikes + shoes) from the provider (the
+    /// onboarding's first step, spec #829): the loop runs it in the write's
+    /// own transaction, and it commits with the domain half. Returns the
+    /// created part ids — the onboarding response lists them, and the loop
+    /// reads the parts back for the frame. No activity sync is queued: the
+    /// user decides on that next ([`queue_sync`](ProviderLane::queue_sync)).
+    async fn import_gear(&self, user_id: UserId, store: &mut Self::Store) -> TbResult<Vec<PartId>>;
+
+    /// Queue the activity sync on the provider's event queue (the onboarding's
+    /// second step, spec #829): the loop runs it in the write's own
+    /// transaction, so the queued event commits with the domain half. No gear
+    /// import — that was the first step
+    /// ([`import_gear`](ProviderLane::import_gear)).
+    async fn queue_sync(&self, user_id: UserId, time: i64, store: &mut Self::Store)
+    -> TbResult<()>;
 
     /// Read every user's provider-neutral stat (the admin read's provider
     /// side, spec #558 §3.3): the domain [`UserStat`] — the stat plus the

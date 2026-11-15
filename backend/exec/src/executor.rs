@@ -802,14 +802,13 @@ where
 /// outcome either way, and a successful `Summary` is delivered through the
 /// pusher (an empty one pushes nothing — the pusher's guard).
 ///
-/// The onboarding cutover's provider side (spec #558 §5.1, #829): one
-/// message = one loop-owned transaction containing the message's entire
-/// work — the `UserOnboardingSync`'s transaction does the domain half
-/// (`exec`) and the `insert_sync` (the gear import + the queued activity
-/// sync) in the same transaction, so the queued event and the imported gear
-/// commit with the domain half (a failed write leaves neither behind). The
-/// created gear parts ride the frame, and the outcome carries the discovered
-/// gear items (the onboarding dialog's response body).
+/// The onboarding's provider side (spec #558 §5.1, #829): one message = one
+/// loop-owned transaction containing the message's entire work. The onboarding
+/// is two steps, each its own write: `UserOnboardingGear` runs the domain half
+/// (`exec`) and the lane's `import_gear` (the gear import) in the same
+/// transaction, and `UserOnboardingSync` runs the domain half and the lane's
+/// `queue_sync` (the queued activity sync) in the same transaction — each
+/// commits with its domain half (a failed write leaves nothing behind).
 ///
 /// Fail fast (spec §6.2, §4.6): the oneshot always resolves, the message is
 /// consumed, and the loop continues — the client is the retry layer. A
@@ -830,8 +829,11 @@ where
     D: DomainFacade<T::Conn> + Send + Sync + 'static,
 {
     debug!("user {}: Processing {write:?}", session.user_id());
-    // The onboarding cutover's Strava side (spec #558 §5.1): extracted
-    // before `exec` consumes the write, added to the same transaction.
+    // The onboarding's provider side (spec #558 §5.1, #829): extracted before
+    // `exec` consumes the write, added to the same transaction. The gear step
+    // imports the gear (no queue); the sync step queues the activity sync (no
+    // gear import).
+    let onboarding_gear = matches!(&write, ApiWrite::UserOnboardingGear);
     let onboarding_time = match &write {
         ApiWrite::UserOnboardingSync { time } => Some(*time),
         _ => None,
@@ -852,14 +854,13 @@ where
             Box::pin(async move {
                 let outcome = async {
                     let outcome = facade.exec(write, &*session, &mut conn).await?;
-                    if let Some(time) = onboarding_time {
-                        // The onboarding gear import (spec #829): the lane
-                        // imports the gear (bikes + shoes) and queues the
-                        // activity sync, returning the created part ids. The
-                        // frame is the created parts' union (read back), and
-                        // the outcome carries the discovered gear items (the
-                        // response body).
-                        let gear_ids = lane.insert_sync(user_id, time, &mut conn).await?;
+                    if onboarding_gear {
+                        // The onboarding gear import (spec #829, the first
+                        // step): the lane imports the gear (bikes + shoes),
+                        // returning the created part ids. The frame is the
+                        // created parts' union (read back), and the outcome
+                        // carries the discovered gear items.
+                        let gear_ids = lane.import_gear(user_id, &mut conn).await?;
                         let mut summary = outcome.summary().clone();
                         let mut gear = Vec::new();
                         for id in gear_ids {
@@ -870,7 +871,13 @@ where
                             });
                             summary.parts.upsert(part);
                         }
-                        return Ok(WriteOutcome::OnboardingSync { summary, gear });
+                        return Ok(WriteOutcome::OnboardingGear { summary, gear });
+                    }
+                    if let Some(time) = onboarding_time {
+                        // The onboarding activity sync (spec #829, the second
+                        // step): the lane queues the activity sync. No gear
+                        // import — that was the first step.
+                        lane.queue_sync(user_id, time, &mut conn).await?;
                     }
                     Ok(outcome)
                 }

@@ -32,12 +32,15 @@
 //! - a **read enqueued after a write** sees that write (FIFO total order
 //!   per user, spec #558 §3.2) — the write's committed row is in the
 //!   read's `ReadOutcome`;
-//! - an **onboarding sync write** (`UserOnboardingSync`) runs the provider's
-//!   `insert_sync` (the gear import + the queued activity sync) in one live
-//!   loop-owned transaction and commits — the created part row is visible to
-//!   a fresh connection, and the oneshot carries the discovered gear items —
-//!   and a `User` read enqueued after it (FIFO) sees the committed row
-//!   (spec #829);
+//! - an **onboarding gear import** (`UserOnboardingGear`, the first step) runs
+//!   the provider's gear import in one live loop-owned transaction and commits
+//!   — the created part row is visible to a fresh connection, and the oneshot
+//!   carries the discovered gear items — and a `User` read enqueued after it
+//!   (FIFO) sees the committed row;
+//! - an **onboarding activity sync** (`UserOnboardingSync`, the second step)
+//!   runs the provider's `insert_sync` (the queued activity sync, no gear
+//!   import) in one live loop-owned transaction and commits — the queue row is
+//!   committed with the domain half (spec #829);
 //! - a **queued Strava `Stop`** past its expiry is dropped by the queue
 //!   probe's housekeeping (committed by the probe) and the queue is empty
 //!   afterwards;
@@ -617,55 +620,51 @@ async fn read_sees_every_earlier_write() {
     outcome.expect("a reaped loop returns Ok");
 }
 
-/// The onboarding sync's store boundary end to end on the live adapter
-/// (spec #829): the `UserOnboardingSync` write travels the in-memory
-/// channel, runs the provider's `insert_sync` (the gear import + the queued
-/// activity sync) in one live loop-owned transaction, and commits — the
-/// created part row (the fixture's 17 plus the onboarding's) is visible to a
-/// fresh connection, and the oneshot carries the discovered gear items. The
-/// `User` read enqueued after it (FIFO total order per user) sees the
-/// committed row.
+/// The onboarding gear import's store boundary end to end on the live adapter
+/// (spec #829, the first step): the `UserOnboardingGear` write travels the
+/// in-memory channel, runs the provider's gear import in one live loop-owned
+/// transaction, and commits — the created part row (the fixture's 17 plus the
+/// onboarding's) is visible to a fresh connection, and the oneshot carries the
+/// discovered gear items. No activity sync is queued. The `User` read enqueued
+/// after it (FIFO total order per user) sees the committed row.
 #[tokio::test]
 #[ignore]
-async fn onboarding_sync_imports_gear_and_fifo_read() {
+async fn onboarding_gear_imports_gear_and_fifo_read() {
     let seam = ready().await;
     // The offline seam: the onboarding's canned Strava gear (one `b-seam` bike
-    // the fixture does not know) plus an empty activity page for the queued
-    // sync's fetch — the loop runs in a spawned task, so the thread-local map
-    // is the wrong seam here.
+    // the fixture does not know) — the loop runs in a spawned task, so the
+    // thread-local map is the wrong seam here.
     canned_strava("/athlete", r#"{"bikes":[{"id":"b-seam"}],"shoes":[]}"#);
     canned_strava(
         "/gear/b-seam",
         r#"{"id":"b-seam","name":"Seam Bike","brand_name":"SeamBrand","model_name":"SB1","frame_type":1}"#,
     );
-    canned_strava("/activities?after=1700000000&per_page=25", "[]");
     let (tx, rx) = request_channel();
     let (frames, frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
-    // The onboarding sync, then the snapshot read — enqueued in order before
-    // the loop starts (the channel is the FIFO the loop consumes in order).
-    let (sync_request, sync_reply) = Request::new_write(
+    // The onboarding gear import, then the snapshot read — enqueued in order
+    // before the loop starts (the channel is the FIFO the loop consumes in
+    // order).
+    let (gear_request, gear_reply) = Request::new_write(
         Box::new(mock_session(UserId::from(1))),
-        ApiWrite::UserOnboardingSync {
-            time: 1_700_000_000,
-        },
+        ApiWrite::UserOnboardingGear,
     );
-    tx.send(sync_request).expect("the channel is open");
+    tx.send(gear_request).expect("the channel is open");
     let (read_request, read_reply) =
         Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
     tx.send(read_request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(loop_ctx(seam.pool.clone(), frames, events, rx));
 
-    // The onboarding sync commits: the oneshot resolves with the onboarding
-    // outcome (the created gear items).
-    let outcome = tokio::time::timeout(TEST_TIMEOUT, sync_reply)
+    // The onboarding gear import commits: the oneshot resolves with the
+    // onboarding outcome (the created gear items).
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, gear_reply)
         .await
-        .expect("the sync reply must resolve in time")
+        .expect("the gear reply must resolve in time")
         .expect("the loop must resolve the oneshot, not drop it")
-        .expect("the onboarding sync must succeed");
-    let WriteOutcome::OnboardingSync { gear, .. } = outcome else {
-        panic!("the onboarding sync carries the OnboardingSync outcome");
+        .expect("the onboarding gear import must succeed");
+    let WriteOutcome::OnboardingGear { gear, .. } = outcome else {
+        panic!("the onboarding gear import carries the OnboardingGear outcome");
     };
     assert_eq!(
         gear.len(),
@@ -687,8 +686,8 @@ async fn onboarding_sync_imports_gear_and_fifo_read() {
     assert_eq!(n, 18, "the onboarding's part row is committed (17 → 18)");
     drop(conn);
 
-    // The read — enqueued after the onboarding sync — sees the committed row:
-    // the fixture's 17 parts plus the onboarding's.
+    // The read — enqueued after the onboarding gear import — sees the committed
+    // row: the fixture's 17 parts plus the onboarding's.
     let read_outcome = tokio::time::timeout(TEST_TIMEOUT, read_reply)
         .await
         .expect("the read's reply must resolve in time")
@@ -772,25 +771,19 @@ async fn failed_write_rolls_back_and_reclaims() {
     outcome.expect("a reaped loop returns Ok");
 }
 
-/// The onboarding cutover write end to end on the live adapter (spec #558
-/// §5.1, #829): the `UserOnboardingSync` message's one loop-owned transaction
-/// does the domain half (the status update) **and** the Strava-side gear
-/// import + `insert_sync` — one message = one loop-owned transaction containing
-/// the message's entire work (domain + Strava). The frame carries the imported
-/// gear, and the queue row commits with the domain half.
+/// The onboarding activity sync's store boundary end to end on the live
+/// adapter (spec #829, the second step): the `UserOnboardingSync` message's
+/// one loop-owned transaction does the domain half (the status update) **and**
+/// the Strava-side `insert_sync` — one message = one loop-owned transaction
+/// containing the message's entire work (domain + Strava). No gear import —
+/// that was the first step. The queue row commits with the domain half.
 #[tokio::test]
 #[ignore]
 async fn onboarding_sync_write_queues_the_sync_event() {
     let seam = ready().await;
-    // The offline seam: the onboarding's canned Strava gear (one `b-seam` bike
-    // the fixture does not know) plus an empty activity page for the queued
-    // sync's fetch — the loop runs in a spawned task, so the thread-local map
-    // is the wrong seam here.
-    canned_strava("/athlete", r#"{"bikes":[{"id":"b-seam"}],"shoes":[]}"#);
-    canned_strava(
-        "/gear/b-seam",
-        r#"{"id":"b-seam","name":"Seam Bike","brand_name":"SeamBrand","model_name":"SB1","frame_type":1}"#,
-    );
+    // The offline seam: an empty activity page for the queued sync's fetch —
+    // the loop runs in a spawned task, so the thread-local map is the wrong
+    // seam here.
     canned_strava("/activities?after=100&per_page=25", "[]");
     let (tx, rx) = request_channel();
     let (frames, _frame_rx) = broadcast::channel(8);
@@ -806,21 +799,19 @@ async fn onboarding_sync_write_queues_the_sync_event() {
 
     let mut loop_task = tokio::spawn(loop_ctx(seam.pool.clone(), frames, events, rx));
 
-    // The write commits: the oneshot resolves with the onboarding outcome —
-    // the frame carries the imported gear (a `User` is in no `Summary`, but
-    // the gear parts are).
+    // The write commits: the oneshot resolves with the plain Summary outcome —
+    // no gear to report (the sync step imports no gear).
     let outcome = tokio::time::timeout(TEST_TIMEOUT, reply)
         .await
         .expect("the route's reply must resolve in time")
         .expect("the loop must resolve the oneshot, not drop it")
         .expect("the onboarding sync write must succeed");
-    let WriteOutcome::OnboardingSync { gear, .. } = outcome else {
-        panic!("the onboarding sync carries the OnboardingSync outcome");
+    let WriteOutcome::Summary(summary) = outcome else {
+        panic!("the onboarding sync carries the plain Summary outcome");
     };
-    assert_eq!(
-        gear.len(),
-        1,
-        "the onboarding response lists the imported gear"
+    assert!(
+        summary.parts.is_empty(),
+        "the sync step imports no gear: the frame's summary is empty"
     );
 
     // The Strava-side event is in the queue: the write's one loop-owned

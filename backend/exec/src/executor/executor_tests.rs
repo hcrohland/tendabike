@@ -108,12 +108,17 @@ mockall::mock! {
         fn facade(&self) -> &tb_provider::MockEntityFacade<MockConn>;
         async fn probe(&self, user_id: UserId, store: &mut MockConn) -> Probe<Event>;
         async fn process(&self, user_id: UserId, store: &mut MockConn) -> Option<Summary>;
-        async fn insert_sync(
+        async fn import_gear(
+            &self,
+            user_id: UserId,
+            store: &mut MockConn,
+        ) -> TbResult<Vec<PartId>>;
+        async fn queue_sync(
             &self,
             user_id: UserId,
             time: i64,
             store: &mut MockConn,
-        ) -> TbResult<Vec<PartId>>;
+        ) -> TbResult<()>;
         async fn all_stats(&self, store: &mut MockConn) -> TbResult<Vec<UserStat>>;
     }
 }
@@ -1006,30 +1011,28 @@ async fn all_stats_round_trips_through_the_loop_transaction() {
     assert!(stats.is_empty(), "the canned store has no Strava users");
 }
 
-// --- The onboarding sync's provider side (spec #829) ---
+// --- The onboarding's provider side (spec #829) ---
 
 #[tokio::test]
-async fn onboarding_sync_write_imports_gear_and_carries_the_gear_items() {
-    // The onboarding sync's provider side (spec #829): the lane's
-    // `insert_sync` imports the gear (bikes + shoes) and queues the activity
-    // sync, returning the created part ids. The loop reads the parts back —
-    // the frame is their union — and the outcome carries the discovered gear
-    // items (the onboarding dialog's response body). The domain half (`exec`)
-    // returns an empty summary (the onboarding's domain part is the status
-    // update, not a `Summary`).
+async fn onboarding_gear_write_imports_gear_and_carries_the_gear_items() {
+    // The onboarding gear step's provider side (spec #829, the first step):
+    // the lane's `import_gear` imports the gear (bikes + shoes), returning the
+    // created part ids. The loop reads the parts back — the frame is their
+    // union — and the outcome carries the discovered gear items (the
+    // onboarding dialog's response body). No activity sync is queued. The
+    // domain half (`exec`) returns an empty summary (the gear step's domain
+    // part is a status guard, not a `Summary`).
     let mut conn = MockConn::new();
     conn.expect_commit().returning(|| Ok(()));
     let source = FakeSource::with(conn);
     let (frames, _frame_rx) = broadcast::channel(4);
     let pusher = RecordingPusher::new();
-    // The onboarding sync write (the request's session is personal).
+    // The onboarding gear write (the request's session is personal).
     let (request, reply) = Request::new_write(
         Box::new(mock_session(UserId::from(1))),
-        ApiWrite::UserOnboardingSync {
-            time: 1_700_000_000,
-        },
+        ApiWrite::UserOnboardingGear,
     );
-    // The domain half: the status update, an empty summary.
+    // The domain half: the status guard, an empty summary.
     let mut facade = MockDomainFacade::new();
     facade.expect_exec().returning(|_w, _s, _st| {
         Box::pin(async move { Ok(WriteOutcome::Summary(Summary::default())) })
@@ -1038,24 +1041,24 @@ async fn onboarding_sync_write_imports_gear_and_carries_the_gear_items() {
     facade
         .expect_part()
         .returning(move |_id, _s, _st| Box::pin(async move { Ok(part_test_bike()) }));
-    // The lane imports one bike (the created part id) and queues the sync.
+    // The lane imports one bike (the created part id). No queue.
     let mut lane = MockLane::new();
-    lane.expect_insert_sync()
-        .returning(|_uid, _time, _st| Ok(vec![PartId::from(1)]));
+    lane.expect_import_gear()
+        .returning(|_uid, _st| Ok(vec![PartId::from(1)]));
     let mut ctx = test_context(source, facade, lane, frames, Box::new(pusher.clone()));
     let result = run_request(&mut ctx, request).await;
     assert!(
         result.is_ok(),
-        "a committed onboarding sync must not end the loop"
+        "a committed onboarding gear import must not end the loop"
     );
     let outcome = reply
         .await
         .expect("the oneshot resolves")
-        .expect("the onboarding sync succeeds");
+        .expect("the onboarding gear import succeeds");
     // The outcome is the onboarding variant: the frame's summary (the created
     // part) plus the discovered gear items (the response body).
-    let WriteOutcome::OnboardingSync { summary, gear } = outcome else {
-        panic!("the onboarding sync carries the OnboardingSync outcome");
+    let WriteOutcome::OnboardingGear { summary, gear } = outcome else {
+        panic!("the onboarding gear import carries the OnboardingGear outcome");
     };
     assert_eq!(
         summary.parts.len(),
@@ -1077,11 +1080,61 @@ async fn onboarding_sync_write_imports_gear_and_carries_the_gear_items() {
     assert_eq!(
         calls.len(),
         1,
-        "the onboarding sync delivers exactly one frame, got {calls:?}"
+        "the onboarding gear import delivers exactly one frame, got {calls:?}"
     );
     assert_eq!(
         calls[0].summary, summary,
         "the delivered frame is the created parts' union"
+    );
+}
+
+#[tokio::test]
+async fn onboarding_sync_write_queues_the_activity_sync() {
+    // The onboarding sync step's provider side (spec #829, the second step):
+    // the lane's `queue_sync` queues the activity sync. No gear import — that
+    // was the first step. The domain half (`exec`) returns an empty summary
+    // (the sync step's domain part is the status update, not a `Summary`), so
+    // the outcome is the plain `Summary` (empty — no gear to report).
+    let mut conn = MockConn::new();
+    conn.expect_commit().returning(|| Ok(()));
+    let source = FakeSource::with(conn);
+    let (frames, _frame_rx) = broadcast::channel(4);
+    let pusher = RecordingPusher::new();
+    // The onboarding sync write (the request's session is personal).
+    let (request, reply) = Request::new_write(
+        Box::new(mock_session(UserId::from(1))),
+        ApiWrite::UserOnboardingSync {
+            time: 1_700_000_000,
+        },
+    );
+    // The domain half: the status update, an empty summary.
+    let mut facade = MockDomainFacade::new();
+    facade.expect_exec().returning(|_w, _s, _st| {
+        Box::pin(async move { Ok(WriteOutcome::Summary(Summary::default())) })
+    });
+    // The lane queues the activity sync (no gear import, no part read-back).
+    let mut lane = MockLane::new();
+    lane.expect_queue_sync()
+        .withf(|_uid, time, _st| *time == 1_700_000_000)
+        .returning(|_uid, _time, _st| Ok(()));
+    let mut ctx = test_context(source, facade, lane, frames, Box::new(pusher));
+    let result = run_request(&mut ctx, request).await;
+    assert!(
+        result.is_ok(),
+        "a committed onboarding sync must not end the loop"
+    );
+    let outcome = reply
+        .await
+        .expect("the oneshot resolves")
+        .expect("the onboarding sync succeeds");
+    // The outcome is the plain Summary (empty — no gear to report): the sync
+    // step's frame is empty, so the pusher's guard delivers nothing.
+    let WriteOutcome::Summary(summary) = outcome else {
+        panic!("the onboarding sync carries the plain Summary outcome");
+    };
+    assert!(
+        summary.parts.is_empty(),
+        "the sync step imports no gear: the frame's summary is empty"
     );
 }
 

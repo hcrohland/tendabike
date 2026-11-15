@@ -234,9 +234,17 @@ pub enum ApiWrite {
     NotificationDelete { id: NotificationId },
 
     // --- user (onboarding) ---
-    /// Trigger the initial sync (the query's `time`, 0 = "now"). The
-    /// domain part runs in [`exec`]; the variant carries `time` for the
-    /// cutover, which builds the sync Event from it.
+    /// Import the user's gear from the provider (the onboarding's first
+    /// step, spec #829): the gear import only, no activity sync. The
+    /// dialog presents the discovered gear, and the user then decides on
+    /// the activity sync. The gear import is the provider's work (the
+    /// loop's `import_gear`); the domain part is a status guard only.
+    UserOnboardingGear,
+    /// Queue the activity sync (the onboarding's second step, spec #829):
+    /// the activity sync only, no gear import. The query's `time`,
+    /// 0 = "now". The activity sync is the provider's work (the loop's
+    /// `queue_sync`); the domain part is the status guard plus the
+    /// completion update.
     UserOnboardingSync { time: i64 },
     /// Postpone the initial sync (no route arguments).
     UserOnboardingPostpone,
@@ -260,14 +268,14 @@ pub struct GearItem {
 /// `Summary` cannot carry — that outcome.
 ///
 /// Today that is [`ApiWrite::ActivityDescend`] (the CSV rows the domain
-/// matched and skipped, the [`DescendReport`]) and [`ApiWrite::UserOnboardingSync`]
+/// matched and skipped, the [`DescendReport`]) and [`ApiWrite::UserOnboardingGear`]
 /// (the discovered gear items, the [`GearItem`]s the onboarding dialog
 /// presents). The matched/created state still rides the frame (the spec
 /// #446 §6.2 deviation).
 #[derive(Clone, Debug, PartialEq)]
 pub enum WriteOutcome {
     /// The write's `Summary` (every write except the descend and the
-    /// onboarding sync).
+    /// onboarding gear import).
     Summary(Summary),
     /// `ActivityDescend`: the `Summary` plus the match report of the CSV
     /// rows.
@@ -275,9 +283,11 @@ pub enum WriteOutcome {
         summary: Summary,
         report: DescendReport,
     },
-    /// `UserOnboardingSync`: the `Summary` (the created gear parts) plus the
+    /// `UserOnboardingGear`: the `Summary` (the created gear parts) plus the
     /// list of discovered gear items (the onboarding dialog's response body).
-    OnboardingSync {
+    /// The gear parts themselves ride the `Summary` frame; the `gear` items
+    /// are the response body the dialog presents.
+    OnboardingGear {
         summary: Summary,
         gear: Vec<GearItem>,
     },
@@ -290,7 +300,7 @@ impl WriteOutcome {
         match self {
             Self::Summary(summary) => summary,
             Self::Descend { summary, .. } => summary,
-            Self::OnboardingSync { summary, .. } => summary,
+            Self::OnboardingGear { summary, .. } => summary,
         }
     }
 }
@@ -309,12 +319,14 @@ impl WriteOutcome {
 /// the `PartNote` created-time, a part's `None` source) are replicated here.
 ///
 /// The `UserOnboarding*` arms do the **domain part only** — the status guard
-/// (the same `BadRequest` messages as the webhook handlers) and the status
-/// update. The provider-side sync event is deliberately not part of this
-/// crate: the domain cannot depend on a provider driver (the dependency
-/// direction is `domain ← provider`), and the domain's store bound is `Store`,
-/// not a provider store. The cutover enqueues a sync
-/// `Event` on the user's channel for `UserOnboardingSync`.
+/// (the same `BadRequest` messages as the webhook handlers) and, for the sync
+/// step, the status update. The provider-side work (the gear import, the
+/// queued activity sync) is deliberately not part of this crate: the domain
+/// cannot depend on a provider driver (the dependency direction is
+/// `domain ← provider`), and the domain's store bound is `Store`, not a
+/// provider store. The loop runs the provider side — `import_gear` for
+/// `UserOnboardingGear`, `queue_sync` for `UserOnboardingSync` — in the same
+/// transaction.
 ///
 /// Returns the `Summary` of everything the operation touched (see the module
 /// docs for how bare-entity results, tombstones, and the non-Summary
@@ -578,10 +590,26 @@ pub async fn exec(
 
         // --- user (onboarding) ---
 
-        // Domain part only: the status guard, exactly as in the webhook
-        // handlers, plus the status update. A `User` is not in any `Summary`,
-        // so the result is empty. The provider-side sync event is handled by
-        // the loop — see the `exec` docs.
+        // The gear import step (spec #829): the domain part is a status guard
+        // only — the gear import is the provider's work (the loop's
+        // `import_gear`), not the domain's. A `User` is not in any `Summary`,
+        // so the result is empty.
+        ApiWrite::UserOnboardingGear => {
+            // The lightweight single-row read: the guard needs only the
+            // onboarding status, not the `UserState` composite (this is a
+            // write path — spec #558 §3.5's composite is for the per-user
+            // routes only).
+            let user = session.user_id().record(store).await?;
+            if user.onboarding_status != OnboardingStatus::Pending {
+                return Err(Error::BadRequest(
+                    "Onboarding already completed or postponed".to_string(),
+                ));
+            }
+            Ok(WriteOutcome::Summary(Summary::default()))
+        }
+        // The activity sync step (spec #829): the domain part is the status
+        // guard plus the completion update — the activity sync is the
+        // provider's work (the loop's `queue_sync`), not the domain's.
         ApiWrite::UserOnboardingSync { .. } => {
             // The lightweight single-row read: the guard needs only the
             // onboarding status, not the `UserState` composite (this is a

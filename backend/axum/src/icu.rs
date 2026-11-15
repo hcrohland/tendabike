@@ -14,7 +14,6 @@ use axum::{
 use crate::appstate::AppState;
 
 mod oauth;
-mod onboarding;
 mod webhook;
 
 pub(crate) fn router() -> Router<AppState> {
@@ -22,7 +21,14 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/login", get(oauth::icu_auth))
         .route("/token", get(oauth::login_authorized))
         .route("/callback", post(webhook::create_event))
-        .route("/onboarding/sync", post(onboarding::trigger_initial_sync))
+        .route(
+            "/onboarding/gear",
+            post(crate::domain::user::trigger_gear_import),
+        )
+        .route(
+            "/onboarding/sync",
+            post(crate::domain::user::trigger_initial_sync),
+        )
         .route("/bikes/{id}", get(crate::redirect::icu_gear_redirect))
         .route("/users/{id}", get(crate::redirect::icu_user_redirect))
 }

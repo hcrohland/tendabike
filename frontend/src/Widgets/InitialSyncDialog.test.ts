@@ -21,19 +21,34 @@ describe("InitialSyncDialog", () => {
 
   beforeEach(() => {
     fetchMock = vi.fn().mockImplementation((url: string) => {
-      if (url.includes("/onboarding/sync")) {
-        // The onboarding sync response (spec #829): the updated user plus the
-        // gear items the provider import discovered.
+      if (url.includes("/onboarding/gear")) {
+        // The onboarding gear import's response (spec #829, the first step):
+        // the gear items the provider import discovered.
         return Promise.resolve(
           resp({
-            user: {
-              ...pendingUser("strava"),
-              onboarding_status: "completed",
-            },
             gear: [
               { name: "Canyon Aeroad", what: 1 },
               { name: "Shimano S-Phyre RC2", what: 301 },
             ],
+          }),
+        );
+      }
+      if (url.includes("/onboarding/sync")) {
+        // The onboarding activity sync's response (spec #829, the second
+        // step): the updated user.
+        return Promise.resolve(
+          resp({
+            ...pendingUser("strava"),
+            onboarding_status: "completed",
+          }),
+        );
+      }
+      if (url.includes("/onboarding/postpone")) {
+        // The postpone's response: the updated user.
+        return Promise.resolve(
+          resp({
+            ...pendingUser("strava"),
+            onboarding_status: "initial_sync_postponed",
           }),
         );
       }
@@ -56,9 +71,37 @@ describe("InitialSyncDialog", () => {
     expect(screen.queryByRole("button", { name: "Skip for Now" })).toBeNull();
   });
 
-  it("triggers the Strava onboarding sync", async () => {
+  it("imports the gear on open (Strava)", async () => {
     setUser(pendingUser("strava"));
     render(InitialSyncDialog);
+    // The gear import (Step 1) fires on dialog open.
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/strava/onboarding/gear",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+    // The discovered gear is rendered as chips.
+    expect(await screen.findByText("Canyon Aeroad")).toBeTruthy();
+    expect(screen.getByText("Shimano S-Phyre RC2")).toBeTruthy();
+  });
+
+  it("imports the gear on open (icu)", async () => {
+    setUser(pendingUser("icu"));
+    render(InitialSyncDialog);
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/icu/onboarding/gear",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+  });
+
+  it("triggers the Strava activity sync on Import Activities", async () => {
+    setUser(pendingUser("strava"));
+    render(InitialSyncDialog);
+    // Wait for the gear import (Step 1) to land so the CTA is enabled.
+    await screen.findByText("Canyon Aeroad");
     fireEvent.click(
       await screen.findByRole("button", { name: "Import Activities" }),
     );
@@ -70,9 +113,10 @@ describe("InitialSyncDialog", () => {
     });
   });
 
-  it("triggers the icu onboarding sync", async () => {
+  it("triggers the icu activity sync on Import Activities", async () => {
     setUser(pendingUser("icu"));
     render(InitialSyncDialog);
+    await screen.findByText("Canyon Aeroad");
     fireEvent.click(
       await screen.findByRole("button", { name: "Import Activities" }),
     );
@@ -84,37 +128,26 @@ describe("InitialSyncDialog", () => {
     });
   });
 
-  it("renders the discovered gear as chips after the onboarding sync", async () => {
+  it("postpones on Skip for now", async () => {
     setUser(pendingUser("strava"));
     render(InitialSyncDialog);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Import Activities" }),
-    );
-    expect(await screen.findByText("Canyon Aeroad")).toBeTruthy();
-    expect(screen.getByText("Shimano S-Phyre RC2")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Skip for Now" }));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/strava/onboarding/postpone",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
   });
 
   it("renders each gear chip with its type icon", async () => {
     setUser(pendingUser("strava"));
     render(InitialSyncDialog);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Import Activities" }),
-    );
     const bikeChip = (await screen.findByText("Canyon Aeroad")).closest("span");
     expect(bikeChip?.querySelector("i")?.className).toBe(
       "flaticon-mountain-bike",
     );
     const shoeChip = screen.getByText("Shimano S-Phyre RC2").closest("span");
     expect(shoeChip?.querySelector("i")?.className).toBe("flaticon-run");
-  });
-
-  it("offers a close action once the gear is discovered", async () => {
-    setUser(pendingUser("strava"));
-    render(InitialSyncDialog);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Import Activities" }),
-    );
-    await screen.findByText("Canyon Aeroad");
-    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
   });
 });

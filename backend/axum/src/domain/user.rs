@@ -6,11 +6,16 @@
 //! This module also defines the `RUser` struct, which represents a user in the system and is used throughout the module.
 //! Additionally, it defines the `AxumAdmin` struct, which is used as a marker type for routes that require admin privileges.
 
-use axum::{Json, Router, extract::State, http::StatusCode, routing::get};
+use axum::{
+    Json, Router,
+    extract::{Query, State},
+    http::StatusCode,
+    routing::get,
+};
 use serde::Serialize;
 
 use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, domain::result_mismatch};
-use tb_domain::{ApiRead, ReadOutcome, UserState};
+use tb_domain::{ApiRead, ApiWrite, GearItem, ReadOutcome, UserState, WriteOutcome};
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
@@ -24,7 +29,7 @@ pub(super) fn router() -> Router<AppState> {
 /// `GET /api/user` — the one-call initial state (spec #572): returns the
 /// full `UserState` (the user record plus the `Summary`). Replaces the old
 /// bare-user and summary-only routes. A pure read (spec #829): it makes no
-/// outbound provider call for gear — the gear import moved to onboarding.
+/// outbound provider call for gear — the gear import happens at onboarding.
 async fn getuser(session: RequestSession, State(state): State<AppState>) -> ApiResult<UserState> {
     // The unified user read (spec #558 §3.5): a single FIFO-ordered message
     // on the user's executor — the pure-FIFO snapshot (spec #558 §3.7).
@@ -53,14 +58,63 @@ struct Export {
     pub shops: Vec<tb_domain::Shop>,
 }
 
-/// The onboarding sync response (spec #829): the updated `User` plus the
-/// list of gear items the provider import discovered (name + type), so the
-/// onboarding dialog can present them. The gear parts themselves ride the
-/// write's `Summary` frame; this is the dialog's response body.
+/// The onboarding gear import response (spec #829, the first step): the list
+/// of gear items the provider import discovered (name + type), so the
+/// onboarding dialog can present them.
 #[derive(Serialize, Debug)]
-pub(crate) struct OnboardingResponse {
-    pub user: tb_domain::User,
-    pub gear: Vec<tb_domain::GearItem>,
+pub(crate) struct OnboardingGearResponse {
+    pub gear: Vec<GearItem>,
+}
+
+/// The onboarding sync's query (the `time`, 0 = "now").
+#[derive(serde::Deserialize)]
+pub(crate) struct InitialSyncQuery {
+    #[serde(default)]
+    pub(crate) time: i64,
+}
+
+/// `POST /{provider}/onboarding/gear` (spec #829, the first step): import the
+/// user's gear from the provider and return the discovered gear items. No
+/// activity sync is queued — the user decides on that next (the second step,
+/// [`trigger_initial_sync`]). The domain's status guard runs on the user's
+/// executor; the gear import is the provider's work in the same transaction.
+pub(crate) async fn trigger_gear_import(
+    user: RequestSession,
+    State(state): State<AppState>,
+) -> ApiResult<OnboardingGearResponse> {
+    let outcome = state
+        .api
+        .write(Box::new(user), ApiWrite::UserOnboardingGear)
+        .await?;
+    let gear = match outcome {
+        WriteOutcome::OnboardingGear { gear, .. } => gear,
+        _ => return Err(result_mismatch("onboarding gear import", "gear list")),
+    };
+    Ok(Json(OnboardingGearResponse { gear }))
+}
+
+/// `POST /{provider}/onboarding/sync` (spec #829, the second step): queue the
+/// activity sync and return the updated user. No gear import — that was the
+/// first step ([`trigger_gear_import`]). The domain's status guard and
+/// completion update run on the user's executor in one loop-owned transaction
+/// alongside the provider-side `queue_sync`. The 200 body reads the `User`
+/// record back (the light record-only read — no `Summary` computation needed).
+pub(crate) async fn trigger_initial_sync(
+    user: RequestSession,
+    State(state): State<AppState>,
+    Query(query): Query<InitialSyncQuery>,
+) -> ApiResult<tb_domain::User> {
+    state
+        .api
+        .write(
+            Box::new(user.clone()),
+            ApiWrite::UserOnboardingSync { time: query.time },
+        )
+        .await?;
+    match state.api.read(Box::new(user), ApiRead::UserRecord).await? {
+        ReadOutcome::UserRecord(user) => Ok(Json(user)),
+        _ => Err(result_mismatch("user", "user record")),
+    }
 }
 
 async fn export(user: RequestSession, State(state): State<AppState>) -> ApiResult<Export> {

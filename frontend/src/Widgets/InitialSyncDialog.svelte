@@ -23,6 +23,7 @@
   import { getUser, setUser } from "../lib/user";
   import {
     providerMeta,
+    onboardingGearUrl,
     onboardingSyncUrl,
     type Provider,
   } from "../lib/provider";
@@ -31,7 +32,8 @@
 
   /// A gear item the onboarding gear import discovered (spec #829): the
   /// display name and the part type (the category — a bike, a shoe). The
-  /// onboarding sync's response lists them; the dialog presents them as chips.
+  /// onboarding gear import's response lists them; the dialog presents them
+  /// as chips.
   interface GearItem {
     name: string;
     what: number;
@@ -40,27 +42,47 @@
   let open = $state(getUser()?.onboarding_status === "pending");
 
   /// The dialog is only open for a known user in pending status, so the
-  /// provider (and with it the branding and the sync route) is derived from
-  /// the current user.
+  /// provider (and with it the branding and the onboarding routes) is derived
+  /// from the current user.
   let provider = $derived((getUser()?.provider ?? "strava") as Provider);
   let meta = $derived(providerMeta[provider]);
 
   let loading = $state(false);
 
   /// The gear the onboarding import discovered, rendered as chips once the
-  /// sync's response lands.
+  /// gear import's response lands.
   let gear = $state<GearItem[]>([]);
+  let gearLoaded = $state(false);
 
-  async function triggerSync() {
+  /// Step 1 (spec #829): on dialog open, import the gear from the provider
+  /// and show the discovered items. No activity sync is queued — the user
+  /// decides on that with the CTA.
+  $effect(() => {
+    if (open && !gearLoaded) {
+      importGear();
+    }
+  });
+
+  async function importGear() {
     loading = true;
     try {
-      // The onboarding sync's response (spec #829): the updated user plus the
-      // discovered gear items. The gear parts themselves ride the stream frame;
-      // the chips are the dialog's presentation of the import's result, so the
-      // dialog stays open to show them.
-      const res = await myfetch(onboardingSyncUrl(provider), "POST");
-      setUser(res.user);
+      const res = await myfetch(onboardingGearUrl(provider), "POST");
       gear = res.gear ?? [];
+      gearLoaded = true;
+    } catch (e) {
+      handleError(e as Error);
+    } finally {
+      loading = false;
+    }
+  }
+
+  /// Step 2 (spec #829): queue the activity sync and close the dialog.
+  async function importActivities() {
+    loading = true;
+    try {
+      const updatedUser = await myfetch(onboardingSyncUrl(provider), "POST");
+      setUser(updatedUser);
+      open = false;
     } catch (e) {
       handleError(e as Error);
     } finally {
@@ -131,7 +153,7 @@
         </P>
         {#if gear.length > 0}
           <!-- The gear the import discovered (spec #829): compact chips in a
-               flex-wrap row, shown once the onboarding sync's response lands. -->
+               flex-wrap row, shown once the gear import's response lands. -->
           <div class="mb-6 text-left">
             <div
               class="text-xs font-medium text-text-1 uppercase tracking-wide mb-2"
@@ -152,31 +174,23 @@
             </div>
           </div>
         {/if}
-        {#if gear.length === 0}
-          <div class="flex justify-center gap-4">
-            <Button
-              color={provider === "strava" ? "orange" : "gray"}
-              disabled={loading}
-              onclick={triggerSync}
-            >
-              {loading ? m.action_importing() : m.header_import_activities()}
+        <!-- The CTA and the skip (Strava only) are visible alongside the gear
+             chips: the user sees the imported gear and decides on the
+             activity sync in one screen (spec #829). -->
+        <div class="flex justify-center gap-4">
+          <Button
+            color={provider === "strava" ? "orange" : "gray"}
+            disabled={loading}
+            onclick={importActivities}
+          >
+            {loading ? m.action_importing() : m.header_import_activities()}
+          </Button>
+          {#if provider === "strava"}
+            <Button color="alternative" disabled={loading} onclick={skipSync}>
+              {m.initialsync_skip()}
             </Button>
-            {#if provider === "strava"}
-              <Button color="alternative" disabled={loading} onclick={skipSync}>
-                {m.initialsync_skip()}
-              </Button>
-            {/if}
-          </div>
-        {:else}
-          <div class="flex justify-center">
-            <Button
-              color={provider === "strava" ? "orange" : "gray"}
-              onclick={() => (open = false)}
-            >
-              {m.action_close()}
-            </Button>
-          </div>
-        {/if}
+          {/if}
+        </div>
       </div>
     </div>
   </div>
