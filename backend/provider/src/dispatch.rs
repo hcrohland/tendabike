@@ -169,7 +169,10 @@ where
         Provider::Strava => {
             crate::strava::event::insert_sync(user_id, event_time, false, store).await
         }
-        Provider::Icu => crate::icu::backfill::backfill(user_id, event_time, facade, store).await,
+        Provider::Icu => {
+            let now = time::OffsetDateTime::now_utc().unix_timestamp();
+            crate::icu::backfill::backfill(user_id, event_time, now, facade, store).await
+        }
     }
 }
 

@@ -186,7 +186,19 @@ pub async fn onboard<D: EntityFacade<S>, S: IcuDataStore>(
     store: &mut S,
 ) -> TbResult<Vec<PartId>> {
     let gear = super::gear::update_gear(user_id, facade, store).await?;
-    super::backfill::backfill(user_id, time, facade, store).await?;
+    let now = if time > 0 {
+        time
+    } else {
+        time::OffsetDateTime::now_utc().unix_timestamp()
+    };
+    super::backfill::backfill(
+        user_id,
+        now - super::backfill::BACKFILL_MONTHS * super::backfill::MONTH,
+        now,
+        facade,
+        store,
+    )
+    .await?;
     Ok(gear)
 }
 
