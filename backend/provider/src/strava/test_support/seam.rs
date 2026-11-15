@@ -18,7 +18,7 @@ use std::collections::HashMap;
 
 use oauth2::RefreshToken;
 use tb_domain::{
-    MockSession,
+    MockSession, OnboardingStatus, UsageId, User,
     test_support::{mock_session, mock_session_admin},
 };
 use time::OffsetDateTime;

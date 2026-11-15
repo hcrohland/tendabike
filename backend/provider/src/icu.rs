@@ -27,7 +27,7 @@
 use log::{debug, info, warn};
 use serde_derive::{Deserialize, Serialize};
 
-use tb_domain::*;
+use crate::facade::*;
 
 mod traits;
 pub use traits::*;

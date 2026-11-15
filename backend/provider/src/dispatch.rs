@@ -44,7 +44,7 @@
 //!
 //! [`ProviderService`]: crate (re-exported in `tb_exec`)
 
-use tb_domain::{ActivityId, PartId, Session, TbResult, UserId};
+use crate::facade::{ActivityId, PartId, Session, TbResult, UserId};
 
 use crate::EntityFacade;
 use crate::Provider;

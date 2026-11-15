@@ -15,7 +15,7 @@ use time::format_description::well_known::Rfc3339;
 
 use super::{IcuDataStore, IcuId};
 use crate::EntityFacade;
-use tb_domain::{Error, Summary, TbResult, UserId};
+use crate::facade::{Error, Summary, TbResult, UserId};
 
 /// A queued icu event (a row in the `icu_events` table).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

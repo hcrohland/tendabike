@@ -3,7 +3,7 @@
 //! function, testable without a store — and each provider module applies
 //! the decision to its own tables (and logs).
 
-use tb_domain::Error;
+use crate::facade::Error;
 
 /// The failure semantics of a failed provider call (spec #446 §4.6) —
 /// drop on permanent failure, no dead-letter table:

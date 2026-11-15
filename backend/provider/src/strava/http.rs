@@ -34,8 +34,8 @@ use serde::de::DeserializeOwned;
 
 use super::client::{HTTP_CLIENT, STRAVACLIENT};
 use super::{StravaDataStore, StravaId, get_token};
+use crate::facade::{Error, TbResult, UserId};
 use crate::{StatusDecision, classify_status};
-use tb_domain::{Error, TbResult, UserId};
 
 const API: &str = "https://www.strava.com/api/v3";
 

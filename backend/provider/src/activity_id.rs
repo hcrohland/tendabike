@@ -9,8 +9,8 @@
 //! executor's dispatch matches on the enum; the drivers build their URLs from
 //! the raw (unprefixed) ids.
 
+use crate::facade::{ActivityId, Error};
 use derive_more::{Display, From, Into};
-use tb_domain::{ActivityId, Error};
 
 /// The Strava activity id: the raw numeric Strava id (unprefixed). The inner
 /// value is private — compare/convert with `i64::from(id)` /

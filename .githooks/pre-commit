@@ -44,6 +44,10 @@ if [ "$run_rust" -eq 1 ]; then
     # ADR-0012: the entity owns its store — a store method is called only from
     # its owning entity's file (plus the store impls, doubles, tests, seed tool).
     python3 .githooks/check-store-access.py
+    # ADR-0015: the facade module is the sole importer of the callee — per
+    # (caller, callee) edge, at most one non-test module imports directly
+    # (plus the grandfathered crossings in the script's exemption list).
+    python3 .githooks/check-facade-access.py
     cargo fmt --check
     # Live cache-vs-DB tripwire — only when a dev DB is available.
     if [ -n "${DATABASE_URL:-}" ]; then

@@ -9,7 +9,7 @@
 //! web route prefix, and the OAuth entry URL. A third provider is a variant
 //! carrying all four encodings at once.
 
-use tb_domain::{Error, TbResult, UserId};
+use crate::facade::{Error, TbResult, UserId};
 
 #[cfg(any(feature = "strava", feature = "icu"))]
 use oauth2::{CsrfToken, Scope};

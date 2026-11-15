@@ -19,7 +19,7 @@ use time::OffsetDateTime;
 use super::IcuDataStore;
 use super::activity::import_activity_data;
 use super::http::request_json;
-use tb_domain::{Error, TbResult, UserId};
+use crate::facade::{Error, TbResult, UserId};
 
 /// Format a unix timestamp as `yyyy-MM-dd` (the icu API's date param format).
 fn date_str(ts: i64) -> String {
