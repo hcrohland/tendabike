@@ -77,6 +77,18 @@ jobs:
       # todo!/unimplemented! deny) holds on PRs, not just for hook-enabled devs.
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+      # Workspace commands unify features graph-wide, so a missing forward (a
+      # test-support feature re-exporting a dep's gated items without enabling
+      # the dep's feature) compiles in every existing check and breaks only
+      # under single-crate resolution.
+      - name: Feature-only check
+        run: |
+          for toml in backend/*/Cargo.toml; do
+            crate=$(grep -m1 '^name' "$toml" | cut -d'"' -f2)
+            if grep -q '^test-support' "$toml"; then
+              cargo check -q -p "$crate" --features test-support
+            fi
+          done
       # -- --include-ignored runs the ignored store-seam suite the other test binaries
       # have no ignored tests, so this changes nothing for the in-memory suites.
       - name: Test
