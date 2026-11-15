@@ -8,7 +8,7 @@ Prop defaults are set in the `$props()` destructuring, not as `?? fallback`s at 
 
 Comments describe what the code **does**, not what **changed**. The commit message is where the change is explained; the comment is where the code is explained.
 
-- No issue references in comments (`issue #717`, `Closes #N`, etc.) — spec references (`spec #795`, `spec #795 §2.1`) carry design rationale and are allowed
+- No issue references in comments (`issue #717`, `Closes #N`, etc.): they are the tell for change-language — a comment that refers to what changed — and spotting those is the reviewer's judgement call. Spec references (`spec #795`, `spec #795 §2.1`) carry design rationale and are allowed
 - No change-language: "no longer", "previously", "now carries", "was removed", "moved to"
 - No restating the diff: if the code says `message: None`, the comment doesn't need to say "the message is no longer stored here"
 
