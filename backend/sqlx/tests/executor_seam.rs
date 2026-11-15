@@ -32,10 +32,15 @@
 //! - a **read enqueued after a write** sees that write (FIFO total order
 //!   per user, spec #558 §3.2) — the write's committed row is in the
 //!   read's `ReadOutcome`;
-//! - a **hydration write** (`Request::Gear`) runs `update_gear` in one live
-//!   loop-owned transaction with the loop's session and commits — the
-//!   created part row is visible to a fresh connection — and a `User` read
-//!   enqueued after it (FIFO) sees the committed row (spec #558 §4);
+//! - an **onboarding gear import** (`UserOnboardingGear`, the first step) runs
+//!   the provider's gear import in one live loop-owned transaction and commits
+//!   — the created part row is visible to a fresh connection, and the oneshot
+//!   carries the discovered gear items — and a `User` read enqueued after it
+//!   (FIFO) sees the committed row;
+//! - an **onboarding activity sync** (`UserOnboardingSync`, the second step)
+//!   runs the provider's `insert_sync` (the queued activity sync, no gear
+//!   import) in one live loop-owned transaction and commits — the queue row is
+//!   committed with the domain half (spec #829);
 //! - a **queued Strava `Stop`** past its expiry is dropped by the queue
 //!   probe's housekeeping (committed by the probe) and the queue is empty
 //!   afterwards;
@@ -78,7 +83,9 @@ use std::time::Duration;
 use tb_domain::test_support::{
     mock_session, mock_session_admin, mock_session_with_shop, part_type_ids::CHAIN, sole_live,
 };
-use tb_domain::{ApiRead, ApiWrite, Part, PartId, ReadOutcome, ShopId, Summary, UsageId, UserId};
+use tb_domain::{
+    ApiRead, ApiWrite, Part, PartId, ReadOutcome, ShopId, Summary, UsageId, UserId, WriteOutcome,
+};
 use tb_exec::providerservice::ProviderService;
 use tb_exec::{
     DeliveryContext, DetachedBegin, DomainFacadeImpl, ExecutorStatus, FramePusher, LoopContext,
@@ -619,18 +626,21 @@ async fn read_sees_every_earlier_write() {
     outcome.expect("a reaped loop returns Ok");
 }
 
-/// The hydration write's store boundary end to end on the live adapter
-/// (spec #558 §4/§8): the `Request::Gear` travels the in-memory channel,
-/// runs `update_gear` in one live loop-owned transaction with the loop's
-/// session, and commits — the created part row (the fixture's 17 plus the
-/// hydration's) is visible to a fresh connection. The `User` read enqueued
+/// The onboarding gear import's store boundary end to end on the live adapter
+/// (spec #829, the first step): the `UserOnboardingGear` write travels the
+/// in-memory channel, runs the provider's gear import in one live loop-owned
+/// transaction, and commits — the created part row (the fixture's 17 plus the
+/// onboarding's) is visible to a fresh connection, and the oneshot carries the
+/// discovered gear items. No activity sync is queued. The `User` read enqueued
 /// after it (FIFO total order per user) sees the committed row.
 #[tokio::test]
 #[ignore]
-async fn gear_hydration_frame_and_fifo_read() {
+async fn onboarding_gear_imports_gear_and_fifo_read() {
     let seam = ready().await;
+    // The user's Strava row: the onboarding's gear import derives the provider
+    // from the provider-internal user data (ADR-0014).
     seed_strava_user(&seam.pool, false).await;
-    // The offline seam: the hydration's canned Strava JSON (one `b-seam` bike
+    // The offline seam: the onboarding's canned Strava gear (one `b-seam` bike
     // the fixture does not know) in the process-wide `CANNED_STRAVA` global —
     // the loop runs in a spawned task, so the thread-local map is the wrong
     // seam here.
@@ -642,9 +652,13 @@ async fn gear_hydration_frame_and_fifo_read() {
     let (tx, rx) = request_channel();
     let (frames, frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
-    // The hydration, then the snapshot read — enqueued in order before the
-    // loop starts (the channel is the FIFO the loop consumes in order).
-    let (gear_request, gear_reply) = Request::new_gear(Box::new(mock_session(UserId::from(1))));
+    // The onboarding gear import, then the snapshot read — enqueued in order
+    // before the loop starts (the channel is the FIFO the loop consumes in
+    // order).
+    let (gear_request, gear_reply) = Request::new_write(
+        Box::new(mock_session(UserId::from(1))),
+        ApiWrite::UserOnboardingGear,
+    );
     tx.send(gear_request).expect("the channel is open");
     let (read_request, read_reply) =
         Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
@@ -652,25 +666,38 @@ async fn gear_hydration_frame_and_fifo_read() {
 
     let mut loop_task = tokio::spawn(loop_ctx(seam.pool.clone(), frames, events, rx));
 
-    // The hydration commits: the oneshot resolves.
-    tokio::time::timeout(TEST_TIMEOUT, gear_reply)
+    // The onboarding gear import commits: the oneshot resolves with the
+    // onboarding outcome (the created gear items).
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, gear_reply)
         .await
         .expect("the gear reply must resolve in time")
         .expect("the loop must resolve the oneshot, not drop it")
-        .expect("the hydration must succeed");
+        .expect("the onboarding gear import must succeed");
+    let WriteOutcome::OnboardingGear { gear, .. } = outcome else {
+        panic!("the onboarding gear import carries the OnboardingGear outcome");
+    };
+    assert_eq!(
+        gear.len(),
+        1,
+        "the onboarding response lists the discovered gear"
+    );
+    assert_eq!(
+        gear[0].name, "Seam Bike",
+        "the gear item's name is the part's"
+    );
 
     // The created part row is committed: the fixture's 17 parts plus the
-    // hydration's, visible to a fresh connection.
+    // onboarding's, visible to a fresh connection.
     let mut conn = seam.pool.raw().acquire().await.expect("a fresh connection");
     let n: i64 = sqlx::query_scalar("SELECT count(*) FROM parts")
         .fetch_one(&mut *conn)
         .await
         .expect("reading the parts table");
-    assert_eq!(n, 18, "the hydration's part row is committed (17 → 18)");
+    assert_eq!(n, 18, "the onboarding's part row is committed (17 → 18)");
     drop(conn);
 
-    // The read — enqueued after the hydration — sees the committed row:
-    // the fixture's 17 parts plus the hydration's.
+    // The read — enqueued after the onboarding gear import — sees the committed
+    // row: the fixture's 17 parts plus the onboarding's.
     let read_outcome = tokio::time::timeout(TEST_TIMEOUT, read_reply)
         .await
         .expect("the read's reply must resolve in time")
@@ -682,7 +709,7 @@ async fn gear_hydration_frame_and_fifo_read() {
     assert_eq!(
         state.summary.parts.len(),
         18,
-        "the FIFO read sees the committed hydration"
+        "the FIFO read sees the committed onboarding gear"
     );
 
     drop(frame_rx);
@@ -755,16 +782,23 @@ async fn failed_write_rolls_back_and_reclaims() {
     outcome.expect("a reaped loop returns Ok");
 }
 
-/// The onboarding cutover write end to end on the live adapter (spec #558
-/// §5.1): the `UserOnboardingSync` message's one loop-owned transaction
-/// does the domain half (the status update) **and** the Strava-side
-/// `insert_sync` — one message = one loop-owned transaction containing the
-/// message's entire work (domain + Strava).
+/// The onboarding activity sync's store boundary end to end on the live
+/// adapter (spec #829, the second step): the `UserOnboardingSync` message's
+/// one loop-owned transaction does the domain half (the status update) **and**
+/// the Strava-side `insert_sync` — one message = one loop-owned transaction
+/// containing the message's entire work (domain + Strava). No gear import —
+/// that was the first step. The queue row commits with the domain half.
 #[tokio::test]
 #[ignore]
 async fn onboarding_sync_write_queues_the_sync_event() {
     let seam = ready().await;
+    // The user's Strava row: the sync write derives the provider from the
+    // provider-internal user data (ADR-0014) to queue on the strava_events queue.
     seed_strava_user(&seam.pool, false).await;
+    // The offline seam: an empty activity page for the queued sync's fetch —
+    // the loop runs in a spawned task, so the thread-local map is the wrong
+    // seam here.
+    canned_strava("/activities?after=100&per_page=25", "[]");
     let (tx, rx) = request_channel();
     let (frames, _frame_rx) = broadcast::channel(8);
     let (events, _events_rx) = broadcast::channel(8);
@@ -776,40 +810,58 @@ async fn onboarding_sync_write_queues_the_sync_event() {
         ApiWrite::UserOnboardingSync { time: 100 },
     );
     tx.send(request).expect("the channel is open");
+    // A read enqueued behind the write: the loop's biased select takes the
+    // API branch (this read) before the queue probe, so the probe — which
+    // would process the just-queued sync (the empty canned page deletes the
+    // row) — runs only after the read. That holds the queue row in place for
+    // the committed-row check below: the loop runs in a spawned task, so
+    // without the barrier the check races the probe and the row can be gone
+    // before it reads (CI scheduling lets the loop win that race).
+    let (read_request, read_reply) =
+        Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
+    tx.send(read_request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(loop_ctx(seam.pool.clone(), frames, events, rx));
 
-    // The write commits: the oneshot resolves with the write's (empty)
-    // summary — a `User` is in no `Summary`.
+    // The write commits: the oneshot resolves with the plain Summary outcome —
+    // no gear to report (the sync step imports no gear).
     let outcome = tokio::time::timeout(TEST_TIMEOUT, reply)
         .await
         .expect("the route's reply must resolve in time")
         .expect("the loop must resolve the oneshot, not drop it")
         .expect("the onboarding sync write must succeed");
+    let WriteOutcome::Summary(summary) = outcome else {
+        panic!("the onboarding sync carries the plain Summary outcome");
+    };
     assert!(
-        outcome.summary().is_empty(),
-        "a `User` is in no `Summary`: the write's frame is empty"
+        summary.parts.is_empty(),
+        "the sync step imports no gear: the frame's summary is empty"
     );
 
     // The Strava-side event is in the queue: the write's one loop-owned
     // transaction did the domain half and the `insert_sync` (spec #558
-    // §5.1) — the queue row is committed with the domain half.
-    let (user, strava) = test_identity();
+    // §5.1) — the queue row is committed with the domain half. The read
+    // barrier above holds it in place (the probe that would process and
+    // delete it runs only after the read).
+    let (_user, strava) = test_identity();
     let n = queue_sync_count(&seam.pool, strava, 100).await;
     assert_eq!(n, 1, "the write's transaction must queue the sync event");
 
-    // The loop's next cycle probes the queue and finds the sync: the seam's
-    // session never imports from the Strava API, so the task panics in the
-    // processing — the expected end of this test's loop.
-    let _ = tokio::time::timeout(TEST_TIMEOUT, &mut loop_task)
+    // The read barrier resolves (the loop has processed it), so the loop's
+    // next cycle probes the queue and finds the sync: the canned activity
+    // page is empty, so the import is a no-op and the loop reaps.
+    let read_outcome = tokio::time::timeout(TEST_TIMEOUT, read_reply)
         .await
-        .expect("the loop must settle in time");
+        .expect("the read's reply must resolve in time")
+        .expect("the loop must resolve the read's oneshot, not drop it")
+        .expect("the read must succeed");
+    drop(read_outcome);
 
-    // The event the write's transaction committed is still queued: the
-    // panicked processing never committed its own deletion.
-    let n = queue_sync_count(&seam.pool, strava, 100).await;
-    assert_eq!(n, 1, "the queued sync must survive the panicked processing");
-    let _ = user;
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, &mut loop_task)
+        .await
+        .expect("the loop must settle in time")
+        .expect("the loop must not panic");
+    outcome.expect("a reaped loop returns Ok");
 }
 
 /// The queue's sync count for `strava` at `event_time` on a fresh

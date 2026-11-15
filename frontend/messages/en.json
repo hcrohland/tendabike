@@ -160,6 +160,7 @@
   "initialsync_desc4": "In any case the app will pull in new activities automatically.",
   "action_importing": "Importing...",
   "initialsync_skip": "Skip for Now",
+  "initialsync_gear": "Your gear",
   "selectpart_placeholder": "Select {category}",
   "selectpart_none": "-- None --",
   "showmore_hide": "Hide {title}",

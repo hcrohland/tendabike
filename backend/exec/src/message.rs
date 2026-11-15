@@ -36,9 +36,9 @@
 //! (spec §4.5 — an empty `Summary` pushes nothing; a dropped frame is
 //! non-fatal, the client's reconnect + full refresh covers it).
 
-use tb_domain::{
-    ApiRead, ApiWrite, ReadOutcome, Session, Summary, TbResult, UserStat, WriteOutcome,
-};
+#[cfg(test)]
+use tb_domain::Summary;
+use tb_domain::{ApiRead, ApiWrite, ReadOutcome, Session, TbResult, UserStat, WriteOutcome};
 #[cfg(test)]
 use tb_provider::strava::event::Event;
 #[cfg(test)]
@@ -70,9 +70,6 @@ pub(crate) enum Message {
 /// - [`Request::Read`] — a read route's [`ApiRead`] descriptor: the loop
 ///   runs it in its own transaction (read-only within it by spec) and
 ///   resolves the read's data (a [`ReadOutcome`]) or the error.
-/// - [`Request::Gear`] — the hydration write (spec #558 §4): `update_gear`
-///   is a `tb_provider::strava` op, so it is dispatched loop-side, not an `ApiWrite`
-///   variant; the reply carries the created-parts `Summary` (the frame).
 /// - [`Request::AllStats`] — the admin `GET /user/all` read (spec #558
 ///   §3.3): `get_all_stats` is a `tb_provider::strava` op, so it rides the admin
 ///   user's channel as an exec-level variant, dispatched loop-side.
@@ -98,14 +95,6 @@ pub enum Request {
         session: Box<dyn Session>,
         /// Resolved exactly once when the read commits or fails.
         reply: oneshot::Sender<TbResult<ReadOutcome>>,
-    },
-    /// The hydration write (spec #558 §4): `update_gear` in the loop's own
-    /// transaction (the user's own gear — identity-only, no shop).
-    Gear {
-        session: Box<dyn Session>,
-        /// Resolved with the created-parts `Summary` (the frame) on commit,
-        /// or the error on failure.
-        reply: oneshot::Sender<TbResult<Summary>>,
     },
     /// The admin `GET /user/all` read (spec #558 §3.3): `get_all_stats` in
     /// the loop's own transaction, read-only within it by spec.
@@ -154,13 +143,6 @@ impl Request {
         )
     }
 
-    /// The hydration write and its session with a fresh reply channel (spec
-    /// #558 §4).
-    pub fn new_gear(session: Box<dyn Session>) -> (Self, oneshot::Receiver<TbResult<Summary>>) {
-        let (reply, rx) = oneshot::channel();
-        (Self::Gear { session, reply }, rx)
-    }
-
     /// The admin stats read and its session with a fresh reply channel (spec
     /// #558 §3.3).
     pub(crate) fn new_all_stats(
@@ -183,11 +165,6 @@ impl std::fmt::Debug for Request {
             Self::Read { read, .. } => f
                 .debug_struct("Request::Read")
                 .field("read", read)
-                .field("session", &"<session>")
-                .field("reply", &"<oneshot>")
-                .finish(),
-            Self::Gear { .. } => f
-                .debug_struct("Request::Gear")
                 .field("session", &"<session>")
                 .field("reply", &"<oneshot>")
                 .finish(),

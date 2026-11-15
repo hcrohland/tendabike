@@ -151,25 +151,20 @@ where
         }
     }
 
-    /// Queue a sync event on the user's provider event queue (the onboarding
-    /// cutover's provider side): delegates to the sync switch
-    /// ([`crate::dispatch::sync_user`]) — the Strava arm queues the
-    /// `strava_events` row; the icu arm runs the icu onboarding (gear import
-    /// + backfill) through its driver.
-    async fn insert_sync(&self, user_id: UserId, time: i64, store: &mut S) -> TbResult<()> {
-        crate::dispatch::sync_user(user_id, time, &self.facade, store).await
+    /// The onboarding's first step (spec #829): import the user's gear
+    /// (bikes + shoes) from the provider, returning the created part ids.
+    /// Delegates to the gear-import switch
+    /// ([`crate::dispatch::import_gear_user`]).
+    async fn import_gear(&self, user_id: UserId, store: &mut S) -> TbResult<Vec<PartId>> {
+        crate::dispatch::import_gear_user(user_id, &self.facade, store).await
     }
 
-    /// Import the user's gear from their provider (the hydration write's
-    /// provider side): the user's provider's driver.
-    async fn update_gear(&self, user_id: UserId, store: &mut S) -> TbResult<Vec<PartId>> {
-        let provider = crate::provider_of(store, user_id).await?;
-        match provider {
-            Provider::Icu => crate::icu::gear::update_gear(user_id, &self.facade, store).await,
-            Provider::Strava => {
-                crate::strava::StravaUser::update_gear(user_id, &self.facade, store).await
-            }
-        }
+    /// The onboarding's second step (spec #829): queue the activity sync on
+    /// the user's provider queue (the Strava `strava_events` row, the icu
+    /// date-window backfill). Delegates to the queue switch
+    /// ([`crate::dispatch::queue_sync_user`]).
+    async fn queue_sync(&self, user_id: UserId, time: i64, store: &mut S) -> TbResult<()> {
+        crate::dispatch::queue_sync_user(user_id, time, &self.facade, store).await
     }
 
     /// Read every user's provider-neutral stat (the admin read's provider

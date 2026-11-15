@@ -91,13 +91,69 @@ where
 }
 
 /// The sync switch (ADR-0014): the single home for the user's provider
-/// identity read plus the Strava `insert_sync(…, false, …)` / icu `onboard`
-/// arms. The provider is the user's real one, read in-transaction (a
-/// per-provider route acting on a user of the other provider follows the
-/// stated identity rule). Both entry points delegate here: the registry's
-/// [`sync`](crate::dispatch::sync) and the unified lane's `insert_sync` (the
-/// onboarding cutover's provider side) — one `match` for the sync op, not two.
+/// identity read plus the Strava gear-import-and-`insert_sync(…, false, …)`
+/// / icu `onboard` arms. The provider is the user's real one, read
+/// in-transaction (a per-provider route acting on a user of the other
+/// provider follows the stated identity rule). The admin trigger delegates
+/// here (the registry's [`sync`](crate::dispatch::sync)): one `match` for the
+/// combined gear-import-plus-queue sync op.
+///
+/// Returns the created gear part ids (spec #829): the Strava arm imports the
+/// gear (bikes + shoes) before queuing the activity sync, and the icu arm
+/// returns the gear its onboarding imported. The admin trigger drops them.
+///
+/// The onboarding's two steps do not run through this combined op: they use
+/// the split [`import_gear_user`](crate::dispatch::import_gear_user) and
+/// [`queue_sync_user`](crate::dispatch::queue_sync_user), so the gear import
+/// and the activity queue are separate decisions (spec #829).
 pub(crate) async fn sync_user<S, D: EntityFacade<S>>(
+    user_id: UserId,
+    event_time: i64,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<Vec<PartId>>
+where
+    S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
+{
+    let provider = crate::provider_of(store, user_id).await?;
+    match provider {
+        Provider::Strava => {
+            // Import the gear (bikes + shoes) before queuing the activity
+            // sync (spec #829): the gear is the onboarding's provider side.
+            let gear = crate::strava::StravaUser::update_gear(user_id, facade, store).await?;
+            crate::strava::event::insert_sync(user_id, event_time, false, store).await?;
+            Ok(gear)
+        }
+        Provider::Icu => crate::icu::onboard(user_id, event_time, facade, store).await,
+    }
+}
+
+/// The onboarding gear import (spec #829, the first step): import the user's
+/// gear (bikes + shoes) from the provider, returning the created part ids. No
+/// activity sync is queued — the user decides on that next (the second step,
+/// [`queue_sync_user`](crate::dispatch::queue_sync_user)). The provider is the
+/// user's real one, read in-transaction.
+pub(crate) async fn import_gear_user<S, D: EntityFacade<S>>(
+    user_id: UserId,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<Vec<PartId>>
+where
+    S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
+{
+    let provider = crate::provider_of(store, user_id).await?;
+    match provider {
+        Provider::Strava => crate::strava::StravaUser::update_gear(user_id, facade, store).await,
+        Provider::Icu => crate::icu::gear::update_gear(user_id, facade, store).await,
+    }
+}
+
+/// The onboarding activity sync (spec #829, the second step): queue the
+/// activity sync on the user's provider queue (the Strava `strava_events` row,
+/// the icu date-window backfill). No gear import — that was the first step
+/// ([`import_gear_user`](crate::dispatch::import_gear_user)). The provider is
+/// the user's real one, read in-transaction.
+pub(crate) async fn queue_sync_user<S, D: EntityFacade<S>>(
     user_id: UserId,
     event_time: i64,
     facade: &D,
@@ -111,13 +167,14 @@ where
         Provider::Strava => {
             crate::strava::event::insert_sync(user_id, event_time, false, store).await
         }
-        Provider::Icu => crate::icu::onboard(user_id, event_time, facade, store).await,
+        Provider::Icu => crate::icu::backfill::backfill(user_id, event_time, facade, store).await,
     }
 }
 
 /// The provider-agnostic `sync` dispatch (ADR-0014): enqueue a `Sync` event
 /// on the user's provider queue. Delegates to the sync switch
-/// ([`sync_user`](crate::dispatch::sync_user)).
+/// ([`sync_user`](crate::dispatch::sync_user)). The admin trigger is
+/// fire-and-forget, so the created gear ids are dropped.
 pub async fn sync<S, D: EntityFacade<S>>(
     user_id: UserId,
     event_time: i64,
@@ -127,7 +184,9 @@ pub async fn sync<S, D: EntityFacade<S>>(
 where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
-    sync_user(user_id, event_time, facade, store).await
+    sync_user(user_id, event_time, facade, store)
+        .await
+        .map(|_| ())
 }
 
 /// The provider-agnostic `deauthorize` dispatch (ADR-0014): revoke the

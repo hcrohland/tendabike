@@ -19,27 +19,65 @@
  -->
 <script lang="ts">
   import { Modal, P, Heading, Button } from "flowbite-svelte";
-  import { myfetch, handleError } from "../lib/utils";
+  import { myfetch, handleError, icons } from "../lib/utils";
   import { getUser, setUser } from "../lib/user";
   import {
     providerMeta,
+    onboardingGearUrl,
     onboardingSyncUrl,
     type Provider,
   } from "../lib/provider";
   import ProviderMark from "./ProviderMark.svelte";
   import { m } from "../../paraglide/messages";
 
+  /// A gear item the onboarding gear import discovered (spec #829): the
+  /// display name and the part type (the category — a bike, a shoe). The
+  /// onboarding gear import's response lists them; the dialog presents them
+  /// as chips.
+  interface GearItem {
+    name: string;
+    what: number;
+  }
+
   let open = $state(getUser()?.onboarding_status === "pending");
 
   /// The dialog is only open for a known user in pending status, so the
-  /// provider (and with it the branding and the sync route) is derived from
-  /// the current user.
+  /// provider (and with it the branding and the onboarding routes) is derived
+  /// from the current user.
   let provider = $derived((getUser()?.provider ?? "strava") as Provider);
   let meta = $derived(providerMeta[provider]);
 
   let loading = $state(false);
 
-  async function triggerSync() {
+  /// The gear the onboarding import discovered, rendered as chips once the
+  /// gear import's response lands.
+  let gear = $state<GearItem[]>([]);
+  let gearLoaded = $state(false);
+
+  /// Step 1 (spec #829): on dialog open, import the gear from the provider
+  /// and show the discovered items. No activity sync is queued — the user
+  /// decides on that with the CTA.
+  $effect(() => {
+    if (open && !gearLoaded) {
+      importGear();
+    }
+  });
+
+  async function importGear() {
+    loading = true;
+    try {
+      const res = await myfetch(onboardingGearUrl(provider), "POST");
+      gear = res.gear ?? [];
+      gearLoaded = true;
+    } catch (e) {
+      handleError(e as Error);
+    } finally {
+      loading = false;
+    }
+  }
+
+  /// Step 2 (spec #829): queue the activity sync and close the dialog.
+  async function importActivities() {
     loading = true;
     try {
       const updatedUser = await myfetch(onboardingSyncUrl(provider), "POST");
@@ -113,11 +151,37 @@
         <P class="mb-6 text-left text-sm text-text-1">
           {m.initialsync_desc4()} <br />
         </P>
+        {#if gear.length > 0}
+          <!-- The gear the import discovered (spec #829): compact chips in a
+               flex-wrap row, shown once the gear import's response lands. -->
+          <div class="mb-6 text-left">
+            <div
+              class="text-xs font-medium text-text-1 uppercase tracking-wide mb-2"
+            >
+              {m.initialsync_gear()}
+            </div>
+            <div class="flex flex-wrap gap-2">
+              {#each gear as item (item.name)}
+                <span
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm bg-surface-2 border border-border-subtle text-text-2"
+                >
+                  <!-- The part type's flaticon (mountain-bike for a bike,
+                       run for a shoe, ...) via the shared icons map. -->
+                  <i class={icons.get(item.what)}></i>
+                  {item.name}
+                </span>
+              {/each}
+            </div>
+          </div>
+        {/if}
+        <!-- The CTA and the skip (Strava only) are visible alongside the gear
+             chips: the user sees the imported gear and decides on the
+             activity sync in one screen (spec #829). -->
         <div class="flex justify-center gap-4">
           <Button
             color={provider === "strava" ? "orange" : "gray"}
             disabled={loading}
-            onclick={triggerSync}
+            onclick={importActivities}
           >
             {loading ? m.action_importing() : m.header_import_activities()}
           </Button>

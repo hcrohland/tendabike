@@ -52,7 +52,7 @@ use tb_domain::{
 use crate::ExecutorStatus;
 
 /// The app's presentation-agnostic service API (spec #558 §2): the generic
-/// channel ops (`read`, `write`, `hydrate_gear`, `subscribe`, `all_stats`)
+/// channel ops (`read`, `write`, `subscribe`, `all_stats`)
 /// plus the provider-neutral direct ops (`rescan`, `subscribe_shop`,
 /// `trigger_processing`). Presentation layers depend on this trait, not the
 /// concrete [`crate::Registry`]. The provider-specific ops live in
@@ -78,12 +78,6 @@ pub trait ServiceApi: Send + Sync {
     /// (the `Summary` — the frame — plus, for the descend, its match
     /// report, the response body). The oneshot wait is unbounded.
     async fn write(&self, session: Box<dyn Session>, write: ApiWrite) -> TbResult<WriteOutcome>;
-
-    /// The hydration write (spec #558 §4): `update_gear` in the loop's own
-    /// transaction, resolving with the created parts' `Summary` — the frame
-    /// (the union of the parts it created, one entry per part, empty when
-    /// nothing is new).
-    async fn hydrate_gear(&self, session: Box<dyn Session>) -> TbResult<Summary>;
 
     /// Register a stream for the user (spawning the executor if it is not
     /// running): a subscription to the frame channel plus a handle to the

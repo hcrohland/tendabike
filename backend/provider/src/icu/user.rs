@@ -177,16 +177,17 @@ pub async fn login<D: EntityFacade<S>, S: IcuDataStore>(
 /// The onboarding cutover's provider side (spec #765/#766): import the
 /// user's icu gear, then run the activity backfill — the date-window walk
 /// that queues the user's past activities as `icu_events` rows for the
-/// normal event loop to import one at a time.
+/// normal event loop to import one at a time. Returns the created gear part
+/// ids (spec #829: the onboarding response lists them).
 pub async fn onboard<D: EntityFacade<S>, S: IcuDataStore>(
     user_id: UserId,
     time: i64,
     facade: &D,
     store: &mut S,
-) -> TbResult<()> {
-    super::gear::update_gear(user_id, facade, store).await?;
+) -> TbResult<Vec<PartId>> {
+    let gear = super::gear::update_gear(user_id, facade, store).await?;
     super::backfill::backfill(user_id, time, facade, store).await?;
-    Ok(())
+    Ok(gear)
 }
 
 /// The all-user icu stat read (spec #764): every icu user's provider-neutral

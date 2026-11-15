@@ -63,7 +63,9 @@ use serde_derive::{Deserialize, Serialize};
 use http::StatusCode;
 
 use crate::{
-    ApiResult, AxumAdmin, RequestSession, appstate::AppState, domain::result_mismatch,
+    ApiResult, AxumAdmin, RequestSession,
+    appstate::AppState,
+    domain::{result_mismatch, user::InitialSyncQuery},
     error::AppError,
 };
 use tb_domain::{ApiRead, ApiWrite, Error, ReadOutcome, TbResult};
@@ -165,40 +167,6 @@ pub(super) async fn sync(
         .sync(Box::new(admin.session()), user_id, query.time)
         .await?;
     Ok(StatusCode::NO_CONTENT)
-}
-
-#[derive(Deserialize)]
-pub(super) struct InitialSyncQuery {
-    #[serde(default)]
-    time: i64,
-}
-
-/// Trigger initial sync for a user
-/// This endpoint allows users to trigger their first activity sync after registration.
-/// It can only be called once - if the user has already completed initial sync, it returns an error.
-/// Returns the updated user object.
-pub(crate) async fn trigger_initial_sync(
-    user: RequestSession,
-    State(state): State<AppState>,
-    Query(query): Query<InitialSyncQuery>,
-) -> ApiResult<tb_domain::User> {
-    // The domain's status guard and completion update — **and** the
-    // Strava-side `insert_sync` — run on the user's executor in one
-    // loop-owned transaction (spec #558 §5.1: one message = one loop-owned
-    // transaction containing the message's entire work, domain + Strava).
-    // The 200 body reads the `User` record back (the light record-only
-    // read — no `Summary` computation needed).
-    state
-        .api
-        .write(
-            Box::new(user.clone()),
-            ApiWrite::UserOnboardingSync { time: query.time },
-        )
-        .await?;
-    match state.api.read(Box::new(user), ApiRead::UserRecord).await? {
-        ReadOutcome::UserRecord(user) => Ok(Json(user)),
-        _ => Err(result_mismatch("user", "user record")),
-    }
 }
 
 /// Postpone initial sync for a user

@@ -41,8 +41,8 @@ the cadence at which the loop re-probes the Strava queue.
 **Inputs** — two message sources, checked in priority order (a client action
 never waits):
 
-1. The user's in-memory **request channel** — API writes, reads, the gear
-   hydration write, and the admin stats read. Requests process in **FIFO
+1. The user's in-memory **request channel** — API writes, reads, and the
+   admin stats read. Requests process in **FIFO
    total order per user**: a read enqueued after a write sees that write.
    This ordering contract is what a second driver gets.
 2. The **`strava_events` database queue** — probed each cycle. A **wake**
@@ -101,11 +101,11 @@ exit — the stream keeps its connection, heartbeats, re-subscribes), or
 `Dead` (a lifecycle error or panic — the stream ends so the client
 reconnects and respawns).
 
-**`ServiceApi`** is the surface a presentation layer calls — 8 methods in
+**`ServiceApi`** is the surface a presentation layer calls — 7 methods in
 two groups:
 
 - **Channel ops** (ride the per-user FIFO): `read`, `write`,
-  `hydrate_gear`, `subscribe`, `all_stats`.
+  `subscribe`, `all_stats`.
 - **Direct ops** (own their own transactions): `subscribe_shop`, `rescan`,
   `trigger_processing`.
 

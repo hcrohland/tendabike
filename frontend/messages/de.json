@@ -160,6 +160,7 @@
   "initialsync_desc4": "In jedem Fall lädt die App neue Aktivitäten automatisch nach.",
   "action_importing": "Importiere...",
   "initialsync_skip": "Vorerst überspringen",
+  "initialsync_gear": "Deine Ausrüstung",
   "selectpart_placeholder": "{category} auswählen",
   "selectpart_none": "-- Keine --",
   "showmore_hide": "{title} ausblenden",

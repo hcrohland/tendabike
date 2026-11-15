@@ -31,7 +31,7 @@ cargo test -q -p tb_sqlx --test store_seam -- --include-ignored
 
 `tb_sqlx`'s `executor_seam.rs` owns the **executor's transaction lifecycle on the live pool** — the store I/O at the executor boundary that `tb_exec`'s unit tests stand in for: commit visibility, rollback, FIFO order per user, the pool/queue-probe interaction, and the reclaim-on-idle policy. It drives the real executor loop — `tb_exec::LoopContext` over the real `DbPool` (`TxnSource`/`Txn` implemented on the live `SqlxConn`) — against real Postgres, asserting the store-level fact on the live adapter (the committed row visible to a fresh connection, the rolled-back write leaving no partial row, the FIFO read seeing the earlier write, the queue drained by the probe).
 
-- **What it mocks** — the **`Session`** is stubbed (a canned `MockSession`), and **Strava** is stubbed behind the `CANNED_STRAVA` offline seam for the gear-hydration path; the store itself is real Postgres.
+- **What it mocks** — the **`Session`** is stubbed (a canned `MockSession`), and **Strava** is stubbed behind the `CANNED_STRAVA` offline seam for the onboarding gear-import path; the store itself is real Postgres.
 - **What it delegates to the seam** — the domain-level results are owned by the in-memory `tb_domain` suite (see [`domain.md`](domain.md)), and the frame-push / orchestration logic is owned by `tb_exec` (see [`exec.md`](exec.md)); this suite asserts only the store-level outcome on the live pool, never re-asserting a domain frame/summary result.
 
 - **Ignored by default, run explicitly.** Like the store-seam suite, every test carries `#[ignore]` and the suite runs with `--include-ignored` + a scratch Postgres URL.

@@ -24,7 +24,13 @@ export function loginUrl(provider: Provider): string {
   return `/${provider}/login`;
 }
 
-/// The provider's onboarding backfill trigger (spec #760):
+/// The provider's onboarding gear import (spec #829, the first step):
+/// `/strava/onboarding/gear` or `/icu/onboarding/gear`.
+export function onboardingGearUrl(provider: Provider): string {
+  return `/${provider}/onboarding/gear`;
+}
+
+/// The provider's onboarding activity sync (spec #829, the second step):
 /// `/strava/onboarding/sync` or `/icu/onboarding/sync`.
 export function onboardingSyncUrl(provider: Provider): string {
   return `/${provider}/onboarding/sync`;
