@@ -80,7 +80,7 @@ pub type IcuClient<
 static ICU_CLIENT: OnceLock<IcuClient> = OnceLock::new();
 
 /// The initialized icu oauth client (panics if the config is not set).
-pub fn icu_client() -> &'static IcuClient {
+pub(crate) fn icu_client() -> &'static IcuClient {
     ICU_CLIENT.get_or_init(|| {
         let config = config::get();
         let client_id = ClientId::new(config.icu_client_id.clone());

@@ -93,7 +93,7 @@ pub type StravaClient<
 static STRAVACLIENT: OnceLock<StravaClient> = OnceLock::new();
 
 /// The initialized Strava oauth client (panics if the config is not set).
-pub fn strava_client() -> &'static StravaClient {
+pub(crate) fn strava_client() -> &'static StravaClient {
     STRAVACLIENT.get_or_init(|| {
         let config = config::get();
         let client_id = ClientId::new(config.strava_client_id.clone());
