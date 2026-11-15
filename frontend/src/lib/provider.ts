@@ -1,6 +1,7 @@
 /// The activity providers a user can connect with (spec #760): one per
-/// user, set at signup, immutable. The values mirror the backend's
-/// `users.provider` column (`'strava'` | `'icu'`).
+/// user, set at signup, immutable. The values are the wire encoding the
+/// backend's `GET /api/user` response carries in `user.provider`
+/// (`'strava'` | `'icu'`).
 export type Provider = "strava" | "icu";
 
 /// The providers offered on the connect screen, in display order.

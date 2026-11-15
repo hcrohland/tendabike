@@ -277,7 +277,6 @@ fn user() -> User {
         avatar: None,
         is_admin: false,
         onboarding_status: OnboardingStatus::Pending,
-        provider: "strava".to_string(),
     }
 }
 
@@ -872,7 +871,7 @@ async fn unknown_path_not_found() {
 /// `Summary`).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_user_returns_200_and_userstate_body() {
-    let (store, mut mock, provider) = mock_ctx();
+    let (store, mut mock, mut provider) = mock_ctx();
     mock.expect_hydrate_gear()
         .times(1)
         .returning(|_session| Ok(Summary::default()));
@@ -882,6 +881,9 @@ async fn get_user_returns_200_and_userstate_body() {
             summary: Summary::default(),
         })))
     });
+    provider
+        .expect_user_provider()
+        .returning(|_| Ok(Provider::Strava));
     let app = build_app(&store, mock, provider);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::GET, "/api/user", Some(&cookie)).await;
@@ -940,7 +942,7 @@ async fn get_user_export_returns_200_and_export_body() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending","provider":"strava"},"parts":[],"attachments":[],"services":[],"plans":[],"usages":[],"activities":[],"shops":[]}"#
+        r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"},"parts":[],"attachments":[],"services":[],"plans":[],"usages":[],"activities":[],"shops":[]}"#
     );
 }
 
@@ -950,7 +952,7 @@ async fn get_user_export_returns_200_and_export_body() {
 /// `Summary`).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn summary_returns_200_and_summary_body() {
-    let (store, mut mock, provider) = mock_ctx();
+    let (store, mut mock, mut provider) = mock_ctx();
     mock.expect_hydrate_gear()
         .times(1)
         .returning(|_session| Ok(Summary::default()));
@@ -960,6 +962,9 @@ async fn summary_returns_200_and_summary_body() {
             summary: Summary::default(),
         })))
     });
+    provider
+        .expect_user_provider()
+        .returning(|_| Ok(Provider::Strava));
     let app = build_app(&store, mock, provider);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::GET, "/api/user", Some(&cookie)).await;
@@ -975,7 +980,7 @@ async fn summary_returns_200_and_summary_body() {
 /// read is shop-scoped by the per-request context, not the cookie.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn active_shop_header_scopes_the_read_session() {
-    let (store, mut mock, provider) = mock_ctx();
+    let (store, mut mock, mut provider) = mock_ctx();
     mock.expect_hydrate_gear()
         .times(1)
         .withf(|session| session.shop() == Some(ShopId::from(1)))
@@ -984,6 +989,9 @@ async fn active_shop_header_scopes_the_read_session() {
         .times(1)
         .withf(|session, _read| session.shop() == Some(ShopId::from(1)))
         .returning(user_state_reply());
+    provider
+        .expect_user_provider()
+        .returning(|_| Ok(Provider::Strava));
     let app = build_app(&store, mock, provider);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_headers(
@@ -1002,7 +1010,7 @@ async fn active_shop_header_scopes_the_read_session() {
 /// messages with no shop on the acting sessions: the full, unfiltered read.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn read_without_active_shop_header_has_no_shop() {
-    let (store, mut mock, provider) = mock_ctx();
+    let (store, mut mock, mut provider) = mock_ctx();
     mock.expect_hydrate_gear()
         .times(1)
         .withf(|session| session.shop().is_none())
@@ -1011,6 +1019,9 @@ async fn read_without_active_shop_header_has_no_shop() {
         .times(1)
         .withf(|session, _read| session.shop().is_none())
         .returning(user_state_reply());
+    provider
+        .expect_user_provider()
+        .returning(|_| Ok(Provider::Strava));
     let app = build_app(&store, mock, provider);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(app, Method::GET, "/api/user", Some(&cookie)).await;
@@ -1023,7 +1034,7 @@ async fn read_without_active_shop_header_has_no_shop() {
 /// cross-tab leak is gone.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn active_shop_header_does_not_leak_across_requests() {
-    let (store, mut mock, provider) = mock_ctx();
+    let (store, mut mock, mut provider) = mock_ctx();
     mock.expect_hydrate_gear()
         .times(2)
         .returning(|_session| Ok(Summary::default()));
@@ -1038,6 +1049,10 @@ async fn active_shop_header_does_not_leak_across_requests() {
         .times(1)
         .withf(|session, _read| session.shop().is_none())
         .returning(user_state_reply());
+    provider
+        .expect_user_provider()
+        .times(2)
+        .returning(|_| Ok(Provider::Strava));
     let app = build_app(&store, mock, provider);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_headers(
@@ -2282,7 +2297,7 @@ async fn onboarding_sync_returns_200_and_user() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending","provider":"strava"}"#
+        r#"{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"}"#
     );
 }
 
@@ -2310,7 +2325,7 @@ async fn onboarding_postpone_returns_200_and_user() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending","provider":"strava"}"#
+        r#"{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"}"#
     );
 }
 

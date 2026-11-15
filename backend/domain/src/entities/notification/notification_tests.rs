@@ -309,7 +309,6 @@ async fn get_summary_includes_notifications() -> crate::TbResult<()> {
             avatar: None,
             is_admin: false,
             onboarding_status: crate::OnboardingStatus::Completed,
-            provider: "strava".to_string(),
         })
     });
     store.expect_activity_get_all().returning(|_| Ok(vec![]));

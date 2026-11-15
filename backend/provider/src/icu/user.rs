@@ -6,8 +6,9 @@
 //! so there is no refresh-token machinery (unlike the Strava driver).
 //!
 //! The `upsert` op is the login upsert (spec #763): one transaction that
-//! creates the domain user (with `provider = 'icu'`) plus the `icu_users`
-//! row, or updates both for an existing connection.
+//! creates the domain user plus the `icu_users` row, or updates both for an
+//! existing connection. The provider is implicit in this driver's login —
+//! the domain stores no provider (ADR-0014).
 
 use anyhow::Context;
 use derive_more::{Display, From, Into};
@@ -78,8 +79,7 @@ impl IcuUser {
     }
 
     /// Upsert an icu user by athlete ID, updating their TendaBike user if
-    /// they already exist, or creating a new user (with `provider = 'icu'`)
-    /// if they don't (spec #763).
+    /// they already exist, or creating a new user if they don't (spec #763).
     ///
     /// # Arguments
     ///
@@ -116,7 +116,7 @@ impl IcuUser {
 
         // create new user!
         let tendabike_id = facade
-            .create_user(firstname, lastname, &avatar, "icu", store)
+            .create_user(firstname, lastname, &avatar, store)
             .await?;
 
         let user = IcuUser {
