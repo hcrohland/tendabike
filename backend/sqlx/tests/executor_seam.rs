@@ -1266,6 +1266,74 @@ async fn delete_user_removes_the_rows() {
     drop(conn);
 }
 
+/// The user delete direct op when the target has notifications and owns a
+/// garage: the `notifications.recipient` FK must not block the delete —
+/// the user's notifications go with the user, and the user's garage goes
+/// with them (its `shops.owner` FK cascades).
+#[tokio::test]
+#[ignore]
+async fn delete_user_with_notifications() {
+    let seam = ready().await;
+    // As the deauth test: the delete's deauthorization half builds the
+    // Strava client (placeholder credentials; the failure is non-fatal).
+    unsafe {
+        std::env::set_var("CLIENT_ID", "seam");
+        std::env::set_var("CLIENT_SECRET", "seam");
+    }
+    let (user, _strava) = test_identity();
+    seed_strava_user(&seam.pool, false).await;
+    // Seed a notification addressed to the fixture user (its `recipient`
+    // FK is what blocks the user delete) and a garage they own (its
+    // `shops.owner` FK cascades, so the garage must go with the user).
+    let mut conn = seam.pool.begin().await.expect("a transaction");
+    sqlx::query(
+        "INSERT INTO notifications \
+         (id, recipient, lifecycle, kind, subscription_id, message) \
+         VALUES (gen_random_uuid(), $1, 'persistent', 'sub_request', 0, 'msg')",
+    )
+    .bind(i32::from(user))
+    .execute(&mut **conn)
+    .await
+    .expect("seeding the notification");
+    sqlx::query("INSERT INTO shops (owner, name) VALUES ($1, 'Seam Garage')")
+        .bind(i32::from(user))
+        .execute(&mut **conn)
+        .await
+        .expect("seeding the garage");
+    conn.commit().await.expect("committing the seed");
+    let reg = registry(&seam.pool);
+
+    let outcome = tokio::time::timeout(
+        TEST_TIMEOUT,
+        reg.delete_user(Box::new(mock_session_admin(UserId::from(1))), user),
+    )
+    .await
+    .expect("the delete must finish in time");
+    outcome.expect("the delete must succeed");
+
+    // The user row is gone, and their notifications and garage with it.
+    let mut conn = seam.pool.begin().await.expect("a fresh connection");
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM users WHERE id = $1")
+        .bind(i32::from(user))
+        .fetch_one(&mut **conn)
+        .await
+        .expect("reading the users");
+    assert_eq!(n, 0, "the user row must be gone");
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM notifications WHERE recipient = $1")
+        .bind(i32::from(user))
+        .fetch_one(&mut **conn)
+        .await
+        .expect("reading the notifications");
+    assert_eq!(n, 0, "the user's notifications must be gone");
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM shops WHERE owner = $1")
+        .bind(i32::from(user))
+        .fetch_one(&mut **conn)
+        .await
+        .expect("reading the shops");
+    assert_eq!(n, 0, "the user's garage must be gone");
+    drop(conn);
+}
+
 /// The shop-subscribe policy against the live adapter: the
 /// `subscribe_shop` ownership read is a real store call on Postgres — a
 /// non-owner's connect is `Forbidden` (the web layer maps it to a 403), the
