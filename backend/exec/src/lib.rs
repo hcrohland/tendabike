@@ -18,6 +18,8 @@
 
 */
 
+#![forbid(unsafe_code)]
+
 //! The per-user executor crate (ADR-0005, executable spec #446 §4).
 //!
 //! One long-lived task per user drives the domain: it consumes the user's

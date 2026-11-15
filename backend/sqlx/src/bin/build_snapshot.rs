@@ -523,7 +523,10 @@ async fn main() -> anyhow::Result<()> {
         .await
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 
-    let pool = DbPool::new(&url)
+    let pg_pool = sqlx::PgPool::connect(&url)
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let pool = DbPool::new(pg_pool)
         .await
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 

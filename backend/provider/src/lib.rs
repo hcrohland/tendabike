@@ -18,6 +18,8 @@
 
 */
 
+#![forbid(unsafe_code)]
+
 //! The provider-agnostic seams shared by every activity provider (spec #781).
 //!
 //! [`activity_id`] — [`ProviderActivityId`], the cross-provider typed activity
@@ -40,6 +42,9 @@
 //! the executor loop runs in production: it selects between the two
 //! providers per call, with a typed switch on [`Provider`], and calls the
 //! driver functions directly.
+
+mod config;
+pub use config::{ProviderConfig, init};
 
 mod activity_id;
 pub use activity_id::*;

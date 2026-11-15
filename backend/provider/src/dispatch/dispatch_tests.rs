@@ -165,17 +165,24 @@ fn icu_event_json(athlete: &str, typ: &str, activity: &str, timestamp: &str) -> 
     )
 }
 
-/// The icu webhook secret the intake tests verify against: sets
-/// `ICU_WEBHOOK_SECRET` to a known value when it is not already present (a
-/// real environment's value takes precedence) and returns the value in force.
+/// Initialize the provider config once for the dispatch test process, with
+/// a known webhook secret the intake tests verify against. Returns the
+/// secret value.
 fn icu_webhook_secret() -> String {
     static ONCE: Once = Once::new();
-    ONCE.call_once(|| unsafe {
-        if std::env::var("ICU_WEBHOOK_SECRET").is_err() {
-            std::env::set_var("ICU_WEBHOOK_SECRET", "icu-test-webhook-secret");
-        }
+    const SECRET: &str = "icu-test-webhook-secret";
+    ONCE.call_once(|| {
+        crate::init(crate::ProviderConfig {
+            strava_client_id: "test-client-id".to_string(),
+            strava_client_secret: "test-client-secret".to_string(),
+            strava_redirect_url: "http://localhost:8000/strava/token".to_string(),
+            icu_client_id: "test-icu-client-id".to_string(),
+            icu_client_secret: "test-icu-client-secret".to_string(),
+            icu_redirect_url: "http://localhost:8000/icu/token".to_string(),
+            icu_webhook_secret: SECRET.to_string(),
+        });
     });
-    std::env::var("ICU_WEBHOOK_SECRET").expect("the secret is set by the helper")
+    SECRET.to_string()
 }
 
 // ─── accept_event: the Strava arm ───────────────────────────────────────────

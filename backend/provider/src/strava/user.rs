@@ -229,7 +229,7 @@ pub async fn login<D: EntityFacade<S>, S: StravaDataStore>(
         )));
     }
 
-    let token = STRAVACLIENT
+    let token = strava_client()
         .exchange_code(AuthorizationCode::new(code.to_string()))
         .request_async(&*HTTP_CLIENT)
         .await

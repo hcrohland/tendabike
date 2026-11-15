@@ -37,7 +37,7 @@ use std::time::SystemTime;
 use log::debug;
 use oauth2::{AccessToken, RefreshToken, TokenResponse};
 
-use super::client::{HTTP_CLIENT, STRAVACLIENT};
+use super::client::{HTTP_CLIENT, strava_client};
 use super::{StravaDataStore, StravaId, StravaUser};
 use tb_domain::{Error, TbResult, UserId};
 
@@ -104,7 +104,7 @@ impl TokenState {
             Error::NotAuth("No Refresh Token provided and Access Token expired".to_string())
         })?;
         debug!("refreshing Strava token");
-        let token = STRAVACLIENT
+        let token = strava_client()
             .exchange_refresh_token(&current_refresh)
             .request_async(&*HTTP_CLIENT)
             .await

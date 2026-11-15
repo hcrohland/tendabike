@@ -29,9 +29,10 @@ use oauth2::{
     RevocationUrl, StandardTokenResponse, TokenUrl, basic::BasicTokenType,
 };
 use serde::{Deserialize, Serialize};
-use std::{env, sync::LazyLock};
+use std::sync::OnceLock;
 
 use crate::client::ProviderClient;
+use crate::config;
 
 pub use crate::client::HTTP_CLIENT;
 
@@ -88,37 +89,30 @@ pub type StravaClient<
     HasTokenUrl,
 >;
 
-/// The shared Strava oauth client (built once from the process environment).
-pub static STRAVACLIENT: LazyLock<StravaClient> = LazyLock::new(strava_oauth_client);
+/// The shared Strava oauth client (built once from the provider config).
+static STRAVACLIENT: OnceLock<StravaClient> = OnceLock::new();
 
-fn strava_oauth_client() -> StravaClient {
-    // Environment variables (* = required):
-    // *"CLIENT_ID"     "REPLACE_ME";
-    // *"CLIENT_SECRET" "REPLACE_ME";
-    //  "REDIRECT_URL"  "http://127.0.0.1:3000/auth/authorized";
-    //  "AUTH_URL"      "https://www.strava.com/oauth/authorize";
-    //  "TOKEN_URL"     "https://www.strava.com/oauth/token";
+/// The initialized Strava oauth client (panics if the config is not set).
+pub fn strava_client() -> &'static StravaClient {
+    STRAVACLIENT.get_or_init(|| {
+        let config = config::get();
+        let client_id = ClientId::new(config.strava_client_id.clone());
+        let client_secret = ClientSecret::new(config.strava_client_secret.clone());
+        let redirect_url = RedirectUrl::new(config.strava_redirect_url.clone()).unwrap();
 
-    let client_id = ClientId::new(env::var("CLIENT_ID").expect("Missing CLIENT_ID!"));
-    let client_secret =
-        ClientSecret::new(env::var("CLIENT_SECRET").expect("Missing CLIENT_SECRET!"));
+        let auth_url = AuthUrl::new("https://www.strava.com/oauth/authorize".to_string()).unwrap();
+        let token_url = TokenUrl::new("https://www.strava.com/oauth/token".to_string()).unwrap();
+        let revocation_url =
+            RevocationUrl::new("https://www.strava.com/oauth/deauthorize".to_string()).unwrap();
 
-    let redirect_url = env::var("REDIRECT_URL")
-        .unwrap_or_else(|_| "http://localhost:8000/strava/token".to_string());
-    let redirect_url = RedirectUrl::new(redirect_url).unwrap();
-
-    let auth_url = AuthUrl::new("https://www.strava.com/oauth/authorize".to_string()).unwrap();
-    let token_url = TokenUrl::new("https://www.strava.com/oauth/token".to_string()).unwrap();
-    let revocation_url =
-        RevocationUrl::new("https://www.strava.com/oauth/deauthorize".to_string()).unwrap();
-
-    StravaClient::new(client_id)
-        .set_client_secret(client_secret)
-        .set_auth_uri(auth_url)
-        .set_token_uri(token_url)
-        .set_auth_type(oauth2::AuthType::RequestBody)
-        .set_redirect_uri(redirect_url)
-        .set_revocation_url(revocation_url)
+        StravaClient::new(client_id)
+            .set_client_secret(client_secret)
+            .set_auth_uri(auth_url)
+            .set_token_uri(token_url)
+            .set_auth_type(oauth2::AuthType::RequestBody)
+            .set_redirect_uri(redirect_url)
+            .set_revocation_url(revocation_url)
+    })
 }
 
 /// The scope string the login exchange requests.

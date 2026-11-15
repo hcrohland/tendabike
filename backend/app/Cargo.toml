@@ -13,6 +13,7 @@ dotenvy = { workspace = true }
 
 anyhow = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+sqlx = { workspace = true }
 tb_axum = { workspace = true }
 tb_exec = { workspace = true }
 tb_sqlx = { workspace = true }

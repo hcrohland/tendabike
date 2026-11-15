@@ -28,10 +28,11 @@ use oauth2::{
     StandardTokenResponse, TokenUrl, basic::BasicTokenType,
 };
 use serde::{Deserialize, Serialize};
-use std::{env, sync::LazyLock};
+use std::sync::OnceLock;
 
 use super::IcuId;
 use crate::client::ProviderClient;
+use crate::config;
 
 pub use crate::client::HTTP_CLIENT;
 
@@ -75,34 +76,27 @@ pub type IcuClient<
     HasTokenUrl,
 >;
 
-/// The shared icu oauth client (built once from the process environment).
-pub static ICU_CLIENT: LazyLock<IcuClient> = LazyLock::new(icu_oauth_client);
+/// The shared icu oauth client (built once from the provider config).
+static ICU_CLIENT: OnceLock<IcuClient> = OnceLock::new();
 
-fn icu_oauth_client() -> IcuClient {
-    // Environment variables (* = required):
-    // *"ICU_CLIENT_ID"     "REPLACE_ME";
-    // *"ICU_CLIENT_SECRET" "REPLACE_ME";
-    //  "ICU_REDIRECT_URL"  "http://127.0.0.1:3000/icu/token";
-    //  "ICU_AUTH_URL"      "https://intervals.icu/oauth/authorize";
-    //  "ICU_TOKEN_URL"     "https://intervals.icu/api/oauth/token";
+/// The initialized icu oauth client (panics if the config is not set).
+pub fn icu_client() -> &'static IcuClient {
+    ICU_CLIENT.get_or_init(|| {
+        let config = config::get();
+        let client_id = ClientId::new(config.icu_client_id.clone());
+        let client_secret = ClientSecret::new(config.icu_client_secret.clone());
+        let redirect_url = RedirectUrl::new(config.icu_redirect_url.clone()).unwrap();
 
-    let client_id = ClientId::new(env::var("ICU_CLIENT_ID").expect("Missing ICU_CLIENT_ID!"));
-    let client_secret =
-        ClientSecret::new(env::var("ICU_CLIENT_SECRET").expect("Missing ICU_CLIENT_SECRET!"));
+        let auth_url = AuthUrl::new("https://intervals.icu/oauth/authorize".to_string()).unwrap();
+        let token_url = TokenUrl::new("https://intervals.icu/api/oauth/token".to_string()).unwrap();
 
-    let redirect_url = env::var("ICU_REDIRECT_URL")
-        .unwrap_or_else(|_| "http://localhost:8000/icu/token".to_string());
-    let redirect_url = RedirectUrl::new(redirect_url).unwrap();
-
-    let auth_url = AuthUrl::new("https://intervals.icu/oauth/authorize".to_string()).unwrap();
-    let token_url = TokenUrl::new("https://intervals.icu/api/oauth/token".to_string()).unwrap();
-
-    IcuClient::new(client_id)
-        .set_client_secret(client_secret)
-        .set_auth_uri(auth_url)
-        .set_token_uri(token_url)
-        .set_auth_type(oauth2::AuthType::RequestBody)
-        .set_redirect_uri(redirect_url)
+        IcuClient::new(client_id)
+            .set_client_secret(client_secret)
+            .set_auth_uri(auth_url)
+            .set_token_uri(token_url)
+            .set_auth_type(oauth2::AuthType::RequestBody)
+            .set_redirect_uri(redirect_url)
+    })
 }
 
 /// The scope string the login exchange requests.

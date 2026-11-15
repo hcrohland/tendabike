@@ -178,7 +178,10 @@ pub fn suffixed_scratch_url(suffix: &str) -> Option<String> {
 /// next runtime's `acquire` waits the full acquire timeout. Every test
 /// therefore opens its own pool and drops it with the test.
 pub async fn pool(url: &str) -> Result<DbPool, String> {
-    tb_sqlx::DbPool::new(url)
+    let pg_pool = sqlx::PgPool::connect(url)
+        .await
+        .map_err(|err| err.to_string())?;
+    tb_sqlx::DbPool::new(pg_pool)
         .await
         .map_err(|err| err.to_string())
 }
@@ -217,10 +220,13 @@ pub async fn setup(url: &str) -> Setup {
     if let Err(err) = bounded(sqlx::Postgres::create_database(url)).await {
         return Setup::Failed(format!("could not create the scratch database: {err}"));
     }
-    match tb_sqlx::DbPool::new(url).await {
-        Ok(pool) => match seed(&pool).await {
-            Ok(marks) => Setup::Ready(marks),
-            Err(err) => Setup::Failed(format!("could not seed the scratch database: {err}")),
+    match sqlx::PgPool::connect(url).await {
+        Ok(pg_pool) => match tb_sqlx::DbPool::new(pg_pool).await {
+            Ok(pool) => match seed(&pool).await {
+                Ok(marks) => Setup::Ready(marks),
+                Err(err) => Setup::Failed(format!("could not seed the scratch database: {err}")),
+            },
+            Err(err) => Setup::Failed(format!("could not connect to the scratch database: {err}")),
         },
         Err(err) => Setup::Failed(format!("could not connect to the scratch database: {err}")),
     }

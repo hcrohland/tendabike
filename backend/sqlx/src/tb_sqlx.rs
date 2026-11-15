@@ -5,7 +5,6 @@
 //!
 //! This module is used by other modules in the application to interact with the database.
 
-use log::info;
 use sqlx::{PgPool, PgTransaction, postgres::PgPoolOptions};
 use std::ops::{Deref, DerefMut};
 
@@ -94,17 +93,10 @@ impl<'c> Txn for SqlxConn<'c> {
 pub struct DbPool(PgPool);
 
 impl DbPool {
-    pub async fn new(database_url: &str) -> anyhow::Result<Self> {
-        info!("Connecting to database: {}", database_url);
-
-        let pool = PgPool::connect(database_url).await?;
-
-        // Run migrations if needed
+    /// Wrap an already-connected `PgPool` and run migrations.
+    pub async fn new(pool: PgPool) -> anyhow::Result<Self> {
         sqlx::migrate!("./migrations").run(&pool).await?;
-
-        let pool = DbPool(pool);
-
-        Ok(pool)
+        Ok(DbPool(pool))
     }
 
     /// Begin a transaction on a pooled connection.

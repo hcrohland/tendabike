@@ -68,7 +68,7 @@ impl Provider {
         match self {
             #[cfg(feature = "strava")]
             Provider::Strava => {
-                let (auth_url, _) = crate::strava::client::STRAVACLIENT
+                let (auth_url, _) = crate::strava::client::strava_client()
                     .authorize_url(|| CsrfToken::new(state.to_string()))
                     .add_scope(Scope::new(crate::strava::client::SCOPES.to_string()))
                     .url();
@@ -76,7 +76,7 @@ impl Provider {
             }
             #[cfg(feature = "icu")]
             Provider::Icu => {
-                let (auth_url, _) = crate::icu::client::ICU_CLIENT
+                let (auth_url, _) = crate::icu::client::icu_client()
                     .authorize_url(|| CsrfToken::new(state.to_string()))
                     .add_scope(Scope::new(crate::icu::client::SCOPES.to_string()))
                     .url();

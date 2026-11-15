@@ -17,6 +17,8 @@
 
 */
 
+#![forbid(unsafe_code)]
+
 use log::{debug, info, trace, warn};
 
 mod error;
