@@ -32,7 +32,7 @@ use anyhow::Context;
 use axum::Router;
 use sqlx::PgPool;
 use tb_domain::TbResult;
-use tb_exec::{ServiceApi, providerservice::ProviderService};
+use tb_exec::{HEARTBEAT_INTERVAL, ServiceApi, providerservice::ProviderService};
 use tb_provider::Provider;
 use tower_sessions::{ExpiredDeletion, SessionManagerLayer};
 use tower_sessions_sqlx_store::PostgresStore;
@@ -110,7 +110,7 @@ pub async fn start(
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let app_state = AppState::new(api, provider);
+    let app_state = AppState::new(api, provider, HEARTBEAT_INTERVAL);
 
     // Parse the config's raw strings into their typed forms.
     let path = std::path::Path::new(&config.static_www)
