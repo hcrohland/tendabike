@@ -16,6 +16,7 @@
 //! root; the web layer names the traits, never a seam type.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use tb_exec::{ServiceApi, providerservice::ProviderService};
 
@@ -34,13 +35,25 @@ pub(crate) struct AppState {
     /// provider, read in-transaction — a per-provider route acting on a user
     /// of the other provider follows the stated identity rule.
     pub(crate) provider: Arc<dyn ProviderService>,
+    /// The SSE heartbeat cadence. Production uses `tb_exec::HEARTBEAT_INTERVAL`
+    /// (15s); tests inject a fast value (~100ms) so the stream suite runs in
+    /// sub-second wall-clock.
+    pub(crate) heartbeat_interval: Duration,
 }
 
 impl AppState {
     /// Build the state over the service API and provider service handles
     /// (the composition root builds the `Registry` over the pool and hands
     /// it over as the two `Arc<dyn _>` handles).
-    pub(crate) fn new(api: Arc<dyn ServiceApi>, provider: Arc<dyn ProviderService>) -> Self {
-        Self { api, provider }
+    pub(crate) fn new(
+        api: Arc<dyn ServiceApi>,
+        provider: Arc<dyn ProviderService>,
+        heartbeat_interval: Duration,
+    ) -> Self {
+        Self {
+            api,
+            provider,
+            heartbeat_interval,
+        }
     }
 }

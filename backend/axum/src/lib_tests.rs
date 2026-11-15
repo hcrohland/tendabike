@@ -80,7 +80,11 @@ fn test_app(
 ) -> Router {
     init_test_config_once();
     let session_layer = SessionManagerLayer::new(store);
-    routes(AppState::new(api, provider), None).layer(session_layer)
+    routes(
+        AppState::new(api, provider, Duration::from_millis(100)),
+        None,
+    )
+    .layer(session_layer)
 }
 
 /// Creates a session in `store` containing `value` and returns the cookie
@@ -2881,8 +2885,8 @@ fn mock_sse_shop(api: &mut MockServiceApi) -> tokio::sync::broadcast::Sender<Sum
 }
 
 /// A connected stream is `text/event-stream` and emits `: ping` heartbeats
-/// (the SSE `KeepAlive` cadence is the 15s `tb_exec::HEARTBEAT_INTERVAL`
-/// constant, spec #558 §2.1, so the window spans one full cadence).
+/// (the SSE `KeepAlive` cadence is the injected 100ms test interval, so the
+/// window spans several cadences).
 #[tokio::test]
 async fn stream_is_event_stream_and_heartbeats() {
     let (store, mut mock, provider) = mock_ctx();
@@ -2896,7 +2900,7 @@ async fn stream_is_event_stream_and_heartbeats() {
         "text/event-stream",
         "the stream must be an event stream"
     );
-    let frames = read_sse_frames(&mut body, 3, Duration::from_secs(18)).await;
+    let frames = read_sse_frames(&mut body, 3, Duration::from_millis(300)).await;
     assert!(
         frames.iter().any(|f| f.contains(": ping")),
         "expected a `: ping` heartbeat within one `HEARTBEAT_INTERVAL` cadence, got: {frames:?}"
@@ -2920,7 +2924,7 @@ async fn stream_forwards_summary_frames() {
     frame_tx
         .send(Summary::default())
         .expect("the stream is attached");
-    let frames = read_sse_frames(&mut body, 3, Duration::from_secs(2)).await;
+    let frames = read_sse_frames(&mut body, 3, Duration::from_millis(200)).await;
     assert!(
         frames.iter().any(|f| f.contains(
             "data: {\"activities\":{},\"parts\":{},\"attachments\":{},\"usages\":{},\"services\":{},\"plans\":{},\"part_notes\":{},\"shops\":{},\"users\":{},\"notifications\":{}}"
@@ -2942,23 +2946,23 @@ async fn stream_survives_a_reaped_executor() {
     assert_eq!(status, StatusCode::OK);
     fate_tx.send_replace(ExecutorStatus::Reaped);
     // The settle heartbeat (the reap's `: ping`).
-    let settled = read_sse_frames(&mut body, 1, Duration::from_secs(2)).await;
+    let settled = read_sse_frames(&mut body, 1, Duration::from_millis(200)).await;
     assert!(
         settled.iter().any(|f| f.contains(": ping")),
         "a reaped executor must yield a heartbeat, got: {settled:?}"
     );
     // The frame is sent after the re-subscribe the next body poll
     // triggers (a frame sent before it would reach the old, dropped
-    // receiver): the 100ms delay bounds the re-subscribe, the 3s read
+    // receiver): the 100ms delay bounds the re-subscribe, the 500ms read
     // bounds the delivery.
     let sender = frame_tx.clone();
     tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
         sender
             .send(Summary::default())
             .expect("the stream re-subscribed");
     });
-    let frames = read_sse_frames(&mut body, 2, Duration::from_secs(10)).await;
+    let frames = read_sse_frames(&mut body, 2, Duration::from_millis(500)).await;
     assert!(
         frames.iter().any(|f| f.contains("data:")),
         "a frame pushed after the reap must be forwarded, got: {frames:?}"
@@ -2985,7 +2989,7 @@ async fn stream_ends_on_a_dead_executor() {
 /// Frames that arrive before the close are drained and ignored.
 async fn assert_stream_ends(body: &mut axum::body::Body) {
     use http_body_util::BodyExt;
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    let deadline = tokio::time::Instant::now() + Duration::from_millis(500);
     loop {
         match tokio::time::timeout_at(deadline, body.frame()).await {
             Ok(Some(Ok(frame))) => drop(frame),
@@ -3018,7 +3022,7 @@ async fn shop_stream_owner_forwards_frames() {
     frame_tx
         .send(Summary::default())
         .expect("the shop stream is attached");
-    let frames = read_sse_frames(&mut body, 3, Duration::from_secs(2)).await;
+    let frames = read_sse_frames(&mut body, 3, Duration::from_millis(200)).await;
     assert!(
         frames.iter().any(|f| f.contains(
             "data: {\"activities\":{},\"parts\":{},\"attachments\":{},\"usages\":{},\"services\":{},\"plans\":{},\"part_notes\":{},\"shops\":{},\"users\":{},\"notifications\":{}}"
@@ -3059,7 +3063,11 @@ async fn spa_fallback_serves_entry_document() {
     let api: Arc<dyn ServiceApi> = Arc::new(mock);
     let provider: Arc<dyn tb_exec::providerservice::ProviderService> = Arc::new(provider);
     let session_layer = SessionManagerLayer::new(store);
-    let app = routes(AppState::new(api, provider), Some(temp_dir.clone())).layer(session_layer);
+    let app = routes(
+        AppState::new(api, provider, Duration::from_millis(100)),
+        Some(temp_dir.clone()),
+    )
+    .layer(session_layer);
 
     // Client-side route gets the SPA entry document.
     let (status, _headers, body) = run(app.clone(), Method::GET, "/part/123", None).await;
