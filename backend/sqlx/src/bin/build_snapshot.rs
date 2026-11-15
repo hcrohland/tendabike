@@ -34,11 +34,11 @@ fn scratch_url() -> String {
 /// seconds instead of hanging the run.
 async fn bounded<T>(
     fut: impl std::future::Future<Output = Result<T, sqlx::Error>>,
-) -> Result<T, String> {
+) -> anyhow::Result<T> {
     match tokio::time::timeout(Duration::from_secs(10), fut).await {
         Ok(Ok(value)) => Ok(value),
-        Ok(Err(err)) => Err(err.to_string()),
-        Err(_) => Err("timed out after 10s".to_string()),
+        Ok(Err(err)) => Err(anyhow::anyhow!("{err}")),
+        Err(_) => Err(anyhow::anyhow!("timed out after 10s")),
     }
 }
 
@@ -511,17 +511,11 @@ async fn main() -> anyhow::Result<()> {
 
     // Create the scratch database (force-drop any leftover from a previous
     // run), then run migrations through the same `DbPool::new` the app uses.
-    let exists = bounded(sqlx::Postgres::database_exists(&url))
-        .await
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let exists = bounded(sqlx::Postgres::database_exists(&url)).await?;
     if exists {
-        bounded(sqlx::Postgres::force_drop_database(&url))
-            .await
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        bounded(sqlx::Postgres::force_drop_database(&url)).await?;
     }
-    bounded(sqlx::Postgres::create_database(&url))
-        .await
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    bounded(sqlx::Postgres::create_database(&url)).await?;
 
     let pg_pool = sqlx::PgPool::connect(&url).await?;
     let pool = DbPool::new(pg_pool).await?;
