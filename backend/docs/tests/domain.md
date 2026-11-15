@@ -66,4 +66,7 @@ The checked-in fixture (`SNAPSHOT_JSON` in `sqlx/src/prepopulated_data.rs`) is r
 cargo run -p tb_sqlx --bin build-snapshot
 ```
 
-Deterministic except for the v7 usage UUIDs, which are minted on every run. Rebuild rather than editing the generated file by hand.
+A fresh scratch database mints part IDs from 300 (the initial schema migration restarts `parts_id_seq` at 300), so a rebuild shifts every part ID away from the checked-in 1–17 and mints fresh v7 usage UUIDs.
+
+- **Field-level change** (a field added, dropped, or re-valued on existing records): edit the checked-in fixture minimally — a rebuild's ID and UUID churn would bury the change.
+- **Structural change** (the canonical sequence itself changed — new entities, new operations): run the rebuild; the part-ID shift (1–17 → 300+) and the fresh UUIDs are expected — name them in the PR description.
