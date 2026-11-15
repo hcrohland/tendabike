@@ -32,7 +32,7 @@
 
 use std::marker::PhantomData;
 
-use tb_domain::{PartId, Summary, TbResult, UserId, UserStat};
+use crate::facade::{PartId, Summary, TbResult, UserId, UserStat};
 
 use crate::EntityFacade;
 

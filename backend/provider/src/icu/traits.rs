@@ -5,13 +5,13 @@ This file defines the intervals.icu data-store traits.
 `icu_users` and `icu_events` tables) and no domain supertrait, so a consumer
 that only drives icu work can bound on it directly.
 
-`IcuStore` is the method-free umbrella over `tb_domain::Store` +
+`IcuStore` is the method-free umbrella over the domain `Store` +
 `IcuDataStore`, naming a store that can do both domain and icu work — the
-same "local traits plus an umbrella" shape as `tb_domain::Store` itself.
+same "local traits plus an umbrella" shape as `Store` itself.
 */
 
 use super::{IcuEvent, IcuId, IcuUser};
-use tb_domain::{TbResult, UserId};
+use crate::facade::{Store, TbResult, UserId};
 
 /// The icu-side data store: the `icu_users` and `icu_events` tables.
 ///
@@ -73,7 +73,7 @@ pub trait IcuDataStore: Send + Sync {
 }
 
 /// A method-free umbrella naming a complete icu store: one that implements
-/// the domain [`tb_domain::Store`] *and* the local [`IcuDataStore`]. It
-/// carries no methods of its own — the same shape as `tb_domain::Store`,
+/// the domain [`Store`] *and* the local [`IcuDataStore`]. It
+/// carries no methods of its own — the same shape as `Store`,
 /// which is the umbrella over the domain's per-entity sub-traits.
-pub trait IcuStore: tb_domain::Store + IcuDataStore {}
+pub trait IcuStore: Store + IcuDataStore {}

@@ -37,13 +37,14 @@
 //! non-fatal, the client's reconnect + full refresh covers it).
 
 #[cfg(test)]
-use tb_domain::Summary;
-use tb_domain::{ApiRead, ApiWrite, ReadOutcome, Session, TbResult, UserStat, WriteOutcome};
+use crate::facade::Summary;
 #[cfg(test)]
 use tb_provider::strava::event::Event;
 #[cfg(test)]
 use tokio::sync::broadcast;
 use tokio::sync::{mpsc, oneshot};
+
+use crate::facade::{ApiRead, ApiWrite, ReadOutcome, Session, TbResult, UserStat, WriteOutcome};
 
 /// The one message the per-user executor consumes: a unified wrapper over the
 /// message sources (spec §4.2) — the user's API-write channel plus the

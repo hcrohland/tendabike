@@ -29,9 +29,32 @@
 //!
 //! [`MockDomainFacade`]: crate::MockDomainFacade
 
-use tb_domain::{
-    Activity, ApiRead, ApiWrite, Part, PartId, ReadOutcome, Session, Shop, ShopId, Store, TbResult,
-    UserId, WriteOutcome,
+/// The domain types the crate's other modules need, re-exported so that
+/// `exec::facade` is the sole importer of `tb_domain` (ADR-0015): every other
+/// `tb_exec` module imports these from `crate::facade`, never from `tb_domain`
+/// directly. The trait, its impl, and the mock below keep their own
+/// `tb_domain` imports — this module is the edge's single door.
+pub(crate) use tb_domain::{
+    Activity, ActivityId, ApiRead, ApiWrite, Error, GearItem, Part, PartId, ReadOutcome, Session,
+    Shop, ShopId, Store, Summary, TbResult, UserId, UserStat, WriteOutcome,
+};
+
+/// The domain types the crate's test modules need, re-exported under
+/// `cfg(test)` — the gate of the in-crate `*_tests` modules — so that test
+/// code funnels through the facade too (ADR-0015): the sole-importer rule
+/// holds with no test exemption. No `test-support` consumer names these
+/// (the feature's consumers are the `api.rs` / `providerservice.rs`
+/// automocks, which use only the re-exports above). The names already
+/// re-exported above reach the tests through this same door.
+#[cfg(test)]
+pub(crate) use tb_domain::{
+    Notification, NotificationId, NotificationKind, NotificationLifecycle, NotificationState,
+    NotificationSubject, OnboardingStatus, PartTypeId, Service, ServiceId, SubscriptionId, Usage,
+    UsageId, User, UserState,
+    test_support::{
+        fixtures::sample_purchase_date, mock_session, mock_session_with_shop, part_type_ids::CHAIN,
+        sole_live,
+    },
 };
 
 /// The executor's door into the domain (spec #795): the six dispatch-level

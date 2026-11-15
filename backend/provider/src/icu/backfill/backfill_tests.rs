@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use super::super::test_support::{icu_user, queue, queue_error, requests, setup};
 use super::*;
-use tb_domain::Error;
+use crate::facade::{Error, Summary};
 
 type MockIcuDataStore = super::super::traits::MockIcuDataStore;
 
@@ -45,7 +45,7 @@ async fn backfill_imports_activities_directly() {
         .times(1)
         .returning(move |activity, _session, _store| {
             upserted_rec.lock().unwrap().push(activity.id.to_string());
-            Ok(tb_domain::Summary::default())
+            Ok(Summary::default())
         });
     // The gear ref resolution (part_by_source).
     facade

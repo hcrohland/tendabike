@@ -11,10 +11,29 @@
 #![allow(clippy::too_many_arguments)]
 use time::OffsetDateTime;
 
-use tb_domain::{
-    Activity, ActivityId, Notification, NotificationKind, NotificationLifecycle,
-    NotificationSubject, Part, PartId, PartTypeId, Session, Stat, Store, Summary, TbResult, UserId,
+/// The domain types the crate's other modules need, re-exported so that
+/// `provider::facade` is the sole importer of `tb_domain` (ADR-0015): every
+/// other `tb_provider` module imports these from `crate::facade`, never from
+/// `tb_domain` directly. The trait, its impl, and the mock below keep their
+/// own `tb_domain` imports — this module is the edge's single door.
+pub(crate) use tb_domain::{
+    ActTypeId, Activity, ActivityId, Error, Notification, NotificationKind, NotificationLifecycle,
+    NotificationSubject, Part, PartId, PartTypeId, Session, ShopId, Stat, Store, Summary, TbResult,
+    UserId, UserStat,
 };
+
+/// The domain types the crate's test modules need — `test_support` and
+/// `#[cfg(test)]` alike (the gate covers both) — re-exported per ADR-0015.
+#[cfg(any(test, feature = "test-support"))]
+pub(crate) use tb_domain::{
+    MockSession, OnboardingStatus, UsageId, User,
+    test_support::{mock_session, mock_session_admin},
+};
+
+/// The domain type the crate's in-crate `*_tests` modules need (the
+/// `cfg(test)`-only gate: no `test-support` consumer names it).
+#[cfg(test)]
+pub(crate) use tb_domain::NotificationState;
 
 /// The provider's door into the domain (spec #781): the operations a provider
 /// drives, each a one-line forward to the concrete domain op, generic over the

@@ -3,7 +3,7 @@
 //! provider calls it first and falls back to its own cycling-subtype arms
 //! (provider-specific, so they stay there).
 
-use tb_domain::ActTypeId;
+use crate::facade::ActTypeId;
 
 /// Maps a wire activity-type name to its [`ActTypeId`], for the arms shared
 /// by both providers.

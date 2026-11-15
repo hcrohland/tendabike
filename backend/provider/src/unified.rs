@@ -42,7 +42,7 @@
 //! data store for both providers (`StravaDataStore + IcuDataStore`) — the
 //! lane bounds on no full domain store.
 
-use tb_domain::{PartId, Summary, TbResult, UserId, UserStat};
+use crate::facade::{PartId, Summary, TbResult, UserId, UserStat};
 
 use crate::EntityFacade;
 use crate::Provider;
@@ -110,7 +110,7 @@ where
     async fn probe(&self, user_id: UserId, store: &mut S) -> Probe<LaneEvent> {
         let provider = match crate::provider_of(store, user_id).await {
             Ok(provider) => provider,
-            Err(tb_domain::Error::NotFound(_)) => return Probe::UserGone,
+            Err(crate::facade::Error::NotFound(_)) => return Probe::UserGone,
             Err(_) => return Probe::Error,
         };
         match provider {

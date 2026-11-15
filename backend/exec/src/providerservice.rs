@@ -43,8 +43,9 @@
 //!
 //! [`Registry`]: crate::Registry
 
-use tb_domain::{ActivityId, PartId, Session, TbResult, UserId};
 use tb_provider::Provider;
+
+use crate::facade::{ActivityId, PartId, Session, TbResult, UserId};
 
 /// The provider-agnostic provider service (ADR-0014): the direct ops a
 /// presentation layer drives the provider through. The user-keyed ops

@@ -41,15 +41,12 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use tb_domain::test_support::{
-    fixtures::sample_purchase_date, mock_session, mock_session_with_shop, part_type_ids::CHAIN,
-    sole_live,
-};
-use tb_domain::{
-    ApiRead, ApiWrite, Error, GearItem, Notification, NotificationId, NotificationKind,
+use crate::facade::{
+    ApiRead, ApiWrite, CHAIN, Error, GearItem, Notification, NotificationId, NotificationKind,
     NotificationLifecycle, NotificationState, NotificationSubject, OnboardingStatus, Part, PartId,
     PartTypeId, ReadOutcome, Service, ServiceId, Shop, ShopId, SubscriptionId, Summary, TbResult,
-    Usage, UsageId, User, UserId, UserStat, UserState, WriteOutcome,
+    Usage, UsageId, User, UserId, UserStat, UserState, WriteOutcome, mock_session,
+    mock_session_with_shop, sample_purchase_date, sole_live,
 };
 use tb_provider::strava::event::Event;
 use tb_provider::{Probe, ProviderLane};
