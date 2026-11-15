@@ -98,7 +98,8 @@ pub(crate) async fn backfill<D: crate::EntityFacade<S>, S: IcuDataStore>(
         let activities: Vec<BackfillActivity> = match request_json(
             user_id,
             &format!(
-                "/athlete/{icu_id}/activities?newest={}&limit={LIMIT}&fields={FIELDS}",
+                "/athlete/{icu_id}/activities?oldest={}&newest={}&limit={LIMIT}&fields={FIELDS}",
+                date_str(oldest_desired),
                 date_str(newest)
             ),
             store,
