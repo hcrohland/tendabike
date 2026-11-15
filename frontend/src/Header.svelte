@@ -196,8 +196,13 @@
       {/if}
     </NavUl>
   {:else}
+    <!-- The connect cards are the /about landing content for anonymous
+         visitors: on /about the button would just point at the cards that are
+         already there, so it only shows elsewhere. -->
     <div class="flex items-center md:order-2">
-      <Button color="gray" href="/about#connect">{m.header_connect()}</Button>
+      {#if activeUrl !== "/about"}
+        <Button color="gray" href="/about#connect">{m.header_connect()}</Button>
+      {/if}
     </div>
   {/if}
 </Navbar>

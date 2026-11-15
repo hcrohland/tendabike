@@ -24,7 +24,7 @@
 //! - `ratelimit`: the icu rate-limit shim over the shared kernel.
 //!
 
-use log::{debug, info};
+use log::{debug, info, warn};
 use serde_derive::{Deserialize, Serialize};
 
 use tb_domain::*;

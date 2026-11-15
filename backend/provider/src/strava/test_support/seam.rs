@@ -209,7 +209,6 @@ pub fn user(id: UserId) -> User {
         avatar: None,
         is_admin: false,
         onboarding_status: OnboardingStatus::Completed,
-        provider: "strava".to_string(),
     }
 }
 

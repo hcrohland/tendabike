@@ -15,7 +15,9 @@ use axum::{
 use serde::Serialize;
 
 use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, domain::result_mismatch};
-use tb_domain::{ApiRead, ApiWrite, GearItem, ReadOutcome, UserState, WriteOutcome};
+use tb_domain::{
+    ApiRead, ApiWrite, Error, GearItem, ReadOutcome, Session, Summary, User, WriteOutcome,
+};
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
@@ -26,16 +28,62 @@ pub(super) fn router() -> Router<AppState> {
         .route("/export", get(export))
 }
 
-/// `GET /api/user` — the one-call initial state (spec #572): returns the
-/// full `UserState` (the user record plus the `Summary`). Replaces the old
+/// The wire shape of `GET /api/user`: the user record (with the provider
+/// added — the domain stores no provider, ADR-0014) plus the `Summary`.
+#[derive(Serialize)]
+struct UserResponse {
+    user: UserWithProvider,
+    summary: Summary,
+}
+
+/// The response's user shape: the domain `User`'s fields plus the `provider`
+/// (the provider layer's identity, ADR-0014). The client's `user.provider`
+/// wire field is unchanged.
+#[derive(Serialize)]
+struct UserWithProvider {
+    #[serde(flatten)]
+    user: User,
+    provider: String,
+}
+
+/// `GET /api/user` — the one-call initial state (spec #572): returns the user
+/// record (with the provider added) plus the `Summary`. Replaces the old
 /// bare-user and summary-only routes. A pure read (spec #829): it makes no
 /// outbound provider call for gear — the gear import happens at onboarding.
-async fn getuser(session: RequestSession, State(state): State<AppState>) -> ApiResult<UserState> {
+/// The user's provider is the provider layer's identity lookup (ADR-0014):
+/// the domain stores no provider, so the web layer derives it and adds it to
+/// the response's user shape. A `NotFound` means the user was deleted: the
+/// session is stale, so we reply 401.
+async fn getuser(
+    session: RequestSession,
+    State(state): State<AppState>,
+) -> ApiResult<UserResponse> {
+    // The user's provider (ADR-0014): the domain stores no provider, so the
+    // web layer derives it from the provider-internal user data and adds it
+    // to the response's user shape. A `NotFound` means the user was deleted:
+    // the session is stale, so we reply 401.
+    let provider = match state.provider.user_provider(session.user_id()).await {
+        Ok(p) => p,
+        Err(Error::NotFound(_)) => return Err(Error::NotAuth("session expired".to_string()).into()),
+        Err(err) => return Err(err.into()),
+    };
     // The unified user read (spec #558 §3.5): a single FIFO-ordered message
-    // on the user's executor — the pure-FIFO snapshot (spec #558 §3.7).
-    match state.api.read(Box::new(session), ApiRead::User).await? {
-        ReadOutcome::User(state) => Ok(Json(*state)),
-        _ => Err(result_mismatch("user", "user state")),
+    // on the user's executor — the pure-FIFO snapshot (spec #558 §3.7). A
+    // pure read (spec #829): no outbound provider call for gear.
+    match state.api.read(Box::new(session), ApiRead::User).await {
+        Ok(ReadOutcome::User(user_state)) => {
+            let user_state = *user_state;
+            Ok(Json(UserResponse {
+                user: UserWithProvider {
+                    user: user_state.user,
+                    provider: provider.wire_value().to_string(),
+                },
+                summary: user_state.summary,
+            }))
+        }
+        Ok(_) => Err(result_mismatch("user", "user state")),
+        Err(Error::NotFound(_)) => Err(Error::NotAuth("session expired".to_string()).into()),
+        Err(err) => Err(err.into()),
     }
 }
 
@@ -120,9 +168,10 @@ pub(crate) async fn trigger_initial_sync(
 async fn export(user: RequestSession, State(state): State<AppState>) -> ApiResult<Export> {
     // The unified user read (spec #558 §3.5): the export is a projection
     // of the `UserState` composite (the bare `User` plus the `Summary`),
-    // staying non-hydrating (spec #558 §3.4/§4).
-    match state.api.read(Box::new(user), ApiRead::User).await? {
-        ReadOutcome::User(state) => {
+    // staying non-hydrating (spec #558 §3.4/§4). A `NotFound` means the
+    // user was deleted: the session is stale, so we reply 401.
+    match state.api.read(Box::new(user), ApiRead::User).await {
+        Ok(ReadOutcome::User(state)) => {
             let summary = state.summary;
             Ok(Json(Export {
                 user: state.user,
@@ -135,7 +184,9 @@ async fn export(user: RequestSession, State(state): State<AppState>) -> ApiResul
                 shops: summary.shops.live(),
             }))
         }
-        _ => Err(result_mismatch("user", "user state")),
+        Ok(_) => Err(result_mismatch("user", "user state")),
+        Err(Error::NotFound(_)) => Err(Error::NotAuth("session expired".to_string()).into()),
+        Err(err) => Err(err.into()),
     }
 }
 

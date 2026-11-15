@@ -87,4 +87,26 @@ describe("GearCard", () => {
     expect(screen.queryByText("Max Mustermann")).toBeNull();
     unmount();
   });
+
+  it("centers the provider mark in the meta line (no baseline hang)", () => {
+    users.setMap([
+      { id: 5, firstname: "Max", name: "Mustermann", avatar: undefined },
+    ]);
+    const sourced = new Part({
+      id: 8,
+      owner: 5,
+      what: 1,
+      name: "My Bike",
+      last_used: new Date("2024-01-01"),
+      source: "icu:123",
+    });
+    const { container } = render(GearCard, { part: sourced });
+    const mark = [...container.querySelectorAll("span")].find(
+      (s) => s.textContent === "icu",
+    );
+    const link = mark?.closest("a");
+    // The mark sits in a centered flex, not a vertical-align:middle inline —
+    // the latter hangs a tall badge below the text line.
+    expect(link?.className).toContain("items-center");
+  });
 });

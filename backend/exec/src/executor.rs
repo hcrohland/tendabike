@@ -162,6 +162,8 @@ enum Select<E> {
     Wake,
     /// The provider probe failed (the queue's state is unknown).
     StravaError,
+    /// The user no longer exists (deleted): the loop exits cleanly.
+    UserGone,
 }
 
 impl<E: std::fmt::Debug> std::fmt::Debug for Select<E> {
@@ -173,6 +175,7 @@ impl<E: std::fmt::Debug> std::fmt::Debug for Select<E> {
             Self::Idle => f.write_str("Select::Idle"),
             Self::Wake => f.write_str("Select::Wake"),
             Self::StravaError => f.write_str("Select::StravaError"),
+            Self::UserGone => f.write_str("Select::UserGone"),
         }
     }
 }
@@ -209,6 +212,7 @@ async fn select_message<E>(
             Some(Probe::Event(event)) => Select::Strava(event),
             Some(Probe::Limited(until)) => Select::Limited(until),
             Some(Probe::Empty) => Select::Idle,
+            Some(Probe::UserGone) => Select::UserGone,
             Some(Probe::Error) => Select::StravaError,
             None => Select::Idle,
         },
@@ -514,6 +518,14 @@ where
                         );
                         return Err(err);
                     }
+                }
+
+                Select::UserGone => {
+                    // The user was deleted: the session is stale
+                    // and the queue probe will never succeed. Exit cleanly —
+                    // the next request will get a 401 from the handler.
+                    debug!("user {}: the user no longer exists; exiting", self.user_id);
+                    return Ok(());
                 }
 
                 Select::Idle => {

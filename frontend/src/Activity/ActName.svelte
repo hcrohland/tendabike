@@ -13,10 +13,14 @@
 </script>
 
 <div class="flex justify-between">
-  <a href={"/source/activities/" + row.id} target="_blank">
+  <a
+    href={"/source/activities/" + row.id}
+    target="_blank"
+    class="inline-flex items-center gap-2"
+  >
     {row.name}
     <span
-      class="inline mx-2 align-middle"
+      class="inline-flex items-center"
       title={m.gearcard_view_on({ provider: providerMeta[provider].name })}
     >
       <ProviderMark {provider} size="sm" />

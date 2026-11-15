@@ -61,11 +61,11 @@
         <a
           href="/source/activities/{activity.id}"
           target="_blank"
-          class="text-sm font-bold wrap-break-word"
+          class="text-sm font-bold wrap-break-word inline-flex items-center gap-1"
         >
           {activity.name}
           <span
-            class="inline mx-1 align-middle"
+            class="inline-flex items-center"
             title={m.gearcard_view_on({
               provider: providerMeta[provider].name,
             })}

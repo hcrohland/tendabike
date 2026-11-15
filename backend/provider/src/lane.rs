@@ -95,6 +95,8 @@ pub enum Probe<E> {
     Limited(i64),
     /// The queue holds nothing interesting for this user.
     Empty,
+    /// The user no longer exists (deleted): the loop should exit cleanly.
+    UserGone,
     /// The probe failed (its transaction rolled back); the queue's state is
     /// unknown.
     Error,

@@ -28,8 +28,8 @@ use http_body_util::BodyExt;
 use tower_sessions::{MemoryStore, Session, SessionManagerLayer};
 
 use tb_domain::{
-    ActTypeId, Activity, ActivityId, ApiRead, DescendReport, GearItem, OnboardingStatus, Part,
-    PartId, PartNote, PartNoteId, PartTypeId, ReadOutcome, Service, ServicePlan,
+    ActTypeId, Activity, ActivityId, ApiRead, DescendReport, Error, GearItem, OnboardingStatus,
+    Part, PartId, PartNote, PartNoteId, PartTypeId, ReadOutcome, Service, ServicePlan,
     Session as TbSession, Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails,
     SubscriptionId, SubscriptionStatus, Summary, TbResult, UsageId, User, UserId, UserPublic,
     UserState, WriteOutcome,
@@ -277,7 +277,6 @@ fn user() -> User {
         avatar: None,
         is_admin: false,
         onboarding_status: OnboardingStatus::Pending,
-        provider: "strava".to_string(),
     }
 }
 
@@ -901,13 +900,16 @@ async fn unknown_path_not_found() {
 /// makes no outbound provider call for gear.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_user_returns_200_and_userstate_body() {
-    let (store, mut mock, provider) = mock_ctx();
+    let (store, mut mock, mut provider) = mock_ctx();
     mock.expect_read().times(1).returning(|_session, _read| {
         Ok(ReadOutcome::User(Box::new(UserState {
             user: user(),
             summary: Summary::default(),
         })))
     });
+    provider
+        .expect_user_provider()
+        .returning(|_| Ok(Provider::Strava));
     let app = build_app(&store, mock, provider);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::GET, "/api/user", Some(&cookie)).await;
@@ -916,6 +918,37 @@ async fn get_user_returns_200_and_userstate_body() {
         String::from_utf8_lossy(&body),
         r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending","provider":"strava"},"summary":{"activities":{},"parts":{},"attachments":{},"usages":{},"services":{},"plans":{},"part_notes":{},"shops":{},"users":{},"notifications":{}}}"#
     );
+}
+
+/// A stale session (the user was deleted) gets 401, not 404: the `read`
+/// fails with `NotFound` because the user's row is gone.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn get_user_stale_session_returns_401() {
+    let (store, mut mock, mut provider) = mock_ctx();
+    provider
+        .expect_user_provider()
+        .returning(|_| Ok(Provider::Strava));
+    mock.expect_read()
+        .times(1)
+        .returning(|_session, _read| Err(Error::NotFound("no rows returned".to_string())));
+    let app = build_app(&store, mock, provider);
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, _body) = run(app, Method::GET, "/api/user", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+/// A stale session (the user was deleted) gets 401, not 404: the `read`
+/// fails with `NotFound` because the user's row is gone.
+#[tokio::test]
+async fn get_user_export_stale_session_returns_401() {
+    let (store, mut mock, provider) = mock_ctx();
+    mock.expect_read()
+        .times(1)
+        .returning(|_session, _read| Err(Error::NotFound("no rows returned".to_string())));
+    let app = build_app(&store, mock, provider);
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, _body) = run(app, Method::GET, "/api/user/export", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
 
 /// `GET /api/user/export` rides the same unified `User` read (staying
@@ -937,7 +970,7 @@ async fn get_user_export_returns_200_and_export_body() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending","provider":"strava"},"parts":[],"attachments":[],"services":[],"plans":[],"usages":[],"activities":[],"shops":[]}"#
+        r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"},"parts":[],"attachments":[],"services":[],"plans":[],"usages":[],"activities":[],"shops":[]}"#
     );
 }
 
@@ -945,13 +978,16 @@ async fn get_user_export_returns_200_and_export_body() {
 /// full `UserState` (the user record plus the `Summary`).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn summary_returns_200_and_summary_body() {
-    let (store, mut mock, provider) = mock_ctx();
+    let (store, mut mock, mut provider) = mock_ctx();
     mock.expect_read().times(1).returning(|_session, _read| {
         Ok(ReadOutcome::User(Box::new(UserState {
             user: user(),
             summary: Summary::default(),
         })))
     });
+    provider
+        .expect_user_provider()
+        .returning(|_| Ok(Provider::Strava));
     let app = build_app(&store, mock, provider);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::GET, "/api/user", Some(&cookie)).await;
@@ -967,11 +1003,14 @@ async fn summary_returns_200_and_summary_body() {
 /// (ADR-0009).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn active_shop_header_scopes_the_read_session() {
-    let (store, mut mock, provider) = mock_ctx();
+    let (store, mut mock, mut provider) = mock_ctx();
     mock.expect_read()
         .times(1)
         .withf(|session, _read| session.shop() == Some(ShopId::from(1)))
         .returning(user_state_reply());
+    provider
+        .expect_user_provider()
+        .returning(|_| Ok(Provider::Strava));
     let app = build_app(&store, mock, provider);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_headers(
@@ -990,11 +1029,14 @@ async fn active_shop_header_scopes_the_read_session() {
 /// shop on the acting session: the full, unfiltered read.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn read_without_active_shop_header_has_no_shop() {
-    let (store, mut mock, provider) = mock_ctx();
+    let (store, mut mock, mut provider) = mock_ctx();
     mock.expect_read()
         .times(1)
         .withf(|session, _read| session.shop().is_none())
         .returning(user_state_reply());
+    provider
+        .expect_user_provider()
+        .returning(|_| Ok(Provider::Strava));
     let app = build_app(&store, mock, provider);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(app, Method::GET, "/api/user", Some(&cookie)).await;
@@ -1007,7 +1049,7 @@ async fn read_without_active_shop_header_has_no_shop() {
 /// cross-tab leak is gone.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn active_shop_header_does_not_leak_across_requests() {
-    let (store, mut mock, provider) = mock_ctx();
+    let (store, mut mock, mut provider) = mock_ctx();
     // Ordered expectations: the first read (the headered request) must be
     // shop-scoped, the second (headerless) must not — the first request
     // persisted nothing.
@@ -1019,6 +1061,10 @@ async fn active_shop_header_does_not_leak_across_requests() {
         .times(1)
         .withf(|session, _read| session.shop().is_none())
         .returning(user_state_reply());
+    provider
+        .expect_user_provider()
+        .times(2)
+        .returning(|_| Ok(Provider::Strava));
     let app = build_app(&store, mock, provider);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_headers(
@@ -2291,7 +2337,7 @@ async fn onboarding_sync_returns_200_and_user() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending","provider":"strava"}"#
+        r#"{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"}"#
     );
 }
 
@@ -2319,7 +2365,7 @@ async fn onboarding_postpone_returns_200_and_user() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending","provider":"strava"}"#
+        r#"{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"}"#
     );
 }
 

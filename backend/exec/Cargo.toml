@@ -37,3 +37,6 @@ tb_provider = { workspace = true, features = ["strava", "icu", "test-support"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
 time = { workspace = true }
 uuid = { workspace = true }
+
+[lints]
+workspace = true

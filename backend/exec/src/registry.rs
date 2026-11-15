@@ -410,7 +410,7 @@ where
 }
 
 /// The provider-agnostic provider service's impl for the registry (ADR-0014):
-/// the eight direct ops are a thin forward — each opens the transaction, hands
+/// the nine direct ops are a thin forward — each opens the transaction, hands
 /// the connection (and the concrete entity-op facade) to the provider
 /// layer's dispatch free function (the single `match provider`), and commits.
 /// No provider dispatch and no driver naming in this crate. The registry owns
@@ -479,8 +479,7 @@ where
     /// in-txn, then deauthorizes.
     async fn deauthorize(&self, mut session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_provider::dispatch::deauthorize(&mut *session, tbid, self.lane.facade(), &mut store)
-            .await?;
+        tb_provider::dispatch::deauthorize(&mut *session, tbid, &mut store).await?;
         store.commit().await?;
         Ok(())
     }
@@ -543,6 +542,16 @@ where
         let uri = tb_provider::dispatch::user_url(provider, id, &mut store).await?;
         store.commit().await?;
         Ok(uri)
+    }
+
+    /// The user's provider identity (ADR-0014): one transaction — the
+    /// provider layer's `provider_of` lookup, derived from the
+    /// provider-internal user data (the domain stores no provider).
+    async fn user_provider(&self, id: UserId) -> TbResult<Provider> {
+        let mut store = self.source.begin().await?;
+        let provider = tb_provider::provider_of(&mut store, id).await?;
+        store.commit().await?;
+        Ok(provider)
     }
 }
 

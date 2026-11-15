@@ -272,6 +272,7 @@ async fn database_is_reachable() {
 #[ignore]
 async fn api_write_end_to_end() {
     let seam = ready().await;
+    seed_strava_user(&seam.pool, false).await;
     let (tx, rx) = request_channel();
     let (frames, frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
@@ -333,6 +334,7 @@ async fn api_write_end_to_end() {
 #[ignore]
 async fn idle_loop_reclaims() {
     let seam = ready().await;
+    seed_strava_user(&seam.pool, false).await;
     let (_tx, rx) = request_channel();
     let (frames, _frame_rx) = broadcast::channel(8);
     let (events, _events_rx) = broadcast::channel(8);
@@ -365,6 +367,7 @@ async fn idle_loop_reclaims() {
 #[ignore]
 async fn read_as_message_round_trip() {
     let seam = ready().await;
+    seed_strava_user(&seam.pool, false).await;
     let (tx, rx) = request_channel();
     let (frames, mut frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
@@ -415,6 +418,7 @@ async fn read_as_message_round_trip() {
 #[ignore]
 async fn shop_context_read_is_scoped_to_the_request_session() {
     let seam = ready().await;
+    seed_strava_user(&seam.pool, false).await;
     let shop = ShopId::from(1);
     // Seed a shop owned by the fixture user and register one of the fixture's
     // parts in it (the prepopulated fixture has no shops).
@@ -499,6 +503,7 @@ async fn shop_context_read_is_scoped_to_the_request_session() {
 #[ignore]
 async fn personal_read_returns_personal_data() {
     let seam = ready().await;
+    seed_strava_user(&seam.pool, false).await;
     // Seed a shop owned by the fixture user and register one of the fixture's
     // parts in it (the prepopulated fixture has no shops).
     {
@@ -560,6 +565,7 @@ async fn personal_read_returns_personal_data() {
 #[ignore]
 async fn read_sees_every_earlier_write() {
     let seam = ready().await;
+    seed_strava_user(&seam.pool, false).await;
     let (tx, rx) = request_channel();
     let (frames, frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
@@ -631,9 +637,13 @@ async fn read_sees_every_earlier_write() {
 #[ignore]
 async fn onboarding_gear_imports_gear_and_fifo_read() {
     let seam = ready().await;
+    // The user's Strava row: the onboarding's gear import derives the provider
+    // from the provider-internal user data (ADR-0014).
+    seed_strava_user(&seam.pool, false).await;
     // The offline seam: the onboarding's canned Strava gear (one `b-seam` bike
-    // the fixture does not know) — the loop runs in a spawned task, so the
-    // thread-local map is the wrong seam here.
+    // the fixture does not know) in the process-wide `CANNED_STRAVA` global —
+    // the loop runs in a spawned task, so the thread-local map is the wrong
+    // seam here.
     canned_strava("/athlete", r#"{"bikes":[{"id":"b-seam"}],"shoes":[]}"#);
     canned_strava(
         "/gear/b-seam",
@@ -717,6 +727,7 @@ async fn onboarding_gear_imports_gear_and_fifo_read() {
 #[ignore]
 async fn failed_write_rolls_back_and_reclaims() {
     let seam = ready().await;
+    seed_strava_user(&seam.pool, false).await;
     let fixture_parts: usize = serde_json::from_str::<tb_sqlx::StoreSnapshot>(SNAPSHOT_JSON)
         .expect("SNAPSHOT_JSON must be valid JSON")
         .parts
@@ -781,6 +792,9 @@ async fn failed_write_rolls_back_and_reclaims() {
 #[ignore]
 async fn onboarding_sync_write_queues_the_sync_event() {
     let seam = ready().await;
+    // The user's Strava row: the sync write derives the provider from the
+    // provider-internal user data (ADR-0014) to queue on the strava_events queue.
+    seed_strava_user(&seam.pool, false).await;
     // The offline seam: an empty activity page for the queued sync's fetch —
     // the loop runs in a spawned task, so the thread-local map is the wrong
     // seam here.
@@ -1301,6 +1315,74 @@ async fn delete_user_removes_the_rows() {
         .await
         .expect("reading the parts");
     assert_eq!(n, 0, "the user's parts must be gone");
+    drop(conn);
+}
+
+/// The user delete direct op when the target has notifications and owns a
+/// garage: the `notifications.recipient` FK must not block the delete —
+/// the user's notifications go with the user, and the user's garage goes
+/// with them (its `shops.owner` FK cascades).
+#[tokio::test]
+#[ignore]
+async fn delete_user_with_notifications() {
+    let seam = ready().await;
+    // As the deauth test: the delete's deauthorization half builds the
+    // Strava client (placeholder credentials; the failure is non-fatal).
+    unsafe {
+        std::env::set_var("CLIENT_ID", "seam");
+        std::env::set_var("CLIENT_SECRET", "seam");
+    }
+    let (user, _strava) = test_identity();
+    seed_strava_user(&seam.pool, false).await;
+    // Seed a notification addressed to the fixture user (its `recipient`
+    // FK is what blocks the user delete) and a garage they own (its
+    // `shops.owner` FK cascades, so the garage must go with the user).
+    let mut conn = seam.pool.begin().await.expect("a transaction");
+    sqlx::query(
+        "INSERT INTO notifications \
+         (id, recipient, lifecycle, kind, subscription_id, message) \
+         VALUES (gen_random_uuid(), $1, 'persistent', 'sub_request', 0, 'msg')",
+    )
+    .bind(i32::from(user))
+    .execute(&mut **conn)
+    .await
+    .expect("seeding the notification");
+    sqlx::query("INSERT INTO shops (owner, name) VALUES ($1, 'Seam Garage')")
+        .bind(i32::from(user))
+        .execute(&mut **conn)
+        .await
+        .expect("seeding the garage");
+    conn.commit().await.expect("committing the seed");
+    let reg = registry(&seam.pool);
+
+    let outcome = tokio::time::timeout(
+        TEST_TIMEOUT,
+        reg.delete_user(Box::new(mock_session_admin(UserId::from(1))), user),
+    )
+    .await
+    .expect("the delete must finish in time");
+    outcome.expect("the delete must succeed");
+
+    // The user row is gone, and their notifications and garage with it.
+    let mut conn = seam.pool.begin().await.expect("a fresh connection");
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM users WHERE id = $1")
+        .bind(i32::from(user))
+        .fetch_one(&mut **conn)
+        .await
+        .expect("reading the users");
+    assert_eq!(n, 0, "the user row must be gone");
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM notifications WHERE recipient = $1")
+        .bind(i32::from(user))
+        .fetch_one(&mut **conn)
+        .await
+        .expect("reading the notifications");
+    assert_eq!(n, 0, "the user's notifications must be gone");
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM shops WHERE owner = $1")
+        .bind(i32::from(user))
+        .fetch_one(&mut **conn)
+        .await
+        .expect("reading the shops");
+    assert_eq!(n, 0, "the user's garage must be gone");
     drop(conn);
 }
 

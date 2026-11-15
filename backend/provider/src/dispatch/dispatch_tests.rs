@@ -22,7 +22,7 @@ use crate::strava::test_support::MockStravaDataStore;
 use crate::strava::{StravaDataStore, StravaId, StravaUser};
 use crate::test_support::MockEntityFacade;
 
-use super::{accept_event, login};
+use super::{accept_event, deauthorize, delete_user, login};
 
 // ─── The composite store double ─────────────────────────────────────────────
 //
@@ -380,6 +380,79 @@ async fn accept_event_icu_rejects_an_invalid_timestamp() -> TbResult<()> {
     Ok(())
 }
 
+// ─── deauthorize / delete_user: the icu arm ─────────────────────────────────
+
+/// The icu deauthorize arm disables the user (their queued events dropped,
+/// their durable token cleared) — the admin "disable user" op that used to
+/// `todo!()`-panic for icu users.
+#[tokio::test]
+async fn deauthorize_icu_disables_the_user() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    // The provider lookup: no Strava row, an icu row → the icu arm.
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(|_| Err(tb_domain::Error::NotFound("no strava user".into())));
+    let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    let icu_read = icu.clone();
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .returning(move |_| Ok(icu_read.clone()));
+    store
+        .icu
+        .expect_icu_events_delete_for_user()
+        .returning(|_id| Ok(0));
+    let icu_token = icu.clone();
+    store
+        .icu
+        .expect_icuser_update_token()
+        .returning(move |_id, token| {
+            assert!(token.is_none(), "the deauth clears the token");
+            Ok(icu_token.clone())
+        });
+
+    let mut session = tb_domain::test_support::mock_session_admin(UserId::from(1));
+    deauthorize(&mut session, UserId::from(9), &mut store).await?;
+    Ok(())
+}
+
+/// The icu delete arm deauthorizes the user, deletes their `icu_users` row,
+/// and deletes their domain rows — the admin "delete user" op that used to
+/// `todo!()`-panic for icu users.
+#[tokio::test]
+async fn delete_user_icu_deletes_the_user() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let mut facade = MockEntityFacade::new();
+    // The domain delete is the entity-op facade's work (ADR-0012).
+    facade.expect_delete_user().returning(|_, _| Ok(()));
+    // The provider lookup: no Strava row, an icu row → the icu arm.
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(|_| Err(tb_domain::Error::NotFound("no strava user".into())));
+    let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    let icu_read = icu.clone();
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .returning(move |_| Ok(icu_read.clone()));
+    store
+        .icu
+        .expect_icu_events_delete_for_user()
+        .returning(|_id| Ok(0));
+    let icu_token = icu.clone();
+    store
+        .icu
+        .expect_icuser_update_token()
+        .returning(move |_id, _token| Ok(icu_token.clone()));
+    store.icu.expect_icuser_delete().returning(|_id| Ok(1));
+
+    let mut session = tb_domain::test_support::mock_session_admin(UserId::from(1));
+    delete_user(&mut session, UserId::from(9), &facade, &mut store).await?;
+    Ok(())
+}
+
 // ─── login: both arms ───────────────────────────────────────────────────────
 
 /// The login's Strava arm rejects an insufficient scope (a `BadRequest` before
@@ -407,5 +480,66 @@ async fn login_icu_rejects_an_insufficient_scope() -> TbResult<()> {
         .await
         .expect_err("an insufficient scope is rejected");
     assert!(matches!(err, tb_domain::Error::BadRequest(_)));
+    Ok(())
+}
+
+// ─── provider_of: the provider-internal identity lookup ─────────────────────
+//
+// The single home for "which provider does this user have?": a row in the
+// Strava user table means Strava, a row in the icu user table means icu. The
+// Strava table is checked first (a user has exactly one provider).
+
+/// A Strava row for the user → the provider is Strava (the strava table is
+/// checked first).
+#[tokio::test]
+async fn provider_of_strava_when_a_strava_row_exists() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let strava = crate::strava::test_support::strava_user(UserId::from(7), 42, true);
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(move |_| Ok(strava.clone()));
+
+    let provider = crate::provider_of(&mut store, UserId::from(7)).await?;
+    assert_eq!(provider, Provider::Strava);
+    Ok(())
+}
+
+/// No Strava row but an icu row → the provider is icu.
+#[tokio::test]
+async fn provider_of_icu_when_only_an_icu_row_exists() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(|_| Err(tb_domain::Error::NotFound("no strava user".into())));
+    let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .returning(move |_| Ok(icu.clone()));
+
+    let provider = crate::provider_of(&mut store, UserId::from(9)).await?;
+    assert_eq!(provider, Provider::Icu);
+    Ok(())
+}
+
+/// No row in either table → a `NotFound` (the caller propagates it).
+#[tokio::test]
+async fn provider_of_not_found_when_no_row_exists() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(|_| Err(tb_domain::Error::NotFound("no strava user".into())));
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .returning(|_| Err(tb_domain::Error::NotFound("no icu user".into())));
+
+    let err = crate::provider_of(&mut store, UserId::from(7))
+        .await
+        .expect_err("no row in either table is a NotFound");
+    assert!(matches!(err, tb_domain::Error::NotFound(_)));
     Ok(())
 }

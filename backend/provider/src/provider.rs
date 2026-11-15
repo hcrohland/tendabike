@@ -1,29 +1,29 @@
 //! The provider's identity record (ADR-0014): the typed form of the domain
 //! concept (a user has exactly one provider, chosen at signup and immutable).
-//! The domain stays provider-ignorant (it stores the string); the provider
-//! layer owns the typing — the same dependent-owned abstraction as the id
-//! prefixes under ADR-0013.
+//! The domain stays provider-ignorant (it stores no provider); the provider
+//! layer owns the typing and the identity — the same dependent-owned
+//! abstraction as the id prefixes under ADR-0013.
 //!
-//! The enum is the single home for the provider's string encodings: its value
-//! in the `users.provider` column, the activity id's prefix, the web route
-//! prefix, and the OAuth entry URL. A third provider is a variant carrying all
-//! four encodings at once.
+//! The enum is the single home for the provider's string encodings: its wire
+//! value (the client's `user.provider` field), the activity id's prefix, the
+//! web route prefix, and the OAuth entry URL. A third provider is a variant
+//! carrying all four encodings at once.
 
 use tb_domain::{Error, TbResult, UserId};
 
 #[cfg(any(feature = "strava", feature = "icu"))]
 use oauth2::{CsrfToken, Scope};
 
-use crate::EntityFacade;
 use crate::ProviderActivityId;
 
 /// The provider's identity: the typed form of the domain concept (a user has
 /// exactly one provider, chosen at signup and immutable). The domain stores
-/// the provider as a string; the provider layer owns the typing (ADR-0014).
+/// no provider; the provider layer owns the typing and derives the identity
+/// from the provider-internal user data (ADR-0014).
 ///
-/// The enum is the single home for the provider's string encodings: its value
-/// in the `users.provider` column, the activity id's prefix, the web route
-/// prefix, and the OAuth entry URL.
+/// The enum is the single home for the provider's string encodings: its wire
+/// value (the client's `user.provider` field), the activity id's prefix, the
+/// web route prefix, and the OAuth entry URL.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Provider {
     Strava,
@@ -31,8 +31,9 @@ pub enum Provider {
 }
 
 impl Provider {
-    /// The provider's value in the `users.provider` column.
-    pub fn db_value(&self) -> &'static str {
+    /// The provider's wire value: the string the client's `user.provider`
+    /// field carries (`"strava"` | `"icu"`).
+    pub fn wire_value(&self) -> &'static str {
         match self {
             Provider::Strava => "strava",
             Provider::Icu => "icu",
@@ -87,21 +88,6 @@ impl Provider {
     }
 }
 
-impl TryFrom<&str> for Provider {
-    type Error = Error;
-
-    /// Parses the provider's value in the `users.provider` column:
-    /// `"strava"` → [`Provider::Strava`], `"icu"` → [`Provider::Icu`]. An
-    /// unrecognized value is a `BadRequest`.
-    fn try_from(s: &str) -> Result<Self, Self::Error> {
-        match s {
-            "strava" => Ok(Provider::Strava),
-            "icu" => Ok(Provider::Icu),
-            _ => Err(Error::BadRequest(format!("unknown provider: {s}"))),
-        }
-    }
-}
-
 impl TryFrom<ProviderActivityId> for Provider {
     type Error = Error;
 
@@ -117,41 +103,38 @@ impl TryFrom<ProviderActivityId> for Provider {
     }
 }
 
-/// The user's provider, read from the `users.provider` column (through the
-/// entity-op facade's [`EntityFacade::user_provider`] read — the owning
-/// entity's op, ADR-0012) and parsed into the typed [`Provider`] (the single
-/// dispatch mechanism, ADR-0014) — the same identity rule the unified lane
-/// and the dispatch use. A read failure is a DB failure the caller propagates.
-pub(crate) async fn provider_of<S, F: EntityFacade<S>>(
-    store: &mut S,
-    user_id: UserId,
-    facade: &F,
-) -> TbResult<Provider>
+/// The user's provider, derived from the provider-internal user data
+/// (ADR-0014): a row in the Strava user table means Strava, a row in the icu
+/// user table means icu (a user has exactly one). The single home for "which
+/// provider does this user have?" — the direct-op dispatch, the unified lane,
+/// and the web layer's `GET /user` response all call it. A user with no row in
+/// either table is a `NotFound`; any other read failure is a DB failure the
+/// caller propagates.
+#[cfg(all(feature = "strava", feature = "icu"))]
+pub async fn provider_of<S>(store: &mut S, user_id: UserId) -> TbResult<Provider>
 where
-    S: Send + Sync,
+    S: crate::strava::StravaDataStore + crate::icu::IcuDataStore + Send + Sync,
 {
-    let s = facade.user_provider(&user_id, store).await?;
-    Provider::try_from(s.as_str())
+    match store.stravauser_get_by_tbid(user_id).await {
+        Ok(_) => Ok(Provider::Strava),
+        Err(Error::NotFound(_)) => match store.icuser_get_by_tbid(user_id).await {
+            Ok(_) => Ok(Provider::Icu),
+            Err(e) => Err(e),
+        },
+        Err(e) => Err(e),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::Provider;
 
-    /// The db value matches the string literal in use today (the
-    /// `users.provider` column).
+    /// The wire value matches the string literal the client's `user.provider`
+    /// field carries.
     #[test]
-    fn db_value_matches_current_literals() {
-        assert_eq!(Provider::Strava.db_value(), "strava");
-        assert_eq!(Provider::Icu.db_value(), "icu");
-    }
-
-    /// The parse round-trips the db value and rejects an unknown provider.
-    #[test]
-    fn parse_round_trips_and_rejects_unknown() {
-        assert_eq!(Provider::try_from("strava").unwrap(), Provider::Strava);
-        assert_eq!(Provider::try_from("icu").unwrap(), Provider::Icu);
-        assert!(Provider::try_from("garmin").is_err());
+    fn wire_value_matches_current_literals() {
+        assert_eq!(Provider::Strava.wire_value(), "strava");
+        assert_eq!(Provider::Icu.wire_value(), "icu");
     }
 
     /// The activity id prefix matches the string literal in use today (the

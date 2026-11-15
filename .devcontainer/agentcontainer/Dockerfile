@@ -53,6 +53,17 @@ RUN npm install -g --ignore-scripts \
     svelte-language-server \
     prettier
 
+# Headless Chromium for the agent's visual/layout debugging loops (Playwright),
+# baked in so a layout bug doesn't re-pay the ~124MB browser download and apt
+# deps at debug time. Browsers go in a shared world-readable path so the
+# non-root `laios` user can launch them; PLAYWRIGHT_BROWSERS_PATH points
+# Playwright there at build and runtime. `--with-deps` installs the system
+# libraries (run as root, before `USER laios` below).
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN npm install -g --ignore-scripts playwright \
+    && npx playwright install --with-deps chromium \
+    && chmod -R a+rX /ms-playwright
+
 # Rust toolchain, installed system-wide under /usr/local so every user gets it
 ENV CARGO_HOME=/usr/local/cargo \
     RUSTUP_HOME=/usr/local/rustup \

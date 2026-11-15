@@ -29,9 +29,9 @@
 //! `tb_exec`.
 //!
 //! The user-keyed ops (`sync`, `deauthorize`, `delete_user`) dispatch on the
-//! user's real provider, read in-transaction (the
-//! [`provider_of`](crate::provider_of) read — the same identity rule the
-//! unified lane uses), not on the route: a
+//! user's real provider, derived in-transaction from the provider-internal
+//! user data (the [`provider_of`](crate::provider_of) lookup — the same
+//! identity rule the unified lane uses), not on the route: a
 //! per-provider route acting on a user of the other provider follows the
 //! stated identity rule instead of failing on a missing lookup.
 //!
@@ -115,7 +115,7 @@ pub(crate) async fn sync_user<S, D: EntityFacade<S>>(
 where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
-    let provider = crate::provider_of(store, user_id, facade).await?;
+    let provider = crate::provider_of(store, user_id).await?;
     match provider {
         Provider::Strava => {
             // Import the gear (bikes + shoes) before queuing the activity
@@ -141,7 +141,7 @@ pub(crate) async fn import_gear_user<S, D: EntityFacade<S>>(
 where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
-    let provider = crate::provider_of(store, user_id, facade).await?;
+    let provider = crate::provider_of(store, user_id).await?;
     match provider {
         Provider::Strava => crate::strava::StravaUser::update_gear(user_id, facade, store).await,
         Provider::Icu => crate::icu::gear::update_gear(user_id, facade, store).await,
@@ -162,7 +162,7 @@ pub(crate) async fn queue_sync_user<S, D: EntityFacade<S>>(
 where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
-    let provider = crate::provider_of(store, user_id, facade).await?;
+    let provider = crate::provider_of(store, user_id).await?;
     match provider {
         Provider::Strava => {
             crate::strava::event::insert_sync(user_id, event_time, false, store).await
@@ -192,20 +192,16 @@ where
 /// The provider-agnostic `deauthorize` dispatch (ADR-0014): revoke the
 /// target's provider token and disable their local row (admin-only — the
 /// driver verifies the acting session is an admin). The provider is the
-/// target's real one, read in-transaction.
-pub async fn deauthorize<S, D: EntityFacade<S>>(
-    session: &mut dyn Session,
-    tbid: UserId,
-    facade: &D,
-    store: &mut S,
-) -> TbResult<()>
+/// target's real one, derived in-transaction from the provider-internal user
+/// data.
+pub async fn deauthorize<S>(session: &mut dyn Session, tbid: UserId, store: &mut S) -> TbResult<()>
 where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
-    let provider = crate::provider_of(store, tbid, facade).await?;
+    let provider = crate::provider_of(store, tbid).await?;
     match provider {
         Provider::Strava => crate::strava::user_deauthorize(session, tbid, store).await,
-        Provider::Icu => todo!("icu deauthorize"),
+        Provider::Icu => crate::icu::user_deauthorize(session, tbid, store).await,
     }
 }
 
@@ -221,10 +217,10 @@ pub async fn delete_user<S, D: EntityFacade<S>>(
 where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
-    let provider = crate::provider_of(store, tbid, facade).await?;
+    let provider = crate::provider_of(store, tbid).await?;
     match provider {
         Provider::Strava => crate::strava::user_delete(session, tbid, facade, store).await,
-        Provider::Icu => todo!("icu delete user"),
+        Provider::Icu => crate::icu::user_delete(session, tbid, facade, store).await,
     }
 }
 
