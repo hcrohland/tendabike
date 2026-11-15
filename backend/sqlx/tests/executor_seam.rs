@@ -102,6 +102,24 @@ use tb_sqlx::{DbPool, SNAPSHOT_JSON, SqlxConn};
 use time::macros::datetime;
 use tokio::sync::{MutexGuard, Notify, broadcast};
 
+/// Initialize the provider config once for the seam test process, with
+/// placeholder credentials (the token revocation fails, and the ops under
+/// test treat that as non-fatal).
+fn init_provider_config_once() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        tb_provider::init(tb_provider::ProviderConfig {
+            strava_client_id: "seam".to_string(),
+            strava_client_secret: "seam".to_string(),
+            strava_redirect_url: "http://localhost:8000/strava/token".to_string(),
+            icu_client_id: "seam".to_string(),
+            icu_client_secret: "seam".to_string(),
+            icu_redirect_url: "http://localhost:8000/icu/token".to_string(),
+            icu_webhook_secret: String::new(),
+        });
+    });
+}
+
 /// The database-name suffix this suite's scratch database carries: cargo
 /// runs the `tb_sqlx` test binaries in parallel, and each suite's one-time
 /// setup force-drops the database its URL names — a shared name would make
@@ -1235,13 +1253,10 @@ async fn accept_event_athlete_deauth_disables_the_user() {
 #[ignore]
 async fn deauthorize_disables_the_user_and_clears_the_queue() {
     let seam = ready().await;
-    // The op's Strava token revocation builds the (lazily-constructed)
-    // Strava client: the credentials are placeholders (the revocation
-    // fails, and `user_deauthorize` treats that as non-fatal).
-    unsafe {
-        std::env::set_var("CLIENT_ID", "seam");
-        std::env::set_var("CLIENT_SECRET", "seam");
-    }
+    // The op's Strava token revocation builds the Strava client: the
+    // credentials are placeholders (the revocation fails, and
+    // `user_deauthorize` treats that as non-fatal).
+    init_provider_config_once();
     let (user, strava) = test_identity();
     seed_strava_user(&seam.pool, true).await;
     let reg = registry(&seam.pool);
@@ -1279,10 +1294,7 @@ async fn delete_user_removes_the_rows() {
     let seam = ready().await;
     // As the deauth test: the delete's deauthorization half builds the
     // Strava client (placeholder credentials; the failure is non-fatal).
-    unsafe {
-        std::env::set_var("CLIENT_ID", "seam");
-        std::env::set_var("CLIENT_SECRET", "seam");
-    }
+    init_provider_config_once();
     let (user, strava) = test_identity();
     seed_strava_user(&seam.pool, true).await;
     let reg = registry(&seam.pool);
@@ -1328,10 +1340,7 @@ async fn delete_user_with_notifications() {
     let seam = ready().await;
     // As the deauth test: the delete's deauthorization half builds the
     // Strava client (placeholder credentials; the failure is non-fatal).
-    unsafe {
-        std::env::set_var("CLIENT_ID", "seam");
-        std::env::set_var("CLIENT_SECRET", "seam");
-    }
+    init_provider_config_once();
     let (user, _strava) = test_identity();
     seed_strava_user(&seam.pool, false).await;
     // Seed a notification addressed to the fixture user (its `recipient`

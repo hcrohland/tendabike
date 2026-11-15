@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 pub use tb_sqlx::{DbPool, SqlxConn};
 
 mod icustore;

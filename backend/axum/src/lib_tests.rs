@@ -52,16 +52,22 @@ use crate::routes;
 
 const SESSION_KEY: &str = "session";
 
-/// Dummies the OAuth client environment variables so the `STRAVACLIENT` and
-/// `ICU_CLIENT` lazy statics do not panic when they are first used in a test
-/// (the authorize routes build the redirect from the enum's `authorize_url`).
-fn set_oauth_env_once() {
+/// Initialize the provider config and CSRF key once for the test process.
+/// The provider config supplies the test credentials the authorize routes
+/// need; the CSRF key uses a random key (no secret set).
+fn init_test_config_once() {
     static ONCE: Once = Once::new();
-    ONCE.call_once(|| unsafe {
-        std::env::set_var("CLIENT_ID", "test-client-id");
-        std::env::set_var("CLIENT_SECRET", "test-client-secret");
-        std::env::set_var("ICU_CLIENT_ID", "test-icu-client-id");
-        std::env::set_var("ICU_CLIENT_SECRET", "test-icu-client-secret");
+    ONCE.call_once(|| {
+        tb_provider::init(tb_provider::ProviderConfig {
+            strava_client_id: "test-client-id".to_string(),
+            strava_client_secret: "test-client-secret".to_string(),
+            strava_redirect_url: "http://localhost:8000/strava/token".to_string(),
+            icu_client_id: "test-icu-client-id".to_string(),
+            icu_client_secret: "test-icu-client-secret".to_string(),
+            icu_redirect_url: "http://localhost:8000/icu/token".to_string(),
+            icu_webhook_secret: String::new(),
+        });
+        crate::oauth_common::init_csrf_key(&None);
     });
 }
 
@@ -72,7 +78,7 @@ fn test_app(
     api: Arc<dyn ServiceApi>,
     provider: Arc<dyn tb_exec::providerservice::ProviderService>,
 ) -> Router {
-    set_oauth_env_once();
+    init_test_config_once();
     let session_layer = SessionManagerLayer::new(store);
     routes(AppState::new(api, provider), None).layer(session_layer)
 }

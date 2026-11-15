@@ -32,7 +32,7 @@ use log::{debug, trace};
 use oauth2::AccessToken;
 use serde::de::DeserializeOwned;
 
-use super::client::{HTTP_CLIENT, STRAVACLIENT};
+use super::client::{HTTP_CLIENT, strava_client};
 use super::{StravaDataStore, StravaId, get_token};
 use crate::facade::{Error, TbResult, UserId};
 use crate::{StatusDecision, classify_status};
@@ -111,7 +111,7 @@ pub(crate) async fn deauthorize(user_id: UserId, store: &mut impl StravaDataStor
         return Ok(());
     }
 
-    STRAVACLIENT
+    strava_client()
         .revoke_token(access.clone().into())
         .context("revoke token config error")?
         .add_extra_param("access_token", access.secret()) // Strava does not follow the standard.

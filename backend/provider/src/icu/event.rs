@@ -93,10 +93,9 @@ struct IcuWebhookActivity {
 /// to (spec #764).
 const ACTIVITY_ANALYZED: &str = "ACTIVITY_ANALYZED";
 
-/// The shared webhook secret (the app's intervals.icu webhook secret, the
-/// `ICU_WEBHOOK_SECRET` env var).
+/// The shared webhook secret (from the provider config).
 fn webhook_secret() -> String {
-    std::env::var("ICU_WEBHOOK_SECRET").unwrap_or_default()
+    crate::config::get().icu_webhook_secret.clone()
 }
 
 /// A constant-time byte equality (the webhook secret check, spec #764): avoids

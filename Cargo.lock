@@ -3044,6 +3044,7 @@ dependencies = [
  "anyhow",
  "dotenvy",
  "mimalloc",
+ "sqlx",
  "tb_axum",
  "tb_exec",
  "tb_provider",

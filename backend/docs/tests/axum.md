@@ -29,7 +29,7 @@ All in `lib_tests.rs` (the `#[cfg(test)]` module declared in `lib.rs`).
 - **`user_cookie(store)` / `admin_cookie(store)`** — create a session via `RequestSession::new_dummy(is_admin)`, return the `id` cookie header.
 - **`RequestSession::new_dummy(is_admin)`** — `#[cfg(test)]` constructor in `session.rs` (fields are private; always construct sessions this way in tests).
 - **`CANNED_STRAVA` / `canned_strava(uri, json)`** — test-only hook in the production Strava module: maps a Strava URI to a canned JSON response, and the Strava `request_json` answers with the canned JSON instead of hitting the Strava API. The seam suite's onboarding path (the gear import's `/athlete` + `/gear/{id}` fetches) runs against these canned responses offline.
-- Tests force the `CLIENT_ID` / `CLIENT_SECRET` env vars via a `Once` (edition 2024: `std::env::set_var` is `unsafe`), overriding any values from the environment so the redirect-URL assertions are deterministic; `CSRF_SECRET` is left unset (the `CSRF_KEY` falls back to a per-process random key, which is fine for token roundtrips).
+- **`init_test_config_once()`** — `Once`-guarded test-process init: `tb_provider::init(ProviderConfig { … })` with fixed test credentials (so the redirect-URL assertions are deterministic, with no env vars to override) and `crate::oauth_common::init_csrf_key(&None)` (no secret, so the `CSRF_KEY` is a per-process random key, which is fine for token roundtrips).
 
 ## Gotchas
 

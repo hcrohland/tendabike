@@ -523,13 +523,10 @@ async fn main() -> anyhow::Result<()> {
         .await
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 
-    let pool = DbPool::new(&url)
-        .await
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let pg_pool = sqlx::PgPool::connect(&url).await?;
+    let pool = DbPool::new(pg_pool).await?;
 
-    let snap = build_workshop_snapshot(&pool)
-        .await
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let snap = build_workshop_snapshot(&pool).await?;
 
     println!(
         "Parts: {}, attachments: {}, usages: {}, activities: {}",

@@ -7,21 +7,33 @@
 use axum::response::Redirect;
 use log::{debug, warn};
 use oauth2::CsrfToken;
-use std::sync::LazyLock;
+use std::sync::OnceLock;
 use tb_domain::{Error, TbResult};
 use tb_provider::Provider;
 use tower_sessions::Session;
 
 use crate::{RequestSession, appstate::AppState, error::AppError};
 
-static CSRF_KEY: LazyLock<Vec<u8>> = LazyLock::new(|| {
-    if let Ok(secret) = std::env::var("CSRF_SECRET") {
-        hex::decode(secret).expect("CSRF_SECRET must be valid hex")
-    } else {
-        warn!("generating random CSRF secret. This does not work for distributed systems");
-        (0..16).map(|_| rand::random::<u8>()).collect()
-    }
-});
+static CSRF_KEY: OnceLock<Vec<u8>> = OnceLock::new();
+
+/// Initialize the CSRF key from the config's `csrf_secret`.
+/// `None` generates a random key and logs a warning (preserving dev behavior).
+pub(crate) fn init_csrf_key(secret: &Option<String>) {
+    let key = match secret {
+        Some(hex_secret) => hex::decode(hex_secret).expect("CSRF_SECRET must be valid hex"),
+        None => {
+            warn!("generating random CSRF secret. This does not work for distributed systems");
+            (0..16).map(|_| rand::random::<u8>()).collect()
+        }
+    };
+    CSRF_KEY.set(key).expect("CSRF_KEY already initialized");
+}
+
+fn csrf_key() -> &'static [u8] {
+    CSRF_KEY
+        .get()
+        .expect("CSRF_KEY not initialized — call init_csrf_key first")
+}
 
 fn hmac_signature(key: &[u8], msg: &str) -> String {
     use base64::prelude::*;
@@ -43,7 +55,7 @@ pub fn gentoken(path: String) -> CsrfToken {
     let random: Vec<u8> = (0..16).map(|_| rand::random()).collect();
     let random = BASE64_URL_SAFE_NO_PAD.encode(random);
     let msg = path + "+" + &random;
-    let sig = hmac_signature(&CSRF_KEY, &msg);
+    let sig = hmac_signature(csrf_key(), &msg);
 
     CsrfToken::new(msg + ":" + &sig)
 }
@@ -51,7 +63,7 @@ pub fn gentoken(path: String) -> CsrfToken {
 /// Extract and verify the return path from a CSRF state token.
 pub fn getpath(state: String) -> TbResult<String> {
     let msg = state.split(':').collect::<Vec<_>>();
-    if msg.len() != 2 || hmac_signature(&CSRF_KEY, msg[0]) != msg[1] {
+    if msg.len() != 2 || hmac_signature(csrf_key(), msg[0]) != msg[1] {
         return Err(Error::BadRequest(format!(
             "Bad signature for exchange request: {state}"
         )));
