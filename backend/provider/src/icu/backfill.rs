@@ -3,12 +3,16 @@
 //!
 //! On first connect the user's history is imported automatically. The walk
 //! reaches back [`BACKFILL_MONTHS`] months, fetching batches via
-//! `GET /athlete/{id}/activities?oldest=&limit=&fields=` and importing each
-//! activity into the domain (through [`super::activity::import_activity`]).
+//! `GET /athlete/{id}/activities?newest=&limit=&fields=` and importing each
+//! activity into the domain (through [`super::activity::import_activity_data`]).
 //!
-//! The walk is **resumable**: the cursor is the newest queued
-//! `icu_events.event_time`. A fresh onboarding starts at `now - 6 months`; a
-//! resume starts at the last imported activity's time.
+//! The walk proceeds **backward** from `now`: each batch fetches the newest
+//! 100 activities on or before the cursor date, and the cursor advances to
+//! the day before the oldest activity in the batch. This works with the
+//! intervals.icu API's descending-order results.
+//!
+//! The walk is **resumable**: the cursor starts at the newest queued
+//! `icu_events.event_time` (or `now` for a fresh onboarding).
 //!
 //! The walk is **rate-limit aware**: it stops when the budget is exhausted
 //! (the proactive gate) or a fetch is 429'd. The activities imported so far
@@ -59,11 +63,13 @@ struct BackfillActivity {
 /// the domain (the onboarding backfill, spec #766).
 ///
 /// `now` is the backfill's "now" (the onboarding time the cutover passes).
-/// The cursor is the newest imported `icu_events.event_time` (the resume
-/// point): a fresh onboarding starts at `now - 6 months`, a resume starts at
-/// the last imported activity's time. Each batch is fetched via
-/// `GET /athlete/{id}/activities?oldest=&limit=&fields=` and its activities
-/// are imported one at a time.
+/// The walk proceeds **backward** from `now`: each batch fetches the newest
+/// 100 activities on or before the cursor date via
+/// `GET /athlete/{id}/activities?newest=&limit=&fields=`, and the cursor
+/// advances to the day before the oldest activity in the batch. The walk
+/// stops when a batch returns fewer than 100 activities (end of history),
+/// when the cursor reaches [`BACKFILL_MONTHS`] months ago, or when the
+/// rate-limit budget is exhausted.
 ///
 /// Rate-limit aware: the walk stops when the budget is exhausted (a 429, or
 /// the proactive gate) — the activities imported so far commit, and a later
@@ -76,15 +82,15 @@ pub(crate) async fn backfill<D: crate::EntityFacade<S>, S: IcuDataStore>(
 ) -> TbResult<()> {
     let icu_id = super::event::get_icu_id(user_id, store).await?;
     let oldest_desired = now - BACKFILL_MONTHS * MONTH;
-    // The resume cursor: the newest imported event's time, or the oldest
-    // desired date for a fresh onboarding.
+    // The starting cursor: the newest known event time (a resume point), or
+    // `now` for a fresh onboarding.
     let start = store
         .icu_events_get_latest_time(&icu_id)
         .await?
-        .unwrap_or(oldest_desired);
+        .unwrap_or(now);
 
-    let mut oldest = start;
-    while oldest < now {
+    let mut newest = start;
+    while newest > oldest_desired {
         // Proactive rate-limit gate: budget exhausted → stop.
         if super::ratelimit::limited_until().is_some() {
             break;
@@ -92,8 +98,8 @@ pub(crate) async fn backfill<D: crate::EntityFacade<S>, S: IcuDataStore>(
         let activities: Vec<BackfillActivity> = match request_json(
             user_id,
             &format!(
-                "/athlete/{icu_id}/activities?oldest={}&limit={LIMIT}&fields={FIELDS}",
-                date_str(oldest)
+                "/athlete/{icu_id}/activities?newest={}&limit={LIMIT}&fields={FIELDS}",
+                date_str(newest)
             ),
             store,
         )
@@ -114,12 +120,13 @@ pub(crate) async fn backfill<D: crate::EntityFacade<S>, S: IcuDataStore>(
             break;
         }
         log::debug!(
-            "icu backfill: from {} → {} activities",
-            date_str(oldest),
+            "icu backfill: to {} → {} activities",
+            date_str(newest),
             activities.len()
         );
-        let mut last_time = oldest;
         let count = activities.len();
+        // The API returns in descending order: the last element is the oldest.
+        let oldest_in_batch = activities.last().unwrap().start_date;
         for a in activities {
             // Import the activity directly (no queue, no second fetch).
             let icu_act = super::activity::IcuActivity {
@@ -136,13 +143,13 @@ pub(crate) async fn backfill<D: crate::EntityFacade<S>, S: IcuDataStore>(
                 icu_joules: a.icu_joules,
             };
             let _summary = import_activity_data(icu_act, user_id, facade, store).await?;
-            last_time = a.start_date.unix_timestamp().max(last_time);
         }
-        // Advance the cursor past the last imported activity.
+        // Advance the cursor to the day before the oldest activity in this
+        // batch (the date-only API precision means we step by whole days).
         if count < LIMIT as usize {
             break; // End of history.
         }
-        oldest = last_time + 1;
+        newest = (oldest_in_batch - time::Duration::days(1)).unix_timestamp();
     }
     Ok(())
 }
