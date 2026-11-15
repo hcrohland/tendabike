@@ -30,8 +30,10 @@ use http::StatusCode;
 use log::error;
 use tokio::sync::{broadcast, watch};
 
+use std::time::Duration;
+
 use tb_domain::{Session, ShopId, Summary, UserId};
-use tb_exec::{ExecutorStatus, HEARTBEAT_INTERVAL};
+use tb_exec::ExecutorStatus;
 
 use crate::RequestSession;
 use crate::appstate::AppState;
@@ -195,12 +197,12 @@ fn heartbeat_event() -> Event {
 /// The shared SSE tail (spec #517): wrap a frame stream in an `Sse` response
 /// with the heartbeat `KeepAlive`, so `personal_endpoint` and `shop_endpoint`
 /// share the identical framing instead of each spelling it out.
-fn sse_response<S>(stream: S) -> Response
+fn sse_response<S>(stream: S, heartbeat_interval: Duration) -> Response
 where
     S: futures::Stream<Item = Result<Event, Infallible>> + Send + 'static,
 {
     Sse::new(stream)
-        .keep_alive(KeepAlive::new().interval(HEARTBEAT_INTERVAL).text("ping"))
+        .keep_alive(KeepAlive::new().interval(heartbeat_interval).text("ping"))
         .into_response()
 }
 
@@ -252,6 +254,8 @@ async fn personal_endpoint(user: RequestSession, state: AppState) -> Response {
         }
     };
 
+    let heartbeat_interval = state.heartbeat_interval;
+
     let stream = unfold(
         StreamSeed {
             app: state,
@@ -263,7 +267,7 @@ async fn personal_endpoint(user: RequestSession, state: AppState) -> Response {
         |mut seed| async move { next_event(&mut seed).await.map(|item| (item, seed)) },
     );
 
-    sse_response(stream)
+    sse_response(stream, heartbeat_interval)
 }
 
 /// The shop stream (spec #517): open the shop's standalone
@@ -276,6 +280,8 @@ async fn shop_endpoint(user_id: UserId, state: AppState, shop_id: ShopId) -> Res
         Err(err) => return AppError::from(err).into_response(),
     };
 
+    let heartbeat_interval = state.heartbeat_interval;
+
     let stream = unfold(
         ShopStreamSeed {
             app: state,
@@ -286,5 +292,5 @@ async fn shop_endpoint(user_id: UserId, state: AppState, shop_id: ShopId) -> Res
         |mut seed| async move { next_shop_event(&mut seed).await.map(|item| (item, seed)) },
     );
 
-    sse_response(stream)
+    sse_response(stream, heartbeat_interval)
 }
