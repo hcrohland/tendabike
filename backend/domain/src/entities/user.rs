@@ -94,9 +94,6 @@ pub struct User {
     pub avatar: Option<String>,
     pub is_admin: bool,
     pub onboarding_status: OnboardingStatus,
-    /// The activity provider the user connected with (spec #763): `'strava'`
-    /// or `'icu'`. Set at signup, immutable — one provider per user.
-    pub provider: String,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
@@ -254,11 +251,10 @@ impl UserId {
         firstname: &str,
         lastname: &str,
         avatar: &Option<String>,
-        provider: &str,
         store: &mut impl UserStore,
     ) -> TbResult<Self> {
         store
-            .user_create(firstname, lastname, avatar, provider)
+            .user_create(firstname, lastname, avatar)
             .await
             .map(|u| u.id)
     }
@@ -280,14 +276,6 @@ impl UserId {
         // The lightweight single-row read: one bool, no `UserState`
         // composite (this runs at every login and every session build).
         UserStore::user_get(store, *self).await.map(|u| u.is_admin)
-    }
-
-    /// The user's activity provider (`'strava'` | `'icu'`), read from the
-    /// `users.provider` column (spec #763/#764): the per-user lane's
-    /// selection key. The lightweight single-row read — one field, no
-    /// `UserState` composite (it runs on every loop probe and process).
-    pub async fn provider(&self, store: &mut impl UserStore) -> TbResult<String> {
-        UserStore::user_get(store, *self).await.map(|u| u.provider)
     }
 
     /// Sets the user's onboarding status. The single door for the status
