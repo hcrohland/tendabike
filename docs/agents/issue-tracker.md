@@ -35,6 +35,8 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 **Check gotcha:** `gh pr checks --watch` exits as soon as the checks that are *registered* pass — before the main CI jobs start, only CodeQL is listed, so it can report green early. Use it to block, then confirm a run exists for the head SHA before acting on the result: `gh run list --branch <head-branch> --limit 1`. Applies both when waiting between commits and before merging.
 
+**Failure logs:** Get the run ID first (`gh run list --branch <b> --limit 1 --json databaseId --jq '.[0].databaseId'`), then `gh run view <id> --log-failed`. Don't chain the ID extraction into the view command.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
