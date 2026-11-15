@@ -796,6 +796,16 @@ async fn onboarding_sync_write_queues_the_sync_event() {
         ApiWrite::UserOnboardingSync { time: 100 },
     );
     tx.send(request).expect("the channel is open");
+    // A read enqueued behind the write: the loop's biased select takes the
+    // API branch (this read) before the queue probe, so the probe — which
+    // would process the just-queued sync (the empty canned page deletes the
+    // row) — runs only after the read. That holds the queue row in place for
+    // the committed-row check below: the loop runs in a spawned task, so
+    // without the barrier the check races the probe and the row can be gone
+    // before it reads (CI scheduling lets the loop win that race).
+    let (read_request, read_reply) =
+        Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
+    tx.send(read_request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(loop_ctx(seam.pool.clone(), frames, events, rx));
 
@@ -816,13 +826,23 @@ async fn onboarding_sync_write_queues_the_sync_event() {
 
     // The Strava-side event is in the queue: the write's one loop-owned
     // transaction did the domain half and the `insert_sync` (spec #558
-    // §5.1) — the queue row is committed with the domain half.
+    // §5.1) — the queue row is committed with the domain half. The read
+    // barrier above holds it in place (the probe that would process and
+    // delete it runs only after the read).
     let (_user, strava) = test_identity();
     let n = queue_sync_count(&seam.pool, strava, 100).await;
     assert_eq!(n, 1, "the write's transaction must queue the sync event");
 
-    // The loop's next cycle probes the queue and finds the sync: the canned
-    // activity page is empty, so the import is a no-op and the loop reaps.
+    // The read barrier resolves (the loop has processed it), so the loop's
+    // next cycle probes the queue and finds the sync: the canned activity
+    // page is empty, so the import is a no-op and the loop reaps.
+    let read_outcome = tokio::time::timeout(TEST_TIMEOUT, read_reply)
+        .await
+        .expect("the read's reply must resolve in time")
+        .expect("the loop must resolve the read's oneshot, not drop it")
+        .expect("the read must succeed");
+    drop(read_outcome);
+
     let outcome = tokio::time::timeout(TEST_TIMEOUT, &mut loop_task)
         .await
         .expect("the loop must settle in time")
