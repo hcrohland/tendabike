@@ -14,14 +14,14 @@ use std::sync::{Arc, Mutex, Once};
 
 use crate::Provider;
 use crate::facade::{Error, TbResult, UserId, mock_session_admin};
-use crate::icu::test_support::MockIcuDataStore;
+use crate::icu::test_support::{MockIcuDataStore, begin_test, queue};
 use crate::icu::{IcuDataStore, IcuEvent, IcuId, IcuUser};
 use crate::strava::event::Event;
 use crate::strava::test_support::MockStravaDataStore;
 use crate::strava::{StravaDataStore, StravaId, StravaUser};
 use crate::test_support::MockEntityFacade;
 
-use super::{accept_event, deauthorize, delete_user, login};
+use super::{accept_event, deauthorize, delete_user, login, sync_users};
 
 // ─── The composite store double ─────────────────────────────────────────────
 //
@@ -548,4 +548,242 @@ async fn provider_of_not_found_when_no_row_exists() -> TbResult<()> {
         .expect_err("no row in either table is a NotFound");
     assert!(matches!(err, Error::NotFound(_)));
     Ok(())
+}
+
+// ─── sync_users: the provider-agnostic all-users sync ───────────────────────
+//
+// The admin `trigger_processing` op: queue a sync for every non-disabled user
+// on their own provider's lane — a Strava user gets a Strava `Sync` event, an
+// icu user is queued via the icu onboarding path.
+
+/// The icu lane: an enabled icu user is queued via the onboarding path.
+#[tokio::test]
+async fn sync_users_queues_icu_users() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let facade = MockEntityFacade::new();
+    // The icu HTTP seam in test mode: the onboarding's gear + backfill fetch
+    // canned empty responses (no gear, no activities → the onboard is a
+    // no-op past the queue).
+    begin_test();
+    queue("/athlete/a1/gear", "[]");
+    queue(
+        "/athlete/a1/activities?oldest=2004-02-27&limit=100&fields=id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules",
+        "[]",
+    );
+    // No Strava row for this user → the `provider_of` lookup resolves icu.
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(|_| Err(Error::NotFound("no strava user".into())));
+    // The provider lookup, the lane read, and the onboard's `get_icu_id` all
+    // resolve the icu user.
+    let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    let icu_read = icu.clone();
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .returning(move |_| Ok(icu_read.clone()));
+    // The backfill's resume cursor: no imported events yet.
+    store
+        .icu
+        .expect_icu_events_get_latest_time()
+        .returning(|_id| Ok(None));
+
+    let mut session = mock_session_admin(UserId::from(1));
+    let queued = sync_users(
+        &mut session,
+        Some(UserId::from(9)),
+        1_700_000_000,
+        false,
+        &facade,
+        &mut store,
+    )
+    .await?;
+
+    assert_eq!(
+        queued,
+        vec![UserId::from(9)],
+        "the icu user is queued on their own lane"
+    );
+    Ok(())
+}
+
+/// The Strava lane (existing behavior, preserved): an enabled Strava user gets
+/// a `Sync` event queued.
+#[tokio::test]
+async fn sync_users_queues_strava_users() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let facade = MockEntityFacade::new();
+    // The all-users Strava read; no icu users.
+    store.strava.expect_stravauser_get_all().returning(|| {
+        Ok(vec![crate::strava::test_support::strava_user(
+            UserId::from(7),
+            42,
+            true,
+        )])
+    });
+    store
+        .icu
+        .expect_icuser_get_all()
+        .returning(|| Ok(Vec::new()));
+    // The `insert_sync`'s `get_strava_id` read + the queue insert.
+    let strava = crate::strava::test_support::strava_user(UserId::from(7), 42, true);
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(move |_| Ok(strava.clone()));
+    let created = Arc::new(Mutex::new(Vec::new()));
+    let created_rec = created.clone();
+    store
+        .strava
+        .expect_strava_event_create()
+        .returning(move |e| {
+            created_rec.lock().unwrap().push(e.clone());
+            Ok(())
+        });
+
+    let mut session = mock_session_admin(UserId::from(1));
+    let queued = sync_users(
+        &mut session,
+        None,
+        1_700_000_000,
+        false,
+        &facade,
+        &mut store,
+    )
+    .await?;
+
+    assert_eq!(queued, vec![UserId::from(7)], "the Strava user is queued");
+    let events = created.lock().unwrap().clone();
+    assert_eq!(events.len(), 1, "one Sync event is queued");
+    assert_eq!(events[0].owner_id, StravaId::from(42));
+    Ok(())
+}
+
+/// Disabled users (both providers) are skipped (with a log warning) — no sync
+/// is queued for them.
+#[tokio::test]
+async fn sync_users_skips_disabled() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let facade = MockEntityFacade::new();
+    // A disabled Strava user and a disabled icu user.
+    store.strava.expect_stravauser_get_all().returning(|| {
+        Ok(vec![crate::strava::test_support::strava_user(
+            UserId::from(7),
+            42,
+            false,
+        )])
+    });
+    store.icu.expect_icuser_get_all().returning(|| {
+        Ok(vec![crate::icu::test_support::icu_user(
+            UserId::from(9),
+            "a1",
+            false,
+        )])
+    });
+
+    let mut session = mock_session_admin(UserId::from(1));
+    let queued = sync_users(
+        &mut session,
+        None,
+        1_700_000_000,
+        false,
+        &facade,
+        &mut store,
+    )
+    .await?;
+
+    assert!(queued.is_empty(), "disabled users are skipped");
+    Ok(())
+}
+
+/// A single-user trigger for a Strava user queues a `Sync` event for that
+/// user (on their own lane).
+#[tokio::test]
+async fn sync_users_single_strava() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let facade = MockEntityFacade::new();
+    // The provider lookup, the lane read, and the `insert_sync`'s read all
+    // resolve the Strava user.
+    let strava = crate::strava::test_support::strava_user(UserId::from(7), 42, true);
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(move |_| Ok(strava.clone()));
+    let created = Arc::new(Mutex::new(Vec::new()));
+    let created_rec = created.clone();
+    store
+        .strava
+        .expect_strava_event_create()
+        .returning(move |e| {
+            created_rec.lock().unwrap().push(e.clone());
+            Ok(())
+        });
+
+    let mut session = mock_session_admin(UserId::from(1));
+    let queued = sync_users(
+        &mut session,
+        Some(UserId::from(7)),
+        1_700_000_000,
+        false,
+        &facade,
+        &mut store,
+    )
+    .await?;
+
+    assert_eq!(
+        queued,
+        vec![UserId::from(7)],
+        "the single Strava user is queued"
+    );
+    assert_eq!(created.lock().unwrap().len(), 1);
+    Ok(())
+}
+
+/// A single-user trigger for a user with no row in either provider table is a
+/// `NotFound` (the `provider_of` lookup).
+#[tokio::test]
+async fn sync_users_unknown_user() {
+    let mut store = DispatchStore::default();
+    let facade = MockEntityFacade::new();
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(|_| Err(Error::NotFound("no strava user".into())));
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .returning(|_| Err(Error::NotFound("no icu user".into())));
+
+    let mut session = mock_session_admin(UserId::from(1));
+    let res = sync_users(
+        &mut session,
+        Some(UserId::from(99)),
+        1_700_000_000,
+        false,
+        &facade,
+        &mut store,
+    )
+    .await;
+    assert!(matches!(res, Err(Error::NotFound(_))));
+}
+
+/// The trigger is admin-only: a non-admin session is `Forbidden` before any
+/// store work.
+#[tokio::test]
+async fn sync_users_forbidden_for_non_admin() {
+    let mut store = DispatchStore::default();
+    let facade = MockEntityFacade::new();
+    let mut session = crate::facade::mock_session(UserId::from(1));
+
+    let res = sync_users(
+        &mut session,
+        None,
+        1_700_000_000,
+        false,
+        &facade,
+        &mut store,
+    )
+    .await;
+    assert!(matches!(res, Err(Error::Forbidden(_))));
 }
