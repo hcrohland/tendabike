@@ -65,7 +65,6 @@ mockall::mock! {
             firstname: &str,
             lastname: &str,
             avatar: &Option<String>,
-            provider: &str,
         ) -> TbResult<User>;
         async fn user_update(
             &mut self,

@@ -22,11 +22,12 @@
 //! executor loop runs in production — the seam's single impl.
 //!
 //! The loop is generic over a single [`ProviderLane`] type, but a user has
-//! exactly one provider (the `users.provider` column, immutable). This lane
-//! selects between the two providers per call from the user's `provider`
-//! column (a typed switch on [`Provider`]), and calls the driver functions
-//! directly — so the loop's control flow (the biased select, the backoff, the
-//! idle policy, the frame push) is unchanged and provider-agnostic.
+//! exactly one provider (immutable). This lane selects between the two
+//! providers per call from the user's provider (a typed switch on
+//! [`Provider`], derived from the provider-internal user data), and calls the
+//! driver functions directly — so the loop's control flow (the biased select,
+//! the backoff, the idle policy, the frame push) is unchanged and
+//! provider-agnostic.
 //!
 //! The unified event type ([`LaneEvent`]) is the loop's `P::Event`: an enum
 //! over the two providers' event rows, so the loop's `Select`, the
@@ -103,11 +104,11 @@ where
     }
 
     /// Probe the user's provider event queue (one transaction's
-    /// housekeeping): read the user's `provider` column (through the facade),
-    /// then read that provider's queue. The returned event is wrapped in
-    /// [`LaneEvent`].
+    /// housekeeping): derive the user's provider from the provider-internal
+    /// user data, then read that provider's queue. The returned event is
+    /// wrapped in [`LaneEvent`].
     async fn probe(&self, user_id: UserId, store: &mut S) -> Probe<LaneEvent> {
-        let provider = match crate::provider_of(store, user_id, &self.facade).await {
+        let provider = match crate::provider_of(store, user_id).await {
             Ok(provider) => provider,
             Err(_) => return Probe::Error,
         };
@@ -131,11 +132,11 @@ where
         }
     }
 
-    /// Process the user's next queued event (the work transaction): read the
-    /// user's `provider` column (through the facade), then handle the event
-    /// with that provider's driver.
+    /// Process the user's next queued event (the work transaction): derive the
+    /// user's provider from the provider-internal user data, then handle the
+    /// event with that provider's driver.
     async fn process(&self, user_id: UserId, store: &mut S) -> Option<Summary> {
-        let provider = match crate::provider_of(store, user_id, &self.facade).await {
+        let provider = match crate::provider_of(store, user_id).await {
             Ok(provider) => provider,
             Err(_) => return None,
         };
@@ -161,7 +162,7 @@ where
     /// Import the user's gear from their provider (the hydration write's
     /// provider side): the user's provider's driver.
     async fn update_gear(&self, user_id: UserId, store: &mut S) -> TbResult<Vec<PartId>> {
-        let provider = crate::provider_of(store, user_id, &self.facade).await?;
+        let provider = crate::provider_of(store, user_id).await?;
         match provider {
             Provider::Icu => crate::icu::gear::update_gear(user_id, &self.facade, store).await,
             Provider::Strava => {

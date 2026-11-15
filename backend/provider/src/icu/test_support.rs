@@ -25,7 +25,7 @@ pub fn icu_user(tbid: UserId, icuathlete: &str, enabled: bool) -> IcuUser {
     }
 }
 
-/// A canned [`User`] with the given id (the icu provider, per spec #763).
+/// A canned [`User`] with the given id.
 pub fn user(id: UserId) -> User {
     User {
         id,
@@ -34,7 +34,6 @@ pub fn user(id: UserId) -> User {
         avatar: None,
         is_admin: false,
         onboarding_status: OnboardingStatus::Completed,
-        provider: "icu".to_string(),
     }
 }
 

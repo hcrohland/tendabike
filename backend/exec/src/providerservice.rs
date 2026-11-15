@@ -24,11 +24,12 @@
 //! the transaction, hands the connection to the provider layer's dispatch
 //! free function (the single `match provider`), and commits.
 //!
-//! Eight in-transaction ops. The user-keyed ops (`sync`, `deauthorize`,
-//! `delete_user`) dispatch on the user's real provider, read in-transaction
-//! (the provider layer's dispatch reads the `users.provider` column) — not on
-//! the route, so a per-provider route acting on a user of the other provider
-//! follows the stated identity rule. The route-keyed ops (`login`,
+//! The in-transaction ops. The user-keyed ops (`sync`, `deauthorize`,
+//! `delete_user`) dispatch on the user's real provider, derived in-transaction
+//! from the provider-internal user data (the provider layer's `provider_of`
+//! lookup — the domain stores no provider) — not on the route, so a
+//! per-provider route acting on a user of the other provider follows the
+//! stated identity rule. The route-keyed ops (`login`,
 //! `accept_event`) take the typed [`Provider`] as a parameter (the route
 //! knows it from the URL) plus opaque string input (the authorization code
 //! and scope, the raw webhook body) — no driver wire type crosses the seam.
@@ -45,12 +46,12 @@
 use tb_domain::{ActivityId, PartId, Session, TbResult, UserId};
 use tb_provider::Provider;
 
-/// The provider-agnostic provider service (ADR-0014): the eight direct ops a
+/// The provider-agnostic provider service (ADR-0014): the direct ops a
 /// presentation layer drives the provider through. The user-keyed ops
 /// (`sync`, `deauthorize`, `delete_user`) dispatch on the user's real
-/// provider, read in-transaction; the route-keyed ops (`login`,
-/// `accept_event`) and the redirect-URL ops are keyed by the typed
-/// [`Provider`] enum. The [`Registry`] implements it as a thin forward (each
+/// provider, derived in-transaction from the provider-internal user data; the
+/// route-keyed ops (`login`, `accept_event`) and the redirect-URL ops are
+/// keyed by the typed [`Provider`] enum. The [`Registry`] implements it as a thin forward (each
 /// op opens the transaction, calls the provider layer's dispatch free
 /// function, and commits — no provider dispatch in this crate).
 ///
@@ -123,4 +124,11 @@ pub trait ProviderService: Send + Sync {
     /// no user context to gate on). The icu arm builds the public athlete
     /// profile page.
     async fn user_url(&self, provider: Provider, id: UserId) -> TbResult<String>;
+
+    /// The user's provider identity (ADR-0014): one transaction — the
+    /// provider layer's `provider_of` lookup, derived from the
+    /// provider-internal user data (the domain stores no provider). The web
+    /// layer's `GET /user` response calls it to populate the client's
+    /// `user.provider` field.
+    async fn user_provider(&self, id: UserId) -> TbResult<Provider>;
 }

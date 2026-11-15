@@ -265,6 +265,7 @@ async fn database_is_reachable() {
 #[ignore]
 async fn api_write_end_to_end() {
     let seam = ready().await;
+    seed_strava_user(&seam.pool, false).await;
     let (tx, rx) = request_channel();
     let (frames, frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
@@ -326,6 +327,7 @@ async fn api_write_end_to_end() {
 #[ignore]
 async fn idle_loop_reclaims() {
     let seam = ready().await;
+    seed_strava_user(&seam.pool, false).await;
     let (_tx, rx) = request_channel();
     let (frames, _frame_rx) = broadcast::channel(8);
     let (events, _events_rx) = broadcast::channel(8);
@@ -358,6 +360,7 @@ async fn idle_loop_reclaims() {
 #[ignore]
 async fn read_as_message_round_trip() {
     let seam = ready().await;
+    seed_strava_user(&seam.pool, false).await;
     let (tx, rx) = request_channel();
     let (frames, mut frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
@@ -408,6 +411,7 @@ async fn read_as_message_round_trip() {
 #[ignore]
 async fn shop_context_read_is_scoped_to_the_request_session() {
     let seam = ready().await;
+    seed_strava_user(&seam.pool, false).await;
     let shop = ShopId::from(1);
     // Seed a shop owned by the fixture user and register one of the fixture's
     // parts in it (the prepopulated fixture has no shops).
@@ -492,6 +496,7 @@ async fn shop_context_read_is_scoped_to_the_request_session() {
 #[ignore]
 async fn personal_read_returns_personal_data() {
     let seam = ready().await;
+    seed_strava_user(&seam.pool, false).await;
     // Seed a shop owned by the fixture user and register one of the fixture's
     // parts in it (the prepopulated fixture has no shops).
     {
@@ -553,6 +558,7 @@ async fn personal_read_returns_personal_data() {
 #[ignore]
 async fn read_sees_every_earlier_write() {
     let seam = ready().await;
+    seed_strava_user(&seam.pool, false).await;
     let (tx, rx) = request_channel();
     let (frames, frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
@@ -623,6 +629,7 @@ async fn read_sees_every_earlier_write() {
 #[ignore]
 async fn gear_hydration_frame_and_fifo_read() {
     let seam = ready().await;
+    seed_strava_user(&seam.pool, false).await;
     // The offline seam: the hydration's canned Strava JSON (one `b-seam` bike
     // the fixture does not know) in the process-wide `CANNED_STRAVA` global —
     // the loop runs in a spawned task, so the thread-local map is the wrong
@@ -693,6 +700,7 @@ async fn gear_hydration_frame_and_fifo_read() {
 #[ignore]
 async fn failed_write_rolls_back_and_reclaims() {
     let seam = ready().await;
+    seed_strava_user(&seam.pool, false).await;
     let fixture_parts: usize = serde_json::from_str::<tb_sqlx::StoreSnapshot>(SNAPSHOT_JSON)
         .expect("SNAPSHOT_JSON must be valid JSON")
         .parts
@@ -756,6 +764,7 @@ async fn failed_write_rolls_back_and_reclaims() {
 #[ignore]
 async fn onboarding_sync_write_queues_the_sync_event() {
     let seam = ready().await;
+    seed_strava_user(&seam.pool, false).await;
     let (tx, rx) = request_channel();
     let (frames, _frame_rx) = broadcast::channel(8);
     let (events, _events_rx) = broadcast::channel(8);
