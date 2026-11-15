@@ -193,9 +193,9 @@ where
 
 /// The provider-agnostic `trigger_processing` dispatch (spec #855): queue a
 /// sync for every non-disabled user on their own provider's lane — a Strava
-/// user gets a Strava `Sync` event (the existing `insert_sync`), an icu user
-/// is queued via the icu onboarding path (the same [`sync_user`] arm the
-/// per-user `sync` direct op uses). `user_id` narrows the trigger to one
+/// user gets a Strava `Sync` event via `insert_sync`, an icu user is queued
+/// via the icu onboarding path (the same [`sync_user`] arm the per-user `sync`
+/// direct op uses). `user_id` narrows the trigger to one
 /// user, regardless of provider (a user with no row in either table is a
 /// `NotFound`). Returns the tbids of the users a sync was queued for — the
 /// caller's per-user wake list.

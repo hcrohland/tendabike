@@ -554,12 +554,9 @@ async fn provider_of_not_found_when_no_row_exists() -> TbResult<()> {
 //
 // The admin `trigger_processing` op: queue a sync for every non-disabled user
 // on their own provider's lane — a Strava user gets a Strava `Sync` event, an
-// icu user is queued via the icu onboarding path. The icu arm is the behavior
-// that was missing (the Strava-only `sync_users` silently skipped icu users).
+// icu user is queued via the icu onboarding path.
 
-/// The icu lane: an enabled icu user is queued via the onboarding path — the
-/// behavior that was missing (ICU users were never queued by the Strava-only
-/// `sync_users`).
+/// The icu lane: an enabled icu user is queued via the onboarding path.
 #[tokio::test]
 async fn sync_users_queues_icu_users() -> TbResult<()> {
     let mut store = DispatchStore::default();
