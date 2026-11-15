@@ -157,4 +157,30 @@ describe("Activities page (#893: icu activities with a bike → effect_update_de
     );
     expect(text).toContain("Ride A");
   });
+
+  it("moving the date slider filters the list through the one-way on:change wiring", async () => {
+    await seedWorld();
+    const { container } = render(Activities, { params: { part: 0 } });
+    for (let i = 0; i < 5; i++) await tick();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    // All four rides start within the initial range, so all are listed.
+    expect(container.textContent).toContain("Ride A");
+    expect(container.textContent).toContain("Ride B");
+
+    // Nudge the start handle one day forward: the earliest ride (A) falls
+    // out of the date range. This locks in that the slider still drives the
+    // date filter after replacing the two-way `bind:values` with the one-way
+    // `values` + `on:change` wiring — the interaction must keep working.
+    const handle = container.querySelector(".rangeHandle") as HTMLElement;
+    handle.focus();
+    handle.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+    );
+    for (let i = 0; i < 5; i++) await tick();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    expect(container.textContent).not.toContain("Ride A");
+    expect(container.textContent).toContain("Ride B");
+  });
 });

@@ -41,7 +41,10 @@
   let sortBy = $state("start");
   let sortDir = $state(-1);
 
-  // Calculate min/max days from all activities
+  // Calculate min/max days from all activities. Reads only `acts`; computes
+  // the range into locals before writing so the effect has no self-dependency
+  // on the `min`/`max` state it writes (a read-then-write of the same state is
+  // what lets an effect reschedule itself).
   $effect(() => {
     if (acts.length === 0) {
       min = 0;
@@ -49,14 +52,14 @@
       dateValues = [0, 1];
       return;
     }
-    let set = acts.map((a) => Math.floor(a.start.getTime() / DAY));
-    max = Math.max(...set);
-    min = Math.min(...set);
+    let days = acts.map((a) => Math.floor(a.start.getTime() / DAY));
+    let lo = Math.min(...days);
+    let hi = Math.max(...days);
     // Ensure min < max for RangeSlider
-    if (min === max) {
-      max += 1;
-    }
-    dateValues = [min, max];
+    if (lo === hi) hi += 1;
+    min = lo;
+    max = hi;
+    dateValues = [lo, hi];
   });
 
   // Date filter: filter activities by date range

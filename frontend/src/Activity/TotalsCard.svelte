@@ -207,7 +207,16 @@
     </div>
   </div>
 
-  <!-- Date Range Slider -->
+  <!-- Date Range Slider.
+
+       One-way `values` + `on:change`, not a two-way `bind:values`: the slider
+       normalizes its input (re-aligning to min/max/step) and reassigns the
+       array, and it also mutates it in place. A two-way binding lets those
+       writes flow back into ActList's `dateValues` $state as fresh array
+       references, which re-triggers the slider's deep-reading normalizer —
+       the reference ping-pong behind #893's effect_update_depth_exceeded.
+       Making the prop one-way means ActList is the sole writer of
+       dateValues; the slider reports user edits via `change` instead. -->
   <div class="mx-8 mt-6">
     <RangeSlider
       style="font-size: 0.75rem"
@@ -220,7 +229,8 @@
       last="label"
       float
       {formatter}
-      bind:values={dateValues}
+      values={dateValues}
+      on:change={(e) => (dateValues = e.detail.values)}
     />
   </div>
 </div>
