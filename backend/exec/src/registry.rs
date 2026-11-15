@@ -49,7 +49,8 @@ use tokio::sync::{broadcast, oneshot, watch};
 
 use tb_provider::Provider;
 use tb_provider::ProviderLane;
-use tb_provider::strava::{StravaDataStore, event::sync_users};
+use tb_provider::icu::IcuDataStore;
+use tb_provider::strava::StravaDataStore;
 
 use crate::api::ServiceApi;
 use crate::facade::{
@@ -292,10 +293,10 @@ where
     // (`rescan`, `subscribe_shop`, `trigger_processing`, ADR-0014) own their
     // own transactions — the rescan's `rescan_all` and the shop-ownership
     // check ride the domain facade (no store bound), and the `sync_users`
-    // queue op rides the Strava data store — so this impl carries the
-    // `StravaDataStore + Txn` bound.
+    // queue op rides the two providers' local data stores — so this impl
+    // carries the `StravaDataStore + IcuDataStore + Txn` bound.
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaDataStore + Txn,
+    S::Conn: StravaDataStore + IcuDataStore + Txn,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
@@ -383,10 +384,11 @@ where
 
     /// Trigger processing for all (or one) users (spec #558 §5.2): admin-only
     /// (the acting `session` must be an admin — `Forbidden` otherwise). One
-    /// transaction (`sync_users`) queuing a `Sync` event per (non-disabled)
-    /// user, then — per queued user — spawn the executor (a no-op if it is
+    /// transaction (`sync_users`) queuing a sync per (non-disabled) user on
+    /// their own provider's lane (a Strava `Sync` event, the icu onboarding
+    /// path), then — per queued user — spawn the executor (a no-op if it is
     /// already running) and wake it. `user_id` narrows the trigger to one
-    /// user (the route's `?user_id=` query).
+    /// user, regardless of provider (the route's `?user_id=` query).
     async fn trigger_processing(
         &self,
         mut session: Box<dyn Session>,
@@ -395,7 +397,15 @@ where
         migrate: bool,
     ) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        let queued = sync_users(&mut *session, user_id, event_time, migrate, &mut store).await?;
+        let queued = tb_provider::dispatch::sync_users(
+            &mut *session,
+            user_id,
+            event_time,
+            migrate,
+            self.lane.facade(),
+            &mut store,
+        )
+        .await?;
         store.commit().await?;
         // Per queued user: spawn the executor (a no-op if it is already
         // running) so it drains the queued Sync even when the user is
