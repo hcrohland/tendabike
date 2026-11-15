@@ -41,10 +41,8 @@
   let sortBy = $state("start");
   let sortDir = $state(-1);
 
-  // Calculate min/max days from all activities. Reads only `acts`; computes
-  // the range into locals before writing so the effect has no self-dependency
-  // on the `min`/`max` state it writes (a read-then-write of the same state is
-  // what lets an effect reschedule itself).
+  // Compute the day range into locals before writing `min`/`max`/`dateValues`,
+  // so the effect reads only `acts`.
   $effect(() => {
     if (acts.length === 0) {
       min = 0;

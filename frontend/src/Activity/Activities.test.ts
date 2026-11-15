@@ -100,7 +100,6 @@ async function seedWorld() {
 /// both so the assertion is robust to which path Svelte takes.
 async function mountAndCollectErrors(params: {
   part: number;
-  start?: number;
 }): Promise<{ text: string; errors: string[] }> {
   const errors: string[] = [];
   const onWindowError = (e: ErrorEvent) => errors.push(String(e?.message ?? e));
@@ -125,7 +124,7 @@ function depthErrors(errors: string[]) {
   return errors.filter((e) => e.includes("effect_update_depth_exceeded"));
 }
 
-describe("Activities page (#893: icu activities with a bike → effect_update_depth_exceeded)", () => {
+describe("Activities page reactivity (effect_update_depth_exceeded)", () => {
   beforeEach(() => {
     // jsdom has no ResizeObserver; the RangeSlider installs one in onMount.
     // A no-op stub is enough — the reactivity under test is pure.
@@ -169,9 +168,8 @@ describe("Activities page (#893: icu activities with a bike → effect_update_de
     expect(container.textContent).toContain("Ride B");
 
     // Nudge the start handle one day forward: the earliest ride (A) falls
-    // out of the date range. This locks in that the slider still drives the
-    // date filter after replacing the two-way `bind:values` with the one-way
-    // `values` + `on:change` wiring — the interaction must keep working.
+    // out of the date range. This locks in that the slider drives the date
+    // filter through the one-way `values` + `on:change` wiring.
     const handle = container.querySelector(".rangeHandle") as HTMLElement;
     handle.focus();
     handle.dispatchEvent(
