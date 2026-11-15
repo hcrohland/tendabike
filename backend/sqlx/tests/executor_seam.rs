@@ -1266,9 +1266,10 @@ async fn delete_user_removes_the_rows() {
     drop(conn);
 }
 
-/// The user delete direct op when the target has notifications: the
-/// `notifications.recipient` FK must not block the delete — the user's
-/// notifications go with the user.
+/// The user delete direct op when the target has notifications and owns a
+/// garage: the `notifications.recipient` FK must not block the delete —
+/// the user's notifications go with the user, and the user's garage goes
+/// with them (its `shops.owner` FK cascades).
 #[tokio::test]
 #[ignore]
 async fn delete_user_with_notifications() {
@@ -1281,8 +1282,9 @@ async fn delete_user_with_notifications() {
     }
     let (user, _strava) = test_identity();
     seed_strava_user(&seam.pool, false).await;
-    // Seed a notification addressed to the fixture user: its
-    // `recipient` FK is what blocks the user delete.
+    // Seed a notification addressed to the fixture user (its `recipient`
+    // FK is what blocks the user delete) and a garage they own (its
+    // `shops.owner` FK cascades, so the garage must go with the user).
     let mut conn = seam.pool.begin().await.expect("a transaction");
     sqlx::query(
         "INSERT INTO notifications \
@@ -1293,6 +1295,11 @@ async fn delete_user_with_notifications() {
     .execute(&mut **conn)
     .await
     .expect("seeding the notification");
+    sqlx::query("INSERT INTO shops (owner, name) VALUES ($1, 'Seam Garage')")
+        .bind(i32::from(user))
+        .execute(&mut **conn)
+        .await
+        .expect("seeding the garage");
     conn.commit().await.expect("committing the seed");
     let reg = registry(&seam.pool);
 
@@ -1304,7 +1311,7 @@ async fn delete_user_with_notifications() {
     .expect("the delete must finish in time");
     outcome.expect("the delete must succeed");
 
-    // The user row is gone and their notifications with it.
+    // The user row is gone, and their notifications and garage with it.
     let mut conn = seam.pool.begin().await.expect("a fresh connection");
     let n: i64 = sqlx::query_scalar("SELECT count(*) FROM users WHERE id = $1")
         .bind(i32::from(user))
@@ -1318,6 +1325,12 @@ async fn delete_user_with_notifications() {
         .await
         .expect("reading the notifications");
     assert_eq!(n, 0, "the user's notifications must be gone");
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM shops WHERE owner = $1")
+        .bind(i32::from(user))
+        .fetch_one(&mut **conn)
+        .await
+        .expect("reading the shops");
+    assert_eq!(n, 0, "the user's garage must be gone");
     drop(conn);
 }
 
