@@ -80,6 +80,13 @@ pub(crate) async fn backfill<D: crate::EntityFacade<S>, S: IcuDataStore>(
     facade: &D,
     store: &mut S,
 ) -> TbResult<()> {
+    // The `time` query param defaults to 0 when absent; fall back to the
+    // system clock so the cursor is a valid recent date.
+    let now = if now > 0 {
+        now
+    } else {
+        time::OffsetDateTime::now_utc().unix_timestamp()
+    };
     let icu_id = super::event::get_icu_id(user_id, store).await?;
     let oldest_desired = now - BACKFILL_MONTHS * MONTH;
     // The starting cursor: the newest known event time (a resume point), or
