@@ -29,9 +29,14 @@
 //!
 //! [`MockDomainFacade`]: crate::MockDomainFacade
 
-use tb_domain::{
-    Activity, ApiRead, ApiWrite, Part, PartId, ReadOutcome, Session, Shop, ShopId, Store, TbResult,
-    UserId, WriteOutcome,
+/// The domain types the crate's other modules need, re-exported so that
+/// `exec::facade` is the sole importer of `tb_domain` (ADR-0015): every other
+/// `tb_exec` module imports these from `crate::facade`, never from `tb_domain`
+/// directly. The trait, its impl, and the mock below keep their own
+/// `tb_domain` imports — this module is the edge's single door.
+pub use tb_domain::{
+    Activity, ActivityId, ApiRead, ApiWrite, Error, GearItem, Part, PartId, ReadOutcome, Session,
+    Shop, ShopId, Store, Summary, TbResult, UserId, UserStat, WriteOutcome,
 };
 
 /// The executor's door into the domain (spec #795): the six dispatch-level

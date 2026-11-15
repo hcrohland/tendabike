@@ -51,9 +51,9 @@ use std::time::Duration;
 use log::debug;
 use tokio::sync::{Mutex, Notify, broadcast, watch};
 
-use tb_domain::{ShopId, Summary, TbResult, UserId};
 use tb_provider::ProviderLane;
 
+use crate::facade::{ShopId, Summary, TbResult, UserId};
 use crate::message::RequestSender;
 use crate::registry::FramePusher;
 use crate::{DomainFacade, LoopContext, TxnSource, request_channel};
