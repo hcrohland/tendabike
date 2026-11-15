@@ -16,7 +16,7 @@ use time::OffsetDateTime;
 /// other `tb_provider` module imports these from `crate::facade`, never from
 /// `tb_domain` directly. The trait, its impl, and the mock below keep their
 /// own `tb_domain` imports — this module is the edge's single door.
-pub use tb_domain::{
+pub(crate) use tb_domain::{
     ActTypeId, Activity, ActivityId, Error, Notification, NotificationKind, NotificationLifecycle,
     NotificationSubject, Part, PartId, PartTypeId, Session, ShopId, Stat, Store, Summary, TbResult,
     UserId, UserStat,

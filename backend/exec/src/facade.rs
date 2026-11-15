@@ -34,7 +34,7 @@
 /// `tb_exec` module imports these from `crate::facade`, never from `tb_domain`
 /// directly. The trait, its impl, and the mock below keep their own
 /// `tb_domain` imports — this module is the edge's single door.
-pub use tb_domain::{
+pub(crate) use tb_domain::{
     Activity, ActivityId, ApiRead, ApiWrite, Error, GearItem, Part, PartId, ReadOutcome, Session,
     Shop, ShopId, Store, Summary, TbResult, UserId, UserStat, WriteOutcome,
 };
