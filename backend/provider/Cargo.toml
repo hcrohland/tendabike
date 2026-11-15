@@ -44,7 +44,7 @@ icu = [
     "dep:derive_more",
     "dep:async-recursion",
 ]
-test-support = ["dep:mockall"]
+test-support = ["dep:mockall", "tb_domain/test-support"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }
