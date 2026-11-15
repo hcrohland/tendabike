@@ -17,7 +17,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
   ],
   "parts": [
     {
-      "id": 300,
+      "id": 1,
       "owner": 1,
       "what": 1,
       "name": "Main Bike",
@@ -26,12 +26,12 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2022-11-14T22:00:00Z",
       "last_used": "2023-05-19T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a1dc99-1536-7340-a73f-42cb55102a01",
+      "usage": "01a0bb12-3570-7d83-b2b2-9308156a4379",
       "source": null,
       "shop": null
     },
     {
-      "id": 301,
+      "id": 2,
       "owner": 1,
       "what": 2,
       "name": "Front Wheel A",
@@ -40,12 +40,12 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a1dc99-1537-77d5-9e93-d6a0e8b8d0fb",
+      "usage": "01a0bb12-3570-7d83-b2b2-931309886fa1",
       "source": null,
       "shop": null
     },
     {
-      "id": 302,
+      "id": 3,
       "owner": 1,
       "what": 5,
       "name": "Rear Wheel A",
@@ -54,12 +54,12 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a1dc99-1537-77d5-9e93-d6a1b8d5bc36",
+      "usage": "01a0bb12-3570-7d83-b2b2-932b2c49c00a",
       "source": null,
       "shop": null
     },
     {
-      "id": 303,
+      "id": 4,
       "owner": 1,
       "what": 4,
       "name": "Chain A",
@@ -68,12 +68,12 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a1dc99-1537-77d5-9e93-d6a2abc85dbd",
+      "usage": "01a0bb12-3570-7d83-b2b2-93361f58866d",
       "source": null,
       "shop": null
     },
     {
-      "id": 304,
+      "id": 5,
       "owner": 1,
       "what": 3,
       "name": "Tire Front A",
@@ -82,12 +82,12 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a1dc99-1537-77d5-9e93-d6a3bb8b10b4",
+      "usage": "01a0bb12-3570-7d83-b2b2-934ae2196cca",
       "source": null,
       "shop": null
     },
     {
-      "id": 305,
+      "id": 6,
       "owner": 1,
       "what": 3,
       "name": "Tire Rear A",
@@ -96,12 +96,12 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a1dc99-1537-77d5-9e93-d6a43f26b37a",
+      "usage": "01a0bb12-3570-7d83-b2b2-935365a98c46",
       "source": null,
       "shop": null
     },
     {
-      "id": 306,
+      "id": 7,
       "owner": 1,
       "what": 1,
       "name": "Road Bike",
@@ -110,12 +110,12 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2022-11-14T22:00:00Z",
       "last_used": "2022-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a1dc99-1544-7237-b0de-6b0897a07785",
+      "usage": "01a0bb12-3571-7d42-8499-fee0fa984276",
       "source": null,
       "shop": null
     },
     {
-      "id": 307,
+      "id": 8,
       "owner": 1,
       "what": 2,
       "name": "Front Wheel B",
@@ -124,12 +124,12 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a1dc99-1544-7237-b0de-6b0937a83437",
+      "usage": "01a0bb12-3571-7d42-8499-fef7a8a35436",
       "source": null,
       "shop": null
     },
     {
-      "id": 308,
+      "id": 9,
       "owner": 1,
       "what": 5,
       "name": "Rear Wheel B",
@@ -138,12 +138,12 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a1dc99-1544-7237-b0de-6b0a44c19ec0",
+      "usage": "01a0bb12-3571-7d42-8499-ff0550db33b7",
       "source": null,
       "shop": null
     },
     {
-      "id": 309,
+      "id": 10,
       "owner": 1,
       "what": 4,
       "name": "Chain B",
@@ -152,12 +152,12 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a1dc99-1544-7237-b0de-6b0b4cca1822",
+      "usage": "01a0bb12-3571-7d42-8499-ff1eb617d2d1",
       "source": null,
       "shop": null
     },
     {
-      "id": 310,
+      "id": 11,
       "owner": 1,
       "what": 3,
       "name": "Tire Front B",
@@ -166,12 +166,12 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a1dc99-1545-73fb-b9ed-959c42cc22b3",
+      "usage": "01a0bb12-3571-7d42-8499-ff2d8828accf",
       "source": null,
       "shop": null
     },
     {
-      "id": 311,
+      "id": 12,
       "owner": 1,
       "what": 3,
       "name": "Tire Rear B",
@@ -180,12 +180,12 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a1dc99-1545-73fb-b9ed-959d05e80617",
+      "usage": "01a0bb12-3571-7d42-8499-ff39cf4923c8",
       "source": null,
       "shop": null
     },
     {
-      "id": 312,
+      "id": 13,
       "owner": 1,
       "what": 4,
       "name": "Spare Chain 1",
@@ -194,12 +194,12 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a1dc99-154f-7470-880d-d7d636c28ca8",
+      "usage": "01a0bb12-3571-7d42-8499-ffe8ff782328",
       "source": null,
       "shop": null
     },
     {
-      "id": 313,
+      "id": 14,
       "owner": 1,
       "what": 4,
       "name": "Spare Chain 2",
@@ -208,12 +208,12 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a1dc99-154f-7470-880d-d7d7ef6c6dae",
+      "usage": "01a0bb12-3571-7d42-8499-fff6116d6ab3",
       "source": null,
       "shop": null
     },
     {
-      "id": 314,
+      "id": 15,
       "owner": 1,
       "what": 3,
       "name": "Spare Tire",
@@ -222,12 +222,12 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a1dc99-154f-7470-880d-d7d8406d59c1",
+      "usage": "01a0bb12-3571-7d42-849a-000b1c5f6a63",
       "source": null,
       "shop": null
     },
     {
-      "id": 315,
+      "id": 16,
       "owner": 1,
       "what": 2,
       "name": "Spare Wheel",
@@ -236,12 +236,12 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a1dc99-154f-7470-880d-d7d9610a6fde",
+      "usage": "01a0bb12-3571-7d42-849a-001513a91707",
       "source": null,
       "shop": null
     },
     {
-      "id": 316,
+      "id": 17,
       "owner": 1,
       "what": 3,
       "name": "Spare Wheel Tire",
@@ -250,104 +250,104 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a1dc99-154f-7470-880d-d7dae6c79443",
+      "usage": "01a0bb12-3571-7d42-849a-002c7fe2ef8e",
       "source": null,
       "shop": null
     }
   ],
   "attachments": [
     {
-      "part_id": 301,
+      "part_id": 2,
       "attached": "2023-01-01T00:00:00Z",
-      "gear": 300,
+      "gear": 1,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a1dc99-153a-7126-a474-e79f7dfc2cc9"
+      "usage": "01a0bb12-3570-7d83-b2b2-9372c8c30395"
     },
     {
-      "part_id": 302,
+      "part_id": 3,
       "attached": "2023-01-01T00:00:00Z",
-      "gear": 300,
+      "gear": 1,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a1dc99-153e-7233-9395-44b921e282d4"
+      "usage": "01a0bb12-3570-7d83-b2b2-939fd1656828"
     },
     {
-      "part_id": 303,
+      "part_id": 4,
       "attached": "2023-01-01T00:00:00Z",
-      "gear": 300,
+      "gear": 1,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a1dc99-1540-745b-ad68-4c3187fa90f9"
+      "usage": "01a0bb12-3570-7d83-b2b2-93b48e8c159d"
     },
     {
-      "part_id": 304,
+      "part_id": 5,
       "attached": "2023-01-01T00:00:00Z",
-      "gear": 300,
+      "gear": 1,
       "hook": 2,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a1dc99-1541-715f-a44b-50d1eb454b4d"
+      "usage": "01a0bb12-3571-7d42-8499-feb96957a6ea"
     },
     {
-      "part_id": 305,
+      "part_id": 6,
       "attached": "2023-01-01T00:00:00Z",
-      "gear": 300,
+      "gear": 1,
       "hook": 5,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a1dc99-1543-77d6-bd1e-d081b8a41a9f"
+      "usage": "01a0bb12-3571-7d42-8499-fed693a2d32e"
     },
     {
-      "part_id": 307,
+      "part_id": 8,
       "attached": "2023-01-01T00:00:00Z",
-      "gear": 306,
+      "gear": 7,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a1dc99-1546-714d-aa46-4b1de4b8f7f5"
+      "usage": "01a0bb12-3571-7d42-8499-ff50396f698b"
     },
     {
-      "part_id": 308,
+      "part_id": 9,
       "attached": "2023-01-01T00:00:00Z",
-      "gear": 306,
+      "gear": 7,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a1dc99-1548-70e6-b2f0-94e1a17ba368"
+      "usage": "01a0bb12-3571-7d42-8499-ff7173f39984"
     },
     {
-      "part_id": 309,
+      "part_id": 10,
       "attached": "2023-01-01T00:00:00Z",
-      "gear": 306,
+      "gear": 7,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a1dc99-154a-731b-8690-7d3d7ad05902"
+      "usage": "01a0bb12-3571-7d42-8499-ff9dadf1f7db"
     },
     {
-      "part_id": 310,
+      "part_id": 11,
       "attached": "2023-01-01T00:00:00Z",
-      "gear": 306,
+      "gear": 7,
       "hook": 2,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a1dc99-154c-7118-a477-94af8f126153"
+      "usage": "01a0bb12-3571-7d42-8499-ffb0567d38c6"
     },
     {
-      "part_id": 311,
+      "part_id": 12,
       "attached": "2023-01-01T00:00:00Z",
-      "gear": 306,
+      "gear": 7,
       "hook": 5,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a1dc99-154e-70a7-875f-cb0ae8044442"
+      "usage": "01a0bb12-3571-7d42-8499-ffdc9695830e"
     },
     {
-      "part_id": 316,
+      "part_id": 17,
       "attached": "2023-01-01T00:00:00Z",
-      "gear": 315,
+      "gear": 16,
       "hook": 2,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a1dc99-1551-774f-9cf3-e583e002f08e"
+      "usage": "01a0bb12-3571-7d42-849a-004ab16c5751"
     }
   ],
   "usages": [
     {
-      "id": "01a1dc99-1536-7340-a73f-42cb55102a01",
+      "id": "01a0bb12-3570-7d83-b2b2-9308156a4379",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -356,7 +356,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a1dc99-1537-77d5-9e93-d6a0e8b8d0fb",
+      "id": "01a0bb12-3570-7d83-b2b2-931309886fa1",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -365,7 +365,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a1dc99-1537-77d5-9e93-d6a1b8d5bc36",
+      "id": "01a0bb12-3570-7d83-b2b2-932b2c49c00a",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -374,7 +374,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a1dc99-1537-77d5-9e93-d6a2abc85dbd",
+      "id": "01a0bb12-3570-7d83-b2b2-93361f58866d",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -383,7 +383,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a1dc99-1537-77d5-9e93-d6a3bb8b10b4",
+      "id": "01a0bb12-3570-7d83-b2b2-934ae2196cca",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -392,7 +392,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a1dc99-1537-77d5-9e93-d6a43f26b37a",
+      "id": "01a0bb12-3570-7d83-b2b2-935365a98c46",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -401,7 +401,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a1dc99-153a-7126-a474-e79f7dfc2cc9",
+      "id": "01a0bb12-3570-7d83-b2b2-9372c8c30395",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -410,7 +410,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a1dc99-153e-7233-9395-44b921e282d4",
+      "id": "01a0bb12-3570-7d83-b2b2-939fd1656828",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -419,7 +419,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a1dc99-1540-745b-ad68-4c3187fa90f9",
+      "id": "01a0bb12-3570-7d83-b2b2-93b48e8c159d",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -428,7 +428,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a1dc99-1541-715f-a44b-50d1eb454b4d",
+      "id": "01a0bb12-3571-7d42-8499-feb96957a6ea",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -437,7 +437,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a1dc99-1543-77d6-bd1e-d081b8a41a9f",
+      "id": "01a0bb12-3571-7d42-8499-fed693a2d32e",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -459,7 +459,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "climb": 400,
       "descend": null,
       "energy": 500,
-      "gear": 300,
+      "gear": 1,
       "device_name": null,
       "external_id": null
     },
@@ -475,7 +475,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "climb": 600,
       "descend": null,
       "energy": 500,
-      "gear": 300,
+      "gear": 1,
       "device_name": null,
       "external_id": null
     },
@@ -491,7 +491,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "climb": 100,
       "descend": null,
       "energy": 500,
-      "gear": 300,
+      "gear": 1,
       "device_name": null,
       "external_id": null
     }
