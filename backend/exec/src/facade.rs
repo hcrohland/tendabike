@@ -39,6 +39,24 @@ pub(crate) use tb_domain::{
     Shop, ShopId, Store, Summary, TbResult, UserId, UserStat, WriteOutcome,
 };
 
+/// The domain types the crate's test modules need, re-exported under
+/// `cfg(test)` — the gate of the in-crate `*_tests` modules — so that test
+/// code funnels through the facade too (ADR-0015): the sole-importer rule
+/// holds with no test exemption. No `test-support` consumer names these
+/// (the feature's consumers are the `api.rs` / `providerservice.rs`
+/// automocks, which use only the re-exports above). The names already
+/// re-exported above reach the tests through this same door.
+#[cfg(test)]
+pub(crate) use tb_domain::{
+    Notification, NotificationId, NotificationKind, NotificationLifecycle, NotificationState,
+    NotificationSubject, OnboardingStatus, PartTypeId, Service, ServiceId, SubscriptionId, Usage,
+    UsageId, User, UserState,
+    test_support::{
+        fixtures::sample_purchase_date, mock_session, mock_session_with_shop, part_type_ids::CHAIN,
+        sole_live,
+    },
+};
+
 /// The executor's door into the domain (spec #795): the six dispatch-level
 /// operations the executor needs, each a one-line forward to the corresponding
 /// `tb_domain` function, generic over the store.

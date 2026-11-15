@@ -36,12 +36,12 @@ The facade module for an edge exports: the trait; the real calling struct and th
 - `ServiceApi`, `ProviderService` (+ `Registry`) — in `tb_exec` (callee for `tb_axum`).
 - `ProviderLane` (+ the unified lane) — in `tb_provider` (callee for `tb_exec`).
 
-**The sole-importer invariant and its check.** A new script, [`.githooks/check-facade-access.py`](../../.githooks/check-facade-access.py), wired into `pre-commit`, enforces the **derived sole-importer rule**: for each (caller crate `A`, callee crate `B`) pair, at most one non-test, non-exempt module in `A` may import from `B`. The facade module is simply whichever module imports from `B`; the rule needs no (A, B, module) list. Test modules are exempt. The check covers **service-facade edges + plain type imports**; the store-impl edges — `tb_sqlx` *implementing* the `Store` / `StravaDataStore` / `IcuDataStore` traits — run the other direction and stay under [`.githooks/check-store-access.py`](../../.githooks/check-store-access.py) (ADR-0012).
+**The sole-importer invariant and its check.** A new script, [`.githooks/check-facade-access.py`](../../.githooks/check-facade-access.py), wired into `pre-commit`, enforces the **derived sole-importer rule**: for each (caller crate `A`, callee crate `B`) pair, at most one non-exempt module in `A` may import from `B`. The facade module is simply whichever module imports from `B`; the rule needs no (A, B, module) list. The rule is universal — test modules included: the facade re-exports the test-only domain types under the same cfg gate as the test code that names them (the `test_support` modules' `cfg(any(test, feature = "test-support"))` gate, the in-crate `*_tests` modules' `cfg(test)` gate), so test code funnels through the facade too and no test exemption is needed. The check covers **service-facade edges + plain type imports**; the store-impl edges — `tb_sqlx` *implementing* the `Store` / `StravaDataStore` / `IcuDataStore` traits — run the other direction and stay under [`.githooks/check-store-access.py`](../../.githooks/check-store-access.py) (ADR-0012).
 
 **Migration policy: reference + grandfather.** This effort conforms **both** caller-side edges as the reference implementation — their facade modules become the sole importers of `tb_domain` in their crates:
 
-- `exec→domain`: the 8 non-test `tb_exec` modules funnel through `exec::facade` (this ADR's reference).
-- `provider→domain`: the 20 non-test `tb_provider` modules funnel through `provider::facade`.
+- `exec→domain`: the other `tb_exec` modules funnel through `exec::facade` (this ADR's reference) — test modules included.
+- `provider→domain`: the other `tb_provider` modules funnel through `provider::facade` — test modules included.
 
 The remaining existing crossings (the callee-side edges and the plain type imports in the other crates) are **grandfathered** via the exemption list and migrate incrementally. New crossings must conform.
 
@@ -54,7 +54,7 @@ The remaining existing crossings (the callee-side edges and the plain type impor
 
 ## Consequences
 
-- `tb_exec` reaches `tb_domain` only through `exec::facade`, which re-exports the domain types the crate needs; the 8 non-test modules (`api`, `executor`, `message`, `providerservice`, `registry`, `registry/core`, `txn`, and `facade` itself) import those types from `crate::facade`, never from `tb_domain`. `DomainFacade` / `DomainFacadeImpl` / `MockDomainFacade` stay in `exec::facade` (caller-side; unchanged in shape).
-- The sole-importer invariant is machine-checked by `.githooks/check-facade-access.py` (the check script lands with the `provider→domain` reference, after both reference edges are conformed), so a second non-test `tb_exec` module that names `tb_domain` directly fails the pre-commit hook.
+- `tb_exec` reaches `tb_domain` only through `exec::facade`, which re-exports the domain types the crate needs (the test-only types under the test code's own cfg gate); the other modules (`api`, `executor`, `message`, `providerservice`, `registry`, `registry/core`, `txn`, and the test modules) import those types from `crate::facade`, never from `tb_domain`. `DomainFacade` / `DomainFacadeImpl` / `MockDomainFacade` stay in `exec::facade` (caller-side; unchanged in shape).
+- The sole-importer invariant is machine-checked by `.githooks/check-facade-access.py` (the check script lands with the `provider→domain` reference, after both reference edges are conformed), so a second `tb_exec` module that names `tb_domain` directly fails the pre-commit hook — a test module as much as a production one.
 - The caller-side facades stay caller-side; the domain stays the edgeless leaf (ADR-0013). The callee-side facades (`ServiceApi`, `ProviderService`, `ProviderLane`) stay in the callee; the caller's facade module re-exports the trait + the mock + the domain types.
 - The grandfathered crossings (the callee-side edges, the `tb_axum`→`tb_exec` plain imports, the `tb_sqlx`→`tb_provider` type imports) are covered by the exemption list and migrate incrementally; new crossings must conform.

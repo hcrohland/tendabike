@@ -76,7 +76,7 @@ impl From<ProviderActivityId> for ActivityId {
 
 #[cfg(test)]
 mod tests {
-    use tb_domain::{ActivityId, Error};
+    use crate::facade::{ActivityId, Error};
 
     use super::{IcuActivityId, ProviderActivityId, StravaActivityId};
 

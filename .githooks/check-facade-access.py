@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """Enforce ADR-0015: the facade module is the sole importer of the callee.
 
-For each (caller crate A, callee crate B) pair, at most one non-test module
-in A may import from B — a `use tb_B::` statement, or a `tb_B::` path named
-anywhere in the module (code or doc comment). The facade module is simply
-whichever module imports from B; the rule needs no (A, B, module) list.
+For each (caller crate A, callee crate B) pair, at most one module in A may
+import from B — a `use tb_B::` statement, or a `tb_B::` path named anywhere
+in the module (code or doc comment). The facade module is simply whichever
+module imports from B; the rule needs no (A, B, module) list.
 
-Test modules are exempt (`*_tests.rs`, `tests/`, `test_support/`), as are
-test-gated bits of otherwise non-test files (`#[cfg(test)]` imports and
-`#[cfg(test)] mod` blocks). A grandfathered exemption list covers the
-crossings not yet conformed to the facade-module pattern — every edge except
-the two conformed caller-side edges (`tb_exec`/`tb_provider` -> `tb_domain`);
-new crossings must conform.
+The rule is universal — test modules included: the facade re-exports the
+test-only domain types under the same cfg gate as the test code that names
+them, so test code funnels through the facade too (no test exemption). A
+grandfathered exemption list covers the crossings not yet conformed to the
+facade-module pattern — every edge except the two conformed caller-side
+edges (`tb_exec`/`tb_provider` -> `tb_domain`); new crossings must conform.
 
 Store-impl edges (`tb_sqlx` implementing the `Store`/`StravaDataStore`/
 `IcuDataStore` traits) run the other direction and stay under
@@ -45,29 +45,6 @@ EXEMPT_EDGES = {
     ("tb_sqlx", "tb_provider"),
 }
 
-# A bare `#[cfg(test)]` attribute line: the next line is test-gated.
-CFG_TEST_RE = re.compile(r"^\s*#\[\s*cfg\(\s*test\s*\)\s*\]\s*$")
-# A `mod` declaration (the test-gated module case).
-MOD_RE = re.compile(r"^\s*mod\s+\w+")
-
-
-def is_exempt(relpath: str) -> bool:
-    """Test locations a module may import from any callee.
-
-    `*_tests.rs` files, the `tests/` suites, and the `test_support`
-    doubles (a `test_support/` directory or the flat `test_support.rs`
-    module) are test code — they import directly on purpose.
-    """
-    parts = relpath.split(os.sep)
-    if relpath.endswith("_tests.rs"):
-        return True
-    if "tests" in parts:
-        return True
-    if "test_support" in parts or relpath.endswith("test_support.rs"):
-        return True
-    return False
-
-
 def crate_names():
     """The workspace's crate names, keyed by their backend/ directory."""
     crates = {}
@@ -82,37 +59,15 @@ def crate_names():
 
 
 def scan_file(path, rel, caller, crates, crossings):
-    """Record every (caller -> callee) import in a non-exempt file.
+    """Record every (caller -> callee) import in a file.
 
-    Test-gated code is skipped: a `#[cfg(test)]` attribute on the line
-    before a `use`, and the body of a `#[cfg(test)] mod` block (tracked by
-    brace depth).
+    Every line is scanned — test modules included (the rule is universal;
+    test code funnels through the facade, ADR-0015).
     """
     with open(path) as f:
         lines = f.readlines()
 
-    in_test_mod = 0  # brace depth inside a #[cfg(test)] mod block (0 = out)
-    pending_cfg_test = False
     for lineno, line in enumerate(lines, 1):
-        if in_test_mod:
-            in_test_mod += line.count("{") - line.count("}")
-            if in_test_mod <= 0:
-                in_test_mod = 0
-            continue
-        if CFG_TEST_RE.match(line):
-            pending_cfg_test = True
-            continue
-        if pending_cfg_test:
-            pending_cfg_test = False
-            if MOD_RE.match(line):
-                in_test_mod = 1 + line.count("{") - line.count("}")
-                if in_test_mod <= 0:
-                    in_test_mod = 0
-                continue
-            if line.strip().startswith("use "):
-                continue  # a test-gated import: not a crossing
-            # otherwise the attribute gated something else on this line:
-            # fall through and scan it
         for callee in crates.values():
             if callee == caller:
                 continue
@@ -131,8 +86,6 @@ def main():
                     continue
                 path = os.path.join(root, fn)
                 rel = os.path.relpath(path, ROOT)
-                if is_exempt(rel):
-                    continue
                 scan_file(path, rel, caller, crates, crossings)
 
     violations = []

@@ -17,11 +17,11 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use oauth2::RefreshToken;
-use tb_domain::{
-    MockSession, OnboardingStatus, UsageId, User,
-    test_support::{mock_session, mock_session_admin},
-};
 use time::OffsetDateTime;
+
+use crate::facade::{
+    MockSession, OnboardingStatus, UsageId, User, mock_session, mock_session_admin,
+};
 
 use super::super::*;
 use crate::test_support::{self as kit, CannedState};

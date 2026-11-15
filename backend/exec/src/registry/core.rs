@@ -585,7 +585,6 @@ mod tests {
 
     use std::time::Duration;
 
-    use tb_domain::{NotificationId, ShopId, Summary, TbResult, UserId};
     use uuid::Uuid;
 
     use super::{Core, DeliveryContext, ExecutorStatus};
@@ -595,6 +594,7 @@ mod tests {
         notification_part_registered, part_owned_by, shop_owned_by, summary_owned_by,
         summary_with_notification, summary_with_service,
     };
+    use crate::facade::{NotificationId, ShopId, Summary, TbResult, UserId};
     use crate::registry::FramePusher;
 
     /// The core's test lane: the `mock!` lane over the unit-test store double

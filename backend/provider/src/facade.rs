@@ -22,6 +22,22 @@ pub(crate) use tb_domain::{
     UserId, UserStat,
 };
 
+/// The domain types the crate's `test_support` modules need, re-exported
+/// under the same gate as those modules so that test code funnels through
+/// the facade too (ADR-0015): the sole-importer rule holds with no test
+/// exemption. The names already re-exported above reach the tests through
+/// this same door.
+#[cfg(any(test, feature = "test-support"))]
+pub(crate) use tb_domain::{
+    MockSession, OnboardingStatus, UsageId, User,
+    test_support::{mock_session, mock_session_admin},
+};
+
+/// The domain type the crate's in-crate `*_tests` modules need (the
+/// `cfg(test)`-only gate: no `test-support` consumer names it).
+#[cfg(test)]
+pub(crate) use tb_domain::NotificationState;
+
 /// The provider's door into the domain (spec #781): the operations a provider
 /// drives, each a one-line forward to the concrete domain op, generic over the
 /// store.

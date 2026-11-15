@@ -37,7 +37,7 @@
 //! non-fatal, the client's reconnect + full refresh covers it).
 
 #[cfg(test)]
-use tb_domain::Summary;
+use crate::facade::Summary;
 #[cfg(test)]
 use tb_provider::strava::event::Event;
 #[cfg(test)]
