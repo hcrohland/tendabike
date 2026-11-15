@@ -80,15 +80,13 @@ pub trait EntityFacade<C: Send + Sync>: Send + Sync {
     async fn part(&self, id: PartId, user: Box<dyn Session>, store: &mut C) -> TbResult<Part>;
 
     // ── User ─────────────────────────────────────────────────────────────
-    /// Create a user (the domain's `UserId::create`). `provider` is the
-    /// activity provider the user connected with (`'strava'` | `'icu'`), set
-    /// at signup and immutable (spec #763).
+    /// Create a user (the domain's `UserId::create`). The provider is implicit
+    /// in which driver's login ran — the domain stores no provider (ADR-0014).
     async fn create_user(
         &self,
         firstname: &str,
         lastname: &str,
         avatar: &Option<String>,
-        provider: &str,
         store: &mut C,
     ) -> TbResult<UserId>;
 
@@ -107,9 +105,6 @@ pub trait EntityFacade<C: Send + Sync>: Send + Sync {
 
     /// Read the user's admin flag (the domain's `UserId::is_admin`).
     async fn user_admin(&self, id: &UserId, store: &mut C) -> TbResult<bool>;
-
-    /// Read the user's provider identity (the domain's `UserId::provider`).
-    async fn user_provider(&self, id: &UserId, store: &mut C) -> TbResult<String>;
 
     /// Delete the user plus everything they own (the domain's
     /// `UserId::delete`).
@@ -191,10 +186,9 @@ impl<C: Store + Sync + 'static> EntityFacade<C> for EntityFacadeImpl {
         firstname: &str,
         lastname: &str,
         avatar: &Option<String>,
-        provider: &str,
         store: &mut C,
     ) -> TbResult<UserId> {
-        UserId::create(firstname, lastname, avatar, provider, store).await
+        UserId::create(firstname, lastname, avatar, store).await
     }
 
     async fn update_user(
@@ -214,10 +208,6 @@ impl<C: Store + Sync + 'static> EntityFacade<C> for EntityFacadeImpl {
 
     async fn user_admin(&self, id: &UserId, store: &mut C) -> TbResult<bool> {
         id.is_admin(store).await
-    }
-
-    async fn user_provider(&self, id: &UserId, store: &mut C) -> TbResult<String> {
-        id.provider(store).await
     }
 
     async fn delete_user(&self, id: &UserId, store: &mut C) -> TbResult<()> {

@@ -691,7 +691,6 @@ fn user_record(id: UserId) -> User {
         avatar: None,
         is_admin: false,
         onboarding_status: OnboardingStatus::Completed,
-        provider: "strava".to_string(),
     }
 }
 

@@ -7,25 +7,20 @@ use super::*;
 async fn upsert_creates_new_user() -> TbResult<()> {
     let (mut store, mut facade) = setup();
     // A new icu user: the icu read is `None`, so the domain user is created
-    // (via the facade, with `provider = 'icu'`) and the icu row is created.
+    // (via the facade) and the icu row is created. The provider is implicit
+    // in this driver's login — the domain stores no provider (ADR-0014).
     let created_user = Arc::new(Mutex::new(None));
     let created_user_rec = created_user.clone();
-    let created_provider = Arc::new(Mutex::new(None));
-    let created_provider_rec = created_provider.clone();
     let created_icu = Arc::new(Mutex::new(None));
     let created_icu_rec = created_icu.clone();
     store.expect_icuser_get_by_icuid().returning(|_id| Ok(None));
     facade
         .expect_create_user()
-        .returning(move |firstname, lastname, _avatar, provider, _store| {
+        .returning(move |firstname, lastname, _avatar, _store| {
             created_user_rec
                 .lock()
                 .unwrap()
                 .replace((firstname.to_string(), lastname.to_string()));
-            created_provider_rec
-                .lock()
-                .unwrap()
-                .replace(provider.to_string());
             Ok(UserId::from(1))
         });
     store.expect_icuser_create().returning(move |su| {
@@ -41,11 +36,6 @@ async fn upsert_creates_new_user() -> TbResult<()> {
     )
     .await?;
     assert_eq!(user.id, "ath-42".into());
-    assert_eq!(
-        created_provider.lock().unwrap().clone(),
-        Some("icu".to_string()),
-        "a new icu user is created with provider 'icu' (spec #763)"
-    );
     let (firstname, lastname) = created_user
         .lock()
         .unwrap()

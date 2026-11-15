@@ -133,7 +133,7 @@ impl StravaUser {
 
         // create new user!
         let tendabike_id = facade
-            .create_user(firstname, lastname, avatar, "strava", store)
+            .create_user(firstname, lastname, avatar, store)
             .await?;
 
         let user = StravaUser {

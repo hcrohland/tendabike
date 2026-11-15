@@ -32,11 +32,6 @@
         "ordinal": 5,
         "name": "onboarding_status",
         "type_info": "Int4"
-      },
-      {
-        "ordinal": 6,
-        "name": "provider",
-        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -51,7 +46,6 @@
       false,
       false,
       true,
-      false,
       false
     ]
   },

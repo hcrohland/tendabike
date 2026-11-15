@@ -388,10 +388,11 @@ async fn accept_event_icu_rejects_an_invalid_timestamp() -> TbResult<()> {
 #[tokio::test]
 async fn deauthorize_icu_disables_the_user() -> TbResult<()> {
     let mut store = DispatchStore::default();
-    let mut facade = MockEntityFacade::new();
-    facade
-        .expect_user_provider()
-        .returning(|_, _| Ok("icu".to_string()));
+    // The provider lookup: no Strava row, an icu row → the icu arm.
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(|_| Err(tb_domain::Error::NotFound("no strava user".into())));
     let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
     let icu_read = icu.clone();
     store
@@ -412,7 +413,7 @@ async fn deauthorize_icu_disables_the_user() -> TbResult<()> {
         });
 
     let mut session = tb_domain::test_support::mock_session_admin(UserId::from(1));
-    deauthorize(&mut session, UserId::from(9), &facade, &mut store).await?;
+    deauthorize(&mut session, UserId::from(9), &mut store).await?;
     Ok(())
 }
 
@@ -423,11 +424,13 @@ async fn deauthorize_icu_disables_the_user() -> TbResult<()> {
 async fn delete_user_icu_deletes_the_user() -> TbResult<()> {
     let mut store = DispatchStore::default();
     let mut facade = MockEntityFacade::new();
-    facade
-        .expect_user_provider()
-        .returning(|_, _| Ok("icu".to_string()));
     // The domain delete is the entity-op facade's work (ADR-0012).
     facade.expect_delete_user().returning(|_, _| Ok(()));
+    // The provider lookup: no Strava row, an icu row → the icu arm.
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(|_| Err(tb_domain::Error::NotFound("no strava user".into())));
     let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
     let icu_read = icu.clone();
     store
@@ -477,5 +480,66 @@ async fn login_icu_rejects_an_insufficient_scope() -> TbResult<()> {
         .await
         .expect_err("an insufficient scope is rejected");
     assert!(matches!(err, tb_domain::Error::BadRequest(_)));
+    Ok(())
+}
+
+// ─── provider_of: the provider-internal identity lookup ─────────────────────
+//
+// The single home for "which provider does this user have?": a row in the
+// Strava user table means Strava, a row in the icu user table means icu. The
+// Strava table is checked first (a user has exactly one provider).
+
+/// A Strava row for the user → the provider is Strava (the strava table is
+/// checked first).
+#[tokio::test]
+async fn provider_of_strava_when_a_strava_row_exists() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let strava = crate::strava::test_support::strava_user(UserId::from(7), 42, true);
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(move |_| Ok(strava.clone()));
+
+    let provider = crate::provider_of(&mut store, UserId::from(7)).await?;
+    assert_eq!(provider, Provider::Strava);
+    Ok(())
+}
+
+/// No Strava row but an icu row → the provider is icu.
+#[tokio::test]
+async fn provider_of_icu_when_only_an_icu_row_exists() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(|_| Err(tb_domain::Error::NotFound("no strava user".into())));
+    let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .returning(move |_| Ok(icu.clone()));
+
+    let provider = crate::provider_of(&mut store, UserId::from(9)).await?;
+    assert_eq!(provider, Provider::Icu);
+    Ok(())
+}
+
+/// No row in either table → a `NotFound` (the caller propagates it).
+#[tokio::test]
+async fn provider_of_not_found_when_no_row_exists() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(|_| Err(tb_domain::Error::NotFound("no strava user".into())));
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .returning(|_| Err(tb_domain::Error::NotFound("no icu user".into())));
+
+    let err = crate::provider_of(&mut store, UserId::from(7))
+        .await
+        .expect_err("no row in either table is a NotFound");
+    assert!(matches!(err, tb_domain::Error::NotFound(_)));
     Ok(())
 }
