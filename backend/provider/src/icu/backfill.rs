@@ -28,20 +28,16 @@ fn date_str(ts: i64) -> String {
     format!("{:04}-{:02}-{:02}", dt.year(), dt.month() as u8, dt.day())
 }
 
-/// How far back the onboarding backfill reaches (the "oldest desired date").
-pub(crate) const BACKFILL_MONTHS: i64 = 240;
-/// A one-month span, in seconds (the backfill's reach, not a window size).
-pub(crate) const MONTH: i64 = 30 * 24 * 3600;
 /// The batch size for each list fetch.
 const LIMIT: i32 = 100;
 /// The fields the domain Activity records (the `fields=` param).
 const FIELDS: &str = "id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules";
 
-/// Walk the user's activity history in `[oldest, newest]` and import each
+/// Walk the user's activity history from `oldest` to now and import each
 /// activity directly into the domain (spec #766).
 ///
-/// The walk proceeds **backward** from `newest` to `oldest`: each batch
-/// fetches the newest 100 activities in the window via
+/// The walk proceeds **backward** from the system's current time to `oldest`:
+/// each batch fetches the newest 100 activities in the window via
 /// `GET /athlete/{id}/activities?oldest=&newest=&limit=&fields=`, and the
 /// cursor advances to the day before the oldest activity in the batch. The
 /// walk stops when a batch returns fewer than 100 activities (end of
@@ -50,14 +46,14 @@ const FIELDS: &str = "id,type,name,start_date,distance,moving_time,elapsed_time,
 ///
 /// Rate-limit aware: the walk stops when the budget is exhausted (a 429, or
 /// the proactive gate) — the activities imported so far commit, and a later
-/// call resumes from the newest imported time.
+/// call re-walks the range (upserts are idempotent).
 pub(crate) async fn backfill<D: crate::EntityFacade<S>, S: IcuDataStore>(
     user_id: UserId,
     oldest: i64,
-    newest: i64,
     facade: &D,
     store: &mut S,
 ) -> TbResult<()> {
+    let newest = OffsetDateTime::now_utc().unix_timestamp();
     let icu_id = super::event::get_icu_id(user_id, store).await?;
 
     let mut cursor = newest;

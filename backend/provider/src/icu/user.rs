@@ -181,24 +181,12 @@ pub async fn login<D: EntityFacade<S>, S: IcuDataStore>(
 /// ids (spec #829: the onboarding response lists them).
 pub async fn onboard<D: EntityFacade<S>, S: IcuDataStore>(
     user_id: UserId,
-    time: i64,
+    _time: i64,
     facade: &D,
     store: &mut S,
 ) -> TbResult<Vec<PartId>> {
     let gear = super::gear::update_gear(user_id, facade, store).await?;
-    let now = if time > 0 {
-        time
-    } else {
-        time::OffsetDateTime::now_utc().unix_timestamp()
-    };
-    super::backfill::backfill(
-        user_id,
-        now - super::backfill::BACKFILL_MONTHS * super::backfill::MONTH,
-        now,
-        facade,
-        store,
-    )
-    .await?;
+    super::backfill::backfill(user_id, 0, facade, store).await?;
     Ok(gear)
 }
 

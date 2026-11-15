@@ -22,9 +22,12 @@ fn user_fixture(store: &mut MockIcuDataStore) {
         .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
 }
 
-// The test bounds: 240 months before `now` to `now`.
-const NOW: i64 = 1_700_000_000;
-const OLDEST: i64 = NOW - BACKFILL_MONTHS * MONTH;
+/// The backfill URI for `oldest=0` (the onboarding case), with today's date
+/// as the `newest` bound.
+fn backfill_uri() -> String {
+    let today = date_str(OffsetDateTime::now_utc().unix_timestamp());
+    format!("/athlete/a1/activities?oldest=1970-01-01&newest={today}&limit=100&fields={FIELDS}")
+}
 
 // ─── the backfill walk ──────────────────────────────────────────────────────
 
@@ -35,7 +38,7 @@ async fn backfill_imports_activities_directly() {
     user_fixture(&mut store);
     // One batch of activities (fewer than LIMIT → end of history).
     queue(
-        "/athlete/a1/activities?oldest=2004-02-27&newest=2023-11-14&limit=100&fields=id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules",
+        &backfill_uri(),
         &format!("[{}]", activity_json("10", "2023-06-01T10:00:00Z")),
     );
     let upserted: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
@@ -51,7 +54,7 @@ async fn backfill_imports_activities_directly() {
     facade
         .expect_part_by_source()
         .returning(|_source, _store| Ok(None));
-    backfill(UserId::from(1), OLDEST, NOW, &facade, &mut store)
+    backfill(UserId::from(1), 0, &facade, &mut store)
         .await
         .unwrap();
     assert_eq!(
@@ -67,12 +70,9 @@ async fn backfill_stops_when_no_more_activities() {
     super::super::ratelimit::test_set_not_limited();
     user_fixture(&mut store);
     // Empty response → end of history.
-    queue(
-        "/athlete/a1/activities?oldest=2004-02-27&newest=2023-11-14&limit=100&fields=id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules",
-        "[]",
-    );
+    queue(&backfill_uri(), "[]");
     facade.expect_upsert_activity().times(0);
-    backfill(UserId::from(1), OLDEST, NOW, &facade, &mut store)
+    backfill(UserId::from(1), 0, &facade, &mut store)
         .await
         .unwrap();
     assert!(
@@ -88,7 +88,7 @@ async fn backfill_stops_before_fetching_when_rate_limited() {
     user_fixture(&mut store);
     // The proactive gate fires before any fetch.
     facade.expect_upsert_activity().times(0);
-    backfill(UserId::from(1), OLDEST, NOW, &facade, &mut store)
+    backfill(UserId::from(1), 0, &facade, &mut store)
         .await
         .unwrap();
     assert!(
@@ -102,12 +102,9 @@ async fn backfill_stops_on_429() {
     let (mut store, mut facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     user_fixture(&mut store);
-    queue_error(
-        "/athlete/a1/activities?oldest=2004-02-27&newest=2023-11-14&limit=100&fields=id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules",
-        Error::TryAgain("rate limited"),
-    );
+    queue_error(&backfill_uri(), Error::TryAgain("rate limited"));
     facade.expect_upsert_activity().times(0);
-    backfill(UserId::from(1), OLDEST, NOW, &facade, &mut store)
+    backfill(UserId::from(1), 0, &facade, &mut store)
         .await
         .unwrap();
     assert_eq!(requests().len(), 1, "the walk stops after the 429");
