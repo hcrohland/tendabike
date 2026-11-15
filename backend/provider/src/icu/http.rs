@@ -14,8 +14,8 @@ use serde::de::DeserializeOwned;
 
 use super::client::HTTP_CLIENT;
 use super::{IcuDataStore, IcuId};
+use crate::facade::{Error, TbResult, UserId};
 use crate::{StatusDecision, classify_status};
-use tb_domain::{Error, TbResult, UserId};
 
 const API: &str = "https://intervals.icu/api/v1";
 

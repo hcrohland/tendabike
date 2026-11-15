@@ -12,8 +12,9 @@ pub use seam::*;
 pub use super::traits::MockIcuDataStore;
 
 use super::{IcuId, IcuUser};
-use tb_domain::{OnboardingStatus, Part, PartId, PartTypeId, UsageId, User, UserId};
 use time::OffsetDateTime;
+
+use crate::facade::{OnboardingStatus, Part, PartId, PartTypeId, UsageId, User, UserId};
 
 /// Builds an [`IcuUser`] for tests.
 pub fn icu_user(tbid: UserId, icuathlete: &str, enabled: bool) -> IcuUser {

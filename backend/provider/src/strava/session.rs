@@ -39,7 +39,7 @@ use oauth2::{AccessToken, RefreshToken, TokenResponse};
 
 use super::client::{HTTP_CLIENT, strava_client};
 use super::{StravaDataStore, StravaId, StravaUser};
-use tb_domain::{Error, TbResult, UserId};
+use crate::facade::{Error, TbResult, UserId};
 
 /// A one-line expiry check: a known expiry in the past is expired; an unknown
 /// expiry (`None`) is treated as not expired.

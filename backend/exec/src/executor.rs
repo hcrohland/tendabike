@@ -36,13 +36,13 @@ use std::future::Future;
 use std::time::Duration;
 
 use log::{debug, error, warn};
-use tb_domain::{
-    ApiRead, ApiWrite, Error, GearItem, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
-    UserStat, WriteOutcome,
-};
 use tb_provider::{Probe, ProviderLane};
 use tokio::sync::{broadcast, oneshot};
 
+use crate::facade::{
+    ApiRead, ApiWrite, Error, GearItem, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
+    UserStat, WriteOutcome,
+};
 use crate::message::{Request, RequestReceiver};
 use crate::{DeliveryContext, DomainFacade, FramePusher, Txn, TxnSource};
 
@@ -919,7 +919,7 @@ where
 }
 
 /// One `ApiRead` in the loop's own transaction (spec #558 §3.6/§3.7):
-/// `begin` → [`tb_domain::read`] → `commit`, **read-only within it by spec** — a read
+/// `begin` → `read` → `commit`, **read-only within it by spec** — a read
 /// computes and returns data, and it pushes **no** SSE frame (it produces
 /// no `Summary`).
 ///

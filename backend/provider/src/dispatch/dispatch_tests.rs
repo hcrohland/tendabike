@@ -12,9 +12,8 @@
 
 use std::sync::{Arc, Mutex, Once};
 
-use tb_domain::{TbResult, UserId};
-
 use crate::Provider;
+use crate::facade::{Error, TbResult, UserId, mock_session_admin};
 use crate::icu::test_support::MockIcuDataStore;
 use crate::icu::{IcuDataStore, IcuEvent, IcuId, IcuUser};
 use crate::strava::event::Event;
@@ -263,7 +262,7 @@ async fn accept_event_strava_unknown_owner_is_rejected() -> TbResult<()> {
     let err = accept_event(Provider::Strava, &strava_activity_body(42), &mut store)
         .await
         .expect_err("an unknown owner is rejected");
-    assert!(matches!(err, tb_domain::Error::BadRequest(_)));
+    assert!(matches!(err, Error::BadRequest(_)));
     Ok(())
 }
 
@@ -276,7 +275,7 @@ async fn accept_event_strava_malformed_body_is_rejected() -> TbResult<()> {
     let err = accept_event(Provider::Strava, "not a json body", &mut store)
         .await
         .expect_err("a malformed body is rejected");
-    assert!(matches!(err, tb_domain::Error::BadRequest(_)));
+    assert!(matches!(err, Error::BadRequest(_)));
     Ok(())
 }
 
@@ -352,7 +351,7 @@ async fn accept_event_icu_rejects_a_bad_secret() -> TbResult<()> {
     let err = accept_event(Provider::Icu, &body, &mut store)
         .await
         .expect_err("a bad secret is rejected");
-    assert!(matches!(err, tb_domain::Error::NotAuth(_)));
+    assert!(matches!(err, Error::NotAuth(_)));
     Ok(())
 }
 
@@ -365,7 +364,7 @@ async fn accept_event_icu_malformed_body_is_rejected() -> TbResult<()> {
     let err = accept_event(Provider::Icu, "not a json body", &mut store)
         .await
         .expect_err("a malformed body is rejected");
-    assert!(matches!(err, tb_domain::Error::BadRequest(_)));
+    assert!(matches!(err, Error::BadRequest(_)));
     Ok(())
 }
 
@@ -383,7 +382,7 @@ async fn accept_event_icu_rejects_an_invalid_timestamp() -> TbResult<()> {
     let err = accept_event(Provider::Icu, &body, &mut store)
         .await
         .expect_err("an invalid timestamp is rejected");
-    assert!(matches!(err, tb_domain::Error::BadRequest(_)));
+    assert!(matches!(err, Error::BadRequest(_)));
     Ok(())
 }
 
@@ -399,7 +398,7 @@ async fn deauthorize_icu_disables_the_user() -> TbResult<()> {
     store
         .strava
         .expect_stravauser_get_by_tbid()
-        .returning(|_| Err(tb_domain::Error::NotFound("no strava user".into())));
+        .returning(|_| Err(Error::NotFound("no strava user".into())));
     let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
     let icu_read = icu.clone();
     store
@@ -419,7 +418,7 @@ async fn deauthorize_icu_disables_the_user() -> TbResult<()> {
             Ok(icu_token.clone())
         });
 
-    let mut session = tb_domain::test_support::mock_session_admin(UserId::from(1));
+    let mut session = mock_session_admin(UserId::from(1));
     deauthorize(&mut session, UserId::from(9), &mut store).await?;
     Ok(())
 }
@@ -437,7 +436,7 @@ async fn delete_user_icu_deletes_the_user() -> TbResult<()> {
     store
         .strava
         .expect_stravauser_get_by_tbid()
-        .returning(|_| Err(tb_domain::Error::NotFound("no strava user".into())));
+        .returning(|_| Err(Error::NotFound("no strava user".into())));
     let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
     let icu_read = icu.clone();
     store
@@ -455,7 +454,7 @@ async fn delete_user_icu_deletes_the_user() -> TbResult<()> {
         .returning(move |_id, _token| Ok(icu_token.clone()));
     store.icu.expect_icuser_delete().returning(|_id| Ok(1));
 
-    let mut session = tb_domain::test_support::mock_session_admin(UserId::from(1));
+    let mut session = mock_session_admin(UserId::from(1));
     delete_user(&mut session, UserId::from(9), &facade, &mut store).await?;
     Ok(())
 }
@@ -472,7 +471,7 @@ async fn login_strava_rejects_an_insufficient_scope() -> TbResult<()> {
     let err = login(Provider::Strava, "code", "read", &facade, &mut store)
         .await
         .expect_err("an insufficient scope is rejected");
-    assert!(matches!(err, tb_domain::Error::BadRequest(_)));
+    assert!(matches!(err, Error::BadRequest(_)));
     Ok(())
 }
 
@@ -486,7 +485,7 @@ async fn login_icu_rejects_an_insufficient_scope() -> TbResult<()> {
     let err = login(Provider::Icu, "code", "WRONG:SCOPE", &facade, &mut store)
         .await
         .expect_err("an insufficient scope is rejected");
-    assert!(matches!(err, tb_domain::Error::BadRequest(_)));
+    assert!(matches!(err, Error::BadRequest(_)));
     Ok(())
 }
 
@@ -519,7 +518,7 @@ async fn provider_of_icu_when_only_an_icu_row_exists() -> TbResult<()> {
     store
         .strava
         .expect_stravauser_get_by_tbid()
-        .returning(|_| Err(tb_domain::Error::NotFound("no strava user".into())));
+        .returning(|_| Err(Error::NotFound("no strava user".into())));
     let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
     store
         .icu
@@ -538,15 +537,15 @@ async fn provider_of_not_found_when_no_row_exists() -> TbResult<()> {
     store
         .strava
         .expect_stravauser_get_by_tbid()
-        .returning(|_| Err(tb_domain::Error::NotFound("no strava user".into())));
+        .returning(|_| Err(Error::NotFound("no strava user".into())));
     store
         .icu
         .expect_icuser_get_by_tbid()
-        .returning(|_| Err(tb_domain::Error::NotFound("no icu user".into())));
+        .returning(|_| Err(Error::NotFound("no icu user".into())));
 
     let err = crate::provider_of(&mut store, UserId::from(7))
         .await
         .expect_err("no row in either table is a NotFound");
-    assert!(matches!(err, tb_domain::Error::NotFound(_)));
+    assert!(matches!(err, Error::NotFound(_)));
     Ok(())
 }

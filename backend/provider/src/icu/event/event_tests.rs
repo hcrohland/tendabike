@@ -2,7 +2,10 @@ use super::super::test_support::{
     activity_json, icu_user, queue, queue_error, setup, stub_activity_json,
 };
 use super::*;
-use tb_domain::{Notification, NotificationLifecycle, NotificationState, Summary};
+use crate::facade::{
+    Notification, NotificationKind, NotificationLifecycle, NotificationState, NotificationSubject,
+    Summary,
+};
 use time::OffsetDateTime;
 
 fn event(id: i32, activity: &str) -> IcuEvent {
@@ -20,8 +23,8 @@ fn notification() -> Notification {
         id: uuid::Uuid::now_v7().into(),
         recipient: UserId::from(1),
         lifecycle: NotificationLifecycle::Transient,
-        kind: tb_domain::NotificationKind::StubsSkipped,
-        subject: tb_domain::NotificationSubject::StubsSkipped,
+        kind: NotificationKind::StubsSkipped,
+        subject: NotificationSubject::StubsSkipped,
         message: Some("2".to_string()),
         state: NotificationState::New,
         created_at: OffsetDateTime::UNIX_EPOCH,

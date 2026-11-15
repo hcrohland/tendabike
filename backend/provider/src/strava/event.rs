@@ -116,7 +116,7 @@ pub enum ObjectType {
 }
 
 impl TryFrom<String> for ObjectType {
-    type Error = tb_domain::Error;
+    type Error = crate::facade::Error;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         use ObjectType::*;
@@ -149,7 +149,7 @@ pub enum AspectType {
 }
 
 impl TryFrom<String> for AspectType {
-    type Error = tb_domain::Error;
+    type Error = crate::facade::Error;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         Ok(match value.as_str() {

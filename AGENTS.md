@@ -19,7 +19,7 @@ A Cargo package's directory is its name without the `tb_` prefix: `tb_provider` 
 
 ## Database
 
-SQLx compiles queries against the committed `backend/sqlx/.sqlx/` offline cache. After adding or changing a query, run `cargo sqlx prepare` to refresh it; apply schema changes with `cargo sqlx migrate run`. A migration is frozen once applied — change its behaviour with a new migration, not by editing the applied one.
+SQLx compiles queries against the committed `backend/sqlx/.sqlx/` offline cache. After adding or changing a query, run `cargo sqlx prepare` to refresh it; apply a new migration with `cargo sqlx migrate run`. **Changing the database schema** — the migration rules and collision resolution — is in [`backend/docs/database-changes.md`](backend/docs/database-changes.md).
 
 ## Commit rules
 
