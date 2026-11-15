@@ -11,11 +11,11 @@
 use time::OffsetDateTime;
 
 use super::*;
-use crate::{EntityFacade, IcuActivityId, ProviderActivityId};
-use tb_domain::{
+use crate::facade::{
     ActTypeId, Activity, Error, Notification, NotificationKind, NotificationLifecycle,
     NotificationSubject, PartId, Summary, UserId,
 };
+use crate::{EntityFacade, IcuActivityId, ProviderActivityId};
 
 /// The intervals.icu URL for an activity (the `/source/activities/{id}`
 /// redirect target): the driver extracts the raw id from the domain's opaque

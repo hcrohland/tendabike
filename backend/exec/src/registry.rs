@@ -47,15 +47,15 @@ use std::time::Duration;
 
 use tokio::sync::{broadcast, oneshot, watch};
 
-use tb_domain::{
-    ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, Summary, TbResult,
-    UserId, UserStat, WriteOutcome,
-};
 use tb_provider::Provider;
 use tb_provider::ProviderLane;
 use tb_provider::strava::{StravaDataStore, event::sync_users};
 
 use crate::api::ServiceApi;
+use crate::facade::{
+    ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, Summary, TbResult,
+    UserId, UserStat, WriteOutcome,
+};
 use crate::message::Request;
 use crate::{DomainFacade, Txn, TxnSource};
 

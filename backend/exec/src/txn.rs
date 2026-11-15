@@ -34,7 +34,7 @@
 //! [`DomainFacade`]: crate::DomainFacade
 //! [`ProviderLane`]: tb_provider::ProviderLane
 
-use tb_domain::{Error, TbResult};
+use crate::facade::{Error, TbResult};
 
 /// A source of open transactions for the executor loop (ADR-0005, executable
 /// spec #446 §4.1).

@@ -44,12 +44,11 @@
 
 use tokio::sync::{broadcast, watch};
 
-use tb_domain::{
+use crate::ExecutorStatus;
+use crate::facade::{
     ApiRead, ApiWrite, ReadOutcome, Session, ShopId, Summary, TbResult, UserId, UserStat,
     WriteOutcome,
 };
-
-use crate::ExecutorStatus;
 
 /// The app's presentation-agnostic service API (spec #558 §2): the generic
 /// channel ops (`read`, `write`, `subscribe`, `all_stats`)

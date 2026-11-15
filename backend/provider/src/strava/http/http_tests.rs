@@ -11,7 +11,7 @@ use super::super::test_support::{
     MockStravaDataStore, begin_test, deauthorizes, queue, seed_token_cache,
 };
 use super::*;
-use tb_domain::UserId;
+use crate::facade::UserId;
 
 /// `request_json` uses the `TokenCache`'s warm token and persists nothing
 /// (a warm token returns `None` for the new refresh token): the store witness

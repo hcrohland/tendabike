@@ -10,7 +10,7 @@ use time::OffsetDateTime;
 
 use super::*;
 use crate::EntityFacade;
-use tb_domain::{PartId, PartTypeId, TbResult, UserId};
+use crate::facade::{PartId, PartTypeId, TbResult, UserId};
 
 /// The intervals.icu wire shape of a gear (`GET /athlete/{id}/gear`).
 ///

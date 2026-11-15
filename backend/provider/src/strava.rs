@@ -18,7 +18,7 @@ use anyhow::Context;
 use log::{debug, info, trace, warn};
 use serde_derive::{Deserialize, Serialize};
 
-use tb_domain::*;
+use crate::facade::*;
 
 mod traits;
 pub use traits::*;

@@ -5,13 +5,13 @@ This file defines the Strava data-store traits.
 (the `strava_users` and `strava_events` tables) and no domain supertrait, so a
 consumer that only drives Strava work can bound on it directly.
 
-`StravaStore` is the method-free umbrella over `tb_domain::Store` +
+`StravaStore` is the method-free umbrella over the domain `Store` +
 `StravaDataStore`, naming a store that can do both domain and Strava work —
-the same "local traits plus an umbrella" shape as `tb_domain::Store` itself.
+the same "local traits plus an umbrella" shape as `Store` itself.
 */
 
 use super::{StravaId, StravaUser, event::Event};
-use tb_domain::{TbResult, UserId};
+use crate::facade::{Store, TbResult, UserId};
 
 /// The Strava-side data store: the `strava_users` and `strava_events` tables.
 ///
@@ -216,7 +216,7 @@ pub trait StravaDataStore: Send + Sync {
 }
 
 /// A method-free umbrella naming a complete Strava store: one that implements
-/// the domain [`tb_domain::Store`] *and* the local [`StravaDataStore`]. It
-/// carries no methods of its own — the same shape as `tb_domain::Store`,
+/// the domain [`Store`] *and* the local [`StravaDataStore`]. It
+/// carries no methods of its own — the same shape as `Store`,
 /// which is the umbrella over the domain's per-entity sub-traits.
-pub trait StravaStore: tb_domain::Store + StravaDataStore {}
+pub trait StravaStore: Store + StravaDataStore {}

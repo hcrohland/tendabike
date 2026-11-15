@@ -19,7 +19,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::thread::LocalKey;
 
-use tb_domain::{Error, TbResult};
+use crate::facade::{Error, TbResult};
 
 pub use crate::facade::MockEntityFacade;
 
