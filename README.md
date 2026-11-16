@@ -11,4 +11,4 @@ You can create parts and attach them to your bikes. You can move parts between b
 TendaBike will calculate the use for any part you create.
 
 ## Docs
-- [Admin guides](docs/guides/admin/) — setup and operations ([Strava provider](docs/guides/admin/strava-provider.md), [intervals.icu provider](docs/guides/admin/icu-provider.md))
+- [Admin guides](docs/guides/admin/) — setup and operations for running a Tendabike instance
