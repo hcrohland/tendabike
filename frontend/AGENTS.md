@@ -29,7 +29,8 @@
 ## Code Style
 
 - **Runes mode**: `<script lang="ts">` blocks with runes (`$state`, `$derived`, `$effect`, `$props()`); module scope via the `<script module>` attribute (never the deprecated `context="module"` form).
-- **Widget wrappers**: use the shared `src/Widgets/` wrappers (e.g. `XsButton`) over raw flowbite components.
+- **Widget wrappers**: use the shared `src/Widgets/` wrappers over raw flowbite components. The load-bearing three: `Card` (entity container), `Menu` (per-entity action dropdown of `DropdownItem`s), `Chip` (label + value metric).
+- **Entity list pages**: one `Card` per entity in a `flex flex-col gap-1 sm:gap-2 max-w-4xl mx-auto` container, per-entity actions in a `Menu` in the card header. Reference: [`src/Activity/ActList.svelte`](src/Activity/ActList.svelte) + [`src/Activity/ActCard.svelte`](src/Activity/ActCard.svelte).
 - **UI open/close state**: component-local — a lib state module never carries it; a child that must close the UI takes a `close` callback prop.
 
 ## Key Gotchas
