@@ -5,28 +5,33 @@ use mimalloc::MiMalloc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
+mod config;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
 
-    let database_url = std::env::var("DB_URL")
-        .or_else(|_| std::env::var("DATABASE_URL"))
-        .unwrap_or_else(|_| "postgres://localhost/tendabike".to_string());
+    // Resolve the instance config from the environment. The deprecation
+    // warnings for the legacy variables in use are printed here, before the
+    // logging subscriber exists (it is set up by `tb_axum::start`).
+    let env = std::env::vars().collect();
+    let (config, deprecations) = config::from_env(&env);
+    for warning in &deprecations {
+        eprintln!("warning: {warning}");
+    }
 
-    let pool = sqlx::PgPool::connect(&database_url).await?;
+    let pool = sqlx::PgPool::connect(&config.database_url).await?;
 
     // Build the provider config from the environment and initialize the
     // provider crate's client statics.
     let provider_config = tb_provider::ProviderConfig {
-        strava_client_id: std::env::var("CLIENT_ID").expect("Missing CLIENT_ID!"),
-        strava_client_secret: std::env::var("CLIENT_SECRET").expect("Missing CLIENT_SECRET!"),
-        strava_redirect_url: std::env::var("REDIRECT_URL")
-            .unwrap_or_else(|_| "http://localhost:8000/strava/token".to_string()),
-        icu_client_id: std::env::var("ICU_CLIENT_ID").expect("Missing ICU_CLIENT_ID!"),
-        icu_client_secret: std::env::var("ICU_CLIENT_SECRET").expect("Missing ICU_CLIENT_SECRET!"),
-        icu_redirect_url: std::env::var("ICU_REDIRECT_URL")
-            .unwrap_or_else(|_| "http://localhost:8000/icu/token".to_string()),
-        icu_webhook_secret: std::env::var("ICU_WEBHOOK_SECRET").unwrap_or_default(),
+        strava_client_id: config.strava_client_id,
+        strava_client_secret: config.strava_client_secret,
+        strava_redirect_url: config.strava_redirect_url,
+        icu_client_id: config.icu_client_id,
+        icu_client_secret: config.icu_client_secret,
+        icu_redirect_url: config.icu_redirect_url,
+        icu_webhook_secret: config.icu_webhook_secret,
     };
     tb_provider::init(provider_config);
 
