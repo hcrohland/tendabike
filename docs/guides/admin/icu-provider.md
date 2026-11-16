@@ -42,8 +42,8 @@ Set in the backend's environment (`.env` is loaded via `dotenvy`):
 The redirect URI is derived from the instance's `HOSTNAME` variable
 (see [the instance setup](index.md)): `https://<HOSTNAME>/icu/token`
 (`http` for `localhost`/`127.0.0.1`; defaults to
-`http://localhost:8000/icu/token`). It must match the redirect URI in
-step 2.
+`http://localhost:8000/icu/token`). The redirect URI in
+step 2 needs to be set to this.
 
 ## 4. How it works
 

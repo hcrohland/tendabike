@@ -33,8 +33,8 @@ Set in the backend's environment (`.env` is loaded via `dotenvy`):
 The redirect URI is derived from the instance's `HOSTNAME` variable
 (see [the instance setup](index.md)): `https://<HOSTNAME>/strava/token`
 (`http` for `localhost`/`127.0.0.1`; defaults to
-`http://localhost:8000/strava/token`). It must match the Redirect URI in
-step 1.
+`http://localhost:8000/strava/token`). The Redirect URI in
+step 1 needs to be set to this.
 
 Token lifetime needs no admin work: the app stores each user's Strava refresh
 token and refreshes the access token automatically (rotated refresh tokens are
