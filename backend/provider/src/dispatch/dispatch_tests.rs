@@ -164,6 +164,12 @@ fn icu_event_json(athlete: &str, typ: &str, activity: &str, timestamp: &str) -> 
     )
 }
 
+/// One intervals.icu webhook event element with **no** `activity` field (the
+/// test delivery: the app's shared secret but no activity object).
+fn icu_event_json_no_activity(athlete: &str, typ: &str, timestamp: &str) -> String {
+    format!("{{\"athlete_id\":\"{athlete}\",\"type\":\"{typ}\",\"timestamp\":\"{timestamp}\"}}")
+}
+
 /// Initialize the provider config once for the dispatch test process, with
 /// a known webhook secret the intake tests verify against. Returns the
 /// secret value.
@@ -383,6 +389,54 @@ async fn accept_event_icu_rejects_an_invalid_timestamp() -> TbResult<()> {
         .await
         .expect_err("an invalid timestamp is rejected");
     assert!(matches!(err, Error::BadRequest(_)));
+    Ok(())
+}
+
+/// The icu arm accepts a **test delivery** (a valid secret, an
+/// `ACTIVITY_ANALYZED` event that carries **no** `activity`) with nothing
+/// queued — the event is not queueable, so it is skipped (and debug-logged)
+/// and intervals.icu does not retry it.
+#[tokio::test]
+async fn accept_event_icu_test_delivery_is_accepted_and_queues_nothing() -> TbResult<()> {
+    let secret = icu_webhook_secret();
+    let mut store = DispatchStore::default();
+    let body = icu_body(
+        &secret,
+        &icu_event_json_no_activity("a1", "ACTIVITY_ANALYZED", "2024-12-06T06:40:47.011+00:00"),
+    );
+
+    let queued = accept_event(Provider::Icu, &body, &mut store).await?;
+
+    assert!(
+        queued.is_empty(),
+        "a test delivery queues nothing (no wake)"
+    );
+    Ok(())
+}
+
+/// The icu arm skips a **non-`ACTIVITY_ANALYZED`** event (even one that
+/// carries an `activity`) with nothing queued — only `ACTIVITY_ANALYZED` is
+/// subscribed, so the event is skipped (and debug-logged).
+#[tokio::test]
+async fn accept_event_icu_non_analyzed_event_is_skipped() -> TbResult<()> {
+    let secret = icu_webhook_secret();
+    let mut store = DispatchStore::default();
+    let body = icu_body(
+        &secret,
+        &icu_event_json(
+            "a1",
+            "ACTIVITY_HEART_RATE",
+            "act-1",
+            "2024-12-06T06:40:47.011+00:00",
+        ),
+    );
+
+    let queued = accept_event(Provider::Icu, &body, &mut store).await?;
+
+    assert!(
+        queued.is_empty(),
+        "a non-analyzed event queues nothing (no wake)"
+    );
     Ok(())
 }
 

@@ -8,7 +8,7 @@
 //! event); [`process`] drains the queue in one call, importing each activity,
 //! and carries the one stub-skip notice a batch produces.
 
-use log::{info, trace, warn};
+use log::{debug, info, trace, warn};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
@@ -80,7 +80,8 @@ struct IcuWebhookEvent {
     /// The event's RFC 3339 timestamp.
     timestamp: String,
     /// The activity the event refers to (its id is the `icu_events` key).
-    activity: IcuWebhookActivity,
+    /// `None` for an event that carries no activity (e.g. a test delivery).
+    activity: Option<IcuWebhookActivity>,
 }
 
 /// The activity an intervals.icu activity event refers to.
@@ -143,11 +144,22 @@ pub async fn accept_event(body: &str, store: &mut impl IcuDataStore) -> TbResult
     let mut queued = Vec::new();
     for event in &envelope.events {
         if event.type_ != ACTIVITY_ANALYZED {
+            debug!(
+                "Skipping icu webhook event: not ACTIVITY_ANALYZED (type: {})",
+                event.type_
+            );
             continue; // only ACTIVITY_ANALYZED is subscribed (spec #764)
         }
+        let Some(activity) = &event.activity else {
+            debug!(
+                "Skipping icu webhook event: no activity (type: {})",
+                event.type_
+            );
+            continue; // an event without an activity (e.g. a test delivery) is not queueable
+        };
         let icu_event = IcuEvent::new(
             IcuId::from(event.athlete_id.as_str()),
-            event.activity.id.clone(),
+            activity.id.clone(),
             parse_timestamp(&event.timestamp)?,
         );
         queued.push(icu_event.accept(store).await?);
