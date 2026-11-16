@@ -21,7 +21,8 @@
 //! attachment delete identity, successor lookup, adjacent-merge trigger,
 //! `find_part_attached_already` for a never-attached part, activity
 //! duplicate-id rejection, update field preservation, time-range boundary,
-//! user+time minute match, and `get_all` ordering.
+//! user+time minute match, `get_all` ordering, and the first-user admin seat
+//! (the first user of an empty `users` table is the admin, atomically).
 //!
 //! Domain-level rules (attach, detach, dispose, upsert, delete, and the
 //! `ApiWrite`/`ApiRead` dispatch paths) are owned by the in-memory suite in
@@ -48,7 +49,7 @@
 //!
 //! The suite is ignored by default: every test carries
 //! `#[ignore]`, so a plain `cargo test --workspace` run (no database)
-//! reports the 11 tests ignored and executes none of them,
+//! reports the 21 tests ignored and executes none of them,
 //! and the existing in-memory suites stay green. It runs with
 //! `cargo test -- --include-ignored` (the `--` matters: `--include-ignored`
 //! is a libtest flag, not a cargo flag), and it fails loudly whenever it
@@ -339,6 +340,119 @@ async fn fixture_roundtrip() -> tb_domain::TbResult<()> {
         Ok(())
     })
     .await
+}
+
+// ---------------------------------------------------------------------------
+// User: store-path rules
+// ---------------------------------------------------------------------------
+
+/// The first user created in an empty `users` table gets the instance's
+/// admin seat (`is_admin = true`); the second and every subsequent user
+/// does not (ticket #905).
+#[tokio::test]
+#[ignore]
+async fn first_user_in_empty_table_is_admin() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        // Empty the users table (and its dependents) inside this test's
+        // rolled-back transaction.
+        sqlx::query("TRUNCATE users CASCADE")
+            .execute(&mut **store)
+            .await
+            .map_err(db_err)?;
+
+        let first = UserStore::user_create(&mut store, "Ana", "Admin", &None).await?;
+        assert!(
+            first.is_admin,
+            "the first user of an empty database is the admin"
+        );
+
+        let second = UserStore::user_create(&mut store, "Bob", "Bike", &None).await?;
+        assert!(!second.is_admin, "the second user is not the admin");
+
+        Ok(())
+    })
+    .await
+}
+
+/// Concurrent first logins race for the admin seat (ticket #905): the
+/// check-and-insert must be atomic. The racing create blocks on the
+/// winner's open transaction — a bounded `lock_timeout` turns the block
+/// into a deterministic failure (a non-atomic check-then-insert would not
+/// block and would mint a second admin) — and once the winner commits, the
+/// loser creates a non-admin.
+///
+/// Unlike the other tests this one *commits* (the race needs two live
+/// transactions), so it restores the prepopulated fixture before returning.
+#[tokio::test]
+#[ignore]
+async fn concurrent_first_logins_produce_exactly_one_admin() -> tb_domain::TbResult<()> {
+    let _lock = LOCK.lock().await;
+    let url = match scratch_url() {
+        Some(url) => url,
+        None => panic!("{NO_SCRATCH_URL}"),
+    };
+    match SETUP.get_or_init(|| setup(&url)).await {
+        Setup::Ready(_) => {}
+        Setup::Failed(err) => panic!("the scratch database could not be prepared: {err}"),
+    }
+    let pool = pool(&url)
+        .await
+        .unwrap_or_else(|err| panic!("the scratch database could not be prepared: {err}"));
+
+    // The race needs an empty `users` table visible to both transactions,
+    // so this truncate commits (unlike the other tests' rolled-back one).
+    let mut tx = pool.begin().await?;
+    sqlx::query("TRUNCATE users CASCADE")
+        .execute(&mut **tx)
+        .await
+        .map_err(db_err)?;
+    tx.commit().await?;
+
+    // The winner: creates the first user (the admin) and holds its
+    // transaction — and with it the first-user lock — open.
+    let mut winner = pool.begin().await?;
+    let first = UserStore::user_create(&mut winner, "Ada", "Lovelace", &None).await?;
+    assert!(
+        first.is_admin,
+        "the first user of an empty database is the admin"
+    );
+
+    // The loser: its create must block on the winner's lock. The bounded
+    // `lock_timeout` makes the block a deterministic failure.
+    let mut loser = pool.begin().await?;
+    sqlx::query("SET LOCAL lock_timeout = '250ms'")
+        .execute(&mut **loser)
+        .await
+        .map_err(db_err)?;
+    let err = UserStore::user_create(&mut loser, "Grace", "Hopper", &None)
+        .await
+        .expect_err("the racing create must block on the winner's first-user lock");
+    assert!(
+        matches!(err, tb_domain::Error::DatabaseFailure(_)),
+        "the blocked create must surface as a DatabaseFailure, got {err:?}"
+    );
+
+    // The winner commits: the lock is released and the first user is
+    // committed. The loser's transaction is aborted by the timed-out
+    // statement, so the retry starts a fresh one.
+    winner.commit().await?;
+    let mut loser = pool.begin().await?;
+    let second = UserStore::user_create(&mut loser, "Grace", "Hopper", &None).await?;
+    assert!(
+        !second.is_admin,
+        "the racing create that lost the race is not the admin"
+    );
+    let admins: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE is_admin")
+        .fetch_one(&mut **loser)
+        .await
+        .map_err(db_err)?;
+    assert_eq!(admins, 1, "exactly one admin after the race");
+    loser.commit().await?;
+
+    // This test committed rows: restore the prepopulated fixture for the
+    // rest of the suite.
+    fresh_fixture(&pool).await?;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
