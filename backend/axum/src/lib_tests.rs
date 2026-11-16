@@ -3101,7 +3101,7 @@ async fn spa_fallback_serves_entry_document() {
         "expected the content file, got: {body_str}"
     );
 
-    // A missing content file returns 404 (not the SPA fallback).
+    // A missing content file returns 404.
     let (status, _headers, _body) =
         run(app.clone(), Method::GET, "/content/missing.md", None).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
