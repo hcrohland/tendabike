@@ -16,6 +16,10 @@ Comments describe what the code **does**, not what **changed**. The commit messa
 
 Reuse an existing message that already expresses the same text rather than adding a duplicate. The shared `action_*` labels (`action_delete`, `action_close`, …) cover most buttons and are the first place to look; a new message is for genuinely new phrasing, not a rewording of a string the app already has.
 
+## Wire shapes
+
+The type an endpoint returns is named in the entity's lib module (e.g. `UserState`, `Summary` in `frontend/src/lib/user.ts`); a fetch result is never `any[]` or an inline object literal at the call site. Naming the shape is what puts every field — including ones like `disabled` — in front of the type-checker; `any[]` hides them.
+
 ## Test guides
 
 Each crate's test guide (`backend/docs/tests/<crate>.md`) is the navigation surface for its test infrastructure. When a test double, fixture, or seam is added, renamed, or removed, update the guide in the same commit — a guide pointing at a double that no longer exists is a broken pointer.
