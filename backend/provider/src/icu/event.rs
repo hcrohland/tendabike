@@ -73,8 +73,8 @@ struct IcuWebhook {
 struct IcuWebhookEvent {
     /// The icu athlete the event belongs to.
     athlete_id: String,
-    /// The event type (e.g. `ACTIVITY_ANALYZED`); only `ACTIVITY_ANALYZED` is
-    /// subscribed.
+    /// The event type (e.g. `ACTIVITY_UPLOADED`); only the subscribed activity
+    /// types are imported.
     #[serde(rename = "type")]
     type_: String,
     /// The event's RFC 3339 timestamp.
@@ -90,9 +90,12 @@ struct IcuWebhookActivity {
     id: String,
 }
 
-/// The `ACTIVITY_ANALYZED` event type: the only event the webhook subscribes
-/// to (spec #764).
-const ACTIVITY_ANALYZED: &str = "ACTIVITY_ANALYZED";
+/// The activity event types the webhook subscribes to (spec #764).
+const SUBSCRIBED_ACTIVITY_TYPES: [&str; 2] = ["ACTIVITY_UPLOADED", "ACTIVITY_UPDATED"];
+
+/// The `TEST` event type: intervals.icu fires a single `TEST` delivery (with
+/// no activity) when the webhook is configured on the *Manage App* page.
+const TEST_EVENT_TYPE: &str = "TEST";
 
 /// The shared webhook secret (from the provider config).
 fn webhook_secret() -> String {
@@ -132,7 +135,8 @@ fn parse_timestamp(timestamp: &str) -> TbResult<i64> {
 
 /// The webhook intake (ADR-0014): the provider's webhook work behind the
 /// seam — the envelope parse of the raw body, the secret verification, the
-/// event filtering (only `ACTIVITY_ANALYZED` is subscribed), the timestamp
+/// event filtering (only the subscribed activity types are imported, and a
+/// `TEST` delivery is logged and dropped), the timestamp
 /// parse, and the queue insert. `body` is the raw webhook body the
 /// presentation layer forwards (no driver wire type crosses the seam).
 /// Returns the TendaBike users a row was queued for (the caller's wake list).
@@ -143,13 +147,17 @@ pub async fn accept_event(body: &str, store: &mut impl IcuDataStore) -> TbResult
     verify_secret(&envelope.secret)?;
     let mut queued = Vec::new();
     for event in &envelope.events {
+        if event.type_ == TEST_EVENT_TYPE {
+            info!("icu webhook test delivery: {event:?}");
+            continue; // a test delivery (no activity) is not queueable
+        }
         let Some(activity) = &event.activity else {
             debug!("Skipping icu webhook event (no activity): {event:?}");
-            continue; // an event without an activity (e.g. a test delivery) is not queueable
+            continue; // an event without an activity is not queueable
         };
-        if event.type_ != ACTIVITY_ANALYZED {
-            debug!("Skipping icu webhook event (not ACTIVITY_ANALYZED): {event:?}");
-            continue; // only ACTIVITY_ANALYZED is subscribed (spec #764)
+        if !SUBSCRIBED_ACTIVITY_TYPES.contains(&event.type_.as_str()) {
+            debug!("Skipping icu webhook event (not a subscribed type): {event:?}");
+            continue; // only the subscribed activity types are imported (spec #764)
         }
         let icu_event = IcuEvent::new(
             IcuId::from(event.athlete_id.as_str()),

@@ -2493,7 +2493,7 @@ async fn webhook_ingest_failure_500s() {
 /// The intervals.icu webhook's wire shape: the shared `secret` plus an array
 /// of `events` (each an `athlete_id`, a `type`, a `timestamp`, and an
 /// `activity`).
-const ICU_WEBHOOK_BODY: &str = r#"{"secret":"test-icu-webhook-secret","events":[{"athlete_id":"i123456","type":"ACTIVITY_ANALYZED","timestamp":"2024-12-06T06:40:47.011+00:00","activity":{"id":"i55751783"}}]}"#;
+const ICU_WEBHOOK_BODY: &str = r#"{"secret":"test-icu-webhook-secret","events":[{"athlete_id":"i123456","type":"ACTIVITY_UPLOADED","timestamp":"2024-12-06T06:40:47.011+00:00","activity":{"id":"i55751783"}}]}"#;
 
 /// `POST /icu/callback` (the webhook, spec #764): the raw body is forwarded
 /// opaquely to the provider service's `accept_event` op (the provider layer
@@ -2525,16 +2525,16 @@ async fn icu_webhook_bad_secret_401s() {
         ))
     });
     let app = build_app(&store, mock, provider);
-    let body = r#"{"secret":"wrong-secret","events":[{"athlete_id":"i123456","type":"ACTIVITY_ANALYZED","timestamp":"2024-12-06T06:40:47.011+00:00","activity":{"id":"i55751783"}}]}"#;
+    let body = r#"{"secret":"wrong-secret","events":[{"athlete_id":"i123456","type":"ACTIVITY_UPLOADED","timestamp":"2024-12-06T06:40:47.011+00:00","activity":{"id":"i55751783"}}]}"#;
     let (status, _headers, _body) = run_json(app, Method::POST, "/icu/callback", None, body).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
 
-/// A delivery whose events are not `ACTIVITY_ANALYZED` is forwarded like any
-/// other body (the event filtering is the provider layer's work): the route
-/// answers the op's result — `200` for the mock's `Ok`.
+/// A delivery whose events are not a subscribed activity type is forwarded
+/// like any other body (the event filtering is the provider layer's work): the
+/// route answers the op's result — `200` for the mock's `Ok`.
 #[tokio::test]
-async fn icu_webhook_forwards_non_analyzed_events_to_the_op() {
+async fn icu_webhook_forwards_non_subscribed_events_to_the_op() {
     let (store, mock, mut provider) = mock_ctx();
     let body = r#"{"secret":"test-icu-webhook-secret","events":[{"athlete_id":"i123456","type":"WELLNESS_UPDATED","timestamp":"2024-12-06T06:40:47.011+00:00","activity":{"id":"i55751783"}}]}"#;
     provider
