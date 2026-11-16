@@ -77,7 +77,7 @@ impl<'c> tb_domain::UserStore for SqlxConn<'c> {
         avatar_: &Option<String>,
     ) -> TbResult<User> {
         let onboarding_status = i32::from(OnboardingStatus::Pending);
-        // The first user of an empty database gets the admin seat (ticket
+        // The first user of an empty database gets the admin seat (spec
         // #905). The emptiness check and the insert are one statement, and
         // the `pg_advisory_xact_lock` serializes concurrent creates for the
         // duration of the transaction: a racing create blocks until this

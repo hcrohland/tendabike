@@ -348,7 +348,7 @@ async fn fixture_roundtrip() -> tb_domain::TbResult<()> {
 
 /// The first user created in an empty `users` table gets the instance's
 /// admin seat (`is_admin = true`); the second and every subsequent user
-/// does not (ticket #905).
+/// does not (spec #905).
 #[tokio::test]
 #[ignore]
 async fn first_user_in_empty_table_is_admin() -> tb_domain::TbResult<()> {
@@ -374,7 +374,7 @@ async fn first_user_in_empty_table_is_admin() -> tb_domain::TbResult<()> {
     .await
 }
 
-/// Concurrent first logins race for the admin seat (ticket #905): the
+/// Concurrent first logins race for the admin seat (spec #905): the
 /// check-and-insert must be atomic. The racing create blocks on the
 /// winner's open transaction — a bounded `lock_timeout` turns the block
 /// into a deterministic failure (a non-atomic check-then-insert would not
