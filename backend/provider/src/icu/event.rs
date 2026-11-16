@@ -143,13 +143,6 @@ pub async fn accept_event(body: &str, store: &mut impl IcuDataStore) -> TbResult
     verify_secret(&envelope.secret)?;
     let mut queued = Vec::new();
     for event in &envelope.events {
-        if event.type_ != ACTIVITY_ANALYZED {
-            debug!(
-                "Skipping icu webhook event: not ACTIVITY_ANALYZED (type: {})",
-                event.type_
-            );
-            continue; // only ACTIVITY_ANALYZED is subscribed (spec #764)
-        }
         let Some(activity) = &event.activity else {
             debug!(
                 "Skipping icu webhook event: no activity (type: {})",
@@ -157,6 +150,13 @@ pub async fn accept_event(body: &str, store: &mut impl IcuDataStore) -> TbResult
             );
             continue; // an event without an activity (e.g. a test delivery) is not queueable
         };
+        if event.type_ != ACTIVITY_ANALYZED {
+            debug!(
+                "Skipping icu webhook event: not ACTIVITY_ANALYZED (type: {})",
+                event.type_
+            );
+            continue; // only ACTIVITY_ANALYZED is subscribed (spec #764)
+        }
         let icu_event = IcuEvent::new(
             IcuId::from(event.athlete_id.as_str()),
             activity.id.clone(),
