@@ -27,7 +27,7 @@ App**. Set:
 | Redirect URI | `https://<your-domain>/icu/token` (local dev: `http://localhost:8000/icu/token`) |
 | Webhook URL | `https://<your-domain>/icu/callback` — **one URL per app**, shared by every athlete who authorizes it. Must be publicly reachable (HTTPS in production; a tunnel such as ngrok for local dev). |
 | Webhook secret | Any long random string. This is the shared `secret` field in every webhook payload — copy it for `ICU_WEBHOOK_SECRET` (step 3). |
-| Webhook event types | **`ACTIVITY_ANALYZED`** — the only type Tendabike subscribes to. |
+| Webhook event types | **`ACTIVITY_UPLOADED`** and **`ACTIVITY_UPDATED`** — the types Tendabike subscribes to. |
 
 ## 3. Environment variables
 
@@ -54,7 +54,8 @@ intervals.icu ──POST /icu/callback──▶ Tendabike
 
 1. The endpoint (`POST /icu/callback`) forwards the raw body to the provider
    layer, which verifies `secret` against `ICU_WEBHOOK_SECRET`
-   (constant-time compare) and keeps only `ACTIVITY_ANALYZED` events.
+   (constant-time compare), drops the `TEST` delivery, and keeps only the
+    subscribed activity events (`ACTIVITY_UPLOADED`, `ACTIVITY_UPDATED`).
 2. Each event's `athlete_id` is mapped to a TendaBike user. **The athlete must
    have already connected via the OAuth flow** (`/icu/login`); events for
    unknown athletes are refused.
@@ -69,7 +70,7 @@ intervals.icu ──POST /icu/callback──▶ Tendabike
 |---|---|
 | Every delivery gets **401** | `ICU_WEBHOOK_SECRET` is unset or does not match the Manage App webhook secret. Compare them byte-for-byte. |
 | Deliveries re-fire repeatedly | Any non-2xx response makes intervals.icu re-fire the webhook with **exponential backoff**. Fix the underlying error (usually the 401 above); the retries stop once a delivery is accepted. |
-| No webhook for a new activity | **Strava-sourced activities never produce webhooks** (Strava ToS). Check the activity's source in intervals.icu. Also: `ACTIVITY_ANALYZED` is delivered **~60 s after upload** (events are consolidated) — check the clock before assuming a loss. |
+| No webhook for a new activity | **Strava-sourced activities never produce webhooks** (Strava ToS). Check the activity's source in intervals.icu. |
 | Activity imported but with no figures ("stub") | The activity is a stub (e.g. Strava-sourced with no data). Stubs are skipped and the user gets one batch notice with the skip count. |
 | Events pile up in `icu_events` | Rate limiting: on HTTP 429 the current event **stays queued** and the queue pauses until the 15-minute window resets. OAuth app limits scale with user count (100/user/day, min 5,000, max 50,000; the 15-min limit is 1/8 of the daily). |
 | A user's connection suddenly stops working | A 401 from the API (dead/revoked token — intervals.icu has no refresh tokens) **disables the user** and drops their queued events. The user must re-authorize via `/icu/login`. |
@@ -85,7 +86,7 @@ curl -i -X POST http://localhost:8000/icu/callback \
   -H 'Content-Type: application/json' \
   -d '{"secret":"<ICU_WEBHOOK_SECRET>",
        "events":[{"athlete_id":"<icu athlete id of a connected user>",
-                  "type":"ACTIVITY_ANALYZED",
+                  "type":"ACTIVITY_UPLOADED",
                   "timestamp":"2026-11-16T06:40:47.011+00:00",
                   "activity":{"id":"i55751783"}}]}'
 ```

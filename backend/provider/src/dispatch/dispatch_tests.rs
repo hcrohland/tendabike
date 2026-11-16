@@ -164,6 +164,12 @@ fn icu_event_json(athlete: &str, typ: &str, activity: &str, timestamp: &str) -> 
     )
 }
 
+/// One intervals.icu webhook event element with **no** `activity` field (the
+/// test delivery: the app's shared secret but no activity object).
+fn icu_event_json_no_activity(athlete: &str, typ: &str, timestamp: &str) -> String {
+    format!("{{\"athlete_id\":\"{athlete}\",\"type\":\"{typ}\",\"timestamp\":\"{timestamp}\"}}")
+}
+
 /// Initialize the provider config once for the dispatch test process, with
 /// a known webhook secret the intake tests verify against. Returns the
 /// secret value.
@@ -281,11 +287,11 @@ async fn accept_event_strava_malformed_body_is_rejected() -> TbResult<()> {
 
 // ─── accept_event: the icu arm ──────────────────────────────────────────────
 
-/// The icu arm verifies the secret, filters to `ACTIVITY_ANALYZED`, parses the
-/// timestamp, and queues one row per analyzed event — returning the users a
-/// row was queued for (the caller's wake list).
+/// The icu arm verifies the secret, filters to the subscribed activity types,
+/// parses the timestamp, and queues one row per subscribed event — returning
+/// the users a row was queued for (the caller's wake list).
 #[tokio::test]
-async fn accept_event_icu_queues_analyzed_events_only() -> TbResult<()> {
+async fn accept_event_icu_queues_subscribed_events_only() -> TbResult<()> {
     let secret = icu_webhook_secret();
     let mut store = DispatchStore::default();
     let user = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
@@ -309,7 +315,7 @@ async fn accept_event_icu_queues_analyzed_events_only() -> TbResult<()> {
             "{},{}",
             icu_event_json(
                 "a1",
-                "ACTIVITY_ANALYZED",
+                "ACTIVITY_UPLOADED",
                 "act-1",
                 "2024-12-06T06:40:47.011+00:00"
             ),
@@ -323,7 +329,7 @@ async fn accept_event_icu_queues_analyzed_events_only() -> TbResult<()> {
     );
     let queued = accept_event(Provider::Icu, &body, &mut store).await?;
 
-    // Only the analyzed event was queued (the other type is not subscribed).
+    // Only the subscribed event was queued (the other type is not subscribed).
     assert_eq!(queued, vec![UserId::from(9)]);
     let created = created.lock().expect("the capture is not poisoned");
     assert_eq!(created.len(), 1);
@@ -342,7 +348,7 @@ async fn accept_event_icu_rejects_a_bad_secret() -> TbResult<()> {
         "a-different-secret",
         &icu_event_json(
             "a1",
-            "ACTIVITY_ANALYZED",
+            "ACTIVITY_UPLOADED",
             "act-1",
             "2024-12-06T06:40:47.011+00:00",
         ),
@@ -376,13 +382,61 @@ async fn accept_event_icu_rejects_an_invalid_timestamp() -> TbResult<()> {
     let mut store = DispatchStore::default();
     let body = icu_body(
         &secret,
-        &icu_event_json("a1", "ACTIVITY_ANALYZED", "act-1", "not-a-timestamp"),
+        &icu_event_json("a1", "ACTIVITY_UPLOADED", "act-1", "not-a-timestamp"),
     );
 
     let err = accept_event(Provider::Icu, &body, &mut store)
         .await
         .expect_err("an invalid timestamp is rejected");
     assert!(matches!(err, Error::BadRequest(_)));
+    Ok(())
+}
+
+/// The icu arm accepts a **test delivery** (a valid secret, a `TEST` event
+/// that carries **no** `activity`) with nothing queued — the event is not
+/// queueable, so it is dropped (and info-logged) and intervals.icu does not
+/// retry it.
+#[tokio::test]
+async fn accept_event_icu_test_delivery_is_accepted_and_queues_nothing() -> TbResult<()> {
+    let secret = icu_webhook_secret();
+    let mut store = DispatchStore::default();
+    let body = icu_body(
+        &secret,
+        &icu_event_json_no_activity("a1", "TEST", "2024-12-06T06:40:47.011+00:00"),
+    );
+
+    let queued = accept_event(Provider::Icu, &body, &mut store).await?;
+
+    assert!(
+        queued.is_empty(),
+        "a test delivery queues nothing (no wake)"
+    );
+    Ok(())
+}
+
+/// The icu arm skips a **non-subscribed** event (even one that carries an
+/// `activity`) with nothing queued — only the subscribed activity types are
+/// imported, so the event is skipped (and debug-logged).
+#[tokio::test]
+async fn accept_event_icu_non_subscribed_event_is_skipped() -> TbResult<()> {
+    let secret = icu_webhook_secret();
+    let mut store = DispatchStore::default();
+    let body = icu_body(
+        &secret,
+        &icu_event_json(
+            "a1",
+            "ACTIVITY_HEART_RATE",
+            "act-1",
+            "2024-12-06T06:40:47.011+00:00",
+        ),
+    );
+
+    let queued = accept_event(Provider::Icu, &body, &mut store).await?;
+
+    assert!(
+        queued.is_empty(),
+        "a non-analyzed event queues nothing (no wake)"
+    );
     Ok(())
 }
 
