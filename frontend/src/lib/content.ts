@@ -1,5 +1,5 @@
 function isContent(res: Response): boolean {
-  return res.ok && !res.headers.get("content-type")?.includes("text/html");
+  return res.ok;
 }
 
 export async function resolveContent(
