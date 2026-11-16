@@ -12,7 +12,7 @@ use time::OffsetDateTime;
 
 use super::*;
 use crate::facade::{
-    ActTypeId, Activity, Error, Notification, NotificationKind, NotificationLifecycle,
+    ActTypeId, Activity, ActivityId, Error, Notification, NotificationKind, NotificationLifecycle,
     NotificationSubject, PartId, Summary, UserId,
 };
 use crate::{EntityFacade, IcuActivityId, ProviderActivityId};
@@ -206,6 +206,23 @@ pub(crate) async fn import_activity<D: EntityFacade<S>, S: IcuDataStore>(
     Ok(Some(
         facade.upsert_activity(activity, session, store).await?,
     ))
+}
+
+/// Deletes an icu activity from the domain (issue #920): the `ACTIVITY_DELETED`
+/// webhook's domain op. Unlike [`import_activity`], it makes no HTTP fetch — the
+/// webhook carries the activity id, and the domain's `delete` returns the
+/// `Summary` of everything it touched (the activity's tombstone plus the
+/// parts/usages its unregistration affects).
+pub(crate) async fn delete_activity<D: EntityFacade<S>, S: IcuDataStore>(
+    activity_id: &str,
+    user_id: UserId,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<Summary> {
+    let id: ActivityId =
+        ProviderActivityId::Icu(IcuActivityId::from(activity_id.to_string())).into();
+    let session = Box::new(OnBehalf(user_id));
+    facade.delete_activity(id, session, store).await
 }
 
 /// The one transient notification a stub-skip batch carries (spec #764): the

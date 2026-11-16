@@ -3,8 +3,8 @@ use super::super::test_support::{
 };
 use super::*;
 use crate::facade::{
-    Notification, NotificationKind, NotificationLifecycle, NotificationState, NotificationSubject,
-    Summary,
+    ActivityId, Notification, NotificationKind, NotificationLifecycle, NotificationState,
+    NotificationSubject, Summary,
 };
 use time::OffsetDateTime;
 
@@ -15,6 +15,19 @@ fn event(id: i32, activity: &str) -> IcuEvent {
         activity_id: activity.to_string(),
         event_time: 1000,
         object_type: "ACTIVITY".to_string(),
+        event_type: "ACTIVITY_UPLOADED".to_string(),
+    }
+}
+
+/// An `ACTIVITY_DELETED` event (issue #920): the queue's delete dispatch key.
+fn deleted_event(id: i32, activity: &str) -> IcuEvent {
+    IcuEvent {
+        id: Some(id),
+        icu_athlete_id: "a1".into(),
+        activity_id: activity.to_string(),
+        event_time: 1000,
+        object_type: "ACTIVITY".to_string(),
+        event_type: "ACTIVITY_DELETED".to_string(),
     }
 }
 
@@ -236,4 +249,92 @@ async fn process_permanent_error_drops_event_and_continues() {
     let summary = process(UserId::from(1), &facade, &mut store).await.unwrap();
     // Only the good activity (event 2) is imported.
     assert_eq!(summary.activities.len(), 1);
+}
+
+// ─── process: ACTIVITY_DELETED (issue #920) ─────────────────────────────────
+
+#[tokio::test]
+async fn process_deletes_activity_on_deleted_event() {
+    let (mut store, mut facade) = setup();
+    super::super::ratelimit::test_set_not_limited();
+    store
+        .expect_icuser_get_by_tbid()
+        .times(..)
+        .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
+    // One ACTIVITY_DELETED event, then empty.
+    store.expect_icu_event_get_next_for_user().returning(|_id| {
+        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(match n {
+            0 => Some(deleted_event(1, "10")),
+            _ => None,
+        })
+    });
+    store.expect_icu_event_delete().returning(|_id| Ok(()));
+    // The delete returns the domain's summary (the activity tombstone).
+    facade
+        .expect_delete_activity()
+        .returning(|id, _user, _store| {
+            let mut summary = Summary::default();
+            summary.activities.tombstone(id);
+            Ok(summary)
+        });
+    let summary = process(UserId::from(1), &facade, &mut store).await.unwrap();
+    // The deleted activity is reported as a tombstone (the client's merge drops it).
+    assert_eq!(summary.activities.len(), 1);
+    assert!(
+        summary
+            .activities
+            .is_tombstoned(&ActivityId::from("icu:10"))
+    );
+}
+
+#[tokio::test]
+async fn process_mixed_batch_imports_and_deletes() {
+    let (mut store, mut facade) = setup();
+    super::super::ratelimit::test_set_not_limited();
+    store
+        .expect_icuser_get_by_tbid()
+        .times(..)
+        .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
+    // An upload (import) followed by a delete.
+    store.expect_icu_event_get_next_for_user().returning(|_id| {
+        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(match n {
+            0 => Some(event(1, "10")),
+            1 => Some(deleted_event(2, "11")),
+            _ => None,
+        })
+    });
+    store.expect_icu_event_delete().returning(|_id| Ok(()));
+    queue("/activity/10", &activity_json("10", "Ride", None));
+    facade
+        .expect_upsert_activity()
+        .returning(move |act, _user, _store| {
+            let mut summary = Summary::default();
+            summary.activities.upsert(act);
+            Ok(summary)
+        });
+    facade
+        .expect_delete_activity()
+        .returning(|id, _user, _store| {
+            let mut summary = Summary::default();
+            summary.activities.tombstone(id);
+            Ok(summary)
+        });
+    let summary = process(UserId::from(1), &facade, &mut store).await.unwrap();
+    // The uploaded activity is live; the deleted one is a tombstone.
+    assert_eq!(summary.activities.len(), 2);
+    assert!(
+        summary
+            .activities
+            .get(&ActivityId::from("icu:10"))
+            .is_some()
+    );
+    assert!(
+        summary
+            .activities
+            .is_tombstoned(&ActivityId::from("icu:11"))
+    );
 }
