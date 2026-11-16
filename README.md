@@ -9,3 +9,6 @@ Know how long your parts last and when to maintain them
 TendaBike fetches all your activities and bikes from Strava.
 You can create parts and attach them to your bikes. You can move parts between bikes.
 TendaBike will calculate the use for any part you create.
+
+## Docs
+- [Admin guides](docs/guides/admin/) — setup and operations (e.g. the [intervals.icu provider](docs/guides/admin/icu-provider.md))
