@@ -207,7 +207,12 @@
     </div>
   </div>
 
-  <!-- Date Range Slider -->
+  <!-- Date Range Slider.
+
+       One-way `values` + `on:change`, not a two-way `bind:values`: two-way
+       binding feeds the slider's reassignment back into `dateValues`,
+       re-triggering its normalizer — a reference ping-pong. One-way makes
+       ActList the sole writer; the slider reports edits via `change`. -->
   <div class="mx-8 mt-6">
     <RangeSlider
       style="font-size: 0.75rem"
@@ -220,7 +225,8 @@
       last="label"
       float
       {formatter}
-      bind:values={dateValues}
+      values={dateValues}
+      on:change={(e) => (dateValues = e.detail.values)}
     />
   </div>
 </div>
