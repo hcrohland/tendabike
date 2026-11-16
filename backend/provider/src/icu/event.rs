@@ -144,17 +144,11 @@ pub async fn accept_event(body: &str, store: &mut impl IcuDataStore) -> TbResult
     let mut queued = Vec::new();
     for event in &envelope.events {
         let Some(activity) = &event.activity else {
-            debug!(
-                "Skipping icu webhook event: no activity (type: {})",
-                event.type_
-            );
+            debug!("Skipping icu webhook event (no activity): {event:?}");
             continue; // an event without an activity (e.g. a test delivery) is not queueable
         };
         if event.type_ != ACTIVITY_ANALYZED {
-            debug!(
-                "Skipping icu webhook event: not ACTIVITY_ANALYZED (type: {})",
-                event.type_
-            );
+            debug!("Skipping icu webhook event (not ACTIVITY_ANALYZED): {event:?}");
             continue; // only ACTIVITY_ANALYZED is subscribed (spec #764)
         }
         let icu_event = IcuEvent::new(
