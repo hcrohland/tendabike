@@ -566,8 +566,14 @@ async fn sync_users_queues_icu_users() -> TbResult<()> {
     // no-op past the queue).
     begin_test();
     queue("/athlete/a1/gear", "[]");
+    let today = {
+        let dt = time::OffsetDateTime::now_utc();
+        format!("{:04}-{:02}-{:02}", dt.year(), dt.month() as u8, dt.day())
+    };
     queue(
-        "/athlete/a1/activities?oldest=2004-02-27&limit=100&fields=id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules",
+        &format!(
+            "/athlete/a1/activities?oldest=1970-01-01&newest={today}&limit=100&fields=id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules"
+        ),
         "[]",
     );
     // No Strava row for this user → the `provider_of` lookup resolves icu.
