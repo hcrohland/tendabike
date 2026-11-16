@@ -23,7 +23,7 @@ SQLx compiles queries against the committed `backend/sqlx/.sqlx/` offline cache.
 
 ## Documentation
 
-- Admin/operator guides (setup and troubleshooting): [`docs/guides/admin/`](docs/guides/admin/) — e.g. the [intervals.icu provider setup](docs/guides/admin/icu-provider.md).
+- Admin/operator guides (setup and troubleshooting): [`docs/guides/admin/`](docs/guides/admin/) — the [Strava provider setup](docs/guides/admin/strava-provider.md) and the [intervals.icu provider setup](docs/guides/admin/icu-provider.md).
 
 ## Commit rules
 
