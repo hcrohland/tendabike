@@ -1,16 +1,8 @@
 <script lang="ts">
-  import {
-    Button,
-    ButtonGroup,
-    Spinner,
-    Table,
-    TableBodyCell,
-    TableBodyRow,
-    TableHeadCell,
-  } from "flowbite-svelte";
+  import { Button, ButtonGroup, Spinner } from "flowbite-svelte";
   import { handleError, myfetch } from "../lib/utils";
   import { type User } from "../lib/user";
-  import Sync from "./Sync.svelte";
+  import AdminCard from "./AdminCard.svelte";
   import CreateSync from "./CreateSync.svelte";
   import DeleteUser from "./DeleteUser.svelte";
   import * as m from "../../paraglide/messages";
@@ -35,64 +27,26 @@
     promise = myfetch("/api/activ/rescan").catch(handleError);
   }
 
-  async function disable(user: User) {
-    await myfetch("/strava/disable/" + user.id, "POST").catch(handleError);
-    refresh();
-  }
-
   refresh();
 </script>
 
 {#await request}
   <Spinner size="16" class="justify-center" />
 {:then list: any[]}
-  <Table>
-    <TableBodyRow>
-      <TableHeadCell>{m.admin_col_id()}</TableHeadCell>
-      <TableHeadCell>{m.partform_name()}</TableHeadCell>
-      <TableHeadCell>{m.admin_col_role()}</TableHeadCell>
-      <TableHeadCell>{m.nav_parts()}</TableHeadCell>
-      <TableHeadCell>{m.nav_activities()}</TableHeadCell>
-      <TableHeadCell>{m.admin_col_events()}</TableHeadCell>
-      <TableHeadCell></TableHeadCell>
-    </TableBodyRow>
+  <div class="flex flex-col gap-1 sm:gap-2 max-w-4xl mx-auto">
     {#each list.sort((a, b) => a.user.id - b.user.id) as { user, parts, activities, events, disabled } (user.id)}
-      <TableBodyRow>
-        <TableBodyCell>{user.id}</TableBodyCell>
-        <TableBodyCell>{user.firstname} {user.name}</TableBodyCell>
-        <TableBodyCell>
-          {disabled
-            ? m.admin_role_disabled()
-            : user.is_admin
-              ? m.header_admin()
-              : m.admin_role_user()}</TableBodyCell
-        >
-        <TableBodyCell>{parts}</TableBodyCell>
-        <TableBodyCell>{activities}</TableBodyCell>
-        <TableBodyCell>{events}</TableBodyCell>
-        <TableBodyCell>
-          <ButtonGroup>
-            {#if !disabled}
-              <Button onclick={() => createSync.start(user)}>
-                {m.admin_add_sync_event()}
-              </Button>
-              <Sync {user} {refresh} />
-              <Button onclick={() => disable(user)}>
-                {m.admin_disable_user()}
-              </Button>
-            {/if}
-            <Button
-              onclick={() => {
-                deleteuser?.start(user);
-              }}
-            >
-              {m.admin_delete_user()}
-            </Button>
-          </ButtonGroup>
-        </TableBodyCell>
-      </TableBodyRow>
+      <AdminCard
+        {user}
+        {parts}
+        {activities}
+        {events}
+        {disabled}
+        {refresh}
+        createSync={(u: User) => createSync.start(u)}
+        deleteUser={(u: User) => deleteuser?.start(u)}
+      />
     {/each}
-  </Table>
+  </div>
   <ButtonGroup class="p-6">
     <Button onclick={() => createSync.start()}
       >{m.admin_add_sync_event_all()}</Button

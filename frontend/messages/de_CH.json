@@ -343,8 +343,6 @@
   "toygroup_none_found": "Für {category} sind uf Strava no keini Aktivitäte gfunde worde.",
   "toygroup_none_assigned": "Du hesch no kes {category} mit ere Aktivität uf Strava verchnüpft. Mach das nache, zum aafo.",
   "toygroup_category_not_found": "Fehler: Kategorie nöd gfunde!",
-  "admin_col_id": "ID",
-  "admin_col_role": "Rolle",
   "admin_col_events": "Ereignis",
   "admin_role_disabled": "Deaktiviert",
   "admin_role_user": "Benutzer",

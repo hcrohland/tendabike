@@ -343,8 +343,6 @@
   "toygroup_none_found": "We did not find any {category} on Strava (yet).",
   "toygroup_none_assigned": "You have no {category} assigned to any activity on Strava. Please do so to get started.",
   "toygroup_category_not_found": "Error: Category not found!",
-  "admin_col_id": "ID",
-  "admin_col_role": "Role",
   "admin_col_events": "Events",
   "admin_role_disabled": "Disabled",
   "admin_role_user": "User",
