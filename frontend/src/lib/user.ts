@@ -68,6 +68,16 @@ export type UserState = {
   summary: Summary;
 };
 
+/// The wire shape of one row of `GET /api/user/all` (admin): the user with
+/// their parts/activities/events counts and the provider's disabled flag.
+export type AdminRow = {
+  user: User;
+  parts: number;
+  activities: number;
+  events: number;
+  disabled: boolean;
+};
+
 /// The wire shape of a Summary: a uniform object per collection, with
 /// stringified id keys and `null` for tombstones (an entity that no longer
 /// exists). The attachment keys are the client's `Attachment.idx`
