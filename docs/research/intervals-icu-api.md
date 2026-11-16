@@ -54,7 +54,7 @@ Two methods exist; for a multi-user app use **OAuth 2.0**:
 
 | Resource | Endpoint | Notes |
 |---|---|---|
-| List activities | `GET /athlete/{id}/activities?oldest=&newest=` | **Date-range required** (ISO `yyyy-MM-dd`). Summary data. `fields=` param selects fields. |
+| List activities | `GET /athlete/{id}/activities?oldest=&newest=&limit=` | `oldest` is **required** (422 without it). `newest` is optional (upper bound). ISO `yyyy-MM-dd`. **Results in descending order** (newest first). `fields=` param selects fields. `limit` caps batch size. |
 | Single activity | `GET /activity/{id}?intervals=true` | Full data; `intervals=true` adds interval breakdown. |
 | Athlete | `GET /athlete/{id}` | Athlete profile/summary. |
 | **List gear** | `GET /athlete/{id}/gear` | Gear items (see below). `.csv` suffix for CSV. |
@@ -62,7 +62,7 @@ Two methods exist; for a multi-user app use **OAuth 2.0**:
 | Activities CSV | `GET /athlete/{id}/activities.csv` | Bulk export. |
 
 - **Athlete id `0`** = "the athlete associated with this token/API key."
-- **Pagination is date-range based** (`oldest`/`newest`), not cursor/offset. Backfill = loop over date windows.
+- **Pagination is date-range based** (`oldest`/`newest`), not cursor/offset. Because results are newest-first, a backfill that walks all history must proceed **backward**: start at `newest=now`, fetch a batch, then set `newest` to the day before the oldest activity in that batch. A forward walk (advancing `oldest`) only ever sees the newest `limit` activities.
 
 ### Gear
 

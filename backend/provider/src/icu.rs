@@ -23,6 +23,9 @@
 //!   user's gear list (`GET /athlete/{id}/gear`).
 //! - `ratelimit`: the icu rate-limit shim over the shared kernel.
 //!
+//! API reference: [`docs/research/intervals-icu-api.md`](../../../docs/research/intervals-icu-api.md)
+//! (required params, sort order, date format, rate-limit headers).
+//!
 
 use log::{debug, info, warn};
 use serde_derive::{Deserialize, Serialize};
