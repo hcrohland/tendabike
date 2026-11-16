@@ -357,7 +357,6 @@
   "sync_create_header_all": "Create sync Event for all users",
   "sync_start_label": "Start",
   "sync_migration_label": "Migration",
-  "sync_processed": "Processing ...",
   "sync_process_queue": "Process Event Queue",
   "notif_title_sub_request": "Shop subscription request",
   "notif_body_sub_request": "A user requested to subscribe to your shop. Review their request and respond.",

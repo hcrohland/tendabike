@@ -1,18 +1,14 @@
 <script lang="ts">
   import { Button, ButtonGroup, Spinner } from "flowbite-svelte";
   import { handleError, myfetch } from "../lib/utils";
-  import { type User } from "../lib/user";
+  import { type AdminRow, type User } from "../lib/user";
   import AdminCard from "./AdminCard.svelte";
   import CreateSync from "./CreateSync.svelte";
   import DeleteUser from "./DeleteUser.svelte";
   import * as m from "../../paraglide/messages";
 
   let promise: Promise<void>, createSync: any;
-  let request:
-    | Promise<
-        { user: User; parts: number; activities: number; events: number }[]
-      >
-    | any[] = [];
+  let request: Promise<AdminRow[]> | AdminRow[] = [];
 
   function refresh() {
     request = myfetch("/api/user/all").catch(handleError);
@@ -32,15 +28,11 @@
 
 {#await request}
   <Spinner size="16" class="justify-center" />
-{:then list: any[]}
+{:then list: AdminRow[]}
   <div class="flex flex-col gap-1 sm:gap-2 max-w-4xl mx-auto">
-    {#each list.sort((a, b) => a.user.id - b.user.id) as { user, parts, activities, events, disabled } (user.id)}
+    {#each list.sort((a, b) => a.user.id - b.user.id) as row (row.user.id)}
       <AdminCard
-        {user}
-        {parts}
-        {activities}
-        {events}
-        {disabled}
+        {row}
         {refresh}
         createSync={(u: User) => createSync.start(u)}
         deleteUser={(u: User) => deleteuser?.start(u)}

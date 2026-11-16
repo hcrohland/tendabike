@@ -19,18 +19,16 @@ function renderCard(overrides: Record<string, any> = {}) {
   const createSync = vi.fn();
   const deleteUser = vi.fn();
   const refresh = vi.fn();
+  const row = {
+    user,
+    parts: 2,
+    activities: 7,
+    events: 11,
+    disabled: false,
+    ...overrides,
+  };
   const utils = render(AdminCard, {
-    props: {
-      user,
-      parts: 2,
-      activities: 7,
-      events: 11,
-      disabled: false,
-      refresh,
-      createSync,
-      deleteUser,
-      ...overrides,
-    },
+    props: { row, refresh, createSync, deleteUser },
   });
   return { utils, createSync, deleteUser, refresh };
 }

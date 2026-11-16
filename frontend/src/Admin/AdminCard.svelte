@@ -4,28 +4,22 @@
   import Chip from "../Widgets/Chip.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { handleError, myfetch } from "../lib/utils";
-  import type { User } from "../lib/user";
+  import type { AdminRow, User } from "../lib/user";
   import * as m from "../../paraglide/messages";
 
   let {
-    user,
-    parts,
-    activities,
-    events,
-    disabled = false,
+    row,
     refresh,
     createSync,
     deleteUser,
   }: {
-    user: User;
-    parts: number;
-    activities: number;
-    events: number;
-    disabled?: boolean;
+    row: AdminRow;
     refresh: () => void;
     createSync: (user: User) => void;
     deleteUser: (user: User) => void;
   } = $props();
+
+  let { user, parts, activities, events, disabled } = $derived(row);
 
   let syncing = $state(false);
 
