@@ -11,14 +11,16 @@ mod config;
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
 
-    // The deprecation warnings for the legacy variables in use are printed
-    // here, before the logging subscriber exists (it is set up by
-    // `tb_axum::start`).
+    // The deprecation warnings for the legacy variables in use and the
+    // webhook callback URLs are printed here, before the logging subscriber
+    // exists (it is set up by `tb_axum::start`).
     let env = std::env::vars().collect();
     let (config, deprecations) = config::from_env(&env);
     for warning in &deprecations {
         eprintln!("warning: {warning}");
     }
+    eprintln!("strava webhook URL: {}", config.strava_webhook_url);
+    eprintln!("icu webhook URL: {}", config.icu_webhook_url);
 
     let pool = sqlx::PgPool::connect(&config.database_url).await?;
 

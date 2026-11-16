@@ -2,25 +2,43 @@
 //! concrete config the crates consume.
 //!
 //! The public host (`HOSTNAME`) is the single source for both providers'
-//! redirect URLs. `STRAVA_*` and `DATABASE_URL` are the canonical variable
-//! names; `CLIENT_ID`, `CLIENT_SECRET`, and `DB_URL` remain as deprecated
-//! fallbacks — a warning is produced for each one that actually supplies a
-//! value.
+//! redirect and webhook callback URLs. `STRAVA_*` and `DATABASE_URL` are
+//! the canonical variable names; `CLIENT_ID`, `CLIENT_SECRET`, and
+//! `DB_URL` remain as deprecated fallbacks — a warning is produced for
+//! each one that actually supplies a value.
 
 use std::collections::HashMap;
 
 /// The resolved instance configuration: the database URL, both providers'
-/// credentials and redirect URLs, and the ICU webhook secret.
+/// credentials, redirect and webhook callback URLs, and the ICU webhook
+/// secret.
 #[derive(Debug, Clone)]
 pub(crate) struct AppConfig {
     pub(crate) database_url: String,
     pub(crate) strava_client_id: String,
     pub(crate) strava_client_secret: String,
     pub(crate) strava_redirect_url: String,
+    pub(crate) strava_webhook_url: String,
     pub(crate) icu_client_id: String,
     pub(crate) icu_client_secret: String,
     pub(crate) icu_redirect_url: String,
+    pub(crate) icu_webhook_url: String,
     pub(crate) icu_webhook_secret: String,
+}
+
+/// The base URL (`<scheme>://<host>`) derived from the instance's public
+/// host: `http` when the host part is `localhost` or `127.0.0.1`, `https`
+/// otherwise. An unset `HOSTNAME` yields the local-dev default
+/// (`http://localhost:8000`).
+fn base_url(hostname: Option<&str>) -> String {
+    let host = hostname.unwrap_or("localhost:8000");
+    let host_part = host.split(':').next().unwrap_or(host);
+    let scheme = if matches!(host_part, "localhost" | "127.0.0.1") {
+        "http"
+    } else {
+        "https"
+    };
+    format!("{scheme}://{host}")
 }
 
 /// The provider redirect URLs derived from the instance's public host:
@@ -33,16 +51,28 @@ struct RedirectUrls {
 }
 
 fn redirect_urls(hostname: Option<&str>) -> RedirectUrls {
-    let host = hostname.unwrap_or("localhost:8000");
-    let host_part = host.split(':').next().unwrap_or(host);
-    let scheme = if matches!(host_part, "localhost" | "127.0.0.1") {
-        "http"
-    } else {
-        "https"
-    };
+    let base = base_url(hostname);
     RedirectUrls {
-        strava: format!("{scheme}://{host}/strava/token"),
-        icu: format!("{scheme}://{host}/icu/token"),
+        strava: format!("{base}/strava/token"),
+        icu: format!("{base}/icu/token"),
+    }
+}
+
+/// The provider webhook callback URLs derived from the instance's public
+/// host: `https://<HOSTNAME>/strava/callback` and
+/// `https://<HOSTNAME>/icu/callback`, with `http` when the host part is
+/// `localhost` or `127.0.0.1`. An unset `HOSTNAME` yields the local-dev
+/// defaults (`http://localhost:8000/…`).
+struct WebhookUrls {
+    strava: String,
+    icu: String,
+}
+
+fn webhook_urls(hostname: Option<&str>) -> WebhookUrls {
+    let base = base_url(hostname);
+    WebhookUrls {
+        strava: format!("{base}/strava/callback"),
+        icu: format!("{base}/icu/callback"),
     }
 }
 
@@ -97,16 +127,20 @@ pub(crate) fn from_env(env: &HashMap<String, String>) -> (AppConfig, Vec<String>
         resolve(env, "STRAVA_CLIENT_SECRET", "CLIENT_SECRET", None);
     warnings.extend(warning);
 
-    let urls = redirect_urls(env.get("HOSTNAME").map(String::as_str));
+    let hostname = env.get("HOSTNAME").map(String::as_str);
+    let urls = redirect_urls(hostname);
+    let webhooks = webhook_urls(hostname);
 
     let config = AppConfig {
         database_url,
         strava_client_id,
         strava_client_secret,
         strava_redirect_url: urls.strava,
+        strava_webhook_url: webhooks.strava,
         icu_client_id: required(env, "ICU_CLIENT_ID"),
         icu_client_secret: required(env, "ICU_CLIENT_SECRET"),
         icu_redirect_url: urls.icu,
+        icu_webhook_url: webhooks.icu,
         icu_webhook_secret: env.get("ICU_WEBHOOK_SECRET").cloned().unwrap_or_default(),
     };
 
@@ -152,6 +186,36 @@ mod tests {
         let urls = redirect_urls(None);
         assert_eq!(urls.strava, "http://localhost:8000/strava/token");
         assert_eq!(urls.icu, "http://localhost:8000/icu/token");
+    }
+
+    // --- webhook_urls -----------------------------------------------------
+
+    #[test]
+    fn hostname_yields_https_webhook_urls() {
+        let urls = webhook_urls(Some("tendabike.example.com"));
+        assert_eq!(urls.strava, "https://tendabike.example.com/strava/callback");
+        assert_eq!(urls.icu, "https://tendabike.example.com/icu/callback");
+    }
+
+    #[test]
+    fn localhost_hostname_yields_http_webhook_urls() {
+        let urls = webhook_urls(Some("localhost:8000"));
+        assert_eq!(urls.strava, "http://localhost:8000/strava/callback");
+        assert_eq!(urls.icu, "http://localhost:8000/icu/callback");
+    }
+
+    #[test]
+    fn loopback_hostname_yields_http_webhook_urls() {
+        let urls = webhook_urls(Some("127.0.0.1:8000"));
+        assert_eq!(urls.strava, "http://127.0.0.1:8000/strava/callback");
+        assert_eq!(urls.icu, "http://127.0.0.1:8000/icu/callback");
+    }
+
+    #[test]
+    fn missing_hostname_yields_local_dev_webhook_defaults() {
+        let urls = webhook_urls(None);
+        assert_eq!(urls.strava, "http://localhost:8000/strava/callback");
+        assert_eq!(urls.icu, "http://localhost:8000/icu/callback");
     }
 
     // --- resolve ----------------------------------------------------------
@@ -216,11 +280,19 @@ mod tests {
             config.strava_redirect_url,
             "https://tendabike.example.com/strava/token"
         );
+        assert_eq!(
+            config.strava_webhook_url,
+            "https://tendabike.example.com/strava/callback"
+        );
         assert_eq!(config.icu_client_id, "iid");
         assert_eq!(config.icu_client_secret, "isec");
         assert_eq!(
             config.icu_redirect_url,
             "https://tendabike.example.com/icu/token"
+        );
+        assert_eq!(
+            config.icu_webhook_url,
+            "https://tendabike.example.com/icu/callback"
         );
         assert_eq!(config.icu_webhook_secret, "hook");
     }
@@ -242,7 +314,12 @@ mod tests {
             config.strava_redirect_url,
             "http://localhost:8000/strava/token"
         );
+        assert_eq!(
+            config.strava_webhook_url,
+            "http://localhost:8000/strava/callback"
+        );
         assert_eq!(config.icu_redirect_url, "http://localhost:8000/icu/token");
+        assert_eq!(config.icu_webhook_url, "http://localhost:8000/icu/callback");
         assert_eq!(warnings.len(), 3);
         for (legacy, replacement) in [
             ("DB_URL", "DATABASE_URL"),
