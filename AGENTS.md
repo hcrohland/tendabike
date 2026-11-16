@@ -21,6 +21,10 @@ A Cargo package's directory is its name without the `tb_` prefix: `tb_provider` 
 
 SQLx compiles queries against the committed `backend/sqlx/.sqlx/` offline cache. After adding or changing a query, run `cargo sqlx prepare` to refresh it; apply a new migration with `cargo sqlx migrate run`. **Changing the database schema** — the migration rules and collision resolution — is in [`backend/docs/database-changes.md`](backend/docs/database-changes.md).
 
+## Documentation
+
+- Admin/operator guides (setup and troubleshooting): [`docs/guides/admin/`](docs/guides/admin/) — general instance setup, plus the [Strava](docs/guides/admin/strava-provider.md) and [intervals.icu](docs/guides/admin/icu-provider.md) provider guides.
+
 ## Commit rules
 
 - Flow, in order: finish the work → if on `main` or a detached HEAD, create a feature branch from a freshly fetched `main` (`git fetch origin && git switch -c <branch> origin/main`) → commit optimistically (run `git commit` directly; fix and re-commit on hook failure) → push → if the work is on an issue, comment on it with the commit SHA.
