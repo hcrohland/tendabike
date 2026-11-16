@@ -11,6 +11,10 @@
 - Run a subset: `npm run test -- src/<file>.test.ts` from the repo root — the path is relative to `frontend/`, so it omits the `frontend/` prefix.
 - **Prettier**: config lives in `frontend/.prettierrc` — run it via the root npm scripts (`npm run fmtcheck` / `npm run format`), never raw `npx prettier` from the repo root (no config there → defaults → false positives).
 
+## Verification
+
+- **Browser:** Playwright + Chromium is available system-wide (`npx playwright`). Use it for real-browser verification when a spec's acceptance criteria require it (e.g., confirming a page renders without console errors). Launch the dev server, drive the page, and check `page.on('console')` / `page.on('pageerror')` for the condition under test.
+
 ## Architecture
 
 - **UI**: Tailwind CSS v4 + flowbite-svelte (components) + flowbite-svelte-icons (icons). New UI comes from flowbite-svelte components — raw Svelte + Tailwind only where the library has no component.
