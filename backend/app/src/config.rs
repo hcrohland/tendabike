@@ -12,22 +12,27 @@ use std::collections::HashMap;
 /// The resolved instance configuration: the database URL, both providers'
 /// credentials and redirect URLs, and the ICU webhook secret.
 #[derive(Debug, Clone)]
-pub struct AppConfig {
-    pub database_url: String,
-    pub strava_client_id: String,
-    pub strava_client_secret: String,
-    pub strava_redirect_url: String,
-    pub icu_client_id: String,
-    pub icu_client_secret: String,
-    pub icu_redirect_url: String,
-    pub icu_webhook_secret: String,
+pub(crate) struct AppConfig {
+    pub(crate) database_url: String,
+    pub(crate) strava_client_id: String,
+    pub(crate) strava_client_secret: String,
+    pub(crate) strava_redirect_url: String,
+    pub(crate) icu_client_id: String,
+    pub(crate) icu_client_secret: String,
+    pub(crate) icu_redirect_url: String,
+    pub(crate) icu_webhook_secret: String,
 }
 
 /// The provider redirect URLs derived from the instance's public host:
 /// `https://<HOSTNAME>/strava/token` and `https://<HOSTNAME>/icu/token`,
 /// with `http` when the host part is `localhost` or `127.0.0.1`. An unset
 /// `HOSTNAME` yields the local-dev defaults (`http://localhost:8000/…`).
-pub fn redirect_urls(hostname: Option<&str>) -> (String, String) {
+struct RedirectUrls {
+    strava: String,
+    icu: String,
+}
+
+fn redirect_urls(hostname: Option<&str>) -> RedirectUrls {
     let host = hostname.unwrap_or("localhost:8000");
     let host_part = host.split(':').next().unwrap_or(host);
     let scheme = if matches!(host_part, "localhost" | "127.0.0.1") {
@@ -35,17 +40,17 @@ pub fn redirect_urls(hostname: Option<&str>) -> (String, String) {
     } else {
         "https"
     };
-    (
-        format!("{scheme}://{host}/strava/token"),
-        format!("{scheme}://{host}/icu/token"),
-    )
+    RedirectUrls {
+        strava: format!("{scheme}://{host}/strava/token"),
+        icu: format!("{scheme}://{host}/icu/token"),
+    }
 }
 
 /// Resolves one variable: the canonical name wins; the deprecated name is
 /// the fallback (yielding a deprecation warning that names it and its
 /// replacement); then the default. Panics when nothing is set and no
 /// default exists.
-pub fn resolve(
+fn resolve(
     env: &HashMap<String, String>,
     canonical: &str,
     deprecated: &str,
@@ -65,10 +70,17 @@ pub fn resolve(
     }
 }
 
+/// Reads a required variable, panicking when it is absent.
+fn required(env: &HashMap<String, String>, name: &str) -> String {
+    env.get(name)
+        .cloned()
+        .unwrap_or_else(|| panic!("Missing {name}!"))
+}
+
 /// Resolves the full instance configuration from the environment, returning
 /// it with the deprecation warnings for the legacy variables that supplied
 /// values.
-pub fn from_env(env: &HashMap<String, String>) -> (AppConfig, Vec<String>) {
+pub(crate) fn from_env(env: &HashMap<String, String>) -> (AppConfig, Vec<String>) {
     let mut warnings = Vec::new();
 
     let (database_url, warning) = resolve(
@@ -77,37 +89,24 @@ pub fn from_env(env: &HashMap<String, String>) -> (AppConfig, Vec<String>) {
         "DB_URL",
         Some("postgres://localhost/tendabike"),
     );
-    if let Some(w) = warning {
-        warnings.push(w);
-    }
+    warnings.extend(warning);
 
     let (strava_client_id, warning) = resolve(env, "STRAVA_CLIENT_ID", "CLIENT_ID", None);
-    if let Some(w) = warning {
-        warnings.push(w);
-    }
+    warnings.extend(warning);
     let (strava_client_secret, warning) =
         resolve(env, "STRAVA_CLIENT_SECRET", "CLIENT_SECRET", None);
-    if let Some(w) = warning {
-        warnings.push(w);
-    }
+    warnings.extend(warning);
 
-    let (strava_redirect_url, icu_redirect_url) =
-        redirect_urls(env.get("HOSTNAME").map(String::as_str));
+    let urls = redirect_urls(env.get("HOSTNAME").map(String::as_str));
 
     let config = AppConfig {
         database_url,
         strava_client_id,
         strava_client_secret,
-        strava_redirect_url,
-        icu_client_id: env
-            .get("ICU_CLIENT_ID")
-            .cloned()
-            .expect("Missing ICU_CLIENT_ID!"),
-        icu_client_secret: env
-            .get("ICU_CLIENT_SECRET")
-            .cloned()
-            .expect("Missing ICU_CLIENT_SECRET!"),
-        icu_redirect_url,
+        strava_redirect_url: urls.strava,
+        icu_client_id: required(env, "ICU_CLIENT_ID"),
+        icu_client_secret: required(env, "ICU_CLIENT_SECRET"),
+        icu_redirect_url: urls.icu,
         icu_webhook_secret: env.get("ICU_WEBHOOK_SECRET").cloned().unwrap_or_default(),
     };
 
@@ -129,30 +128,30 @@ mod tests {
 
     #[test]
     fn hostname_yields_https_redirects() {
-        let (strava, icu) = redirect_urls(Some("tendabike.example.com"));
-        assert_eq!(strava, "https://tendabike.example.com/strava/token");
-        assert_eq!(icu, "https://tendabike.example.com/icu/token");
+        let urls = redirect_urls(Some("tendabike.example.com"));
+        assert_eq!(urls.strava, "https://tendabike.example.com/strava/token");
+        assert_eq!(urls.icu, "https://tendabike.example.com/icu/token");
     }
 
     #[test]
     fn localhost_hostname_yields_http_redirects() {
-        let (strava, icu) = redirect_urls(Some("localhost:8000"));
-        assert_eq!(strava, "http://localhost:8000/strava/token");
-        assert_eq!(icu, "http://localhost:8000/icu/token");
+        let urls = redirect_urls(Some("localhost:8000"));
+        assert_eq!(urls.strava, "http://localhost:8000/strava/token");
+        assert_eq!(urls.icu, "http://localhost:8000/icu/token");
     }
 
     #[test]
     fn loopback_hostname_yields_http_redirects() {
-        let (strava, icu) = redirect_urls(Some("127.0.0.1:8000"));
-        assert_eq!(strava, "http://127.0.0.1:8000/strava/token");
-        assert_eq!(icu, "http://127.0.0.1:8000/icu/token");
+        let urls = redirect_urls(Some("127.0.0.1:8000"));
+        assert_eq!(urls.strava, "http://127.0.0.1:8000/strava/token");
+        assert_eq!(urls.icu, "http://127.0.0.1:8000/icu/token");
     }
 
     #[test]
     fn missing_hostname_yields_local_dev_defaults() {
-        let (strava, icu) = redirect_urls(None);
-        assert_eq!(strava, "http://localhost:8000/strava/token");
-        assert_eq!(icu, "http://localhost:8000/icu/token");
+        let urls = redirect_urls(None);
+        assert_eq!(urls.strava, "http://localhost:8000/strava/token");
+        assert_eq!(urls.icu, "http://localhost:8000/icu/token");
     }
 
     // --- resolve ----------------------------------------------------------
