@@ -47,7 +47,7 @@ Two methods exist; for a multi-user app use **OAuth 2.0**:
   { "secret": "ooKeodacie8I", "events": [ { "athlete_id": "i123456", "type": "ACTIVITY_UPLOADED", "timestamp": "...", "activity": { "id": "...", "start_date": "..." } } ] }
   ```
 - The `secret` field verifies the webhook came from intervals.icu (constant-time compare).
-- Event types: `ACTIVITY_UPLOADED` (file uploaded), `ACTIVITY_UPDATED` (activity changed), `ACTIVITY_ANALYZED` (analysis complete, ~60s after upload), `CALENDAR_UPDATED`, `SPORT_SETTINGS_UPDATED`, `WELLNESS_UPDATED`. **Tendabike subscribes to `ACTIVITY_UPLOADED` and `ACTIVITY_UPDATED`.**
+- Event types: `ACTIVITY_UPLOADED` (file uploaded), `ACTIVITY_UPDATED` (activity changed), `ACTIVITY_DELETED` (activity deleted), `ACTIVITY_ANALYZED` (analysis complete, ~60s after upload), `CALENDAR_UPDATED`, `SPORT_SETTINGS_UPDATED`, `WELLNESS_UPDATED`. **Tendabike subscribes to `ACTIVITY_UPLOADED`, `ACTIVITY_UPDATED`, and `ACTIVITY_DELETED`** — the first two import the activity, `ACTIVITY_DELETED` deletes it.
 - **Not delivered for Strava-sourced activities.**
 - Recommended pattern: webhook as the change signal, then pull full data via `GET /activity/{id}`; periodic polling as a safety net.
 
