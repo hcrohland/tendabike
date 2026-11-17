@@ -59,6 +59,7 @@ struct DbIcuEvent {
     activity_id: String,
     event_time: i64,
     object_type: String,
+    event_type: String,
 }
 
 impl From<IcuEvent> for DbIcuEvent {
@@ -69,6 +70,7 @@ impl From<IcuEvent> for DbIcuEvent {
             activity_id,
             event_time,
             object_type,
+            event_type,
         } = value;
         Self {
             id,
@@ -76,6 +78,7 @@ impl From<IcuEvent> for DbIcuEvent {
             activity_id,
             event_time,
             object_type,
+            event_type,
         }
     }
 }
@@ -88,6 +91,7 @@ impl From<DbIcuEvent> for IcuEvent {
             activity_id,
             event_time,
             object_type,
+            event_type,
         } = value;
         Self {
             id,
@@ -95,6 +99,7 @@ impl From<DbIcuEvent> for IcuEvent {
             activity_id,
             event_time,
             object_type,
+            event_type,
         }
     }
 }
@@ -184,13 +189,14 @@ impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
         let e: DbIcuEvent = e.into();
         sqlx::query_as!(
             DbIcuEvent,
-            r#"INSERT INTO icu_events (icu_athlete_id, activity_id, event_time, object_type)
-             VALUES ($1, $2, $3, $4)
-             RETURNING id, icu_athlete_id, activity_id as "activity_id!", event_time, object_type as "object_type!""#,
+            r#"INSERT INTO icu_events (icu_athlete_id, activity_id, event_time, object_type, event_type)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING id, icu_athlete_id, activity_id as "activity_id!", event_time, object_type as "object_type!", event_type as "event_type!""#,
             e.icu_athlete_id,
             e.activity_id,
             e.event_time,
-            e.object_type
+            e.object_type,
+            e.event_type
         )
         .fetch_one(&mut **self.inner())
         .await
@@ -221,7 +227,7 @@ impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
     async fn icu_event_get_next_for_user(&mut self, user: IcuId) -> TbResult<Option<IcuEvent>> {
         sqlx::query_as!(
             DbIcuEvent,
-            r#"SELECT id, icu_athlete_id, activity_id as "activity_id!", event_time, object_type as "object_type!" FROM icu_events
+            r#"SELECT id, icu_athlete_id, activity_id as "activity_id!", event_time, object_type as "object_type!", event_type as "event_type!" FROM icu_events
              WHERE icu_athlete_id = $1
              ORDER BY event_time ASC
              LIMIT 1"#,
@@ -305,11 +311,15 @@ mod tests {
             activity_id: "1234".to_string(),
             event_time: 1700000000,
             object_type: "ACTIVITY".to_string(),
+            event_type: "ACTIVITY_DELETED".to_string(),
         };
         let db = DbIcuEvent::from(event.clone());
         assert_eq!(db.icu_athlete_id, "ath-42");
         assert_eq!(db.activity_id, "1234");
         assert_eq!(db.event_time, 1700000000);
-        assert_eq!(IcuEvent::from(db).activity_id, "1234");
+        assert_eq!(db.event_type, "ACTIVITY_DELETED");
+        let back = IcuEvent::from(db);
+        assert_eq!(back.activity_id, "1234");
+        assert_eq!(back.event_type, "ACTIVITY_DELETED");
     }
 }
