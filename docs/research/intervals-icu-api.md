@@ -41,12 +41,13 @@ Two methods exist; for a multi-user app use **OAuth 2.0**:
 
 - Configured on the app management page (`/settings/apps` → "Manage App"); select event types. **Per-app, one URL for all athletes** who authorized that app — we must map `athlete_id` in the payload to our users.
 - Delivery: HTTP POST. Non-2xx responses are **re-fired with exponential backoff**.
+- **Test delivery:** saving the webhook on the *Manage App* page fires one `TEST`-typed event with **no `activity`** to validate the URL; it must be answered `200` (a non-2xx makes intervals.icu re-fire it).
 - Payload:
   ```json
   { "secret": "ooKeodacie8I", "events": [ { "athlete_id": "i123456", "type": "ACTIVITY_UPLOADED", "timestamp": "...", "activity": { "id": "...", "start_date": "..." } } ] }
   ```
 - The `secret` field verifies the webhook came from intervals.icu (constant-time compare).
-- Event types: `ACTIVITY_UPLOADED` (file uploaded), `ACTIVITY_ANALYZED` (analysis complete, ~60s after upload — use this one), `CALENDAR_UPDATED`, `SPORT_SETTINGS_UPDATED`, `WELLNESS_UPDATED`.
+- Event types: `ACTIVITY_UPLOADED` (file uploaded), `ACTIVITY_UPDATED` (activity changed), `ACTIVITY_DELETED` (activity deleted), `ACTIVITY_ANALYZED` (analysis complete, ~60s after upload), `CALENDAR_UPDATED`, `SPORT_SETTINGS_UPDATED`, `WELLNESS_UPDATED`. **Tendabike subscribes to `ACTIVITY_UPLOADED`, `ACTIVITY_UPDATED`, and `ACTIVITY_DELETED`** — the first two import the activity, `ACTIVITY_DELETED` deletes it.
 - **Not delivered for Strava-sourced activities.**
 - Recommended pattern: webhook as the change signal, then pull full data via `GET /activity/{id}`; periodic polling as a safety net.
 
