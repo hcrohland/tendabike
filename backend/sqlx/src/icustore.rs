@@ -79,7 +79,7 @@ impl From<IcuEvent> for DbIcuEvent {
             icu_athlete_id: icu_athlete_id.into(),
             activity_id,
             event_time,
-            object_type,
+            object_type: object_type.into(),
             event_type,
             oldest,
         }
@@ -97,6 +97,7 @@ impl From<DbIcuEvent> for IcuEvent {
             event_type,
             oldest,
         } = value;
+        let object_type = object_type.try_into().unwrap();
         Self {
             id,
             icu_athlete_id: icu_athlete_id.into(),
@@ -297,6 +298,7 @@ impl<'c> tb_provider::icu::IcuStore for SqlxConn<'c> {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tb_provider::icu::IcuObjectType;
 
     fn icu_user(token: Option<&str>) -> IcuUser {
         IcuUser {
@@ -329,7 +331,7 @@ mod tests {
             icu_athlete_id: IcuId::from("ath-42"),
             activity_id: "1234".to_string(),
             event_time: 1700000000,
-            object_type: "ACTIVITY".to_string(),
+            object_type: IcuObjectType::Activity,
             event_type: "ACTIVITY_DELETED".to_string(),
             oldest: None,
         };
@@ -337,10 +339,12 @@ mod tests {
         assert_eq!(db.icu_athlete_id, "ath-42");
         assert_eq!(db.activity_id, "1234");
         assert_eq!(db.event_time, 1700000000);
+        assert_eq!(db.object_type, "ACTIVITY");
         assert_eq!(db.event_type, "ACTIVITY_DELETED");
         assert_eq!(db.oldest, None);
         let back = IcuEvent::from(db);
         assert_eq!(back.activity_id, "1234");
+        assert_eq!(back.object_type, IcuObjectType::Activity);
         assert_eq!(back.event_type, "ACTIVITY_DELETED");
         assert_eq!(back.oldest, None);
 
@@ -350,14 +354,15 @@ mod tests {
             icu_athlete_id: IcuId::from("ath-42"),
             activity_id: "sync".to_string(),
             event_time: 0,
-            object_type: "SYNC".to_string(),
+            object_type: IcuObjectType::Sync,
             event_type: String::new(),
             oldest: Some(1_700_000_000),
         };
         let db = DbIcuEvent::from(sync.clone());
+        assert_eq!(db.object_type, "SYNC");
         assert_eq!(db.oldest, Some(1_700_000_000));
         let back = IcuEvent::from(db);
         assert_eq!(back.oldest, Some(1_700_000_000));
-        assert_eq!(back.object_type, "SYNC");
+        assert_eq!(back.object_type, IcuObjectType::Sync);
     }
 }

@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex, Once};
 use crate::Provider;
 use crate::facade::{Error, TbResult, UserId, mock_session_admin};
 use crate::icu::test_support::{MockIcuDataStore, begin_test, queue};
-use crate::icu::{IcuDataStore, IcuEvent, IcuId, IcuUser};
+use crate::icu::{IcuDataStore, IcuEvent, IcuId, IcuObjectType, IcuUser};
 use crate::strava::event::Event;
 use crate::strava::test_support::MockStravaDataStore;
 use crate::strava::{StravaDataStore, StravaId, StravaUser};
@@ -711,7 +711,11 @@ async fn sync_users_queues_icu_users() -> TbResult<()> {
     );
     let events = created.lock().unwrap().clone();
     assert_eq!(events.len(), 1, "one SYNC event is queued");
-    assert_eq!(events[0].object_type, "SYNC", "the queued row is a SYNC");
+    assert_eq!(
+        events[0].object_type,
+        IcuObjectType::Sync,
+        "the queued row is a SYNC"
+    );
     assert_eq!(
         events[0].oldest,
         Some(1_700_000_000),
@@ -757,7 +761,11 @@ async fn queue_sync_user_queues_icu_sync_with_full_history() -> TbResult<()> {
 
     let events = created.lock().unwrap().clone();
     assert_eq!(events.len(), 1, "one SYNC event is queued");
-    assert_eq!(events[0].object_type, "SYNC", "the queued row is a SYNC");
+    assert_eq!(
+        events[0].object_type,
+        IcuObjectType::Sync,
+        "the queued row is a SYNC"
+    );
     assert_eq!(
         events[0].oldest,
         Some(0),

@@ -76,7 +76,7 @@ use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, Attachment, AttachmentStore, MAX_TIME,
     NotificationStore, Part, PartId, PartStore, PartTypeId, UsageId, UsageStore, UserId, UserStore,
 };
-use tb_provider::icu::{IcuDataStore, IcuEvent, IcuId};
+use tb_provider::icu::{IcuDataStore, IcuEvent, IcuId, IcuObjectType};
 use tb_sqlx::{SNAPSHOT_JSON, StoreSnapshot};
 use time::{OffsetDateTime, macros::datetime};
 use tokio::sync::MutexGuard;
@@ -1155,7 +1155,7 @@ async fn icu_event_sync_oldest_roundtrips() -> tb_domain::TbResult<()> {
             .icu_event_get_next_for_user(icu_id)
             .await?
             .expect("the SYNC row is queued");
-        assert_eq!(stored.object_type, "SYNC");
+        assert_eq!(stored.object_type, IcuObjectType::Sync);
         assert_eq!(
             stored.oldest,
             Some(1_700_000_000),
@@ -1183,7 +1183,7 @@ async fn icu_event_activity_has_no_oldest() -> tb_domain::TbResult<()> {
             .icu_event_get_next_for_user(icu_id)
             .await?
             .expect("the ACTIVITY row is queued");
-        assert_eq!(stored.object_type, "ACTIVITY");
+        assert_eq!(stored.object_type, IcuObjectType::Activity);
         assert_eq!(stored.oldest, None, "an ACTIVITY row has no oldest bound");
 
         Ok(())
@@ -1227,7 +1227,7 @@ async fn icu_event_sync_replace_keeps_one() -> tb_domain::TbResult<()> {
         // row's cursor is `0` (the sentinel), so it is the oldest queued row.
         let next = store.icu_event_get_next_for_user(icu_id).await?;
         assert!(
-            next.is_some() && next.as_ref().unwrap().object_type == "SYNC",
+            next.is_some() && next.as_ref().unwrap().object_type == IcuObjectType::Sync,
             "the re-enqueued SYNC row is queued"
         );
 

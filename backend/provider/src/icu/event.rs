@@ -19,15 +19,48 @@ use super::{IcuDataStore, IcuId};
 use crate::EntityFacade;
 use crate::facade::{Error, Summary, TbResult, UserId};
 
-/// The `icu_events` object type for a queued activity (a webhook row).
-const ACTIVITY_OBJECT_TYPE: &str = "ACTIVITY";
-/// The `icu_events` object type for the durable backfill cursor:
-/// the row's `event_time` is the `newest` cursor and its `oldest` column the
-/// walk's lower bound.
-const SYNC_OBJECT_TYPE: &str = "SYNC";
 /// The `activity_id` sentinel a `SYNC` row carries (the column is `NOT NULL`,
 /// but a `SYNC` refers to no single activity).
 const SYNC_ACTIVITY_ID: &str = "sync";
+
+/// The `icu_events` object type: a queued activity (a webhook row) or the
+/// durable backfill cursor (`SYNC` — the row's `event_time` is the `newest`
+/// cursor and its `oldest` column the walk's lower bound).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum IcuObjectType {
+    /// A queued activity (a webhook row).
+    #[default]
+    Activity,
+    /// The durable backfill cursor.
+    Sync,
+}
+
+impl TryFrom<String> for IcuObjectType {
+    type Error = crate::facade::Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        use IcuObjectType::*;
+        Ok(match value.as_str() {
+            "ACTIVITY" => Activity,
+            "SYNC" => Sync,
+            _ => {
+                return Err(Error::BadRequest(format!(
+                    "Unknown icu object type {value}"
+                )));
+            }
+        })
+    }
+}
+
+impl From<IcuObjectType> for String {
+    fn from(value: IcuObjectType) -> Self {
+        use IcuObjectType::*;
+        String::from(match value {
+            Activity => "ACTIVITY",
+            Sync => "SYNC",
+        })
+    }
+}
 
 /// A queued icu event (a row in the `icu_events` table).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -42,7 +75,7 @@ pub struct IcuEvent {
     /// The event's unix time (the `newest` cursor for a `SYNC` row).
     pub event_time: i64,
     /// The event's object type (`ACTIVITY` | `SYNC`).
-    pub object_type: String,
+    pub object_type: IcuObjectType,
     /// The webhook event type (`ACTIVITY_UPLOADED` | `ACTIVITY_UPDATED` |
     /// `ACTIVITY_DELETED`) — the queue's dispatch key. Empty for a `SYNC` row
     /// (its dispatch is on `object_type`).
@@ -66,7 +99,7 @@ impl IcuEvent {
             icu_athlete_id,
             activity_id: activity_id.into(),
             event_time,
-            object_type: ACTIVITY_OBJECT_TYPE.to_string(),
+            object_type: IcuObjectType::Activity,
             event_type: event_type.into(),
             oldest: None,
         }
@@ -83,7 +116,7 @@ impl IcuEvent {
             icu_athlete_id,
             activity_id: SYNC_ACTIVITY_ID.to_string(),
             event_time: 0,
-            object_type: SYNC_OBJECT_TYPE.to_string(),
+            object_type: IcuObjectType::Sync,
             event_type: String::new(),
             oldest: Some(oldest),
         }
@@ -357,10 +390,10 @@ async fn drain<D: EntityFacade<S>, S: IcuDataStore>(
         }) else {
             break; // the queue is empty
         };
-        match event.object_type.as_str() {
+        match event.object_type {
             // A `SYNC` row: run its durable cursor walk (the walk owns the
             // row's fate — delete on completion, stay queued on a 429).
-            SYNC_OBJECT_TYPE => {
+            IcuObjectType::Sync => {
                 let (s, outcome) = process_sync(event, user_id, facade, store).await?;
                 summary += s;
                 if matches!(outcome, SyncOutcome::Limited) {
@@ -368,7 +401,7 @@ async fn drain<D: EntityFacade<S>, S: IcuDataStore>(
                 }
             }
             // An `ACTIVITY` row: the import path.
-            _ => {
+            IcuObjectType::Activity => {
                 info!("Processing icu event: {}", event.activity_id);
                 match dispatch_event(&event, user_id, facade, store).await {
                     Ok(Some(s)) => summary += s,

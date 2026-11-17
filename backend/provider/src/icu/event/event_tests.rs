@@ -14,7 +14,7 @@ fn event(id: i32, activity: &str) -> IcuEvent {
         icu_athlete_id: "a1".into(),
         activity_id: activity.to_string(),
         event_time: 1000,
-        object_type: "ACTIVITY".to_string(),
+        object_type: IcuObjectType::Activity,
         event_type: "ACTIVITY_UPLOADED".to_string(),
         oldest: None,
     }
@@ -431,7 +431,7 @@ fn sync_event(id: i32, oldest: i64, newest: i64) -> IcuEvent {
         icu_athlete_id: "a1".into(),
         activity_id: "sync".to_string(),
         event_time: newest,
-        object_type: "SYNC".to_string(),
+        object_type: IcuObjectType::Sync,
         event_type: String::new(),
         oldest: Some(oldest),
     }
@@ -481,7 +481,7 @@ async fn insert_sync_enqueues_sync_event() {
 
     let events = created.lock().unwrap().clone();
     assert_eq!(events.len(), 1, "one SYNC event is queued");
-    assert_eq!(events[0].object_type, "SYNC");
+    assert_eq!(events[0].object_type, IcuObjectType::Sync);
     assert_eq!(
         events[0].oldest,
         Some(1_700_000_000),
