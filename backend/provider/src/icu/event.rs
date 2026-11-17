@@ -31,7 +31,7 @@ pub struct IcuEvent {
     /// The event's object type (e.g. `ACTIVITY`).
     pub object_type: String,
     /// The webhook event type (`ACTIVITY_UPLOADED` | `ACTIVITY_UPDATED` |
-    /// `ACTIVITY_DELETED`) — the queue's dispatch key (issue #920).
+    /// `ACTIVITY_DELETED`) — the queue's dispatch key.
     pub event_type: String,
 }
 
@@ -101,11 +101,11 @@ struct IcuWebhookActivity {
 }
 
 /// The activity event types the webhook subscribes to (spec #764; `ACTIVITY_DELETED`
-/// per issue #920).
+/// for the delete path).
 const SUBSCRIBED_ACTIVITY_TYPES: [&str; 3] =
     ["ACTIVITY_UPLOADED", "ACTIVITY_UPDATED", "ACTIVITY_DELETED"];
 
-/// The webhook event type that deletes the activity (issue #920): the queue's
+/// The webhook event type that deletes the activity: the queue's
 /// `process` op dispatches on this — it calls the domain's `delete_activity`
 /// instead of importing.
 const DELETED_EVENT_TYPE: &str = "ACTIVITY_DELETED";
@@ -225,7 +225,7 @@ pub(crate) async fn get_event(
     }
 }
 
-/// Dispatches one queued event to its domain op (issue #920): an
+/// Dispatches one queued event to its domain op: an
 /// `ACTIVITY_DELETED` event deletes the activity; every other subscribed event
 /// imports it. Returns `Ok(None)` for a skipped stub (the import path only — a
 /// delete is never a stub); errors (a 401, a 429, a DB failure) bubble up for

@@ -208,7 +208,7 @@ pub(crate) async fn import_activity<D: EntityFacade<S>, S: IcuDataStore>(
     ))
 }
 
-/// Deletes an icu activity from the domain (issue #920): the `ACTIVITY_DELETED`
+/// Deletes an icu activity from the domain: the `ACTIVITY_DELETED`
 /// webhook's domain op. Unlike [`import_activity`], it makes no HTTP fetch — the
 /// webhook carries the activity id, and the domain's `delete` returns the
 /// `Summary` of everything it touched (the activity's tombstone plus the

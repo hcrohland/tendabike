@@ -19,16 +19,11 @@ fn event(id: i32, activity: &str) -> IcuEvent {
     }
 }
 
-/// An `ACTIVITY_DELETED` event (issue #920): the queue's delete dispatch key.
+/// An `ACTIVITY_DELETED` event: the queue's delete dispatch key.
 fn deleted_event(id: i32, activity: &str) -> IcuEvent {
-    IcuEvent {
-        id: Some(id),
-        icu_athlete_id: "a1".into(),
-        activity_id: activity.to_string(),
-        event_time: 1000,
-        object_type: "ACTIVITY".to_string(),
-        event_type: "ACTIVITY_DELETED".to_string(),
-    }
+    let mut e = event(id, activity);
+    e.event_type = "ACTIVITY_DELETED".into();
+    e
 }
 
 fn notification() -> Notification {
@@ -251,7 +246,7 @@ async fn process_permanent_error_drops_event_and_continues() {
     assert_eq!(summary.activities.len(), 1);
 }
 
-// ─── process: ACTIVITY_DELETED (issue #920) ─────────────────────────────────
+// ─── process: ACTIVITY_DELETED ──────────────────────────────────────────────
 
 #[tokio::test]
 async fn process_deletes_activity_on_deleted_event() {

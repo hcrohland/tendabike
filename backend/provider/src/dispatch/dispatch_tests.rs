@@ -414,7 +414,7 @@ async fn accept_event_icu_test_delivery_is_accepted_and_queues_nothing() -> TbRe
     Ok(())
 }
 
-/// The icu arm queues an **`ACTIVITY_DELETED`** event (issue #920) — it is a
+/// The icu arm queues an **`ACTIVITY_DELETED`** event — it is a
 /// subscribed type, and the queued row carries the event type (the queue's
 /// delete dispatch key).
 #[tokio::test]
