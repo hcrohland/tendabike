@@ -651,11 +651,8 @@ async fn process_sync_429_after_first_batch_keeps_advanced_cursor_and_row() {
     let oldest_ts = OffsetDateTime::parse("2026-01-02T10:00:00Z", &Rfc3339)
         .unwrap()
         .unix_timestamp();
-    // The second fetch (bounded by the day before the oldest activity) 429s.
-    queue_error(
-        &sync_uri(0, oldest_ts - 86400),
-        Error::TryAgain("rate limited"),
-    );
+    // The second fetch (bounded by the day of the oldest activity) 429s.
+    queue_error(&sync_uri(0, oldest_ts), Error::TryAgain("rate limited"));
 
     facade
         .expect_upsert_activity()
@@ -754,7 +751,8 @@ async fn process_sync_resumes_from_stored_cursor() {
 }
 
 /// `process` on a `SYNC` event advances the persisted `newest` cursor to the
-/// oldest activity in a full (100) batch, then continues from the day before.
+/// oldest activity in a full (100) batch, then continues from that activity's
+/// day (the same day — the remaining same-day activities get fetched).
 #[tokio::test]
 async fn process_sync_advances_cursor_per_batch() {
     let (mut store, mut facade) = setup();
@@ -793,9 +791,10 @@ async fn process_sync_advances_cursor_per_batch() {
     let oldest_ts = OffsetDateTime::parse("2026-01-02T10:00:00Z", &Rfc3339)
         .unwrap()
         .unix_timestamp();
-    // The next batch is bounded by the day before the oldest activity
-    // (< 100 → end of history).
-    queue(&sync_uri(0, oldest_ts - 86400), "[]");
+    // The next batch is bounded by the day of the batch's oldest activity
+    // (the same day — the remaining same-day activities get fetched;
+    // < 100 → end of history).
+    queue(&sync_uri(0, oldest_ts), "[]");
 
     facade
         .expect_upsert_activity()
@@ -821,5 +820,93 @@ async fn process_sync_advances_cursor_per_batch() {
     assert_eq!(
         times[1], oldest_ts,
         "the persisted cursor equals the oldest activity in the full batch"
+    );
+    // The second fetch is bounded by the oldest activity's day (the same day,
+    // not the day before): remaining same-day activities get fetched.
+    let reqs = super::super::test_support::requests();
+    assert_eq!(reqs.len(), 2, "two batches are fetched");
+    assert!(
+        reqs[1].contains(&format!("newest={}", super::date_str(oldest_ts))),
+        "the next batch starts at the batch's oldest activity's day"
+    );
+}
+
+/// `process` on a `SYNC` event where a full (100) batch does not clear the
+/// start day (the batch's oldest activity is still on it): the next fetch
+/// starts at the start day minus one (re-querying the same day would loop).
+#[tokio::test]
+async fn process_sync_full_batch_on_start_day_steps_back_a_day() {
+    let (mut store, mut facade) = setup();
+    super::super::ratelimit::test_set_not_limited();
+    sync_user_fixture(&mut store);
+    use time::format_description::well_known::Rfc3339;
+    // A `SYNC` row whose stored cursor (the start day) is the activities' day:
+    // a full batch cannot clear it.
+    let cursor = OffsetDateTime::parse("2026-01-02T23:00:00Z", &Rfc3339)
+        .unwrap()
+        .unix_timestamp();
+    store
+        .expect_icu_event_get_next_for_user()
+        .returning(move |_id| {
+            static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+            Ok(
+                if N.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                    Some(sync_event(1, 0, cursor))
+                } else {
+                    None
+                },
+            )
+        });
+    // The cursor is non-zero (no sentinel resolution); the one `set_time` is
+    // the cursor advance to the batch's oldest activity.
+    let set_times: std::sync::Arc<std::sync::Mutex<Vec<i64>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let rec = set_times.clone();
+    store.expect_icu_event_set_time().returning(move |_id, t| {
+        rec.lock().unwrap().push(t);
+        Ok(())
+    });
+    store.expect_icu_event_delete().returning(|_id| Ok(()));
+
+    // A full batch (100), all on the start day (2026-01-02).
+    let acts: Vec<String> = (0..100)
+        .map(|i| activity_json(&format!("100{}", i), "Ride", None))
+        .collect();
+    queue(&sync_uri(0, cursor), &format!("[{}]", acts.join(",")));
+    // The batch's oldest activity (all share `activity_json`'s start date,
+    // 2026-01-02T10:00:00Z) is on the start day → the next fetch steps back
+    // to 2026-01-01 (< 100 → end of history).
+    let oldest_ts = OffsetDateTime::parse("2026-01-02T10:00:00Z", &Rfc3339)
+        .unwrap()
+        .unix_timestamp();
+    queue(&sync_uri(0, cursor - 86400), "[]");
+
+    facade
+        .expect_upsert_activity()
+        .times(100)
+        .returning(|act, _user, _store| {
+            let mut summary = Summary::default();
+            summary.activities.upsert(act);
+            Ok(summary)
+        });
+
+    let summary = super::process(UserId::from(1), &facade, &mut store)
+        .await
+        .unwrap();
+
+    assert_eq!(summary.activities.len(), 100);
+    let times = set_times.lock().unwrap().clone();
+    assert_eq!(
+        times,
+        vec![oldest_ts],
+        "the persisted cursor is the batch's oldest activity (no sentinel resolution)"
+    );
+    // The second fetch is bounded by the start day minus one (not the same
+    // day, which would loop).
+    let reqs = super::super::test_support::requests();
+    assert_eq!(reqs.len(), 2, "two batches are fetched");
+    assert!(
+        reqs[1].contains(&format!("newest={}", super::date_str(cursor - 86400))),
+        "the next batch starts at the start day minus one"
     );
 }

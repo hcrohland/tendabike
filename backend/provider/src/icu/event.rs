@@ -8,7 +8,7 @@
 //! event); [`process`] drains the queue in one call, importing each activity,
 //! and carries the one stub-skip notice a batch produces.
 
-use log::{debug, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
@@ -432,9 +432,10 @@ async fn process_sync<D: EntityFacade<S>, S: IcuDataStore>(
         store.icu_event_set_time(event.id, cursor).await?;
     }
     // The query's `newest` bound: `None` until the first batch (then the
-    // cursor), after which it is the day before the last batch's oldest
-    // activity (the date-only API precision — stepping a day avoids
-    // re-importing the boundary day).
+    // cursor), after which it is the day of the last batch's oldest activity
+    // (the date-only API precision — the same day, so the remaining same-day
+    // activities get fetched; a full batch that did not clear the start day
+    // steps a day back instead).
     let mut query_newest: Option<i64> = None;
 
     let mut summary = Summary::default();
@@ -482,8 +483,7 @@ async fn process_sync<D: EntityFacade<S>, S: IcuDataStore>(
         );
         let count = activities.len();
         // The API returns in descending order: the last element is the oldest.
-        let oldest_in_batch_dt = activities.last().unwrap().start_date;
-        let oldest_in_batch = oldest_in_batch_dt.unix_timestamp();
+        let oldest_in_batch = activities.last().unwrap().start_date.unix_timestamp();
         for act in activities {
             if let Some(s) =
                 super::activity::import_activity_data(act, user_id, facade, store).await?
@@ -498,9 +498,20 @@ async fn process_sync<D: EntityFacade<S>, S: IcuDataStore>(
         cursor = oldest_in_batch;
         event.event_time = cursor;
         store.icu_event_set_time(event.id, cursor).await?;
-        // The next query's bound: the day before the oldest activity (the
-        // date-only API precision — step a whole day, not the instant).
-        query_newest = Some((oldest_in_batch_dt - time::Duration::days(1)).unix_timestamp());
+        // The next query's bound: the day of the oldest activity (the
+        // date-only API precision — the same day, so the remaining same-day
+        // activities get fetched). A full batch that did not clear the start
+        // day (the oldest activity is still on it) steps a whole day back
+        // instead (and flags it): re-querying the same day would loop.
+        if date_str(oldest_in_batch) == date_str(newest) {
+            error!(
+                "icu sync: a full batch did not clear the start day {}; stepping a day back",
+                date_str(newest)
+            );
+            query_newest = Some(newest - 86400);
+        } else {
+            query_newest = Some(oldest_in_batch);
+        }
     }
 
     // The row's fate: a rate-limit stop leaves it queued, a completion
