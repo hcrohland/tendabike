@@ -22,6 +22,8 @@
 //!
 //! This file also contains the definitions of various modules that implement the endpoints for the different resources
 //! of the Tendabike server, such as users, parts, attachments, activities, and Strava integration.
+
+#![warn(unreachable_pub)]
 //!
 
 #![forbid(unsafe_code)]

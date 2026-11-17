@@ -1,4 +1,5 @@
 #![warn(clippy::all)]
+#![warn(unreachable_pub)]
 
 use mimalloc::MiMalloc;
 
