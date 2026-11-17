@@ -3096,6 +3096,20 @@ async fn shop_stream_non_owner_is_forbidden() {
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
 
+// ─── Offline startup gate (ticket #925) ─────────────────────────────────────
+
+/// The offline gate (ticket #925): the instance runs offline iff the enabled
+/// provider set is empty. The test process configures both providers, so a
+/// configured subset is a normal mode and must not trip the gate.
+#[test]
+fn offline_gate_is_false_for_a_configured_subset() {
+    init_test_config_once();
+    assert!(
+        !crate::is_offline(),
+        "a configured subset is a normal mode, not offline"
+    );
+}
+
 // ─── SPA fallback (static serving in the router) ────────────────────────────
 
 /// A client-side route returns the SPA entry document (`200.html`) with a 200

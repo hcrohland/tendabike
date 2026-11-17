@@ -1,6 +1,11 @@
-import { getEnabledProviders, loadProviders } from "./provider.svelte";
+import {
+  getEnabledProviders,
+  getProvidersStatus,
+  isOffline,
+  loadProviders,
+} from "./provider.svelte";
 
-export { getEnabledProviders, loadProviders };
+export { getEnabledProviders, getProvidersStatus, isOffline, loadProviders };
 
 /// The activity providers a user can connect with (spec #760): one per
 /// user, set at signup, immutable. The values are the wire encoding the

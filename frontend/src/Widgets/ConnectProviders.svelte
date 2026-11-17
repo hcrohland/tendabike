@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { Button } from "flowbite-svelte";
   import {
     getEnabledProviders,
-    loadProviders,
+    getProvidersStatus,
     providerMeta,
     loginUrl,
     type Provider,
@@ -11,13 +10,12 @@
   import ProviderMark from "./ProviderMark.svelte";
   import * as m from "../../paraglide/messages";
 
-  // The enabled providers: fetched on mount — the connect screen is the
-  // anonymous landing page. `undefined` while the fetch is in flight: no
-  // cards and no failure page until the set is known.
-  onMount(() => {
-    loadProviders();
-  });
-
+  // The enabled providers are app-wide state (ticket #925): the layout
+  // fetches them once, this screen only reads the shared module state.
+  // `loading` — nothing to offer yet; `error` — the fetch failed (a
+  // distinct state, not offline); `ready` + empty — offline; `ready` +
+  // non-empty — the provider cards.
+  const status = $derived(getProvidersStatus());
   const enabled = $derived(getEnabledProviders());
 
   function blurb(p: Provider) {
@@ -27,12 +25,14 @@
 
 <section id="connect" class="mb-8">
   <h2 class="text-xl font-bold mb-4">{m.connect_heading()}</h2>
-  {#if enabled === undefined}
+  {#if status === "loading"}
     <!-- The fetch is in flight: nothing to offer yet -->
+  {:else if status === "error"}
+    <!-- The fetch failed: a distinct state, not the offline message -->
+    <p class="text-text-1">{m.providers_load_failed()}</p>
   {:else if enabled.length === 0}
-    <!-- No provider is enabled: the failure page — a clear, non-leaky
-         message, no provider cards, no login affordance -->
-    <p class="text-text-1">{m.no_providers_configured()}</p>
+    <!-- Offline: a successful fetch that returned no providers -->
+    <p class="text-text-1">{m.offline_connect()}</p>
   {:else}
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {#each enabled as p (p)}
