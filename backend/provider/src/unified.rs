@@ -164,7 +164,7 @@ where
     /// date-window backfill). Delegates to the queue switch
     /// ([`crate::dispatch::queue_sync_user`]).
     async fn queue_sync(&self, user_id: UserId, time: i64, store: &mut S) -> TbResult<()> {
-        crate::dispatch::queue_sync_user(user_id, time, &self.facade, store).await
+        crate::dispatch::queue_sync_user(user_id, time, store).await
     }
 
     /// Read every user's provider-neutral stat (the admin read's provider

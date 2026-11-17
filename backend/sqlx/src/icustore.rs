@@ -60,6 +60,7 @@ struct DbIcuEvent {
     event_time: i64,
     object_type: String,
     event_type: String,
+    oldest: Option<i64>,
 }
 
 impl From<IcuEvent> for DbIcuEvent {
@@ -71,6 +72,7 @@ impl From<IcuEvent> for DbIcuEvent {
             event_time,
             object_type,
             event_type,
+            oldest,
         } = value;
         Self {
             id,
@@ -79,6 +81,7 @@ impl From<IcuEvent> for DbIcuEvent {
             event_time,
             object_type,
             event_type,
+            oldest,
         }
     }
 }
@@ -92,6 +95,7 @@ impl From<DbIcuEvent> for IcuEvent {
             event_time,
             object_type,
             event_type,
+            oldest,
         } = value;
         Self {
             id,
@@ -100,6 +104,7 @@ impl From<DbIcuEvent> for IcuEvent {
             event_time,
             object_type,
             event_type,
+            oldest,
         }
     }
 }
@@ -189,14 +194,15 @@ impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
         let e: DbIcuEvent = e.into();
         sqlx::query_as!(
             DbIcuEvent,
-            r#"INSERT INTO icu_events (icu_athlete_id, activity_id, event_time, object_type, event_type)
-             VALUES ($1, $2, $3, $4, $5)
-             RETURNING id, icu_athlete_id, activity_id as "activity_id!", event_time, object_type as "object_type!", event_type as "event_type!""#,
+            r#"INSERT INTO icu_events (icu_athlete_id, activity_id, event_time, object_type, event_type, oldest)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id, icu_athlete_id, activity_id as "activity_id!", event_time, object_type as "object_type!", event_type as "event_type!", oldest"#,
             e.icu_athlete_id,
             e.activity_id,
             e.event_time,
             e.object_type,
-            e.event_type
+            e.event_type,
+            e.oldest
         )
         .fetch_one(&mut **self.inner())
         .await
@@ -227,7 +233,7 @@ impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
     async fn icu_event_get_next_for_user(&mut self, user: IcuId) -> TbResult<Option<IcuEvent>> {
         sqlx::query_as!(
             DbIcuEvent,
-            r#"SELECT id, icu_athlete_id, activity_id as "activity_id!", event_time, object_type as "object_type!", event_type as "event_type!" FROM icu_events
+            r#"SELECT id, icu_athlete_id, activity_id as "activity_id!", event_time, object_type as "object_type!", event_type as "event_type!", oldest FROM icu_events
              WHERE icu_athlete_id = $1
              ORDER BY event_time ASC
              LIMIT 1"#,
@@ -272,6 +278,18 @@ impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
 
         Ok(result.rows_affected() as usize)
     }
+
+    async fn icu_events_delete_sync_for_user(&mut self, user: &IcuId) -> TbResult<usize> {
+        let result = sqlx::query!(
+            "DELETE FROM icu_events WHERE icu_athlete_id = $1 AND object_type = 'SYNC'",
+            user.to_string()
+        )
+        .execute(&mut **self.inner())
+        .await
+        .map_err(into_domain)?;
+
+        Ok(result.rows_affected() as usize)
+    }
 }
 
 impl<'c> tb_provider::icu::IcuStore for SqlxConn<'c> {}
@@ -305,6 +323,7 @@ mod tests {
 
     #[test]
     fn icu_event_roundtrips() {
+        // An `ACTIVITY` event: `oldest` is `None` (no walk).
         let event = IcuEvent {
             id: Some(7),
             icu_athlete_id: IcuId::from("ath-42"),
@@ -312,14 +331,33 @@ mod tests {
             event_time: 1700000000,
             object_type: "ACTIVITY".to_string(),
             event_type: "ACTIVITY_DELETED".to_string(),
+            oldest: None,
         };
         let db = DbIcuEvent::from(event.clone());
         assert_eq!(db.icu_athlete_id, "ath-42");
         assert_eq!(db.activity_id, "1234");
         assert_eq!(db.event_time, 1700000000);
         assert_eq!(db.event_type, "ACTIVITY_DELETED");
+        assert_eq!(db.oldest, None);
         let back = IcuEvent::from(db);
         assert_eq!(back.activity_id, "1234");
         assert_eq!(back.event_type, "ACTIVITY_DELETED");
+        assert_eq!(back.oldest, None);
+
+        // A `SYNC` event: `oldest` is the walk's lower bound (issue #900).
+        let sync = IcuEvent {
+            id: Some(8),
+            icu_athlete_id: IcuId::from("ath-42"),
+            activity_id: "sync".to_string(),
+            event_time: 0,
+            object_type: "SYNC".to_string(),
+            event_type: String::new(),
+            oldest: Some(1_700_000_000),
+        };
+        let db = DbIcuEvent::from(sync.clone());
+        assert_eq!(db.oldest, Some(1_700_000_000));
+        let back = IcuEvent::from(db);
+        assert_eq!(back.oldest, Some(1_700_000_000));
+        assert_eq!(back.object_type, "SYNC");
     }
 }

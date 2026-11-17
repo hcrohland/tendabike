@@ -152,13 +152,12 @@ where
 
 /// The onboarding activity sync (spec #829, the second step): queue the
 /// activity sync on the user's provider queue (the Strava `strava_events` row,
-/// the icu date-window backfill). No gear import — that was the first step
+/// the icu `SYNC` event, issue #900). No gear import — that was the first step
 /// ([`import_gear_user`](crate::dispatch::import_gear_user)). The provider is
 /// the user's real one, read in-transaction.
-pub(crate) async fn queue_sync_user<S, D: EntityFacade<S>>(
+pub(crate) async fn queue_sync_user<S>(
     user_id: UserId,
     event_time: i64,
-    facade: &D,
     store: &mut S,
 ) -> TbResult<()>
 where
@@ -169,7 +168,9 @@ where
         Provider::Strava => {
             crate::strava::event::insert_sync(user_id, event_time, false, store).await
         }
-        Provider::Icu => crate::icu::backfill::backfill(user_id, event_time, facade, store).await,
+        // The icu onboarding syncs the full history: `oldest = 0` (the `newest`
+        // sentinel is `0`, resolved to now at first processing, issue #900).
+        Provider::Icu => crate::icu::event::insert_sync(user_id, 0, store).await,
     }
 }
 
@@ -242,8 +243,8 @@ where
         }
     }
 
-    // The icu lane: the onboarding path (gear import + backfill) per
-    // non-disabled icu user.
+    // The icu lane: gear import (inline) + a `SYNC` event per non-disabled
+    // icu user (issue #900: the durable backfill cursor, not an inline walk).
     if provider.is_none() || provider == Some(Provider::Icu) {
         let users = match user_id {
             Some(id) => vec![store.icuser_get_by_tbid(id).await?],

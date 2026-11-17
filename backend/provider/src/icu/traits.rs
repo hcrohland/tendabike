@@ -70,6 +70,10 @@ pub trait IcuDataStore: Send + Sync {
     /// Delete every queued icu event for `user` (the icu athlete id); returns
     /// the number of rows deleted.
     async fn icu_events_delete_for_user(&mut self, user: &IcuId) -> TbResult<usize>;
+
+    /// Delete the user's queued `SYNC` event (issue #900, the REPLACE enqueue:
+    /// at most one `SYNC` per user); returns the number of rows deleted.
+    async fn icu_events_delete_sync_for_user(&mut self, user: &IcuId) -> TbResult<usize>;
 }
 
 /// A method-free umbrella naming a complete icu store: one that implements
