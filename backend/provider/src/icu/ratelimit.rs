@@ -60,7 +60,7 @@ thread_local! {
 /// resets, or `None` if budget remains (or no data yet).
 ///
 /// Emits a WARN log on transition into or out of the rate-limited state.
-pub fn limited_until() -> Option<i64> {
+pub(crate) fn limited_until() -> Option<i64> {
     // Test seam: a per-thread override shadows the process-global limiter, so
     // parallel rate-limiter tests can't observe each other's state.
     if let Some(until) = TEST_OVERRIDE.with(|o| o.borrow().as_ref().map(|l| l.gate())) {
@@ -73,14 +73,14 @@ pub fn limited_until() -> Option<i64> {
 /// state. Each header is a `"15min,daily"` comma-separated pair of integers.
 /// Missing or malformed headers are ignored (the state keeps its previous
 /// values for those fields).
-pub fn update_from_headers(headers: &HeaderMap) {
+pub(crate) fn update_from_headers(headers: &HeaderMap) {
     RATE_LIMITER.update_from_headers(headers);
 }
 
 #[cfg(test)]
 /// Sets this thread's rate-limiter override to "at limit" (15-min exhausted:
 /// 0 remaining), so [`limited_until`] reports a boundary.
-pub fn test_set_limited() {
+pub(crate) fn test_set_limited() {
     TEST_OVERRIDE.with(|o| {
         *o.borrow_mut() = Some(RateLimitShim::limiter_from_headers(
             "icu",
@@ -96,7 +96,7 @@ pub fn test_set_limited() {
 #[cfg(test)]
 /// Sets this thread's rate-limiter override to "no data" (allows all
 /// requests), so [`limited_until`] reports no limit.
-pub fn test_set_not_limited() {
+pub(crate) fn test_set_not_limited() {
     TEST_OVERRIDE.with(|o| {
         *o.borrow_mut() = Some(RateLimitShim::limiter_from_headers(
             "icu",

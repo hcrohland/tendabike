@@ -19,6 +19,7 @@
 */
 
 #![forbid(unsafe_code)]
+#![warn(unreachable_pub)]
 
 //! The provider-agnostic seams shared by every activity provider (spec #781).
 //!

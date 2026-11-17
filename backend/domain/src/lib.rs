@@ -18,6 +18,7 @@
 */
 
 #![forbid(unsafe_code)]
+#![warn(unreachable_pub)]
 
 use log::{debug, info, trace, warn};
 
