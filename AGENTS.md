@@ -27,7 +27,7 @@ SQLx compiles queries against the committed `backend/sqlx/.sqlx/` offline cache.
 
 ## Commit rules
 
-- Flow, in order: finish the work → if on `main` or a detached HEAD, create a feature branch from a freshly fetched `main` (`git fetch origin && git switch -c <branch> --no-track origin/main`) → commit optimistically (run `git commit` directly; fix and re-commit on hook failure) → push to the feature branch (`git push -u origin <branch>` — the branch is created `--no-track`, so a bare `git push` has no upstream to push to until this creates the remote branch and sets tracking) → if the work is on an issue, comment on it with the commit SHA.
+- Flow, in order: finish the work → if on `main` or a detached HEAD, create a feature branch from a freshly fetched `main` (`git fetch origin && git switch -c <branch> --no-track origin/main`) → commit optimistically (run `git commit` directly; fix and re-commit on hook failure) → push to the feature branch (`git push -u origin <branch>` — the branch has no upstream yet, so `-u` sets it) → if the work is on an issue, comment on it with the commit SHA.
 - Commit titles name the change; the issue number goes in a `Closes #N` line in the body, one per issue. `Closes #N` auto-closes the issue on merge, so use it in the commit body — do not call the issue API to change the issue's state.
 - Never bypass the pre-commit hook with `--no-verify` or `-n` — make the checks pass instead.
 
