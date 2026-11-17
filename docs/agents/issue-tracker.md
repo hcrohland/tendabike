@@ -19,7 +19,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 | Operation | Command |
 |---|---|
 | List open issues | `gh issue list --state open --json number,title,assignees,labels` |
-| View an issue | `gh issue view <n> --json title,body,labels,assignees,state,comments` |
+| View an issue | `gh issue view <n> --json title,body,labels,assignees,state,comments,subIssues` |
 | Create an issue | `gh issue create --title "…" --body "…" --label "…"` |
 | Create as sub-issue | `gh issue create --title "…" --body "…" --parent <n>` |
 | Create blocked by | `gh issue create --title "…" --body "…" --blocked-by <n1>,<n2>` |
@@ -49,7 +49,7 @@ GitHub shares one number space across issues and PRs, so a bare `#42` may be eit
 
 ## When a skill says "fetch the relevant ticket"
 
-`gh issue view <n> --json title,body,labels,assignees,state,comments`.
+`gh issue view <n> --json title,body,labels,assignees,state,comments,subIssues`.
 
 ## Wayfinding operations
 
