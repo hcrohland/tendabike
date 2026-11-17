@@ -27,7 +27,10 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 | Assign | `gh issue edit <n> --add-assignee <login>` |
 | Comment | `gh issue comment <n> --body "…"` |
 | Close | `gh issue close <n> --reason completed` |
+| Create PR | `gh pr create --head <branch> --title "…" --body "…"` |
 | Merge PR | `gh pr checks <n> --watch --interval 30 --fail-fast >/dev/null 2>&1 && gh pr merge <n> --squash` |
+| View PR inline review comments | `gh api pulls/<n>/comments` |
+| Reply to a review comment | `gh api pulls/<n>/comments -F in_reply_to=<id> -f body="…"` |
 | Add sub-issue | `gh issue edit <parent> --add-sub-issue <child1>,<child2>` |
 | Add blocked-by | `gh issue edit <n> --add-blocked-by <blocker1>,<blocker2>` |
 | Add blocking | `gh issue edit <n> --add-blocking <n1>,<n2>` |
@@ -36,6 +39,8 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 **Check gotcha:** `gh pr checks --watch` exits as soon as the checks that are *registered* pass — before the main CI jobs start, only CodeQL is listed, so it can report green early. Use it to block, then confirm a run exists for the head SHA before acting on the result: `gh run list --branch <head-branch> --limit 1`. Applies both when waiting between commits and before merging.
 
 **Failure logs:** Get the run ID first (`gh run list --branch <b> --limit 1 --json databaseId --jq '.[0].databaseId'`), then `gh run view <id> --log-failed`. Don't chain the ID extraction into the view command.
+
+**Review comments:** `gh pr view --json comments` returns only the review body, not the inline review comments. When replying, `-F in_reply_to=<id>` sends the id as a number — `-f` stringifies it and the API 422s.
 
 ## Pull requests as a triage surface
 
