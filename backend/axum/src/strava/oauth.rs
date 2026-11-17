@@ -33,8 +33,9 @@ pub(crate) async fn strava_auth(Query(path): Query<PathParam>) -> impl IntoRespo
     let path = path.inner.unwrap_or("/".to_owned());
     // The web shell generates the CSRF state (beside its other protocol
     // secrets); the enum assembles the authorize URL from the driver's
-    // client config (ADR-0014).
-    let url = Provider::Strava.authorize_url(gentoken(path).secret());
+    // client config (ADR-0014). The Strava flow is a plain
+    // authorization-code exchange: no PKCE challenge.
+    let url = Provider::Strava.authorize_url(gentoken(path).secret(), None);
 
     // Redirect to Strava's oauth service
     Redirect::to(&url)
@@ -66,7 +67,9 @@ pub(crate) async fn login_authorized(
         }
         AuthResponse::Request { code, state, scope } => (code, scope, getpath(state)?),
     };
-    login_and_redirect(state, session, Provider::Strava, code, scope, path).await
+    // The Strava flow is a plain authorization-code exchange: no PKCE
+    // verifier.
+    login_and_redirect(state, session, Provider::Strava, code, scope, path, None).await
 }
 
 pub(crate) async fn logout(session: Session) -> impl IntoResponse {

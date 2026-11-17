@@ -442,11 +442,23 @@ where
     /// does the provider's login work (the scope check, the token exchange,
     /// the athlete wire-shape parsing, and the upsert), returning the
     /// identity and the admin flag.
-    async fn login(&self, provider: Provider, code: &str, scope: &str) -> TbResult<(UserId, bool)> {
+    async fn login<'a>(
+        &self,
+        provider: Provider,
+        code: &'a str,
+        scope: &'a str,
+        verifier: Option<&'a str>,
+    ) -> TbResult<(UserId, bool)> {
         let mut store = self.source.begin().await?;
-        let result =
-            tb_provider::dispatch::login(provider, code, scope, self.lane.facade(), &mut store)
-                .await?;
+        let result = tb_provider::dispatch::login(
+            provider,
+            code,
+            scope,
+            verifier,
+            self.lane.facade(),
+            &mut store,
+        )
+        .await?;
         store.commit().await?;
         Ok(result)
     }

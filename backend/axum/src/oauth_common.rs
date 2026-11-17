@@ -1,7 +1,8 @@
 //! Shared OAuth handling for both the Strava and intervals.icu flows: the
 //! HMAC-signed CSRF state token (the token encodes the return path and a
 //! random nonce, signed with the `CSRF_SECRET` (or a random key in
-//! development)) and the shared callback completion (the provider-agnostic
+//! development); the intervals.icu variant additionally encodes the PKCE code
+//! verifier) and the shared callback completion (the provider-agnostic
 //! `login` direct op, the tower-session write, and the redirect).
 
 use axum::response::Redirect;
@@ -60,6 +61,21 @@ pub fn gentoken(path: String) -> CsrfToken {
     CsrfToken::new(msg + ":" + &sig)
 }
 
+/// Generate a CSRF state token encoding `path` (the OAuth return path) and the
+/// PKCE `verifier`: the verifier round-trips through the same signed state as
+/// the path, so the callback recovers it for the token exchange (stateless —
+/// no server-side storage).
+pub fn gentoken_pkce(path: String, verifier: &str) -> CsrfToken {
+    use base64::prelude::*;
+
+    let random: Vec<u8> = (0..16).map(|_| rand::random()).collect();
+    let random = BASE64_URL_SAFE_NO_PAD.encode(random);
+    let msg = path + "+" + &random + "+" + verifier;
+    let sig = hmac_signature(csrf_key(), &msg);
+
+    CsrfToken::new(msg + ":" + &sig)
+}
+
 /// Extract and verify the return path from a CSRF state token.
 pub fn getpath(state: String) -> TbResult<String> {
     let msg = state.split(':').collect::<Vec<_>>();
@@ -71,13 +87,34 @@ pub fn getpath(state: String) -> TbResult<String> {
     Ok(msg[0].split('+').next().unwrap_or("").to_owned())
 }
 
+/// Extract and verify the return path and the PKCE `verifier` from a
+/// `gentoken_pkce` state token. A tampered state is rejected by the signature
+/// check; a validly signed state without a verifier segment is malformed.
+pub fn getstate_pkce(state: String) -> TbResult<(String, String)> {
+    let msg = state.split(':').collect::<Vec<_>>();
+    if msg.len() != 2 || hmac_signature(csrf_key(), msg[0]) != msg[1] {
+        return Err(Error::BadRequest(format!(
+            "Bad signature for exchange request: {state}"
+        )));
+    };
+    let parts = msg[0].split('+').collect::<Vec<_>>();
+    if parts.len() != 3 {
+        return Err(Error::BadRequest(format!(
+            "Bad state for exchange request: {state}"
+        )));
+    }
+    Ok((parts[0].to_owned(), parts[2].to_owned()))
+}
+
 /// Complete the OAuth callback for a provider (ADR-0014): the provider-agnostic
 /// `login` direct op — the provider layer's dispatch does the provider's login
 /// work (the scope check, the token exchange, the athlete wire-shape parsing,
 /// and the upsert), returning the identity and the admin flag. The web shell
-/// forwards the opaque callback values — no driver wire type crosses the seam.
-/// The tower-session write stays in axum (the token is stored in the provider
-/// layer's user row, not the cookie), then the redirect to the return path.
+/// forwards the opaque callback values (plus the PKCE `verifier` the signed
+/// state carries, when the flow uses one) — no driver wire type crosses the
+/// seam. The tower-session write stays in axum (the token is stored in the
+/// provider layer's user row, not the cookie), then the redirect to the
+/// return path.
 pub async fn login_and_redirect(
     state: AppState,
     session: Session,
@@ -85,8 +122,12 @@ pub async fn login_and_redirect(
     code: String,
     scope: String,
     path: String,
+    verifier: Option<&str>,
 ) -> Result<Redirect, AppError> {
-    let (user_id, is_admin) = state.provider.login(provider, &code, &scope).await?;
+    let (user_id, is_admin) = state
+        .provider
+        .login(provider, &code, &scope, verifier)
+        .await?;
     RequestSession::create_from_token(user_id, is_admin, session).await?;
     debug!("Redirecting to {path}");
     Ok(Redirect::to(&path))
@@ -125,6 +166,37 @@ mod tests {
     fn getpath_rejects_malformed_state() {
         assert!(matches!(
             getpath("no-colon-separator".to_string()),
+            Err(Error::BadRequest(_))
+        ));
+    }
+
+    #[test]
+    fn getstate_pkce_recovers_path_and_verifier_from_gentoken_pkce() {
+        let token = gentoken_pkce("/foo/bar".to_string(), "verifier-abc");
+        assert_eq!(
+            getstate_pkce(token.secret().clone()).expect("valid state"),
+            ("/foo/bar".to_owned(), "verifier-abc".to_owned())
+        );
+    }
+
+    #[test]
+    fn getstate_pkce_rejects_corrupted_signature() {
+        let token = gentoken_pkce("/foo".to_string(), "verifier-abc");
+        let mut state = token.secret().clone();
+        state.push('x');
+        assert!(matches!(getstate_pkce(state), Err(Error::BadRequest(_))));
+    }
+
+    #[test]
+    fn getstate_pkce_rejects_a_state_without_a_verifier() {
+        // A validly signed state in the plain (verifier-less) format: the
+        // signature checks out, but the verifier segment is absent.
+        let random: Vec<u8> = (0..16).map(|_| rand::random()).collect();
+        use base64::prelude::*;
+        let msg = "/foo".to_owned() + "+" + &BASE64_URL_SAFE_NO_PAD.encode(random);
+        let sig = hmac_signature(csrf_key(), &msg);
+        assert!(matches!(
+            getstate_pkce((msg + ":" + &sig).to_string()),
             Err(Error::BadRequest(_))
         ));
     }
