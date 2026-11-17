@@ -3117,16 +3117,21 @@ fn offline_gate_is_false_for_a_configured_subset() {
 /// unaffected.
 #[tokio::test]
 async fn spa_fallback_serves_entry_document() {
+    init_test_config_once();
     let (store, mock, mut provider) = mock_ctx();
     provider
         .expect_enabled_providers()
         .returning(|| vec![tb_provider::Provider::Strava, tb_provider::Provider::Icu]);
 
-    // Create a temp dir with the SPA entry document and a real static asset.
+    // Create a temp dir with the SPA entry document, a real static asset,
+    // and a content subdirectory with one markdown file.
     let temp_dir = std::env::temp_dir().join(format!("tendabike_spa_test_{}", std::process::id()));
     std::fs::create_dir_all(&temp_dir).unwrap();
     std::fs::write(temp_dir.join("200.html"), "<html>SPA</html>").unwrap();
     std::fs::write(temp_dir.join("asset.txt"), "asset content").unwrap();
+    let content_dir = temp_dir.join("content");
+    std::fs::create_dir_all(&content_dir).unwrap();
+    std::fs::write(content_dir.join("about.md"), "# About page").unwrap();
 
     let api: Arc<dyn ServiceApi> = Arc::new(mock);
     let provider: Arc<dyn tb_exec::providerservice::ProviderService> = Arc::new(provider);
@@ -3154,6 +3159,20 @@ async fn spa_fallback_serves_entry_document() {
         body_str.contains("asset content"),
         "expected the real asset, got: {body_str}"
     );
+
+    // An existing content file is served as itself.
+    let (status, _headers, body) = run(app.clone(), Method::GET, "/content/about.md", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("# About page"),
+        "expected the content file, got: {body_str}"
+    );
+
+    // A missing content file returns 404.
+    let (status, _headers, _body) =
+        run(app.clone(), Method::GET, "/content/missing.md", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
 
     // API routes are unaffected (answered by their handlers, not the fallback).
     let (status, _headers, _body) = run(app.clone(), Method::GET, "/api/types/part", None).await;

@@ -30,17 +30,27 @@ pub struct IcuEvent {
     pub event_time: i64,
     /// The event's object type (e.g. `ACTIVITY`).
     pub object_type: String,
+    /// The webhook event type (`ACTIVITY_UPLOADED` | `ACTIVITY_UPDATED` |
+    /// `ACTIVITY_DELETED`) — the queue's dispatch key.
+    pub event_type: String,
 }
 
 impl IcuEvent {
     /// A queued icu event with no row id yet (a fresh webhook/sync enqueue).
-    pub fn new(icu_athlete_id: IcuId, activity_id: impl Into<String>, event_time: i64) -> Self {
+    /// `event_type` is the webhook's event type (the queue's dispatch key).
+    pub fn new(
+        icu_athlete_id: IcuId,
+        activity_id: impl Into<String>,
+        event_time: i64,
+        event_type: impl Into<String>,
+    ) -> Self {
         Self {
             id: None,
             icu_athlete_id,
             activity_id: activity_id.into(),
             event_time,
             object_type: "ACTIVITY".to_string(),
+            event_type: event_type.into(),
         }
     }
 
@@ -90,8 +100,15 @@ struct IcuWebhookActivity {
     id: String,
 }
 
-/// The activity event types the webhook subscribes to (spec #764).
-const SUBSCRIBED_ACTIVITY_TYPES: [&str; 2] = ["ACTIVITY_UPLOADED", "ACTIVITY_UPDATED"];
+/// The activity event types the webhook subscribes to (spec #764; `ACTIVITY_DELETED`
+/// for the delete path).
+const SUBSCRIBED_ACTIVITY_TYPES: [&str; 3] =
+    ["ACTIVITY_UPLOADED", "ACTIVITY_UPDATED", "ACTIVITY_DELETED"];
+
+/// The webhook event type that deletes the activity: the queue's
+/// `process` op dispatches on this — it calls the domain's `delete_activity`
+/// instead of importing.
+const DELETED_EVENT_TYPE: &str = "ACTIVITY_DELETED";
 
 /// The `TEST` event type: intervals.icu fires a single `TEST` delivery (with
 /// no activity) when the webhook is configured on the *Manage App* page.
@@ -163,6 +180,7 @@ pub async fn accept_event(body: &str, store: &mut impl IcuDataStore) -> TbResult
             IcuId::from(event.athlete_id.as_str()),
             activity.id.clone(),
             parse_timestamp(&event.timestamp)?,
+            event.type_.clone(),
         );
         queued.push(icu_event.accept(store).await?);
     }
@@ -207,6 +225,25 @@ pub(crate) async fn get_event(
     }
 }
 
+/// Dispatches one queued event to its domain op: an
+/// `ACTIVITY_DELETED` event deletes the activity; every other subscribed event
+/// imports it. Returns `Ok(None)` for a skipped stub (the import path only — a
+/// delete is never a stub); errors (a 401, a 429, a DB failure) bubble up for
+/// the batch to classify.
+async fn dispatch_event<D: EntityFacade<S>, S: IcuDataStore>(
+    event: &IcuEvent,
+    user_id: UserId,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<Option<Summary>> {
+    if event.event_type == DELETED_EVENT_TYPE {
+        return Ok(Some(
+            super::activity::delete_activity(&event.activity_id, user_id, facade, store).await?,
+        ));
+    }
+    super::activity::import_activity(&event.activity_id, user_id, facade, store).await
+}
+
 /// Drains the user's `icu_events` queue in one call (the lane's `process`),
 /// importing each activity into the domain (spec #764).
 ///
@@ -240,7 +277,7 @@ pub(crate) async fn process<D: EntityFacade<S>, S: IcuDataStore>(
             break; // the queue is empty
         };
         info!("Processing icu event: {}", event.activity_id);
-        match super::activity::import_activity(&event.activity_id, user_id, facade, store).await {
+        match dispatch_event(&event, user_id, facade, store).await {
             Ok(Some(s)) => summary += s,
             Ok(None) => stubs += 1, // a stub: skipped (gear ref dropped)
             Err(err) => match apply_failure(err, &event, &icu_id, store).await? {

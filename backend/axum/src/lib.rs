@@ -100,9 +100,12 @@ fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> Route
 
     if let Some(path) = static_path {
         let fallback_file = path.join("200.html");
-        let static_service = tower_http::services::ServeDir::new(path)
+        let static_service = tower_http::services::ServeDir::new(&path)
             .fallback(tower_http::services::ServeFile::new(fallback_file));
-        router = router.fallback_service(static_service);
+        let content_service = tower_http::services::ServeDir::new(path.join("content"));
+        router = router
+            .nest_service("/content", content_service)
+            .fallback_service(static_service);
     }
 
     router

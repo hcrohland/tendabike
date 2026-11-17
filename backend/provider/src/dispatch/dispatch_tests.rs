@@ -427,6 +427,50 @@ async fn accept_event_icu_test_delivery_is_accepted_and_queues_nothing() -> TbRe
     Ok(())
 }
 
+/// The icu arm queues an **`ACTIVITY_DELETED`** event — it is a
+/// subscribed type, and the queued row carries the event type (the queue's
+/// delete dispatch key).
+#[tokio::test]
+async fn accept_event_icu_queues_a_deleted_event() -> TbResult<()> {
+    let secret = icu_webhook_secret();
+    let mut store = DispatchStore::default();
+    let user = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    store
+        .icu
+        .expect_icuser_get_by_icuid()
+        .returning(move |_id| Ok(Some(user.clone())));
+    let created = Arc::new(Mutex::new(Vec::new()));
+    let created_cell = created.clone();
+    store.icu.expect_icu_event_create().returning(move |e| {
+        created_cell
+            .lock()
+            .expect("the capture is not poisoned")
+            .push(e.clone());
+        Ok(())
+    });
+
+    let body = icu_body(
+        &secret,
+        &icu_event_json(
+            "a1",
+            "ACTIVITY_DELETED",
+            "act-1",
+            "2024-12-06T06:40:47.011+00:00",
+        ),
+    );
+    let queued = accept_event(Provider::Icu, &body, &mut store).await?;
+
+    // The deleted event is subscribed and queued (the wake list).
+    assert_eq!(queued, vec![UserId::from(9)]);
+    let created = created.lock().expect("the capture is not poisoned");
+    assert_eq!(created.len(), 1);
+    let event = &created[0];
+    assert_eq!(event.icu_athlete_id, IcuId::from("a1"));
+    assert_eq!(event.activity_id, "act-1");
+    assert_eq!(event.event_type, "ACTIVITY_DELETED");
+    Ok(())
+}
+
 /// The icu arm skips a **non-subscribed** event (even one that carries an
 /// `activity`) with nothing queued — only the subscribed activity types are
 /// imported, so the event is skipped (and debug-logged).

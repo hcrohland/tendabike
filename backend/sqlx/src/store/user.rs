@@ -77,14 +77,21 @@ impl<'c> tb_domain::UserStore for SqlxConn<'c> {
         avatar_: &Option<String>,
     ) -> TbResult<User> {
         let onboarding_status = i32::from(OnboardingStatus::Pending);
+        // The first user of an empty database gets the admin seat (spec
+        // #905). The emptiness check and the insert are one statement, and
+        // the `pg_advisory_xact_lock` serializes concurrent creates for the
+        // duration of the transaction: a racing create blocks until this
+        // transaction ends, then sees the committed row and is not the
+        // first — no check-then-insert race.
         sqlx::query_as!(
             DbUser,
-            "INSERT INTO users (firstname, name, is_admin, avatar, onboarding_status)
-             VALUES ($1, $2, $3, $4, $5)
+            "WITH first AS (SELECT pg_advisory_xact_lock(9050001))
+             INSERT INTO users (firstname, name, is_admin, avatar, onboarding_status)
+             SELECT $1, $2, NOT EXISTS (SELECT 1 FROM users), $3, $4
+             FROM first
              RETURNING *",
             firstname_,
             lastname,
-            false,
             avatar_ as _,
             onboarding_status
         )
