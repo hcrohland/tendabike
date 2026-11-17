@@ -59,11 +59,11 @@ fn init_test_config_once() {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
         tb_provider::init(tb_provider::ProviderConfig {
-            strava_client_id: "test-client-id".to_string(),
-            strava_client_secret: "test-client-secret".to_string(),
+            strava_client_id: Some("test-client-id".to_string()),
+            strava_client_secret: Some("test-client-secret".to_string()),
             strava_redirect_url: "http://localhost:8000/strava/token".to_string(),
-            icu_client_id: "test-icu-client-id".to_string(),
-            icu_client_secret: "test-icu-client-secret".to_string(),
+            icu_client_id: Some("test-icu-client-id".to_string()),
+            icu_client_secret: Some("test-icu-client-secret".to_string()),
             icu_redirect_url: "http://localhost:8000/icu/token".to_string(),
             icu_webhook_secret: String::new(),
         });
@@ -564,7 +564,10 @@ async fn callback_validation_rejects_wrong_token() {
 
 #[tokio::test]
 async fn login_redirects_to_strava_authorize() {
-    let (store, mock, provider) = mock_ctx();
+    let (store, mock, mut provider) = mock_ctx();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Strava, tb_provider::Provider::Icu]);
     let app = build_app(&store, mock, provider);
     let (status, headers, _body) = run(app, Method::GET, "/strava/login", None).await;
     assert_eq!(status, StatusCode::SEE_OTHER);
@@ -577,6 +580,51 @@ async fn login_redirects_to_strava_authorize() {
     assert!(location.contains("state="));
     // The Strava flow is a plain authorization-code exchange: no PKCE.
     assert!(!location.contains("code_challenge"));
+}
+
+/// A disabled provider's login entry point answers a clear "unavailable"
+/// (ADR-0016): no redirect, no 500 — the provider is hidden from the
+/// connect screen, and a direct hit degrades gracefully.
+#[tokio::test]
+async fn login_of_a_disabled_provider_is_unavailable() {
+    let (store, mock, mut provider) = mock_ctx();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Icu]);
+    let app = build_app(&store, mock, provider);
+    let (status, _headers, body) = run(app, Method::GET, "/strava/login", None).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        body,
+        b"Service unavailable: the strava provider is disabled on this server"
+    );
+}
+
+/// `GET /api/providers`: unauthenticated, the enabled providers as an
+/// ordered list of wire values — the connect screen offers only these,
+/// and renders the failure page when the list is empty.
+#[tokio::test]
+async fn providers_lists_the_enabled_providers_in_wire_order() {
+    let (store, mock, mut provider) = mock_ctx();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Strava]);
+    let app = build_app(&store, mock, provider);
+    let (status, _headers, body) = run(app, Method::GET, "/api/providers", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, br#"["strava"]"#);
+}
+
+/// `GET /api/providers` with no enabled providers: the empty list — the
+/// connect screen's failure page.
+#[tokio::test]
+async fn providers_lists_nothing_when_none_enabled() {
+    let (store, mock, mut provider) = mock_ctx();
+    provider.expect_enabled_providers().returning(Vec::new);
+    let app = build_app(&store, mock, provider);
+    let (status, _headers, body) = run(app, Method::GET, "/api/providers", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, br#"[]"#);
 }
 
 #[tokio::test]
@@ -677,7 +725,10 @@ fn query_param(location: &str, name: &str) -> Option<String> {
 
 #[tokio::test]
 async fn icu_login_redirects_to_icu_authorize() {
-    let (store, mock, provider) = mock_ctx();
+    let (store, mock, mut provider) = mock_ctx();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Strava, tb_provider::Provider::Icu]);
     let app = build_app(&store, mock, provider);
     let (status, headers, _body) = run(app, Method::GET, "/icu/login", None).await;
     assert_eq!(status, StatusCode::SEE_OTHER);
@@ -3139,6 +3190,20 @@ async fn shop_stream_non_owner_is_forbidden() {
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
 
+// ─── Offline startup gate ─────────────────────────────────────
+
+/// The offline gate: the instance runs offline iff the enabled
+/// provider set is empty. The test process configures both providers, so a
+/// configured subset is a normal mode and must not trip the gate.
+#[test]
+fn offline_gate_is_false_for_a_configured_subset() {
+    init_test_config_once();
+    assert!(
+        !crate::is_offline(),
+        "a configured subset is a normal mode, not offline"
+    );
+}
+
 // ─── SPA fallback (static serving in the router) ────────────────────────────
 
 /// A client-side route returns the SPA entry document (`200.html`) with a 200
@@ -3147,7 +3212,10 @@ async fn shop_stream_non_owner_is_forbidden() {
 #[tokio::test]
 async fn spa_fallback_serves_entry_document() {
     init_test_config_once();
-    let (store, mock, provider) = mock_ctx();
+    let (store, mock, mut provider) = mock_ctx();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Strava, tb_provider::Provider::Icu]);
 
     // Create a temp dir with the SPA entry document, a real static asset,
     // and a content subdirectory with one markdown file.

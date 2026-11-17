@@ -575,6 +575,13 @@ where
         store.commit().await?;
         Ok(provider)
     }
+
+    /// The enabled providers (ADR-0016): the provider layer's config-derived
+    /// set, in the `Provider` enum's definition order. No transaction: a
+    /// pure config read.
+    fn enabled_providers(&self) -> Vec<Provider> {
+        tb_provider::enabled_providers().to_vec()
+    }
 }
 
 /// Enqueue a [`Request`] on the user's executor and await its oneshot

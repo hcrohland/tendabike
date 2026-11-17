@@ -18,7 +18,7 @@
 
 use axum::{
     extract::{Query, State},
-    response::{IntoResponse, Redirect},
+    response::Redirect,
 };
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -38,7 +38,18 @@ pub(crate) struct PathParam {
     inner: Option<String>,
 }
 
-pub(crate) async fn icu_auth(Query(path): Query<PathParam>) -> impl IntoResponse {
+/// `GET /icu/login`: the OAuth entry point. A disabled provider (its client
+/// id unset, ADR-0016) answers a clear "unavailable" — no redirect, no 500:
+/// the provider is hidden from the connect screen, and a direct hit
+/// degrades gracefully.
+pub(crate) async fn icu_auth(
+    Query(path): Query<PathParam>,
+    State(state): State<AppState>,
+) -> Result<Redirect, AppError> {
+    if !state.provider.enabled_providers().contains(&Provider::Icu) {
+        // The provider layer owns the disabled-provider message (ADR-0016).
+        return Err(tb_provider::disabled(Provider::Icu).into());
+    }
     let path = path.inner.unwrap_or("/".to_owned());
     // A fresh random verifier per login: it round-trips in the signed state
     // (the callback recovers it for the token exchange), and the enum derives
@@ -50,7 +61,7 @@ pub(crate) async fn icu_auth(Query(path): Query<PathParam>) -> impl IntoResponse
     );
 
     // Redirect to intervals.icu's oauth service
-    Redirect::to(&url)
+    Ok(Redirect::to(&url))
 }
 
 #[derive(Debug, Serialize, Deserialize)]

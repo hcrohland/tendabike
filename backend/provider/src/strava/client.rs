@@ -93,11 +93,24 @@ pub type StravaClient<
 static STRAVACLIENT: OnceLock<StravaClient> = OnceLock::new();
 
 /// The initialized Strava oauth client (panics if the config is not set).
+/// Only called for an enabled provider (ADR-0016): a disabled provider's
+/// ops are guarded before they reach the client, so the credentials are
+/// present.
 pub(crate) fn strava_client() -> &'static StravaClient {
     STRAVACLIENT.get_or_init(|| {
         let config = config::get();
-        let client_id = ClientId::new(config.strava_client_id.clone());
-        let client_secret = ClientSecret::new(config.strava_client_secret.clone());
+        let client_id = ClientId::new(
+            config
+                .strava_client_id
+                .clone()
+                .expect("strava provider disabled — the client must not be built"),
+        );
+        let client_secret = ClientSecret::new(
+            config
+                .strava_client_secret
+                .clone()
+                .expect("strava provider disabled — the client must not be built"),
+        );
         let redirect_url = RedirectUrl::new(config.strava_redirect_url.clone()).unwrap();
 
         let auth_url = AuthUrl::new("https://www.strava.com/oauth/authorize".to_string()).unwrap();
