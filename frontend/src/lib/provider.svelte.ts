@@ -19,7 +19,7 @@ export function getEnabledProviders(): Provider[] {
   return enabled;
 }
 
-/// The offline state (ticket #925): a *successful* `/api/providers` fetch
+/// The offline state: a *successful* `/api/providers` fetch
 /// that returned an empty enabled set. A failed fetch is a distinct error
 /// state and is not offline.
 export function isOffline(): boolean {

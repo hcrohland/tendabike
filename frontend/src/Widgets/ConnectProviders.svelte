@@ -10,7 +10,7 @@
   import ProviderMark from "./ProviderMark.svelte";
   import * as m from "../../paraglide/messages";
 
-  // The enabled providers are app-wide state (ticket #925): the layout
+  // The enabled providers are app-wide state: the layout
   // fetches them once, this screen only reads the shared module state.
   // `loading` — nothing to offer yet; `error` — the fetch failed (a
   // distinct state, not offline); `ready` + empty — offline; `ready` +

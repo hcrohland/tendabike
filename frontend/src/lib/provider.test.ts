@@ -41,7 +41,7 @@ function stubProvidersFail() {
   );
 }
 
-describe("provider state (ticket #925)", () => {
+describe("provider state", () => {
   /// The module state starts in flight: `loading`, not offline. Must run
   /// first — the module state persists across the file's tests.
   it("starts loading: not offline, no providers", () => {

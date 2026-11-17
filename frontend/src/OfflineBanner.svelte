@@ -3,7 +3,7 @@
   import * as m from "../paraglide/messages";
 </script>
 
-<!-- The offline banner (ticket #925): a successful /api/providers fetch
+<!-- The offline banner: a successful /api/providers fetch
      that returned an empty enabled set. Plain text, not dismissible, no
      link. A failed fetch is a distinct error state and shows nothing here. -->
 {#if isOffline()}

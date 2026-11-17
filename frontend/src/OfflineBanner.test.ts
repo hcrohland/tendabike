@@ -40,7 +40,7 @@ function stubProvidersFail() {
   );
 }
 
-describe("OfflineBanner (ticket #925)", () => {
+describe("OfflineBanner", () => {
   it("shows on a successful empty fetch (offline)", async () => {
     stubProviders([]);
     await loadProviders();

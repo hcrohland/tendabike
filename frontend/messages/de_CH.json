@@ -22,7 +22,7 @@
   "connect_feature_reconnect": "Mit eme Tipp nöi verbinde",
   "connect_button": "Verbind {name}",
   "offline_banner": "Offline — keini Aktivitätsanbieter konfiguriert.",
-  "offline_connect": "Mir sind offline. Es sin keini Aktivitätsanbieter konfiguriert, drum sind Import und Synchronisacion vo Aktivitäte nid verfüegbar. Füeg en Anbieter zr, zum online z'go.",
+  "offline_connect": "Mir sind offline. Es sin keini Aktivitätsanbieter konfiguriert, drum sind Import und Synchronisation vo Aktivitäte nid verfüegbar. Füeg en Anbieter zue, zum online z'go.",
   "providers_load_failed": "D'Anbieter chönd nid glade werde. Versuuch's no einisch.",
   "gearcard_unknown_model": "unbekannts Modell",
   "gearcard_view_on": "Uf {provider} aluege",

@@ -11,7 +11,7 @@
   import Footer from "../Footer.svelte";
   import { loadProviders } from "../lib/provider";
 
-  // The enabled providers are app-wide state (ticket #925): the layout
+  // The enabled providers are app-wide state: the layout
   // fetches them once so the offline banner and the connect screen read
   // the same module state.
   onMount(() => {

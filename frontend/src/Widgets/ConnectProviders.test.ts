@@ -55,7 +55,7 @@ describe("ConnectProviders", () => {
     });
   });
 
-  /// The component reads the app-wide provider state (ticket #925): the
+  /// The component reads the app-wide provider state: the
   /// layout fetches it, so the test drives it the same way.
   async function load(providers: string[] | "fail") {
     if (providers === "fail") stubProvidersFail();

@@ -72,14 +72,14 @@ mod oauth_common;
 
 mod stream;
 
-/// The offline gate (ticket #925): the instance runs offline iff the
+/// The offline gate: the instance runs offline iff the
 /// enabled provider set is empty (ADR-0016). A proper subset is a normal
 /// mode and never trips the gate.
 fn is_offline() -> bool {
     tb_provider::enabled_providers().is_empty()
 }
 
-/// The startup offline warning (ticket #925): once at startup, when the
+/// The startup offline warning: once at startup, when the
 /// instance runs offline (no enabled providers), log an error naming the
 /// fix. A configured subset is a normal mode and logs nothing.
 fn warn_if_offline() {
@@ -172,7 +172,7 @@ pub async fn start(
     tracing::debug!("listening on {}", addr);
 
     // Once at startup: warn when the instance runs offline (no enabled
-    // providers) — a configured subset is a normal mode (ticket #925).
+    // providers) — a configured subset is a normal mode.
     warn_if_offline();
 
     let listener = tokio::net::TcpListener::bind(addr)

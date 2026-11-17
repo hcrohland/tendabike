@@ -3096,9 +3096,9 @@ async fn shop_stream_non_owner_is_forbidden() {
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
 
-// ─── Offline startup gate (ticket #925) ─────────────────────────────────────
+// ─── Offline startup gate ─────────────────────────────────────
 
-/// The offline gate (ticket #925): the instance runs offline iff the enabled
+/// The offline gate: the instance runs offline iff the enabled
 /// provider set is empty. The test process configures both providers, so a
 /// configured subset is a normal mode and must not trip the gate.
 #[test]
