@@ -15,13 +15,13 @@ use std::sync::{Arc, Mutex, Once};
 use crate::Provider;
 use crate::facade::{Error, TbResult, UserId, mock_session_admin};
 use crate::icu::test_support::{MockIcuDataStore, begin_test, queue};
-use crate::icu::{IcuDataStore, IcuEvent, IcuId, IcuUser};
+use crate::icu::{IcuDataStore, IcuEvent, IcuId, IcuObjectType, IcuUser};
 use crate::strava::event::Event;
 use crate::strava::test_support::MockStravaDataStore;
 use crate::strava::{StravaDataStore, StravaId, StravaUser};
 use crate::test_support::MockEntityFacade;
 
-use super::{accept_event, deauthorize, delete_user, login, sync_users};
+use super::{accept_event, deauthorize, delete_user, login, queue_sync_user, sync_users};
 
 // ─── The composite store double ─────────────────────────────────────────────
 //
@@ -132,6 +132,9 @@ impl IcuDataStore for DispatchStore {
     }
     async fn icu_events_delete_for_user(&mut self, user: &IcuId) -> TbResult<usize> {
         self.icu.icu_events_delete_for_user(user).await
+    }
+    async fn icu_events_delete_sync_for_user(&mut self, user: &IcuId) -> TbResult<usize> {
+        self.icu.icu_events_delete_sync_for_user(user).await
     }
 }
 
@@ -692,45 +695,42 @@ async fn provider_of_not_found_when_no_row_exists() -> TbResult<()> {
 // on their own provider's lane — a Strava user gets a Strava `Sync` event, an
 // icu user is queued via the icu onboarding path.
 
-/// The icu lane: an enabled icu user is queued via the onboarding path.
+/// The icu lane: an enabled icu user gets gear imported (inline) and a
+/// `SYNC` event queued.
 #[tokio::test]
 async fn sync_users_queues_icu_users() -> TbResult<()> {
     init_config_once();
     let mut store = DispatchStore::default();
     let facade = MockEntityFacade::new();
-    // The icu HTTP seam in test mode: the onboarding's gear + backfill fetch
-    // canned empty responses (no gear, no activities → the onboard is a
-    // no-op past the queue).
+    // The icu HTTP seam in test mode: the gear import fetches a canned empty
+    // gear list (no gear → the gear import is a no-op).
     begin_test();
     queue("/athlete/a1/gear", "[]");
-    let today = {
-        let dt = time::OffsetDateTime::now_utc();
-        format!("{:04}-{:02}-{:02}", dt.year(), dt.month() as u8, dt.day())
-    };
-    queue(
-        &format!(
-            "/athlete/a1/activities?oldest=1970-01-01&newest={today}&limit=100&fields=id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules"
-        ),
-        "[]",
-    );
     // No Strava row for this user → the `provider_of` lookup resolves icu.
     store
         .strava
         .expect_stravauser_get_by_tbid()
         .returning(|_| Err(Error::NotFound("no strava user".into())));
-    // The provider lookup, the lane read, and the onboard's `get_icu_id` all
-    // resolve the icu user.
+    // The provider lookup, the lane read, and the `insert_sync`'s
+    // `get_icu_id` all resolve the icu user.
     let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
     let icu_read = icu.clone();
     store
         .icu
         .expect_icuser_get_by_tbid()
         .returning(move |_| Ok(icu_read.clone()));
-    // The backfill's resume cursor: no imported events yet.
+    // The `insert_sync`'s REPLACE: no existing `SYNC` row to drop, then the
+    // fresh `SYNC` row is queued.
     store
         .icu
-        .expect_icu_events_get_latest_time()
-        .returning(|_id| Ok(None));
+        .expect_icu_events_delete_sync_for_user()
+        .returning(|_id| Ok(0));
+    let created = Arc::new(Mutex::new(Vec::new()));
+    let created_rec = created.clone();
+    store.icu.expect_icu_event_create().returning(move |e| {
+        created_rec.lock().unwrap().push(e);
+        Ok(())
+    });
 
     let mut session = mock_session_admin(UserId::from(1));
     let queued = sync_users(
@@ -748,6 +748,69 @@ async fn sync_users_queues_icu_users() -> TbResult<()> {
         vec![UserId::from(9)],
         "the icu user is queued on their own lane"
     );
+    let events = created.lock().unwrap().clone();
+    assert_eq!(events.len(), 1, "one SYNC event is queued");
+    assert_eq!(
+        events[0].object_type,
+        IcuObjectType::Sync,
+        "the queued row is a SYNC"
+    );
+    assert_eq!(
+        events[0].oldest,
+        Some(1_700_000_000),
+        "the SYNC's lower bound is the trigger time"
+    );
+    assert_eq!(events[0].event_time, 0, "the newest sentinel is 0");
+    Ok(())
+}
+
+/// The onboarding arm (`queue_sync_user`): an icu user gets a `SYNC` event
+/// queued with `oldest = 0` (the full history) and the `0` `newest` sentinel —
+/// no gear import (that is the separate first step).
+#[tokio::test]
+async fn queue_sync_user_queues_icu_sync_with_full_history() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    // No Strava row for this user → the `provider_of` lookup resolves icu.
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(|_| Err(Error::NotFound("no strava user".into())));
+    // The provider lookup and the `insert_sync`'s `get_icu_id` resolve the
+    // icu user.
+    let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    let icu_read = icu.clone();
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .returning(move |_| Ok(icu_read.clone()));
+    // The `insert_sync`'s REPLACE: no existing `SYNC` row to drop, then the
+    // fresh `SYNC` row is queued.
+    store
+        .icu
+        .expect_icu_events_delete_sync_for_user()
+        .returning(|_id| Ok(0));
+    let created = Arc::new(Mutex::new(Vec::new()));
+    let created_rec = created.clone();
+    store.icu.expect_icu_event_create().returning(move |e| {
+        created_rec.lock().unwrap().push(e);
+        Ok(())
+    });
+
+    queue_sync_user(UserId::from(9), 1_700_000_000, &mut store).await?;
+
+    let events = created.lock().unwrap().clone();
+    assert_eq!(events.len(), 1, "one SYNC event is queued");
+    assert_eq!(
+        events[0].object_type,
+        IcuObjectType::Sync,
+        "the queued row is a SYNC"
+    );
+    assert_eq!(
+        events[0].oldest,
+        Some(0),
+        "the onboarding SYNC walks the full history"
+    );
+    assert_eq!(events[0].event_time, 0, "the newest sentinel is 0");
     Ok(())
 }
 

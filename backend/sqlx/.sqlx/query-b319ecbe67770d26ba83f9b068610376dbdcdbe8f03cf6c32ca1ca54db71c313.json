@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM icu_events WHERE icu_athlete_id = $1 AND object_type = 'SYNC'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b319ecbe67770d26ba83f9b068610376dbdcdbe8f03cf6c32ca1ca54db71c313"
+}

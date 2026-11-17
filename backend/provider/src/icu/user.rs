@@ -178,19 +178,20 @@ pub async fn login<D: EntityFacade<S>, S: IcuDataStore>(
     Ok((user.user_id(), is_admin))
 }
 
-/// The onboarding cutover's provider side (spec #765/#766): import the
-/// user's icu gear, then run the activity backfill — the date-window walk
-/// that queues the user's past activities as `icu_events` rows for the
-/// normal event loop to import one at a time. Returns the created gear part
-/// ids (spec #829: the onboarding response lists them).
+/// The admin sync trigger's provider side: import the user's icu gear
+/// (inline), then enqueue the durable `SYNC` event — the `oldest` bound is
+/// the trigger time, and the `newest` sentinel is `0` (resolved to now at
+/// first processing). The date-cursor walk runs in the lane's `process` (the
+/// `SYNC` row's cursor walk). Returns the created gear part ids (spec #829:
+/// the onboarding response lists them).
 pub async fn onboard<D: EntityFacade<S>, S: IcuDataStore>(
     user_id: UserId,
-    _time: i64,
+    time: i64,
     facade: &D,
     store: &mut S,
 ) -> TbResult<Vec<PartId>> {
     let gear = super::gear::update_gear(user_id, facade, store).await?;
-    super::backfill::backfill(user_id, 0, facade, store).await?;
+    super::event::insert_sync(user_id, time, store).await?;
     Ok(gear)
 }
 
