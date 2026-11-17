@@ -1,11 +1,17 @@
+import {
+  getEnabledProviders,
+  getProvidersStatus,
+  isOffline,
+  loadProviders,
+} from "./provider.svelte";
+
+export { getEnabledProviders, getProvidersStatus, isOffline, loadProviders };
+
 /// The activity providers a user can connect with (spec #760): one per
 /// user, set at signup, immutable. The values are the wire encoding the
 /// backend's `GET /api/user` response carries in `user.provider`
 /// (`'strava'` | `'icu'`).
 export type Provider = "strava" | "icu";
-
-/// The providers offered on the connect screen, in display order.
-export const PROVIDERS: Provider[] = ["strava", "icu"];
 
 /// The per-provider branding: the display name (a brand name, not
 /// translated) and the accent color the provider's chrome is painted in.

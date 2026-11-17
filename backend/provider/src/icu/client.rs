@@ -80,11 +80,24 @@ pub type IcuClient<
 static ICU_CLIENT: OnceLock<IcuClient> = OnceLock::new();
 
 /// The initialized icu oauth client (panics if the config is not set).
+/// Only called for an enabled provider (ADR-0016): a disabled provider's
+/// ops are guarded before they reach the client, so the credentials are
+/// present.
 pub(crate) fn icu_client() -> &'static IcuClient {
     ICU_CLIENT.get_or_init(|| {
         let config = config::get();
-        let client_id = ClientId::new(config.icu_client_id.clone());
-        let client_secret = ClientSecret::new(config.icu_client_secret.clone());
+        let client_id = ClientId::new(
+            config
+                .icu_client_id
+                .clone()
+                .expect("icu provider disabled — the client must not be built"),
+        );
+        let client_secret = ClientSecret::new(
+            config
+                .icu_client_secret
+                .clone()
+                .expect("icu provider disabled — the client must not be built"),
+        );
         let redirect_url = RedirectUrl::new(config.icu_redirect_url.clone()).unwrap();
 
         let auth_url = AuthUrl::new("https://intervals.icu/oauth/authorize".to_string()).unwrap();

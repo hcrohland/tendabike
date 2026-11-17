@@ -109,11 +109,11 @@ fn init_provider_config_once() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
         tb_provider::init(tb_provider::ProviderConfig {
-            strava_client_id: "seam".to_string(),
-            strava_client_secret: "seam".to_string(),
+            strava_client_id: Some("seam".to_string()),
+            strava_client_secret: Some("seam".to_string()),
             strava_redirect_url: "http://localhost:8000/strava/token".to_string(),
-            icu_client_id: "seam".to_string(),
-            icu_client_secret: "seam".to_string(),
+            icu_client_id: Some("seam".to_string()),
+            icu_client_secret: Some("seam".to_string()),
             icu_redirect_url: "http://localhost:8000/icu/token".to_string(),
             icu_webhook_secret: String::new(),
         });
@@ -233,8 +233,14 @@ struct ExecSeam {
 /// and reset the database to the pristine fixture (truncate + re-seed +
 /// re-point the sequences — the committed-write model's per-test cleanup;
 /// the seam suite's rolled-back model only needs the sequence reset).
+///
+/// Also initializes the provider config (the `Once` makes it idempotent):
+/// the direct ops and the lane's `process` read the enabled set
+/// (ADR-0016), and the tests run in parallel — an uninitialized config
+/// would panic whichever test reaches the provider layer first.
 async fn ready() -> ExecSeam {
     let _lock = LOCK.lock().await;
+    init_provider_config_once();
     install_notice_capture();
     let url = match suffixed_scratch_url(DB_SUFFIX) {
         Some(url) => url,
@@ -1153,6 +1159,9 @@ async fn rescan_stops_the_executors() {
 #[ignore]
 async fn accept_event_queues_the_event() {
     let seam = ready().await;
+    // The intake reads the enabled set (ADR-0016): the suite's all-enabled
+    // config keeps the arm's behavior unchanged.
+    init_provider_config_once();
     let (_user, strava) = test_identity();
     seed_strava_user(&seam.pool, false).await;
     let reg = registry(&seam.pool);
@@ -1207,6 +1216,8 @@ async fn accept_event_queues_the_event() {
 #[ignore]
 async fn accept_event_athlete_deauth_disables_the_user() {
     let seam = ready().await;
+    // As the queue test: the intake reads the enabled set (ADR-0016).
+    init_provider_config_once();
     let (_user, strava) = test_identity();
     seed_strava_user(&seam.pool, true).await;
     let reg = registry(&seam.pool);
