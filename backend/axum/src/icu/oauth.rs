@@ -9,19 +9,27 @@
 //! the scope check, the token exchange, and the wire-shape parsing are the
 //! provider layer's work). The CSRF state handling is the same HMAC scheme as
 //! the Strava flow (provider-agnostic).
+//!
+//! Unlike the Strava flow, the login uses PKCE (RFC 7636, S256,
+//! unconditional): the web shell generates a random code verifier per login,
+//! its S256 challenge goes in the authorize URL, and the verifier
+//! round-trips in the signed state so the callback can submit it in the
+//! token exchange.
 
 use axum::{
     extract::{Query, State},
-    response::{IntoResponse, Redirect},
+    response::Redirect,
 };
 use log::warn;
 use serde::{Deserialize, Serialize};
 use tower_sessions::Session;
 
+use oauth2::PkceCodeChallenge;
+
 use crate::{
     appstate::AppState,
     error::AppError,
-    oauth_common::{gentoken, getpath, login_and_redirect},
+    oauth_common::{gentoken_pkce, getpath_and_verifier, login_and_redirect},
 };
 use tb_provider::Provider;
 
@@ -30,15 +38,30 @@ pub(crate) struct PathParam {
     inner: Option<String>,
 }
 
-pub(crate) async fn icu_auth(Query(path): Query<PathParam>) -> impl IntoResponse {
+/// `GET /icu/login`: the OAuth entry point. A disabled provider (its client
+/// id unset, ADR-0016) answers a clear "unavailable" — no redirect, no 500:
+/// the provider is hidden from the connect screen, and a direct hit
+/// degrades gracefully.
+pub(crate) async fn icu_auth(
+    Query(path): Query<PathParam>,
+    State(state): State<AppState>,
+) -> Result<Redirect, AppError> {
+    if !state.provider.enabled_providers().contains(&Provider::Icu) {
+        // The provider layer owns the disabled-provider message (ADR-0016).
+        return Err(tb_provider::disabled(Provider::Icu).into());
+    }
     let path = path.inner.unwrap_or("/".to_owned());
-    // The web shell generates the CSRF state (beside its other protocol
-    // secrets); the enum assembles the authorize URL from the driver's
-    // client config (ADR-0014).
-    let url = Provider::Icu.authorize_url(gentoken(path).secret());
+    // A fresh random verifier per login: it round-trips in the signed state
+    // (the callback recovers it for the token exchange), and the enum derives
+    // the authorize URL's S256 challenge from it.
+    let (_, verifier) = PkceCodeChallenge::new_random_sha256();
+    let url = Provider::Icu.authorize_url(
+        gentoken_pkce(path, verifier.secret()).secret(),
+        Some(verifier.secret()),
+    );
 
     // Redirect to intervals.icu's oauth service
-    Redirect::to(&url)
+    Ok(Redirect::to(&url))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -61,7 +84,7 @@ pub(crate) async fn login_authorized(
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Redirect, AppError> {
-    let (code, scope, path) = match query {
+    let (code, scope, path, verifier) = match query {
         AuthResponse::Error { error, .. } => {
             warn!("Authentication failed with error: {error}");
             return Ok(Redirect::to("/"));
@@ -69,8 +92,18 @@ pub(crate) async fn login_authorized(
         // intervals.icu omits the `scope` query param on some callbacks: an
         // absent scope is the empty string (the provider layer accepts it).
         AuthResponse::Request { code, state, scope } => {
-            (code, scope.unwrap_or_default(), getpath(state)?)
+            let (path, verifier) = getpath_and_verifier(state)?;
+            (code, scope.unwrap_or_default(), path, verifier)
         }
     };
-    login_and_redirect(state, session, Provider::Icu, code, scope, path).await
+    login_and_redirect(
+        state,
+        session,
+        Provider::Icu,
+        code,
+        scope,
+        path,
+        Some(&verifier),
+    )
+    .await
 }

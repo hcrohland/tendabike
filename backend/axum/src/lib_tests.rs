@@ -59,11 +59,11 @@ fn init_test_config_once() {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
         tb_provider::init(tb_provider::ProviderConfig {
-            strava_client_id: "test-client-id".to_string(),
-            strava_client_secret: "test-client-secret".to_string(),
+            strava_client_id: Some("test-client-id".to_string()),
+            strava_client_secret: Some("test-client-secret".to_string()),
             strava_redirect_url: "http://localhost:8000/strava/token".to_string(),
-            icu_client_id: "test-icu-client-id".to_string(),
-            icu_client_secret: "test-icu-client-secret".to_string(),
+            icu_client_id: Some("test-icu-client-id".to_string()),
+            icu_client_secret: Some("test-icu-client-secret".to_string()),
             icu_redirect_url: "http://localhost:8000/icu/token".to_string(),
             icu_webhook_secret: String::new(),
         });
@@ -564,7 +564,10 @@ async fn callback_validation_rejects_wrong_token() {
 
 #[tokio::test]
 async fn login_redirects_to_strava_authorize() {
-    let (store, mock, provider) = mock_ctx();
+    let (store, mock, mut provider) = mock_ctx();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Strava, tb_provider::Provider::Icu]);
     let app = build_app(&store, mock, provider);
     let (status, headers, _body) = run(app, Method::GET, "/strava/login", None).await;
     assert_eq!(status, StatusCode::SEE_OTHER);
@@ -575,6 +578,53 @@ async fn login_redirects_to_strava_authorize() {
     );
     assert!(location.contains("client_id=test-client-id"));
     assert!(location.contains("state="));
+    // The Strava flow is a plain authorization-code exchange: no PKCE.
+    assert!(!location.contains("code_challenge"));
+}
+
+/// A disabled provider's login entry point answers a clear "unavailable"
+/// (ADR-0016): no redirect, no 500 — the provider is hidden from the
+/// connect screen, and a direct hit degrades gracefully.
+#[tokio::test]
+async fn login_of_a_disabled_provider_is_unavailable() {
+    let (store, mock, mut provider) = mock_ctx();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Icu]);
+    let app = build_app(&store, mock, provider);
+    let (status, _headers, body) = run(app, Method::GET, "/strava/login", None).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        body,
+        b"Service unavailable: the strava provider is disabled on this server"
+    );
+}
+
+/// `GET /api/providers`: unauthenticated, the enabled providers as an
+/// ordered list of wire values — the connect screen offers only these,
+/// and renders the failure page when the list is empty.
+#[tokio::test]
+async fn providers_lists_the_enabled_providers_in_wire_order() {
+    let (store, mock, mut provider) = mock_ctx();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Strava]);
+    let app = build_app(&store, mock, provider);
+    let (status, _headers, body) = run(app, Method::GET, "/api/providers", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, br#"["strava"]"#);
+}
+
+/// `GET /api/providers` with no enabled providers: the empty list — the
+/// connect screen's failure page.
+#[tokio::test]
+async fn providers_lists_nothing_when_none_enabled() {
+    let (store, mock, mut provider) = mock_ctx();
+    provider.expect_enabled_providers().returning(Vec::new);
+    let app = build_app(&store, mock, provider);
+    let (status, _headers, body) = run(app, Method::GET, "/api/providers", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, br#"[]"#);
 }
 
 #[tokio::test]
@@ -604,8 +654,10 @@ async fn token_forwards_the_opaque_callback_to_login() {
     provider
         .expect_login()
         .times(1)
-        .withf(|p, code, scope| *p == Provider::Strava && code == "abc" && scope == "read")
-        .returning(|_p, _c, _s| Ok((UserId::from(1), false)));
+        .withf(|p, code, scope, verifier| {
+            *p == Provider::Strava && code == "abc" && scope == "read" && verifier.is_none()
+        })
+        .returning(|_p, _c, _s, _v| Ok((UserId::from(1), false)));
     let app = build_app(&store, mock, provider);
     let state = crate::oauth_common::gentoken("/return".to_string());
     let (status, headers, _body) = run(
@@ -627,11 +679,14 @@ async fn token_forwards_the_opaque_callback_to_login() {
 #[tokio::test]
 async fn token_login_failure_500s() {
     let (store, mock, mut provider) = mock_ctx();
-    provider.expect_login().times(1).returning(|_p, _c, _s| {
-        Err(tb_domain::Error::AnyFailure(anyhow::anyhow!(
-            "login failed"
-        )))
-    });
+    provider
+        .expect_login()
+        .times(1)
+        .returning(|_p, _c, _s, _v| {
+            Err(tb_domain::Error::AnyFailure(anyhow::anyhow!(
+                "login failed"
+            )))
+        });
     let app = build_app(&store, mock, provider);
     let state = crate::oauth_common::gentoken("/return".to_string());
     let (status, _headers, _body) = run(
@@ -658,9 +713,22 @@ async fn logout_redirects_to_root() {
 
 // ─── intervals.icu OAuth (spec #763) ──────────────────────────────────────
 
+/// Reads a query parameter from a URL (the authorize-redirect assertions).
+fn query_param(location: &str, name: &str) -> Option<String> {
+    location.split_once('?').and_then(|(_, query)| {
+        query.split('&').find_map(|pair| {
+            let (k, v) = pair.split_once('=')?;
+            (k == name).then(|| v.to_owned())
+        })
+    })
+}
+
 #[tokio::test]
 async fn icu_login_redirects_to_icu_authorize() {
-    let (store, mock, provider) = mock_ctx();
+    let (store, mock, mut provider) = mock_ctx();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Strava, tb_provider::Provider::Icu]);
     let app = build_app(&store, mock, provider);
     let (status, headers, _body) = run(app, Method::GET, "/icu/login", None).await;
     assert_eq!(status, StatusCode::SEE_OTHER);
@@ -671,6 +739,32 @@ async fn icu_login_redirects_to_icu_authorize() {
     );
     assert!(location.contains("client_id=test-icu-client-id"));
     assert!(location.contains("state="));
+    // PKCE (RFC 7636): the authorize URL carries the S256 code challenge.
+    let challenge = query_param(&location, "code_challenge").expect("code_challenge");
+    assert!(!challenge.is_empty());
+    assert_eq!(
+        query_param(&location, "code_challenge_method").as_deref(),
+        Some("S256")
+    );
+}
+
+/// Two logins get independent PKCE verifiers: the S256 challenges in their
+/// authorize URLs differ (S256 is injective, so distinct challenges mean
+/// distinct verifiers).
+#[tokio::test]
+async fn icu_login_issues_an_independent_verifier_per_login() {
+    let (store, mock, mut provider) = mock_ctx();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Strava, tb_provider::Provider::Icu]);
+    let app = build_app(&store, mock, provider);
+    let (_, h1, _) = run(app.clone(), Method::GET, "/icu/login", None).await;
+    let (_, h2, _) = run(app, Method::GET, "/icu/login", None).await;
+    let l1 = h1["location"].to_str().expect("location").to_owned();
+    let l2 = h2["location"].to_str().expect("location").to_owned();
+    let c1 = query_param(&l1, "code_challenge").expect("code_challenge");
+    let c2 = query_param(&l2, "code_challenge").expect("code_challenge");
+    assert_ne!(c1, c2, "two logins must get independent verifiers");
 }
 
 #[tokio::test]
@@ -693,17 +787,24 @@ async fn icu_token_error_redirects_to_root() {
 /// (ADR-0014): the scope check, the token exchange, and the wire-shape
 /// parsing are the provider layer's work. intervals.icu omits the `scope`
 /// query param on some callbacks: an absent scope is forwarded as the empty
-/// string (the provider layer accepts it).
+/// string (the provider layer accepts it). The PKCE verifier round-trips in
+/// the signed state: the callback recovers it and forwards it to the `login`
+/// op.
 #[tokio::test]
 async fn icu_token_forwards_the_opaque_callback_to_login() {
     let (store, mock, mut provider) = mock_ctx();
     provider
         .expect_login()
         .times(1)
-        .withf(|p, code, scope| *p == Provider::Icu && code == "abc" && scope.is_empty())
-        .returning(|_p, _c, _s| Ok((UserId::from(1), false)));
+        .withf(|p, code, scope, verifier| {
+            *p == Provider::Icu
+                && code == "abc"
+                && scope.is_empty()
+                && *verifier == Some("verifier-abc")
+        })
+        .returning(|_p, _c, _s, _v| Ok((UserId::from(1), false)));
     let app = build_app(&store, mock, provider);
-    let state = crate::oauth_common::gentoken("/return".to_string());
+    let state = crate::oauth_common::gentoken_pkce("/return".to_string(), "verifier-abc");
     let (status, headers, _body) = run(
         app,
         Method::GET,
@@ -716,6 +817,56 @@ async fn icu_token_forwards_the_opaque_callback_to_login() {
     .await;
     assert_eq!(status, StatusCode::SEE_OTHER);
     assert_eq!(headers["location"], "/return");
+}
+
+/// The PKCE binding end to end: the verifier the callback submits to the
+/// `login` op is the one whose S256 challenge the `/icu/login` authorize URL
+/// carried (both derive from the same signed state).
+#[tokio::test]
+async fn icu_token_submits_the_verifier_matching_the_authorize_challenge() {
+    let (store, mock, mut provider) = mock_ctx();
+    let captured: Arc<std::sync::Mutex<Option<String>>> = Arc::new(std::sync::Mutex::new(None));
+    let captured_rec = captured.clone();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Strava, tb_provider::Provider::Icu]);
+    provider
+        .expect_login()
+        .times(1)
+        .withf(|p, code, _scope, _verifier| *p == Provider::Icu && code == "abc")
+        .returning(move |_p, _c, _s, verifier| {
+            if let Some(v) = verifier {
+                captured_rec.lock().unwrap().replace(v.to_owned());
+            }
+            Ok((UserId::from(1), false))
+        });
+    let app = build_app(&store, mock, provider);
+
+    // The login redirect: the authorize URL's challenge and the signed state.
+    let (_, headers, _) = run(app.clone(), Method::GET, "/icu/login", None).await;
+    let location = headers["location"].to_str().expect("location").to_owned();
+    let challenge = query_param(&location, "code_challenge").expect("code_challenge");
+    let state = query_param(&location, "state").expect("state");
+
+    // The callback: the verifier is recovered from the state and submitted.
+    let (status, _, _) = run(
+        app,
+        Method::GET,
+        &format!("/icu/token?code=abc&state={state}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+
+    let verifier = captured
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("the verifier was submitted to the login op");
+    let expected = oauth2::PkceCodeChallenge::from_code_verifier_sha256(
+        &oauth2::PkceCodeVerifier::new(verifier),
+    );
+    assert_eq!(expected.as_str(), challenge);
 }
 
 /// `POST /icu/onboarding/gear` (spec #829, the first step) enqueues the
@@ -3045,6 +3196,20 @@ async fn shop_stream_non_owner_is_forbidden() {
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
 
+// ─── Offline startup gate ─────────────────────────────────────
+
+/// The offline gate: the instance runs offline iff the enabled
+/// provider set is empty. The test process configures both providers, so a
+/// configured subset is a normal mode and must not trip the gate.
+#[test]
+fn offline_gate_is_false_for_a_configured_subset() {
+    init_test_config_once();
+    assert!(
+        !crate::is_offline(),
+        "a configured subset is a normal mode, not offline"
+    );
+}
+
 // ─── SPA fallback (static serving in the router) ────────────────────────────
 
 /// A client-side route returns the SPA entry document (`200.html`) with a 200
@@ -3053,7 +3218,10 @@ async fn shop_stream_non_owner_is_forbidden() {
 #[tokio::test]
 async fn spa_fallback_serves_entry_document() {
     init_test_config_once();
-    let (store, mock, provider) = mock_ctx();
+    let (store, mock, mut provider) = mock_ctx();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Strava, tb_provider::Provider::Icu]);
 
     // Create a temp dir with the SPA entry document, a real static asset,
     // and a content subdirectory with one markdown file.

@@ -442,11 +442,23 @@ where
     /// does the provider's login work (the scope check, the token exchange,
     /// the athlete wire-shape parsing, and the upsert), returning the
     /// identity and the admin flag.
-    async fn login(&self, provider: Provider, code: &str, scope: &str) -> TbResult<(UserId, bool)> {
+    async fn login<'a>(
+        &self,
+        provider: Provider,
+        code: &'a str,
+        scope: &'a str,
+        verifier: Option<&'a str>,
+    ) -> TbResult<(UserId, bool)> {
         let mut store = self.source.begin().await?;
-        let result =
-            tb_provider::dispatch::login(provider, code, scope, self.lane.facade(), &mut store)
-                .await?;
+        let result = tb_provider::dispatch::login(
+            provider,
+            code,
+            scope,
+            verifier,
+            self.lane.facade(),
+            &mut store,
+        )
+        .await?;
         store.commit().await?;
         Ok(result)
     }
@@ -562,6 +574,13 @@ where
         let provider = tb_provider::provider_of(&mut store, id).await?;
         store.commit().await?;
         Ok(provider)
+    }
+
+    /// The enabled providers (ADR-0016): the provider layer's config-derived
+    /// set, in the `Provider` enum's definition order. No transaction: a
+    /// pure config read.
+    fn enabled_providers(&self) -> Vec<Provider> {
+        tb_provider::enabled_providers().to_vec()
     }
 }
 

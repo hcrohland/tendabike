@@ -29,15 +29,31 @@ pub(crate) struct PathParam {
     inner: Option<String>,
 }
 
-pub(crate) async fn strava_auth(Query(path): Query<PathParam>) -> impl IntoResponse {
+/// `GET /strava/login`: the OAuth entry point. A disabled provider (its
+/// client id unset, ADR-0016) answers a clear "unavailable" — no redirect,
+/// no 500: the provider is hidden from the connect screen, and a direct hit
+/// degrades gracefully.
+pub(crate) async fn strava_auth(
+    Query(path): Query<PathParam>,
+    State(state): State<AppState>,
+) -> Result<Redirect, AppError> {
+    if !state
+        .provider
+        .enabled_providers()
+        .contains(&Provider::Strava)
+    {
+        // The provider layer owns the disabled-provider message (ADR-0016).
+        return Err(tb_provider::disabled(Provider::Strava).into());
+    }
     let path = path.inner.unwrap_or("/".to_owned());
     // The web shell generates the CSRF state (beside its other protocol
     // secrets); the enum assembles the authorize URL from the driver's
-    // client config (ADR-0014).
-    let url = Provider::Strava.authorize_url(gentoken(path).secret());
+    // client config (ADR-0014). The Strava flow is a plain
+    // authorization-code exchange: no PKCE challenge.
+    let url = Provider::Strava.authorize_url(gentoken(path).secret(), None);
 
     // Redirect to Strava's oauth service
-    Redirect::to(&url)
+    Ok(Redirect::to(&url))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -66,7 +82,9 @@ pub(crate) async fn login_authorized(
         }
         AuthResponse::Request { code, state, scope } => (code, scope, getpath(state)?),
     };
-    login_and_redirect(state, session, Provider::Strava, code, scope, path).await
+    // The Strava flow is a plain authorization-code exchange: no PKCE
+    // verifier.
+    login_and_redirect(state, session, Provider::Strava, code, scope, path, None).await
 }
 
 pub(crate) async fn logout(session: Session) -> impl IntoResponse {

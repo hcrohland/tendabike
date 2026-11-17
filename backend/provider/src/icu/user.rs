@@ -12,7 +12,7 @@
 
 use anyhow::Context;
 use derive_more::{Display, From, Into};
-use oauth2::{AuthorizationCode, TokenResponse};
+use oauth2::{AuthorizationCode, PkceCodeVerifier, TokenResponse};
 use serde::Deserialize;
 
 use super::*;
@@ -134,15 +134,18 @@ impl IcuUser {
 
 /// The login (ADR-0014): the provider's login work behind the seam — the
 /// scope check, the token exchange, the wire-shape parsing of the athlete,
-/// and the upsert, returning the identity and the admin flag. `code` and
-/// `scope` are the opaque callback values the presentation layer forwards
-/// (no driver wire type crosses the seam).
+/// and the upsert, returning the identity and the admin flag. `code`,
+/// `scope`, and `code_verifier` are the opaque callback values the
+/// presentation layer forwards (no driver wire type crosses the seam).
+/// `code_verifier` is the PKCE verifier (RFC 7636, S256) matching the
+/// challenge in the authorize URL the web shell issued.
 ///
 /// intervals.icu omits the `scope` query param on some callbacks: an absent
 /// scope (the empty string) is accepted, a present one must match.
 pub async fn login<D: EntityFacade<S>, S: IcuDataStore>(
     code: &str,
     scope: &str,
+    code_verifier: &str,
     facade: &D,
     store: &mut S,
 ) -> TbResult<(UserId, bool)> {
@@ -154,6 +157,7 @@ pub async fn login<D: EntityFacade<S>, S: IcuDataStore>(
 
     let token = icu_client()
         .exchange_code(AuthorizationCode::new(code.to_string()))
+        .set_pkce_verifier(PkceCodeVerifier::new(code_verifier.to_string()))
         .request_async(&*HTTP_CLIENT)
         .await
         .context("token exchange failed")?;
