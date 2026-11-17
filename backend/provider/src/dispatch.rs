@@ -54,12 +54,17 @@ use crate::Provider;
 /// The provider-agnostic `login` dispatch (ADR-0014): the provider's login
 /// work — the scope check, the token exchange, the athlete wire-shape
 /// parsing, and the upsert — returning the identity and the admin flag. The
-/// provider is the route's (it knows it from the URL); `code` and `scope`
-/// are the opaque callback values (no driver wire type crosses the seam).
+/// provider is the route's (it knows it from the URL); `code`, `scope`, and
+/// `verifier` are the opaque callback values (no driver wire type crosses the
+/// seam). `verifier` is the PKCE code verifier (intervals.icu-only — the
+/// Strava flow is a plain authorization-code exchange and ignores it); the
+/// icu arm requires it (the web layer always recovers it from the signed
+/// state, so its absence is a protocol violation).
 pub async fn login<S, D: EntityFacade<S>>(
     provider: Provider,
     code: &str,
     scope: &str,
+    verifier: Option<&str>,
     facade: &D,
     store: &mut S,
 ) -> TbResult<(UserId, bool)>
@@ -71,7 +76,12 @@ where
     crate::config::require_enabled(provider)?;
     match provider {
         Provider::Strava => crate::strava::login(code, scope, facade, store).await,
-        Provider::Icu => crate::icu::login(code, scope, facade, store).await,
+        Provider::Icu => {
+            let verifier = verifier.ok_or_else(|| {
+                Error::BadRequest("missing code verifier for the icu login".to_string())
+            })?;
+            crate::icu::login(code, scope, verifier, facade, store).await
+        }
     }
 }
 
@@ -165,13 +175,12 @@ where
 
 /// The onboarding activity sync (spec #829, the second step): queue the
 /// activity sync on the user's provider queue (the Strava `strava_events` row,
-/// the icu date-window backfill). No gear import — that was the first step
+/// the icu `SYNC` event). No gear import — that was the first step
 /// ([`import_gear_user`](crate::dispatch::import_gear_user)). The provider is
 /// the user's real one, read in-transaction.
-pub(crate) async fn queue_sync_user<S, D: EntityFacade<S>>(
+pub(crate) async fn queue_sync_user<S>(
     user_id: UserId,
     event_time: i64,
-    facade: &D,
     store: &mut S,
 ) -> TbResult<()>
 where
@@ -184,7 +193,7 @@ where
         Provider::Strava => {
             crate::strava::event::insert_sync(user_id, event_time, false, store).await
         }
-        Provider::Icu => crate::icu::backfill::backfill(user_id, event_time, facade, store).await,
+        Provider::Icu => crate::icu::event::insert_sync(user_id, 0, store).await,
     }
 }
 
@@ -261,9 +270,9 @@ where
         }
     }
 
-    // The icu lane: the onboarding path (gear import + backfill) per
-    // non-disabled icu user. A disabled provider's lane is skipped
-    // (ADR-0016).
+    // The icu lane: gear import (inline) + a `SYNC` event (the durable
+    // backfill cursor) per non-disabled icu user. A disabled provider's
+    // lane is skipped (ADR-0016).
     if (provider.is_none() || provider == Some(Provider::Icu))
         && crate::enabled_providers().contains(&Provider::Icu)
     {

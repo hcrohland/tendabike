@@ -8,14 +8,59 @@
 //! event); [`process`] drains the queue in one call, importing each activity,
 //! and carries the one stub-skip notice a batch produces.
 
-use log::{debug, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
+use super::activity::IcuActivity;
+use super::http::request_json;
 use super::{IcuDataStore, IcuId};
 use crate::EntityFacade;
 use crate::facade::{Error, Summary, TbResult, UserId};
+
+/// The `activity_id` sentinel a `SYNC` row carries (the column is `NOT NULL`,
+/// but a `SYNC` refers to no single activity).
+const SYNC_ACTIVITY_ID: &str = "sync";
+
+/// The `icu_events` object type: a queued activity (a webhook row) or the
+/// durable backfill cursor (`SYNC` — the row's `event_time` is the `newest`
+/// cursor and its `oldest` column the walk's lower bound).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum IcuObjectType {
+    /// A queued activity (a webhook row).
+    #[default]
+    Activity,
+    /// The durable backfill cursor.
+    Sync,
+}
+
+impl TryFrom<String> for IcuObjectType {
+    type Error = crate::facade::Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        use IcuObjectType::*;
+        Ok(match value.as_str() {
+            "ACTIVITY" => Activity,
+            "SYNC" => Sync,
+            _ => {
+                return Err(Error::BadRequest(format!(
+                    "Unknown icu object type {value}"
+                )));
+            }
+        })
+    }
+}
+
+impl From<IcuObjectType> for String {
+    fn from(value: IcuObjectType) -> Self {
+        use IcuObjectType::*;
+        String::from(match value {
+            Activity => "ACTIVITY",
+            Sync => "SYNC",
+        })
+    }
+}
 
 /// A queued icu event (a row in the `icu_events` table).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -24,19 +69,24 @@ pub struct IcuEvent {
     pub id: Option<i32>,
     /// The icu athlete the event belongs to.
     pub icu_athlete_id: IcuId,
-    /// The activity the event refers to.
+    /// The activity the event refers to (the `"sync"` sentinel for a `SYNC`
+    /// row, which refers to no single activity).
     pub activity_id: String,
-    /// The event's unix time (also the backfill cursor).
+    /// The event's unix time (the `newest` cursor for a `SYNC` row).
     pub event_time: i64,
-    /// The event's object type (e.g. `ACTIVITY`).
-    pub object_type: String,
+    /// The event's object type (`ACTIVITY` | `SYNC`).
+    pub object_type: IcuObjectType,
     /// The webhook event type (`ACTIVITY_UPLOADED` | `ACTIVITY_UPDATED` |
-    /// `ACTIVITY_DELETED`) — the queue's dispatch key.
+    /// `ACTIVITY_DELETED`) — the queue's dispatch key. Empty for a `SYNC` row
+    /// (its dispatch is on `object_type`).
     pub event_type: String,
+    /// The `SYNC` walk's fixed lower bound (unix time) — `None` for an
+    /// `ACTIVITY` event, which has no walk.
+    pub oldest: Option<i64>,
 }
 
 impl IcuEvent {
-    /// A queued icu event with no row id yet (a fresh webhook/sync enqueue).
+    /// A queued `ACTIVITY` event with no row id yet (a fresh webhook enqueue).
     /// `event_type` is the webhook's event type (the queue's dispatch key).
     pub fn new(
         icu_athlete_id: IcuId,
@@ -49,8 +99,26 @@ impl IcuEvent {
             icu_athlete_id,
             activity_id: activity_id.into(),
             event_time,
-            object_type: "ACTIVITY".to_string(),
+            object_type: IcuObjectType::Activity,
             event_type: event_type.into(),
+            oldest: None,
+        }
+    }
+
+    /// A queued `SYNC` event with no row id yet (the durable backfill cursor):
+    /// the fixed `oldest` bound and the `0` `newest` sentinel
+    /// (resolved to now at first processing). The `activity_id` carries the
+    /// `"sync"` sentinel (the column is `NOT NULL`), and the dispatch is on
+    /// `object_type`.
+    pub fn new_sync(icu_athlete_id: IcuId, oldest: i64) -> Self {
+        Self {
+            id: None,
+            icu_athlete_id,
+            activity_id: SYNC_ACTIVITY_ID.to_string(),
+            event_time: 0,
+            object_type: IcuObjectType::Sync,
+            event_type: String::new(),
+            oldest: Some(oldest),
         }
     }
 
@@ -193,6 +261,23 @@ pub(crate) async fn get_icu_id(user_id: UserId, store: &mut impl IcuDataStore) -
     Ok(user.id)
 }
 
+/// Enqueue (or replace) the user's `SYNC` event: the durable
+/// backfill cursor. The `oldest` bound is fixed, and the `newest` sentinel is
+/// `0` (resolved to now at first processing). **REPLACE** semantics — at most
+/// one `SYNC` per user: a new enqueue drops the user's existing `SYNC` row (a
+/// mid-walk cursor is discarded) before queueing the fresh one.
+pub(crate) async fn insert_sync(
+    user_id: UserId,
+    oldest: i64,
+    store: &mut impl IcuDataStore,
+) -> TbResult<()> {
+    let icu_id = get_icu_id(user_id, store).await?;
+    store.icu_events_delete_sync_for_user(&icu_id).await?;
+    let event = IcuEvent::new_sync(icu_id, oldest);
+    store.icu_event_create(event).await?;
+    Ok(())
+}
+
 /// One outcome of a read of the `icu_events` queue (spec #764): what is
 /// interesting for the user right now, and when the queue is paused.
 #[derive(Debug, Clone, PartialEq)]
@@ -247,6 +332,30 @@ async fn dispatch_event<D: EntityFacade<S>, S: IcuDataStore>(
 /// Drains the user's `icu_events` queue in one call (the lane's `process`),
 /// importing each activity into the domain (spec #764).
 ///
+/// The next queued row is read once and handed to the batch drain
+/// ([`drain`]), which branches on each row's `object_type`: a `SYNC` row runs
+/// the durable backfill cursor walk ([`process_sync`]), and an `ACTIVITY` row
+/// takes the import path. The queue's read-side rules (the rate-limit gate,
+/// the oldest-first order) are applied by the probe; this op handles the row.
+pub(crate) async fn process<D: EntityFacade<S>, S: IcuDataStore>(
+    user_id: UserId,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<Summary> {
+    let icu_id = get_icu_id(user_id, store).await?;
+    let Some(event) = store.icu_event_get_next_for_user(icu_id.clone()).await? else {
+        return Ok(Summary::default()); // the queue is empty
+    };
+    drain(event, icu_id, user_id, facade, store).await
+}
+
+/// The batch drain (spec #764): imports each queued activity into the
+/// domain, carrying the one stub-skip notice a batch produces.
+///
+/// The batch branches on each row's `object_type`: a `SYNC` row runs the
+/// durable backfill cursor walk ([`process_sync`] — the walk owns the row's
+/// fate), and an `ACTIVITY` row takes the import path.
+///
 /// The batch is bounded by the queue, the rate-limit gate, and the failure
 /// classification:
 ///
@@ -258,14 +367,16 @@ async fn dispatch_event<D: EntityFacade<S>, S: IcuDataStore>(
 /// - **401 / dead auth** → disable the user (drops all their queued events).
 /// - **permanent** (a 404, a parse error) → drop the event and continue.
 /// - **DB failure** → propagate: the caller rolls back and backs off.
-pub(crate) async fn process<D: EntityFacade<S>, S: IcuDataStore>(
+async fn drain<D: EntityFacade<S>, S: IcuDataStore>(
+    first: IcuEvent,
+    icu_id: IcuId,
     user_id: UserId,
     facade: &D,
     store: &mut S,
 ) -> TbResult<Summary> {
-    let icu_id = get_icu_id(user_id, store).await?;
     let mut summary = Summary::default();
     let mut stubs = 0usize;
+    let mut pending = Some(first);
 
     loop {
         // The proactive rate-limit gate: budget exhausted → stop (the current
@@ -273,19 +384,36 @@ pub(crate) async fn process<D: EntityFacade<S>, S: IcuDataStore>(
         if super::ratelimit::limited_until().is_some() {
             break;
         }
-        let Some(event) = store.icu_event_get_next_for_user(icu_id.clone()).await? else {
+        let Some(event) = (match pending.take() {
+            Some(event) => Some(event),
+            None => store.icu_event_get_next_for_user(icu_id.clone()).await?,
+        }) else {
             break; // the queue is empty
         };
-        info!("Processing icu event: {}", event.activity_id);
-        match dispatch_event(&event, user_id, facade, store).await {
-            Ok(Some(s)) => summary += s,
-            Ok(None) => stubs += 1, // a stub: skipped (gear ref dropped)
-            Err(err) => match apply_failure(err, &event, &icu_id, store).await? {
-                BatchOutcome::Stop => break, // 429 (event stays queued) or 401 (user disabled)
-                BatchOutcome::Continue => {} // permanent: the event was dropped, continue
-            },
+        match event.object_type {
+            // A `SYNC` row: run its durable cursor walk (the walk owns the
+            // row's fate — delete on completion, stay queued on a 429).
+            IcuObjectType::Sync => {
+                let (s, outcome) = process_sync(event, user_id, facade, store).await?;
+                summary += s;
+                if matches!(outcome, SyncOutcome::Limited) {
+                    break; // a 429: the row stays queued
+                }
+            }
+            // An `ACTIVITY` row: the import path.
+            IcuObjectType::Activity => {
+                info!("Processing icu event: {}", event.activity_id);
+                match dispatch_event(&event, user_id, facade, store).await {
+                    Ok(Some(s)) => summary += s,
+                    Ok(None) => stubs += 1, // a stub: skipped (gear ref dropped)
+                    Err(err) => match apply_failure(err, &event, &icu_id, store).await? {
+                        BatchOutcome::Stop => break, // 429 (event stays queued) or 401 (user disabled)
+                        BatchOutcome::Continue => {} // permanent: the event was dropped, continue
+                    },
+                }
+                store.icu_event_delete(event.id).await?;
+            }
         }
-        store.icu_event_delete(event.id).await?;
     }
 
     // One transient notice per batch with the skip count (spec #764).
@@ -294,6 +422,151 @@ pub(crate) async fn process<D: EntityFacade<S>, S: IcuDataStore>(
         summary.notifications.upsert(notice);
     }
     Ok(summary)
+}
+
+/// Format a unix timestamp as `yyyy-MM-dd` (the icu API's date param format).
+fn date_str(ts: i64) -> String {
+    let dt = OffsetDateTime::from_unix_timestamp(ts).unwrap();
+    format!("{:04}-{:02}-{:02}", dt.year(), dt.month() as u8, dt.day())
+}
+
+/// The batch size for each list fetch.
+const LIMIT: i32 = 100;
+/// The fields the domain Activity records (the `fields=` param).
+const FIELDS: &str = "id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules";
+
+/// The `SYNC` cursor walk: the durable, rate-limit-aware
+/// date-window walk that imports the user's activities in batches of 100
+/// (newest first).
+///
+/// The `0` `newest` sentinel resolves to now on the first run (the cursor is
+/// persisted). After each successful batch the persisted `newest` cursor is
+/// advanced to the oldest activity in that batch, so a crash or a 429 leaves
+/// the last-advanced cursor for the next `process` to resume from. The walk
+/// stops when a batch returns `< 100` (end of history), when the cursor
+/// reaches `oldest`, or on a 429 (the cursor is *not* advanced on a 429, and
+/// the row is left queued). On completion (not a 429) the `SYNC` row is
+/// deleted and the walk's union `Summary` is returned (it rides the lane's
+/// frame, so the imported activities reach the frontend without a
+/// re-hydration), with the walk's [`SyncOutcome`] (so the batch drain knows
+/// whether the row stays queued).
+async fn process_sync<D: EntityFacade<S>, S: IcuDataStore>(
+    mut event: IcuEvent,
+    user_id: UserId,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<(Summary, SyncOutcome)> {
+    let oldest = event.oldest.unwrap_or(0);
+    let mut cursor = event.event_time;
+    // The `0` sentinel: resolve to now on the first run (persist the cursor).
+    if cursor == 0 {
+        cursor = OffsetDateTime::now_utc().unix_timestamp();
+        event.event_time = cursor;
+        store.icu_event_set_time(event.id, cursor).await?;
+    }
+    // The query's `newest` bound: `None` until the first batch (then the
+    // cursor), after which it is the day of the last batch's oldest activity
+    // (the date-only API precision — the same day, so the remaining same-day
+    // activities get fetched; a full batch that did not clear the start day
+    // steps a day back instead).
+    let mut query_newest: Option<i64> = None;
+
+    let mut summary = Summary::default();
+    let mut limited = false;
+
+    loop {
+        let newest = query_newest.unwrap_or(cursor);
+        if newest <= oldest {
+            break; // the cursor reached the lower bound: end of history
+        }
+        // The proactive rate-limit gate: budget exhausted → stop (the cursor
+        // and the row stay in place; the probe reports `Limited`).
+        if super::ratelimit::limited_until().is_some() {
+            limited = true;
+            break;
+        }
+        let activities: Vec<IcuActivity> = match request_json(
+            user_id,
+            &format!(
+                "/athlete/{}/activities?oldest={}&newest={}&limit={LIMIT}&fields={FIELDS}",
+                event.icu_athlete_id,
+                date_str(oldest),
+                date_str(newest)
+            ),
+            store,
+        )
+        .await
+        {
+            Ok(activities) => activities,
+            // A 429: stop without advancing the cursor (the row stays queued;
+            // a later `process` resumes from the stored cursor).
+            Err(Error::TryAgain(msg)) => {
+                warn!("icu sync rate limited ({msg}); the cursor stays in place");
+                return Ok((summary, SyncOutcome::Limited));
+            }
+            Err(err) => return Err(err),
+        };
+        if activities.is_empty() {
+            break; // no activities in the window: end of history
+        }
+        info!(
+            "icu sync: {} → {} activities",
+            date_str(newest),
+            activities.len()
+        );
+        let count = activities.len();
+        // The API returns in descending order: the last element is the oldest.
+        let oldest_in_batch = activities.last().unwrap().start_date.unix_timestamp();
+        for act in activities {
+            if let Some(s) =
+                super::activity::import_activity_data(act, user_id, facade, store).await?
+            {
+                summary += s;
+            }
+        }
+        if count < LIMIT as usize {
+            break; // end of history
+        }
+        // Advance the persisted cursor to the oldest activity in this batch.
+        cursor = oldest_in_batch;
+        event.event_time = cursor;
+        store.icu_event_set_time(event.id, cursor).await?;
+        // The next query's bound: the day of the oldest activity (the
+        // date-only API precision — the same day, so the remaining same-day
+        // activities get fetched). A full batch that did not clear the start
+        // day (the oldest activity is still on it) steps a whole day back
+        // instead (and flags it): re-querying the same day would loop.
+        if date_str(oldest_in_batch) == date_str(newest) {
+            error!(
+                "icu sync: a full batch did not clear the start day {}; stepping a day back",
+                date_str(newest)
+            );
+            query_newest = Some(newest - 86400);
+        } else {
+            query_newest = Some(oldest_in_batch);
+        }
+    }
+
+    // The row's fate: a rate-limit stop leaves it queued, a completion
+    // deletes it.
+    let outcome = if limited {
+        SyncOutcome::Limited
+    } else {
+        store.icu_event_delete(event.id).await?;
+        SyncOutcome::Done
+    };
+    Ok((summary, outcome))
+}
+
+/// The outcome of the `SYNC` walk: it completed (the `SYNC` row was deleted)
+/// or it stopped on a rate limit (the row stays queued — the probe reports
+/// `Limited` until the window resets).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SyncOutcome {
+    /// The walk completed: the `SYNC` row was deleted.
+    Done,
+    /// The walk stopped on a rate limit: the row stays queued.
+    Limited,
 }
 
 /// The outcome of a failed import in a `process` batch.

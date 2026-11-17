@@ -45,7 +45,6 @@ pub mod user;
 pub use user::*;
 
 pub mod activity;
-pub mod backfill;
 pub mod gear;
 pub mod http;
 mod ratelimit;
