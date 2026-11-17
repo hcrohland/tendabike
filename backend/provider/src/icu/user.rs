@@ -174,12 +174,12 @@ pub async fn login<D: EntityFacade<S>, S: IcuDataStore>(
     Ok((user.user_id(), is_admin))
 }
 
-/// The admin sync trigger's provider side (issue #900): import the user's icu
-/// gear (inline, unchanged), then enqueue the durable `SYNC` event — the
-/// `oldest` bound is the trigger time, and the `newest` sentinel is `0`
-/// (resolved to now at first processing). No inline backfill: the date-cursor
-/// walk runs in the lane's `process` (the `SYNC` row's cursor walk). Returns
-/// the created gear part ids (spec #829: the onboarding response lists them).
+/// The admin sync trigger's provider side: import the user's icu gear
+/// (inline), then enqueue the durable `SYNC` event — the `oldest` bound is
+/// the trigger time, and the `newest` sentinel is `0` (resolved to now at
+/// first processing). The date-cursor walk runs in the lane's `process` (the
+/// `SYNC` row's cursor walk). Returns the created gear part ids (spec #829:
+/// the onboarding response lists them).
 pub async fn onboard<D: EntityFacade<S>, S: IcuDataStore>(
     user_id: UserId,
     time: i64,

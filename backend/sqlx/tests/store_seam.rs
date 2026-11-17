@@ -1137,7 +1137,7 @@ async fn notification_delete_non_recipient_returns_none() -> tb_domain::TbResult
 }
 
 // ---------------------------------------------------------------------------
-// icu_events: the durable backfill cursor (issue #900)
+// icu_events: the durable backfill cursor
 // ---------------------------------------------------------------------------
 
 /// The `icu_events` `oldest` column roundtrips: a `SYNC` row created with an

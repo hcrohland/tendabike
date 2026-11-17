@@ -335,7 +335,7 @@ async fn process_mixed_batch_imports_and_deletes() {
     );
 }
 
-// ─── insert_sync: the durable backfill cursor (issue #900) ─────────────────
+// ─── insert_sync: the durable backfill cursor ───────────────────────────────
 
 /// A queued `SYNC` event: the `oldest` bound and the `newest` cursor
 /// (`event_time`).
@@ -438,7 +438,7 @@ async fn insert_sync_replaces_existing_sync() {
     );
 }
 
-// ─── process_sync: the durable backfill cursor walk (issue #900) ────────────
+// ─── process_sync: the durable backfill cursor walk ─────────────────────────
 
 /// The test's `now` (the zero-sentinel's resolution and the first query's
 /// `newest` bound).
@@ -521,6 +521,79 @@ async fn process_sync_429_keeps_cursor_and_row() {
     assert!(
         summary.is_empty(),
         "a 429 mid-walk imports nothing and leaves the row queued"
+    );
+}
+
+/// `process` on a `SYNC` event where the first batch succeeds (the cursor
+/// advances) and the second fetch 429s: the persisted cursor equals the first
+/// batch's oldest activity (not advanced further) and the `SYNC` row remains.
+#[tokio::test]
+async fn process_sync_429_after_first_batch_keeps_advanced_cursor_and_row() {
+    let (mut store, mut facade) = setup();
+    super::super::ratelimit::test_set_not_limited();
+    sync_user_fixture(&mut store);
+    // The queue holds one `SYNC` row (the `0` sentinel, full history).
+    store
+        .expect_icu_event_get_next_for_user()
+        .returning(|_id| Ok(Some(sync_event(1, 0, 0))));
+    // The zero-sentinel resolution + the first batch's cursor advance are
+    // persisted. No `icu_event_delete` is expected: the 429 on the second
+    // fetch stops the walk before completion, so the row stays queued.
+    let set_times: std::sync::Arc<std::sync::Mutex<Vec<i64>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let rec = set_times.clone();
+    store.expect_icu_event_set_time().returning(move |_id, t| {
+        rec.lock().unwrap().push(t);
+        Ok(())
+    });
+    // A full batch (100) → the cursor advances to the oldest activity.
+    let acts: Vec<String> = (0..100)
+        .map(|i| activity_json(&format!("100{}", i), "Ride", None))
+        .collect();
+    queue(&sync_uri(0, now_ts()), &format!("[{}]", acts.join(",")));
+    // The oldest activity in the first batch (all share `activity_json`'s
+    // start date, 2026-01-02T10:00:00Z).
+    use time::format_description::well_known::Rfc3339;
+    let oldest_ts = OffsetDateTime::parse("2026-01-02T10:00:00Z", &Rfc3339)
+        .unwrap()
+        .unix_timestamp();
+    // The second fetch (bounded by the day before the oldest activity) 429s.
+    queue_error(
+        &sync_uri(0, oldest_ts - 86400),
+        Error::TryAgain("rate limited"),
+    );
+
+    facade
+        .expect_upsert_activity()
+        .times(100)
+        .returning(|act, _user, _store| {
+            let mut summary = Summary::default();
+            summary.activities.upsert(act);
+            Ok(summary)
+        });
+
+    let summary = super::process(UserId::from(1), &facade, &mut store)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        summary.activities.len(),
+        100,
+        "the first batch's activities are imported"
+    );
+    let times = set_times.lock().unwrap().clone();
+    // The first `set_time` is the zero-sentinel resolution (now); the second
+    // is the cursor advance to the oldest activity in the first batch. The
+    // 429 on the second fetch stops the walk, so the cursor is not advanced
+    // further.
+    assert_eq!(
+        times.len(),
+        2,
+        "the sentinel resolution and the one cursor advance (no further advance on the 429)"
+    );
+    assert_eq!(
+        times[1], oldest_ts,
+        "the persisted cursor equals the first batch's oldest activity"
     );
 }
 

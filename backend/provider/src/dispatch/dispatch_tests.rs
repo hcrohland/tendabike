@@ -21,7 +21,7 @@ use crate::strava::test_support::MockStravaDataStore;
 use crate::strava::{StravaDataStore, StravaId, StravaUser};
 use crate::test_support::MockEntityFacade;
 
-use super::{accept_event, deauthorize, delete_user, login, sync_users};
+use super::{accept_event, deauthorize, delete_user, login, queue_sync_user, sync_users};
 
 // ─── The composite store double ─────────────────────────────────────────────
 //
@@ -658,7 +658,7 @@ async fn provider_of_not_found_when_no_row_exists() -> TbResult<()> {
 // icu user is queued via the icu onboarding path.
 
 /// The icu lane: an enabled icu user gets gear imported (inline) and a
-/// `SYNC` event queued (issue #900 — no inline backfill walk).
+/// `SYNC` event queued.
 #[tokio::test]
 async fn sync_users_queues_icu_users() -> TbResult<()> {
     let mut store = DispatchStore::default();
@@ -716,6 +716,52 @@ async fn sync_users_queues_icu_users() -> TbResult<()> {
         events[0].oldest,
         Some(1_700_000_000),
         "the SYNC's lower bound is the trigger time"
+    );
+    assert_eq!(events[0].event_time, 0, "the newest sentinel is 0");
+    Ok(())
+}
+
+/// The onboarding arm (`queue_sync_user`): an icu user gets a `SYNC` event
+/// queued with `oldest = 0` (the full history) and the `0` `newest` sentinel —
+/// no gear import (that is the separate first step).
+#[tokio::test]
+async fn queue_sync_user_queues_icu_sync_with_full_history() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    // No Strava row for this user → the `provider_of` lookup resolves icu.
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(|_| Err(Error::NotFound("no strava user".into())));
+    // The provider lookup and the `insert_sync`'s `get_icu_id` resolve the
+    // icu user.
+    let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    let icu_read = icu.clone();
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .returning(move |_| Ok(icu_read.clone()));
+    // The `insert_sync`'s REPLACE: no existing `SYNC` row to drop, then the
+    // fresh `SYNC` row is queued.
+    store
+        .icu
+        .expect_icu_events_delete_sync_for_user()
+        .returning(|_id| Ok(0));
+    let created = Arc::new(Mutex::new(Vec::new()));
+    let created_rec = created.clone();
+    store.icu.expect_icu_event_create().returning(move |e| {
+        created_rec.lock().unwrap().push(e);
+        Ok(())
+    });
+
+    queue_sync_user(UserId::from(9), 1_700_000_000, &mut store).await?;
+
+    let events = created.lock().unwrap().clone();
+    assert_eq!(events.len(), 1, "one SYNC event is queued");
+    assert_eq!(events[0].object_type, "SYNC", "the queued row is a SYNC");
+    assert_eq!(
+        events[0].oldest,
+        Some(0),
+        "the onboarding SYNC walks the full history"
     );
     assert_eq!(events[0].event_time, 0, "the newest sentinel is 0");
     Ok(())

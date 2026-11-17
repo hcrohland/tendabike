@@ -21,7 +21,7 @@ use crate::facade::{Error, Summary, TbResult, UserId};
 
 /// The `icu_events` object type for a queued activity (a webhook row).
 const ACTIVITY_OBJECT_TYPE: &str = "ACTIVITY";
-/// The `icu_events` object type for the durable backfill cursor (issue #900):
+/// The `icu_events` object type for the durable backfill cursor:
 /// the row's `event_time` is the `newest` cursor and its `oldest` column the
 /// walk's lower bound.
 const SYNC_OBJECT_TYPE: &str = "SYNC";
@@ -72,8 +72,8 @@ impl IcuEvent {
         }
     }
 
-    /// A queued `SYNC` event with no row id yet (the durable backfill cursor,
-    /// issue #900): the fixed `oldest` bound and the `0` `newest` sentinel
+    /// A queued `SYNC` event with no row id yet (the durable backfill cursor):
+    /// the fixed `oldest` bound and the `0` `newest` sentinel
     /// (resolved to now at first processing). The `activity_id` carries the
     /// `"sync"` sentinel (the column is `NOT NULL`), and the dispatch is on
     /// `object_type`.
@@ -228,19 +228,17 @@ pub(crate) async fn get_icu_id(user_id: UserId, store: &mut impl IcuDataStore) -
     Ok(user.id)
 }
 
-/// Enqueue (or replace) the user's `SYNC` event (issue #900): the durable
+/// Enqueue (or replace) the user's `SYNC` event: the durable
 /// backfill cursor. The `oldest` bound is fixed, and the `newest` sentinel is
 /// `0` (resolved to now at first processing). **REPLACE** semantics — at most
 /// one `SYNC` per user: a new enqueue drops the user's existing `SYNC` row (a
 /// mid-walk cursor is discarded) before queueing the fresh one.
-pub async fn insert_sync(
+pub(crate) async fn insert_sync(
     user_id: UserId,
     oldest: i64,
     store: &mut impl IcuDataStore,
 ) -> TbResult<()> {
     let icu_id = get_icu_id(user_id, store).await?;
-    // REPLACE: drop the user's existing `SYNC` row (a mid-walk cursor is
-    // discarded), then enqueue the fresh one.
     store.icu_events_delete_sync_for_user(&icu_id).await?;
     let event = IcuEvent::new_sync(icu_id, oldest);
     store.icu_event_create(event).await?;
@@ -303,7 +301,7 @@ async fn dispatch_event<D: EntityFacade<S>, S: IcuDataStore>(
 ///
 /// The next queued row is read once and dispatched on its `object_type`:
 /// a `SYNC` row runs the durable backfill cursor walk
-/// ([`process_sync`], issue #900), and an `ACTIVITY` row takes the batch
+/// ([`process_sync`]), and an `ACTIVITY` row takes the batch
 /// drain ([`drain`]). The queue's read-side rules (the rate-limit gate, the
 /// oldest-first order) are applied by the probe; this op handles the row.
 pub(crate) async fn process<D: EntityFacade<S>, S: IcuDataStore>(
@@ -389,7 +387,7 @@ const LIMIT: i32 = 100;
 /// The fields the domain Activity records (the `fields=` param).
 const FIELDS: &str = "id,type,name,start_date,distance,moving_time,elapsed_time,total_elevation_gain,total_elevation_loss,gear,icu_joules";
 
-/// The `SYNC` cursor walk (issue #900): the durable, rate-limit-aware
+/// The `SYNC` cursor walk: the durable, rate-limit-aware
 /// date-window walk that imports the user's activities in batches of 100
 /// (newest first).
 ///

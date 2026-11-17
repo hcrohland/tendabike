@@ -344,7 +344,7 @@ mod tests {
         assert_eq!(back.event_type, "ACTIVITY_DELETED");
         assert_eq!(back.oldest, None);
 
-        // A `SYNC` event: `oldest` is the walk's lower bound (issue #900).
+        // A `SYNC` event: `oldest` is the walk's lower bound.
         let sync = IcuEvent {
             id: Some(8),
             icu_athlete_id: IcuId::from("ath-42"),
