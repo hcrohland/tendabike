@@ -145,7 +145,7 @@ where
         // (ADR-0016): the event stays queued (the caller rolls back and
         // backs off), so re-adding the credential restores the provider
         // and its syncs.
-        if !crate::enabled_providers().contains(&provider) {
+        if crate::config::is_disabled(provider) {
             return None;
         }
         match provider {

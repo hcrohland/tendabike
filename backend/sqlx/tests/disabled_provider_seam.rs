@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with TendaBike. If not, see <https://www.gnu.org/licenses/>.
 
-//! The disabled-provider seam suite (ADR-0016, issue #908): the graceful
+//! The disabled-provider seam suite (ADR-0016): the graceful
 //! freeze of a provider whose client id is unset, driven on the live
 //! adapter (the real `Registry`, the real `UnifiedLane`, the real
 //! dispatch) against real Postgres.
@@ -31,8 +31,9 @@
 //! - a **login** on the disabled provider fails with a clear
 //!   `Unavailable` "disabled on this server" error (not a 500-class DB
 //!   failure, not a token exchange);
-//! - the disabled provider's **webhook** is inert: the intake answers
-//!   `Ok` and queues nothing;
+//! - the disabled provider's **webhook** is declined: the intake fails
+//!   with the clear `Unavailable` error (a non-2xx, so the sender
+//!   retries) and queues nothing;
 //! - a **sync** of a disabled provider's user fails with the clear
 //!   `Unavailable` error (the graceful freeze is loud, not silent);
 //! - a disabled provider's user **keeps reading**: the `user_provider`
@@ -262,11 +263,13 @@ async fn login_of_a_disabled_provider_is_unavailable() {
     }
 }
 
-/// The disabled provider's webhook is inert (ADR-0016): the intake answers
-/// `Ok` (the route answers 200, not a 500) and queues nothing.
+/// The disabled provider's webhook is declined (ADR-0016): the intake
+/// fails with the clear `Unavailable` "disabled on this server" error —
+/// the route answers a non-2xx, so the sender retries and the event is
+/// not lost — and queues nothing.
 #[tokio::test]
 #[ignore]
-async fn webhook_of_a_disabled_provider_is_inert() {
+async fn webhook_of_a_disabled_provider_is_declined() {
     let seam = ready().await;
     init_provider_config_once();
     seed_strava_user(&seam.pool, false).await;
@@ -278,13 +281,23 @@ async fn webhook_of_a_disabled_provider_is_inert() {
     )
     .await
     .expect("the intake must finish in time");
-    outcome.expect("a disabled provider's webhook must answer Ok, not fail");
+    match outcome {
+        Err(Error::Unavailable(msg)) => {
+            assert!(
+                msg.contains("strava") && msg.contains("disabled on this server"),
+                "the message must name the provider and state the freeze: {msg}"
+            );
+        }
+        other => panic!(
+            "a disabled provider's webhook must be a clear Unavailable decline, got: {other:?}"
+        ),
+    }
 
     let (_, strava) = test_identity();
     assert_eq!(
         strava_queue_count(&seam.pool, strava).await,
         0,
-        "the inert webhook must queue nothing"
+        "the declined webhook must queue nothing"
     );
 }
 

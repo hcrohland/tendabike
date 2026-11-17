@@ -22,7 +22,6 @@ use crate::{
     error::AppError,
     oauth_common::{gentoken, getpath, login_and_redirect},
 };
-use tb_domain::Error;
 use tb_provider::Provider;
 
 #[derive(Deserialize)]
@@ -43,10 +42,8 @@ pub(crate) async fn strava_auth(
         .enabled_providers()
         .contains(&Provider::Strava)
     {
-        return Err(Error::Unavailable(
-            "the strava provider is not available on this server".to_string(),
-        )
-        .into());
+        // The provider layer owns the disabled-provider message (ADR-0016).
+        return Err(tb_provider::disabled(Provider::Strava).into());
     }
     let path = path.inner.unwrap_or("/".to_owned());
     // The web shell generates the CSRF state (beside its other protocol

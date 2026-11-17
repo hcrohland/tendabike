@@ -103,16 +103,19 @@ fn resolve(
 
 /// Resolves an optional variable with the same canonical/deprecated rule as
 /// [`resolve`], but nothing-set yields `None` (a disabled provider,
-/// ADR-0016) instead of a panic.
+/// ADR-0016) instead of a panic. A `None` deprecated name means the
+/// variable has no legacy spelling (the canonical name only).
 fn resolve_optional(
     env: &HashMap<String, String>,
     canonical: &str,
-    deprecated: &str,
+    deprecated: Option<&str>,
 ) -> (Option<String>, Option<String>) {
     if let Some(value) = env.get(canonical) {
         return (Some(value.clone()), None);
     }
-    if let Some(value) = env.get(deprecated) {
+    if let Some(deprecated) = deprecated
+        && let Some(value) = env.get(deprecated)
+    {
         let warning =
             format!("deprecated environment variable {deprecated}: use {canonical} instead");
         return (Some(value.clone()), Some(warning));
@@ -136,17 +139,17 @@ pub(crate) fn from_env(env: &HashMap<String, String>) -> (AppConfig, Vec<String>
 
     // The providers' credentials are optional (ADR-0016): a missing client
     // id disables the provider (a graceful freeze), it does not panic the
-    // startup. The deprecated `CLIENT_ID`/`CLIENT_SECRET` fallback (from
-    // #904) keeps its warning.
-    let (strava_client_id, warning) = resolve_optional(env, "STRAVA_CLIENT_ID", "CLIENT_ID");
+    // startup. The deprecated `CLIENT_ID`/`CLIENT_SECRET` fallback keeps
+    // its warning.
+    let (strava_client_id, warning) = resolve_optional(env, "STRAVA_CLIENT_ID", Some("CLIENT_ID"));
     warnings.extend(warning);
     let (strava_client_secret, warning) =
-        resolve_optional(env, "STRAVA_CLIENT_SECRET", "CLIENT_SECRET");
+        resolve_optional(env, "STRAVA_CLIENT_SECRET", Some("CLIENT_SECRET"));
     warnings.extend(warning);
-    let (icu_client_id, warning) = resolve_optional(env, "ICU_CLIENT_ID", "ICU_CLIENT_ID");
+    // The ICU variables have no legacy spelling: canonical name only.
+    let (icu_client_id, warning) = resolve_optional(env, "ICU_CLIENT_ID", None);
     warnings.extend(warning);
-    let (icu_client_secret, warning) =
-        resolve_optional(env, "ICU_CLIENT_SECRET", "ICU_CLIENT_SECRET");
+    let (icu_client_secret, warning) = resolve_optional(env, "ICU_CLIENT_SECRET", None);
     warnings.extend(warning);
 
     let hostname = env.get("HOSTNAME").map(String::as_str);
@@ -359,7 +362,7 @@ mod tests {
         }
     }
 
-    // --- subset providers (issue #908, ADR-0016) -------------------------
+    // --- subset providers (ADR-0016) --------------------------------------
 
     /// A missing Strava client id (canonical and deprecated) disables the
     /// provider — it does not panic the startup.
@@ -399,9 +402,9 @@ mod tests {
         assert!(warnings.is_empty());
     }
 
-    /// The deprecated `CLIENT_ID`/`CLIENT_SECRET` fallback (from #904)
-    /// still enables Strava and still warns: only a *missing* client id
-    /// (canonical and fallback both absent) disables the provider.
+    /// The deprecated `CLIENT_ID`/`CLIENT_SECRET` fallback still enables
+    /// Strava and still warns: only a *missing* client id (canonical and
+    /// fallback both absent) disables the provider.
     #[test]
     fn deprecated_fallback_still_enables_and_warns() {
         let e = env(&[("CLIENT_ID", "sid"), ("CLIENT_SECRET", "ssec")]);

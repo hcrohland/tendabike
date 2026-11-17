@@ -44,7 +44,7 @@
 //! driver functions directly.
 
 mod config;
-pub use config::{ProviderConfig, enabled_providers, init};
+pub use config::{ProviderConfig, disabled, enabled_providers, init};
 
 mod activity_id;
 pub use activity_id::*;

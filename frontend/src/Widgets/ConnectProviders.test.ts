@@ -7,8 +7,8 @@ describe("ConnectProviders", () => {
   /// assignment lands on this stub instead.
   let location: { href: string };
 
-  /// Stub the `GET /api/providers` fetch (issue #908) with the enabled
-  /// provider wire values.
+  /// Stub the `GET /api/providers` fetch with the enabled provider wire
+  /// values.
   function stubProviders(providers: string[]) {
     vi.stubGlobal(
       "fetch",
@@ -62,6 +62,30 @@ describe("ConnectProviders", () => {
     await vi.waitFor(() =>
       expect(screen.queryByText("intervals.icu")).toBeNull(),
     );
+  });
+
+  it("shows the failure page when the providers fetch fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => {
+        if (url === "/api/providers") {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            text: () => Promise.resolve("internal server error"),
+          });
+        }
+        return Promise.reject(new Error(`unexpected fetch: ${url}`));
+      }),
+    );
+    render(ConnectProviders);
+    expect(
+      await screen.findByText(
+        "This instance has no activity providers configured",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText("Strava")).toBeNull();
+    expect(screen.queryByText("intervals.icu")).toBeNull();
   });
 
   it("shows the failure page when no provider is enabled", async () => {

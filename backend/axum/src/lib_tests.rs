@@ -581,8 +581,8 @@ async fn login_redirects_to_strava_authorize() {
 }
 
 /// A disabled provider's login entry point answers a clear "unavailable"
-/// (issue #908, ADR-0016): no redirect, no 500 — the provider is hidden
-/// from the connect screen, and a direct hit degrades gracefully.
+/// (ADR-0016): no redirect, no 500 — the provider is hidden from the
+/// connect screen, and a direct hit degrades gracefully.
 #[tokio::test]
 async fn login_of_a_disabled_provider_is_unavailable() {
     let (store, mock, mut provider) = mock_ctx();
@@ -594,13 +594,13 @@ async fn login_of_a_disabled_provider_is_unavailable() {
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(
         body,
-        b"Service unavailable: the strava provider is not available on this server"
+        b"Service unavailable: the strava provider is disabled on this server"
     );
 }
 
-/// `GET /api/providers` (issue #908): unauthenticated, the enabled
-/// providers as an ordered list of wire values — the connect screen offers
-/// only these, and renders the failure page when the list is empty.
+/// `GET /api/providers`: unauthenticated, the enabled providers as an
+/// ordered list of wire values — the connect screen offers only these,
+/// and renders the failure page when the list is empty.
 #[tokio::test]
 async fn providers_lists_the_enabled_providers_in_wire_order() {
     let (store, mock, mut provider) = mock_ctx();
@@ -613,8 +613,8 @@ async fn providers_lists_the_enabled_providers_in_wire_order() {
     assert_eq!(body, br#"["strava"]"#);
 }
 
-/// `GET /api/providers` with no enabled providers (issue #908): the empty
-/// list — the connect screen's failure page.
+/// `GET /api/providers` with no enabled providers: the empty list — the
+/// connect screen's failure page.
 #[tokio::test]
 async fn providers_lists_nothing_when_none_enabled() {
     let (store, mock, mut provider) = mock_ctx();

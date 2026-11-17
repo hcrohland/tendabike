@@ -1,6 +1,6 @@
 # tb_sqlx tests
 
-The unit tests are pure (no database, no network), colocated in each module's `#[cfg(test)] mod tests`: `lib.rs`, `tb_sqlx.rs`, `stravastore.rs`, and `store/{user,part,activity,attachment,service,serviceplan,shop,usage}.rs`. Two integration suites are the exceptions: `tests/store_seam.rs` (store I/O) and `tests/executor_seam.rs` (the executor's transaction lifecycle) — both run against a real Postgres (below).
+The unit tests are pure (no database, no network), colocated in each module's `#[cfg(test)] mod tests`: `lib.rs`, `tb_sqlx.rs`, `stravastore.rs`, and `store/{user,part,activity,attachment,service,serviceplan,shop,usage}.rs`. Three integration suites are the exceptions: `tests/store_seam.rs` (store I/O), `tests/executor_seam.rs` (the executor's transaction lifecycle), and `tests/disabled_provider_seam.rs` (the graceful freeze of a disabled provider) — all run against a real Postgres (below).
 
 ## Coverage
 
@@ -43,6 +43,22 @@ cargo test -q -p tb_sqlx --test store_seam -- --include-ignored
 
 ```bash
 cargo test -q -p tb_sqlx --test executor_seam -- --include-ignored
+```
+
+## The disabled-provider-seam integration suite (`tests/disabled_provider_seam.rs`)
+
+`tb_sqlx`'s `disabled_provider_seam.rs` owns the **graceful freeze of a disabled provider on the live adapter** (ADR-0016): the real `Registry`, the real `UnifiedLane`, and the real dispatch, against real Postgres. The suite's one-time setup initializes the provider config with Strava **disabled** (its client id unset) and intervals.icu enabled — the opposite of every other suite's all-enabled config, which is why it is its own binary (the provider config is process-global) on its own suffixed scratch database (`<scratch>_disab`).
+
+- **What it mocks** — nothing: the live `Registry` over the real `DbPool`, the real `UnifiedLane`, and the real dispatch (the disabled-provider behavior on the live adapter is the boundary under test).
+- **What it asserts** — the op-level outcomes on the live adapter: the enabled set derives from the config; the disabled provider's login and sync fail with the clear `Unavailable` "disabled on this server" error; its webhook is declined (the `Unavailable` answer is a non-2xx, so the sender retries) and queues nothing; its user keeps reading; its queued events stay queued (the freeze is reversible); and the enabled provider keeps working.
+
+- **Ignored by default, run explicitly.** Like the other seam suites, every test carries `#[ignore]` and the suite runs with `--include-ignored` + a scratch Postgres URL.
+- **Suffixed scratch database.** The suite works on a **suffixed** scratch database (`<scratch>_disab`), not the other suites': cargo runs test binaries in parallel, and each suite's one-time setup force-drops the database its URL names, so two suites on one URL would drop each other's database out from under the run. The lifecycle is otherwise shared through `common/scratch.rs` (the same canary, the same one-time setup, the same lock).
+- **Per-test reset.** The direct ops **commit**, so a committed row outlives the test; each test therefore starts from a truncated-and-re-seeded scratch database (`scratch::fresh_fixture`), like the executor-seam suite.
+- **`init_provider_config_once` seam.** The suite's one-time provider config (`tb_provider::init` behind a `Once`) is the disabled-provider state under test: Strava's client id `None`, intervals.icu's set to a known value with a known webhook secret.
+
+```bash
+cargo test -q -p tb_sqlx --test disabled_provider_seam -- --include-ignored
 ```
 
 ## Gotchas

@@ -1,4 +1,4 @@
-//! The provider availability endpoint (issue #908, ADR-0016):
+//! The provider availability endpoint (ADR-0016):
 //! `GET /api/providers` — unauthenticated, the enabled providers as an
 //! ordered list of wire values. The connect screen (the anonymous landing
 //! page) offers only the providers it lists, and renders the failure page
@@ -12,7 +12,7 @@ pub(super) fn router() -> Router<AppState> {
     Router::new().route("/", get(list))
 }
 
-/// `GET /api/providers` (issue #908): the enabled providers, in the
+/// `GET /api/providers`: the enabled providers, in the
 /// `Provider` enum's definition order, as wire values (`["strava"]`).
 /// Unauthenticated: the response carries no user data — it is the
 /// instance's provider configuration.

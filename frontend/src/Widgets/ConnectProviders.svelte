@@ -11,9 +11,9 @@
   import ProviderMark from "./ProviderMark.svelte";
   import * as m from "../../paraglide/messages";
 
-  // The enabled providers (issue #908): fetched on mount — the connect
-  // screen is the anonymous landing page. `undefined` while the fetch is in
-  // flight: no cards and no failure page until the set is known.
+  // The enabled providers: fetched on mount — the connect screen is the
+  // anonymous landing page. `undefined` while the fetch is in flight: no
+  // cards and no failure page until the set is known.
   onMount(() => {
     loadProviders();
   });
@@ -30,8 +30,8 @@
   {#if enabled === undefined}
     <!-- The fetch is in flight: nothing to offer yet -->
   {:else if enabled.length === 0}
-    <!-- No provider is enabled (issue #908): the failure page — a clear,
-         non-leaky message, no provider cards, no login affordance -->
+    <!-- No provider is enabled: the failure page — a clear, non-leaky
+         message, no provider cards, no login affordance -->
     <p class="text-text-1">{m.no_providers_configured()}</p>
   {:else}
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">

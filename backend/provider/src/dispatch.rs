@@ -68,9 +68,7 @@ where
 {
     // A disabled provider is a graceful freeze (ADR-0016): no OAuth without
     // credentials — a clear "unavailable", not a token exchange.
-    if !crate::enabled_providers().contains(&provider) {
-        return Err(crate::config::disabled(provider));
-    }
+    crate::config::require_enabled(provider)?;
     match provider {
         Provider::Strava => crate::strava::login(code, scope, facade, store).await,
         Provider::Icu => crate::icu::login(code, scope, facade, store).await,
@@ -88,12 +86,11 @@ pub async fn accept_event<S>(provider: Provider, body: &str, store: &mut S) -> T
 where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
-    // A disabled provider's webhook route is inert (ADR-0016): answer
-    // without processing (the route answers 200, not a 500 — the sender's
-    // retry policy applies).
-    if !crate::enabled_providers().contains(&provider) {
-        return Ok(Vec::new());
-    }
+    // A disabled provider's webhook is declined (ADR-0016): the clear
+    // `Unavailable` error answers a non-2xx, so the sender retries and
+    // the event is not lost — re-adding the credential restores the
+    // provider and its syncs.
+    crate::config::require_enabled(provider)?;
     match provider {
         Provider::Strava => {
             let queued = crate::strava::event::accept_event(body, store).await?;
@@ -131,9 +128,7 @@ where
     let provider = crate::provider_of(store, user_id).await?;
     // A disabled provider's sync fails loudly (ADR-0016): the graceful
     // freeze is a clear "provider disabled" error, not a silent no-op.
-    if !crate::enabled_providers().contains(&provider) {
-        return Err(crate::config::disabled(provider));
-    }
+    crate::config::require_enabled(provider)?;
     match provider {
         Provider::Strava => {
             // Import the gear (bikes + shoes) before queuing the activity
@@ -161,9 +156,7 @@ where
 {
     let provider = crate::provider_of(store, user_id).await?;
     // A disabled provider's gear import fails loudly (ADR-0016).
-    if !crate::enabled_providers().contains(&provider) {
-        return Err(crate::config::disabled(provider));
-    }
+    crate::config::require_enabled(provider)?;
     match provider {
         Provider::Strava => crate::strava::StravaUser::update_gear(user_id, facade, store).await,
         Provider::Icu => crate::icu::gear::update_gear(user_id, facade, store).await,
@@ -186,9 +179,7 @@ where
 {
     let provider = crate::provider_of(store, user_id).await?;
     // A disabled provider's queued sync fails loudly (ADR-0016).
-    if !crate::enabled_providers().contains(&provider) {
-        return Err(crate::config::disabled(provider));
-    }
+    crate::config::require_enabled(provider)?;
     match provider {
         Provider::Strava => {
             crate::strava::event::insert_sync(user_id, event_time, false, store).await

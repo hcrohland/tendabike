@@ -53,11 +53,27 @@ pub fn enabled_providers() -> &'static [Provider] {
 
 /// The clear error a disabled provider's op returns (ADR-0016): the
 /// message names the provider and says it is disabled on this server.
-pub(crate) fn disabled(provider: Provider) -> Error {
+pub fn disabled(provider: Provider) -> Error {
     Error::Unavailable(format!(
         "the {} provider is disabled on this server",
         provider.wire_value()
     ))
+}
+
+/// The graceful-freeze check (ADR-0016): `true` when the provider is
+/// disabled on this server (its client id unset).
+pub(crate) fn is_disabled(provider: Provider) -> bool {
+    !enabled_providers().contains(&provider)
+}
+
+/// The graceful-freeze guard (ADR-0016): `Ok(())` when the provider is
+/// enabled, the clear [`disabled`] error when it is not.
+pub(crate) fn require_enabled(provider: Provider) -> Result<(), Error> {
+    if is_disabled(provider) {
+        Err(disabled(provider))
+    } else {
+        Ok(())
+    }
 }
 
 /// The enabled providers of a config: a provider is enabled iff its client
