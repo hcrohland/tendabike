@@ -13,11 +13,12 @@ function mockFetch(responses: Record<string, string>) {
           text: () => Promise.resolve(responses[path]),
         });
       }
-      // Simulates ServeDir fallback: 200 with HTML
+      // Simulates ServeDir default: 404 for missing files
       return Promise.resolve({
-        ok: true,
-        headers: { get: () => "text/html" },
-        text: () => Promise.resolve("<html>fallback</html>"),
+        ok: false,
+        status: 404,
+        headers: { get: () => null },
+        text: () => Promise.resolve("Not Found"),
       });
     }),
   );
@@ -53,7 +54,7 @@ describe("resolveContent", () => {
     expect(content).toBe("English content");
   });
 
-  it("returns an empty string when only HTML fallback is available", async () => {
+  it("returns an empty string when no content file exists", async () => {
     mockFetch({});
     const content = await resolveContent("nonexistent", "en");
     expect(content).toBe("");
