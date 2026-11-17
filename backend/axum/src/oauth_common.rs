@@ -49,16 +49,37 @@ fn hmac_signature(key: &[u8], msg: &str) -> String {
     BASE64_STANDARD.encode(signature)
 }
 
-/// Generate a CSRF state token encoding `path` (the OAuth return path).
-pub fn gentoken(path: String) -> CsrfToken {
+/// A fresh random nonce (the state's per-request secret, base64url-encoded —
+/// neither it nor a PKCE verifier can contain a `+`).
+fn fresh_nonce() -> String {
     use base64::prelude::*;
 
     let random: Vec<u8> = (0..16).map(|_| rand::random()).collect();
-    let random = BASE64_URL_SAFE_NO_PAD.encode(random);
-    let msg = path + "+" + &random;
-    let sig = hmac_signature(csrf_key(), &msg);
+    BASE64_URL_SAFE_NO_PAD.encode(random)
+}
 
-    CsrfToken::new(msg + ":" + &sig)
+/// Sign a state message: the HMAC signature over `msg`, appended after a `:`.
+fn signed(msg: &str) -> CsrfToken {
+    let sig = hmac_signature(csrf_key(), msg);
+    CsrfToken::new(msg.to_owned() + ":" + &sig)
+}
+
+/// Verify a state's signature and return its signed message (the part before
+/// the `:`). A tampered or malformed state is a `BadRequest`.
+fn verified_message(state: &str) -> TbResult<String> {
+    let msg = state.split(':').collect::<Vec<_>>();
+    if msg.len() != 2 || hmac_signature(csrf_key(), msg[0]) != msg[1] {
+        return Err(Error::BadRequest(format!(
+            "Bad signature for exchange request: {state}"
+        )));
+    }
+    Ok(msg[0].to_owned())
+}
+
+/// Generate a CSRF state token encoding `path` (the OAuth return path).
+pub fn gentoken(path: String) -> CsrfToken {
+    let nonce = fresh_nonce();
+    signed(&(path + "+" + &nonce))
 }
 
 /// Generate a CSRF state token encoding `path` (the OAuth return path) and the
@@ -66,44 +87,33 @@ pub fn gentoken(path: String) -> CsrfToken {
 /// the path, so the callback recovers it for the token exchange (stateless —
 /// no server-side storage).
 pub fn gentoken_pkce(path: String, verifier: &str) -> CsrfToken {
-    use base64::prelude::*;
-
-    let random: Vec<u8> = (0..16).map(|_| rand::random()).collect();
-    let random = BASE64_URL_SAFE_NO_PAD.encode(random);
-    let msg = path + "+" + &random + "+" + verifier;
-    let sig = hmac_signature(csrf_key(), &msg);
-
-    CsrfToken::new(msg + ":" + &sig)
+    let nonce = fresh_nonce();
+    signed(&(path + "+" + &nonce + "+" + verifier))
 }
 
 /// Extract and verify the return path from a CSRF state token.
 pub fn getpath(state: String) -> TbResult<String> {
-    let msg = state.split(':').collect::<Vec<_>>();
-    if msg.len() != 2 || hmac_signature(csrf_key(), msg[0]) != msg[1] {
-        return Err(Error::BadRequest(format!(
-            "Bad signature for exchange request: {state}"
-        )));
-    };
-    Ok(msg[0].split('+').next().unwrap_or("").to_owned())
+    let msg = verified_message(&state)?;
+    Ok(msg.split('+').next().unwrap_or("").to_owned())
 }
 
 /// Extract and verify the return path and the PKCE `verifier` from a
 /// `gentoken_pkce` state token. A tampered state is rejected by the signature
-/// check; a validly signed state without a verifier segment is malformed.
-pub fn getstate_pkce(state: String) -> TbResult<(String, String)> {
-    let msg = state.split(':').collect::<Vec<_>>();
-    if msg.len() != 2 || hmac_signature(csrf_key(), msg[0]) != msg[1] {
-        return Err(Error::BadRequest(format!(
-            "Bad signature for exchange request: {state}"
-        )));
-    };
-    let parts = msg[0].split('+').collect::<Vec<_>>();
-    if parts.len() != 3 {
+/// check; a validly signed state without a verifier segment is malformed. The
+/// last segment is the verifier, the second-last the nonce, and everything
+/// before is the return path (rejoined with `+` — a path may contain a
+/// literal `+`, which the nonce and the verifier, being base64url, never do).
+pub fn getpath_and_verifier(state: String) -> TbResult<(String, String)> {
+    let msg = verified_message(&state)?;
+    let parts: Vec<&str> = msg.split('+').collect();
+    if parts.len() < 3 {
         return Err(Error::BadRequest(format!(
             "Bad state for exchange request: {state}"
         )));
     }
-    Ok((parts[0].to_owned(), parts[2].to_owned()))
+    let verifier = parts[parts.len() - 1];
+    let path = parts[..parts.len() - 2].join("+");
+    Ok((path, verifier.to_owned()))
 }
 
 /// Complete the OAuth callback for a provider (ADR-0014): the provider-agnostic
@@ -171,32 +181,46 @@ mod tests {
     }
 
     #[test]
-    fn getstate_pkce_recovers_path_and_verifier_from_gentoken_pkce() {
+    fn getpath_and_verifier_recovers_path_and_verifier_from_gentoken_pkce() {
         let token = gentoken_pkce("/foo/bar".to_string(), "verifier-abc");
         assert_eq!(
-            getstate_pkce(token.secret().clone()).expect("valid state"),
+            getpath_and_verifier(token.secret().clone()).expect("valid state"),
             ("/foo/bar".to_owned(), "verifier-abc".to_owned())
         );
     }
 
+    /// A return path with a literal `+` round-trips: the nonce and the
+    /// verifier are base64url (no `+`), so the parser's last-two-segments rule
+    /// recovers the path with its `+` intact.
     #[test]
-    fn getstate_pkce_rejects_corrupted_signature() {
-        let token = gentoken_pkce("/foo".to_string(), "verifier-abc");
-        let mut state = token.secret().clone();
-        state.push('x');
-        assert!(matches!(getstate_pkce(state), Err(Error::BadRequest(_))));
+    fn getpath_and_verifier_recovers_a_path_with_a_literal_plus() {
+        let token = gentoken_pkce("/foo+bar".to_string(), "verifier-abc");
+        assert_eq!(
+            getpath_and_verifier(token.secret().clone()).expect("valid state"),
+            ("/foo+bar".to_owned(), "verifier-abc".to_owned())
+        );
     }
 
     #[test]
-    fn getstate_pkce_rejects_a_state_without_a_verifier() {
+    fn getpath_and_verifier_rejects_corrupted_signature() {
+        let token = gentoken_pkce("/foo".to_string(), "verifier-abc");
+        let mut state = token.secret().clone();
+        state.push('x');
+        assert!(matches!(
+            getpath_and_verifier(state),
+            Err(Error::BadRequest(_))
+        ));
+    }
+
+    #[test]
+    fn getpath_and_verifier_rejects_a_state_without_a_verifier() {
         // A validly signed state in the plain (verifier-less) format: the
         // signature checks out, but the verifier segment is absent.
-        let random: Vec<u8> = (0..16).map(|_| rand::random()).collect();
-        use base64::prelude::*;
-        let msg = "/foo".to_owned() + "+" + &BASE64_URL_SAFE_NO_PAD.encode(random);
-        let sig = hmac_signature(csrf_key(), &msg);
+        let nonce = fresh_nonce();
+        let msg = "/foo".to_owned() + "+" + &nonce;
+        let state = signed(&msg);
         assert!(matches!(
-            getstate_pkce((msg + ":" + &sig).to_string()),
+            getpath_and_verifier(state.secret().clone()),
             Err(Error::BadRequest(_))
         ));
     }

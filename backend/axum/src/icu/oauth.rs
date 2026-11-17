@@ -29,7 +29,7 @@ use oauth2::PkceCodeChallenge;
 use crate::{
     appstate::AppState,
     error::AppError,
-    oauth_common::{gentoken_pkce, getstate_pkce, login_and_redirect},
+    oauth_common::{gentoken_pkce, getpath_and_verifier, login_and_redirect},
 };
 use tb_provider::Provider;
 
@@ -40,16 +40,13 @@ pub(crate) struct PathParam {
 
 pub(crate) async fn icu_auth(Query(path): Query<PathParam>) -> impl IntoResponse {
     let path = path.inner.unwrap_or("/".to_owned());
-    // PKCE (RFC 7636, unconditional — intervals.icu always accepts the
-    // challenge): a fresh random verifier per login; the S256 challenge goes
-    // in the authorize URL, the verifier round-trips in the signed state (the
-    // callback recovers it for the token exchange). The web shell generates
-    // both (beside its other protocol secrets); the enum assembles the
-    // authorize URL from the driver's client config (ADR-0014).
-    let (challenge, verifier) = PkceCodeChallenge::new_random_sha256();
+    // A fresh random verifier per login: it round-trips in the signed state
+    // (the callback recovers it for the token exchange), and the enum derives
+    // the authorize URL's S256 challenge from it.
+    let (_, verifier) = PkceCodeChallenge::new_random_sha256();
     let url = Provider::Icu.authorize_url(
         gentoken_pkce(path, verifier.secret()).secret(),
-        Some(&challenge),
+        Some(verifier.secret()),
     );
 
     // Redirect to intervals.icu's oauth service
@@ -83,11 +80,8 @@ pub(crate) async fn login_authorized(
         }
         // intervals.icu omits the `scope` query param on some callbacks: an
         // absent scope is the empty string (the provider layer accepts it).
-        // The signed state carries the PKCE verifier the `/icu/login`
-        // redirect generated (a tampered or malformed state is rejected by
-        // the signature check, not the token exchange).
         AuthResponse::Request { code, state, scope } => {
-            let (path, verifier) = getstate_pkce(state)?;
+            let (path, verifier) = getpath_and_verifier(state)?;
             (code, scope.unwrap_or_default(), path, verifier)
         }
     };

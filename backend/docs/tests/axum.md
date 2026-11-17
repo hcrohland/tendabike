@@ -12,7 +12,7 @@ All tests run in-memory (no database; the DB boundary is a fast-failing source, 
 ## Coverage
 
 - **Error mapping** (`error.rs`): every `Error` variant → expected HTTP status + body text through `AppError::into_response()`
-- **OAuth helpers** (`oauth_common.rs`): HMAC-SHA256 known-answer vector for `hmac_signature()`, `gentoken`/`getpath` roundtrip, corrupted-signature and malformed-state rejection, and the PKCE `gentoken_pkce`/`getstate_pkce` roundtrip (path + verifier) with its corrupted-signature and verifier-less rejection
+- **OAuth helpers** (`oauth_common.rs`): HMAC-SHA256 known-answer vector for `hmac_signature()`, `gentoken`/`getpath` roundtrip, corrupted-signature and malformed-state rejection, and the PKCE `gentoken_pkce`/`getpath_and_verifier` roundtrip (path + verifier, including a path with a literal `+`) with its corrupted-signature and verifier-less rejection
 - **Webhook validation** (`strava/webhook.rs`): `Hub::validate()` accepts a valid subscribe, rejects wrong token / unknown mode
 - **Partnote MIME** (`domain/partnote.rs`): file-extension → MIME type helper
 - **Router boundaries** (`lib_tests.rs`, `test_app` fixture): public endpoints (`/api/types/*`, `/strava/callback`, `/strava/login`, `/strava/token`, `/strava/logout`), 401 on unauthenticated `/api/*`, 404 (hidden) on admin-only routes for non-admins, 500 when an authenticated request reaches the DB layer, 405 wrong method, 404 unknown path
