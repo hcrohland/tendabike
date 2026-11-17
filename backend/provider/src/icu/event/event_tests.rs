@@ -335,6 +335,92 @@ async fn process_mixed_batch_imports_and_deletes() {
     );
 }
 
+/// `process` with a resolved `SYNC` row queued *behind* an `ACTIVITY` row
+/// (the `SYNC`'s `event_time` is now, the `ACTIVITY`'s is earlier): the
+/// drain branches on `object_type` for every row it pulls — the `ACTIVITY`
+/// is imported and the `SYNC` row runs its walk (not the import path, which
+/// would 404 and drop the durable cursor row).
+#[tokio::test]
+async fn process_drain_routes_sync_row_to_its_walk() {
+    let (mut store, mut facade) = setup();
+    super::super::ratelimit::test_set_not_limited();
+    sync_user_fixture(&mut store);
+    // The `ACTIVITY` row (event_time 1000) sorts before the resolved `SYNC`
+    // row (event_time = now).
+    let now = now_ts();
+    store
+        .expect_icu_event_get_next_for_user()
+        .returning(move |_id| {
+            static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+            let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(match n {
+                0 => Some(event(1, "10")),
+                1 => Some(sync_event(2, 0, now)),
+                _ => None,
+            })
+        });
+    // Both rows are deleted: the `ACTIVITY` by its import, the `SYNC` by its
+    // walk's completion.
+    let deletes: std::sync::Arc<std::sync::Mutex<Vec<Option<i32>>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let rec = deletes.clone();
+    store.expect_icu_event_delete().returning(move |id| {
+        rec.lock().unwrap().push(id);
+        Ok(())
+    });
+    // The `ACTIVITY` row's import.
+    queue("/activity/10", &activity_json("10", "Ride", None));
+    // The `SYNC` walk's batch (< 100 → end of history → the row is deleted).
+    queue(
+        &sync_uri(0, now),
+        &format!("[{}]", activity_json("30", "Ride", None)),
+    );
+    facade
+        .expect_upsert_activity()
+        .times(2)
+        .returning(|act, _user, _store| {
+            let mut summary = Summary::default();
+            summary.activities.upsert(act);
+            Ok(summary)
+        });
+
+    let summary = super::process(UserId::from(1), &facade, &mut store)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        summary.activities.len(),
+        2,
+        "the ACTIVITY and the walk's activity ride the returned Summary"
+    );
+    assert!(
+        summary
+            .activities
+            .get(&ActivityId::from("icu:10"))
+            .is_some()
+    );
+    assert!(
+        summary
+            .activities
+            .get(&ActivityId::from("icu:30"))
+            .is_some()
+    );
+    // Both rows were deleted (the `SYNC` by its walk's completion, not the
+    // import-and-drop path).
+    let deletes = deletes.lock().unwrap().clone();
+    assert!(deletes.contains(&Some(1)), "the ACTIVITY row was deleted");
+    assert!(
+        deletes.contains(&Some(2)),
+        "the SYNC row was deleted by its walk"
+    );
+    // The walk fetched the list URI (not an import of the `"sync"` sentinel).
+    let reqs = super::super::test_support::requests();
+    assert!(
+        reqs.iter().any(|r| r.starts_with("/athlete/a1/activities")),
+        "the SYNC row went through its walk's list fetch"
+    );
+}
+
 // ─── insert_sync: the durable backfill cursor ───────────────────────────────
 
 /// A queued `SYNC` event: the `oldest` bound and the `newest` cursor
@@ -454,10 +540,18 @@ async fn process_sync_walks_and_deletes_on_completion() {
     let (mut store, mut facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     sync_user_fixture(&mut store);
-    // The queue holds one `SYNC` row (the `0` sentinel, full history).
-    store
-        .expect_icu_event_get_next_for_user()
-        .returning(|_id| Ok(Some(sync_event(1, 0, 0))));
+    // The queue holds one `SYNC` row (the `0` sentinel, full history); the
+    // walk's completion deletes it, so the drain's re-pull finds nothing.
+    store.expect_icu_event_get_next_for_user().returning(|_id| {
+        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        Ok(
+            if N.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                Some(sync_event(1, 0, 0))
+            } else {
+                None
+            },
+        )
+    });
     // The zero-sentinel resolution persists `now`; the completion deletes the
     // row.
     store
@@ -606,11 +700,21 @@ async fn process_sync_resumes_from_stored_cursor() {
     super::super::ratelimit::test_set_not_limited();
     sync_user_fixture(&mut store);
     // A `SYNC` row whose `newest` cursor is a stored (non-zero) time: the
-    // resume point of a prior, interrupted walk.
+    // resume point of a prior, interrupted walk. The walk's completion
+    // deletes the row, so the drain's re-pull finds nothing.
     let cursor = now_ts() - 86400; // one day before now
     store
         .expect_icu_event_get_next_for_user()
-        .returning(move |_id| Ok(Some(sync_event(1, 0, cursor))));
+        .returning(move |_id| {
+            static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+            Ok(
+                if N.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                    Some(sync_event(1, 0, cursor))
+                } else {
+                    None
+                },
+            )
+        });
     // The stored cursor is non-zero: the sentinel is NOT re-resolved, so
     // `icu_event_set_time` is only called for the (later) cursor advance.
     store
@@ -656,9 +760,18 @@ async fn process_sync_advances_cursor_per_batch() {
     let (mut store, mut facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     sync_user_fixture(&mut store);
-    store
-        .expect_icu_event_get_next_for_user()
-        .returning(|_id| Ok(Some(sync_event(1, 0, 0))));
+    // The queue holds one `SYNC` row (the `0` sentinel, full history); the
+    // walk's completion deletes it, so the drain's re-pull finds nothing.
+    store.expect_icu_event_get_next_for_user().returning(|_id| {
+        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        Ok(
+            if N.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                Some(sync_event(1, 0, 0))
+            } else {
+                None
+            },
+        )
+    });
     // The zero-sentinel resolution + the per-batch cursor advance.
     let set_times: std::sync::Arc<std::sync::Mutex<Vec<i64>>> =
         std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
