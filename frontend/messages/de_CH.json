@@ -21,6 +21,7 @@
   "connect_feature_live_sync": "Live-Synchronisacion",
   "connect_feature_reconnect": "Mit eme Tipp nöi verbinde",
   "connect_button": "Verbind {name}",
+  "no_providers_configured": "Diesi Instanz het keini Aktivitätsanbieter konfiguriert",
   "gearcard_unknown_model": "unbekannts Modell",
   "gearcard_view_on": "Uf {provider} aluege",
   "time_since": "sit",

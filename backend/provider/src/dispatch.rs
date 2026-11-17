@@ -66,6 +66,11 @@ pub async fn login<S, D: EntityFacade<S>>(
 where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
+    // A disabled provider is a graceful freeze (ADR-0016): no OAuth without
+    // credentials — a clear "unavailable", not a token exchange.
+    if !crate::enabled_providers().contains(&provider) {
+        return Err(crate::config::disabled(provider));
+    }
     match provider {
         Provider::Strava => crate::strava::login(code, scope, facade, store).await,
         Provider::Icu => crate::icu::login(code, scope, facade, store).await,
@@ -83,6 +88,12 @@ pub async fn accept_event<S>(provider: Provider, body: &str, store: &mut S) -> T
 where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
+    // A disabled provider's webhook route is inert (ADR-0016): answer
+    // without processing (the route answers 200, not a 500 — the sender's
+    // retry policy applies).
+    if !crate::enabled_providers().contains(&provider) {
+        return Ok(Vec::new());
+    }
     match provider {
         Provider::Strava => {
             let queued = crate::strava::event::accept_event(body, store).await?;
@@ -118,6 +129,11 @@ where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
     let provider = crate::provider_of(store, user_id).await?;
+    // A disabled provider's sync fails loudly (ADR-0016): the graceful
+    // freeze is a clear "provider disabled" error, not a silent no-op.
+    if !crate::enabled_providers().contains(&provider) {
+        return Err(crate::config::disabled(provider));
+    }
     match provider {
         Provider::Strava => {
             // Import the gear (bikes + shoes) before queuing the activity
@@ -144,6 +160,10 @@ where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
     let provider = crate::provider_of(store, user_id).await?;
+    // A disabled provider's gear import fails loudly (ADR-0016).
+    if !crate::enabled_providers().contains(&provider) {
+        return Err(crate::config::disabled(provider));
+    }
     match provider {
         Provider::Strava => crate::strava::StravaUser::update_gear(user_id, facade, store).await,
         Provider::Icu => crate::icu::gear::update_gear(user_id, facade, store).await,
@@ -165,6 +185,10 @@ where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
     let provider = crate::provider_of(store, user_id).await?;
+    // A disabled provider's queued sync fails loudly (ADR-0016).
+    if !crate::enabled_providers().contains(&provider) {
+        return Err(crate::config::disabled(provider));
+    }
     match provider {
         Provider::Strava => {
             crate::strava::event::insert_sync(user_id, event_time, false, store).await
@@ -225,8 +249,12 @@ where
 
     let mut queued = Vec::new();
 
-    // The Strava lane: a `Sync` event per non-disabled Strava user.
-    if provider.is_none() || provider == Some(Provider::Strava) {
+    // The Strava lane: a `Sync` event per non-disabled Strava user. A
+    // disabled provider's lane is skipped (ADR-0016: the admin sync skips
+    // its users — their syncs would fail with the clear error anyway).
+    if (provider.is_none() || provider == Some(Provider::Strava))
+        && crate::enabled_providers().contains(&Provider::Strava)
+    {
         let users = match user_id {
             Some(id) => vec![store.stravauser_get_by_tbid(id).await?],
             None => store.stravauser_get_all().await?,
@@ -243,8 +271,11 @@ where
     }
 
     // The icu lane: the onboarding path (gear import + backfill) per
-    // non-disabled icu user.
-    if provider.is_none() || provider == Some(Provider::Icu) {
+    // non-disabled icu user. A disabled provider's lane is skipped
+    // (ADR-0016).
+    if (provider.is_none() || provider == Some(Provider::Icu))
+        && crate::enabled_providers().contains(&Provider::Icu)
+    {
         let users = match user_id {
             Some(id) => vec![store.icuser_get_by_tbid(id).await?],
             None => store.icuser_get_all().await?,

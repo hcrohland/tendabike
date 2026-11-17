@@ -12,7 +12,7 @@
 
 use axum::{
     extract::{Query, State},
-    response::{IntoResponse, Redirect},
+    response::Redirect,
 };
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -23,6 +23,7 @@ use crate::{
     error::AppError,
     oauth_common::{gentoken, getpath, login_and_redirect},
 };
+use tb_domain::Error;
 use tb_provider::Provider;
 
 #[derive(Deserialize)]
@@ -30,7 +31,20 @@ pub(crate) struct PathParam {
     inner: Option<String>,
 }
 
-pub(crate) async fn icu_auth(Query(path): Query<PathParam>) -> impl IntoResponse {
+/// `GET /icu/login`: the OAuth entry point. A disabled provider (its client
+/// id unset, ADR-0016) answers a clear "unavailable" — no redirect, no 500:
+/// the provider is hidden from the connect screen, and a direct hit
+/// degrades gracefully.
+pub(crate) async fn icu_auth(
+    Query(path): Query<PathParam>,
+    State(state): State<AppState>,
+) -> Result<Redirect, AppError> {
+    if !state.provider.enabled_providers().contains(&Provider::Icu) {
+        return Err(Error::Unavailable(
+            "the icu provider is not available on this server".to_string(),
+        )
+        .into());
+    }
     let path = path.inner.unwrap_or("/".to_owned());
     // The web shell generates the CSRF state (beside its other protocol
     // secrets); the enum assembles the authorize URL from the driver's
@@ -38,7 +52,7 @@ pub(crate) async fn icu_auth(Query(path): Query<PathParam>) -> impl IntoResponse
     let url = Provider::Icu.authorize_url(gentoken(path).secret());
 
     // Redirect to intervals.icu's oauth service
-    Redirect::to(&url)
+    Ok(Redirect::to(&url))
 }
 
 #[derive(Debug, Serialize, Deserialize)]

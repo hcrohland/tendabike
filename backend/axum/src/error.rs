@@ -40,6 +40,7 @@ impl IntoResponse for AppError {
                 Error::Conflict(_) => StatusCode::CONFLICT,
                 Error::TryAgain(_) => StatusCode::TOO_MANY_REQUESTS,
                 Error::Ambiguous(_) => StatusCode::CONFLICT,
+                Error::Unavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
                 Error::DatabaseFailure(_) => StatusCode::INTERNAL_SERVER_ERROR,
                 Error::AnyFailure(_) => StatusCode::INTERNAL_SERVER_ERROR,
             },
@@ -145,5 +146,12 @@ mod tests {
         let (status, body) = respond(AppError::AnyError(anyhow::anyhow!("any"))).await;
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
         assert_eq!(body, "any");
+    }
+
+    #[tokio::test]
+    async fn unavailable_maps_to_service_unavailable() {
+        let (status, body) = respond(Error::Unavailable("provider off".to_string()).into()).await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(body, "Service unavailable: provider off");
     }
 }

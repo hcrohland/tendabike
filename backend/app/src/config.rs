@@ -10,17 +10,18 @@
 use std::collections::HashMap;
 
 /// The resolved instance configuration: the database URL, both providers'
-/// credentials, redirect and webhook callback URLs, and the ICU webhook
+/// credentials (optional — a missing client id disables the provider,
+/// ADR-0016), redirect and webhook callback URLs, and the ICU webhook
 /// secret.
 #[derive(Debug, Clone)]
 pub(crate) struct AppConfig {
     pub(crate) database_url: String,
-    pub(crate) strava_client_id: String,
-    pub(crate) strava_client_secret: String,
+    pub(crate) strava_client_id: Option<String>,
+    pub(crate) strava_client_secret: Option<String>,
     pub(crate) strava_redirect_url: String,
     pub(crate) strava_webhook_url: String,
-    pub(crate) icu_client_id: String,
-    pub(crate) icu_client_secret: String,
+    pub(crate) icu_client_id: Option<String>,
+    pub(crate) icu_client_secret: Option<String>,
     pub(crate) icu_redirect_url: String,
     pub(crate) icu_webhook_url: String,
     pub(crate) icu_webhook_secret: String,
@@ -100,11 +101,23 @@ fn resolve(
     }
 }
 
-/// Reads a required variable, panicking when it is absent.
-fn required(env: &HashMap<String, String>, name: &str) -> String {
-    env.get(name)
-        .cloned()
-        .unwrap_or_else(|| panic!("Missing {name}!"))
+/// Resolves an optional variable with the same canonical/deprecated rule as
+/// [`resolve`], but nothing-set yields `None` (a disabled provider,
+/// ADR-0016) instead of a panic.
+fn resolve_optional(
+    env: &HashMap<String, String>,
+    canonical: &str,
+    deprecated: &str,
+) -> (Option<String>, Option<String>) {
+    if let Some(value) = env.get(canonical) {
+        return (Some(value.clone()), None);
+    }
+    if let Some(value) = env.get(deprecated) {
+        let warning =
+            format!("deprecated environment variable {deprecated}: use {canonical} instead");
+        return (Some(value.clone()), Some(warning));
+    }
+    (None, None)
 }
 
 /// Resolves the full instance configuration from the environment, returning
@@ -121,10 +134,19 @@ pub(crate) fn from_env(env: &HashMap<String, String>) -> (AppConfig, Vec<String>
     );
     warnings.extend(warning);
 
-    let (strava_client_id, warning) = resolve(env, "STRAVA_CLIENT_ID", "CLIENT_ID", None);
+    // The providers' credentials are optional (ADR-0016): a missing client
+    // id disables the provider (a graceful freeze), it does not panic the
+    // startup. The deprecated `CLIENT_ID`/`CLIENT_SECRET` fallback (from
+    // #904) keeps its warning.
+    let (strava_client_id, warning) = resolve_optional(env, "STRAVA_CLIENT_ID", "CLIENT_ID");
     warnings.extend(warning);
     let (strava_client_secret, warning) =
-        resolve(env, "STRAVA_CLIENT_SECRET", "CLIENT_SECRET", None);
+        resolve_optional(env, "STRAVA_CLIENT_SECRET", "CLIENT_SECRET");
+    warnings.extend(warning);
+    let (icu_client_id, warning) = resolve_optional(env, "ICU_CLIENT_ID", "ICU_CLIENT_ID");
+    warnings.extend(warning);
+    let (icu_client_secret, warning) =
+        resolve_optional(env, "ICU_CLIENT_SECRET", "ICU_CLIENT_SECRET");
     warnings.extend(warning);
 
     let hostname = env.get("HOSTNAME").map(String::as_str);
@@ -137,8 +159,8 @@ pub(crate) fn from_env(env: &HashMap<String, String>) -> (AppConfig, Vec<String>
         strava_client_secret,
         strava_redirect_url: urls.strava,
         strava_webhook_url: webhooks.strava,
-        icu_client_id: required(env, "ICU_CLIENT_ID"),
-        icu_client_secret: required(env, "ICU_CLIENT_SECRET"),
+        icu_client_id,
+        icu_client_secret,
         icu_redirect_url: urls.icu,
         icu_webhook_url: webhooks.icu,
         icu_webhook_secret: env.get("ICU_WEBHOOK_SECRET").cloned().unwrap_or_default(),
@@ -274,8 +296,8 @@ mod tests {
         let (config, warnings) = from_env(&e);
         assert!(warnings.is_empty());
         assert_eq!(config.database_url, "postgres://db/tendabike");
-        assert_eq!(config.strava_client_id, "sid");
-        assert_eq!(config.strava_client_secret, "ssec");
+        assert_eq!(config.strava_client_id, Some("sid".to_string()));
+        assert_eq!(config.strava_client_secret, Some("ssec".to_string()));
         assert_eq!(
             config.strava_redirect_url,
             "https://tendabike.example.com/strava/token"
@@ -284,8 +306,8 @@ mod tests {
             config.strava_webhook_url,
             "https://tendabike.example.com/strava/callback"
         );
-        assert_eq!(config.icu_client_id, "iid");
-        assert_eq!(config.icu_client_secret, "isec");
+        assert_eq!(config.icu_client_id, Some("iid".to_string()));
+        assert_eq!(config.icu_client_secret, Some("isec".to_string()));
         assert_eq!(
             config.icu_redirect_url,
             "https://tendabike.example.com/icu/token"
@@ -308,8 +330,8 @@ mod tests {
         ]);
         let (config, warnings) = from_env(&e);
         assert_eq!(config.database_url, "postgres://db/tendabike");
-        assert_eq!(config.strava_client_id, "sid");
-        assert_eq!(config.strava_client_secret, "ssec");
+        assert_eq!(config.strava_client_id, Some("sid".to_string()));
+        assert_eq!(config.strava_client_secret, Some("ssec".to_string()));
         assert_eq!(
             config.strava_redirect_url,
             "http://localhost:8000/strava/token"
@@ -323,6 +345,72 @@ mod tests {
         assert_eq!(warnings.len(), 3);
         for (legacy, replacement) in [
             ("DB_URL", "DATABASE_URL"),
+            ("CLIENT_ID", "STRAVA_CLIENT_ID"),
+            ("CLIENT_SECRET", "STRAVA_CLIENT_SECRET"),
+        ] {
+            let hit = warnings
+                .iter()
+                .find(|w| w.contains(legacy))
+                .unwrap_or_else(|| panic!("no warning naming {legacy}"));
+            assert!(
+                hit.contains(replacement),
+                "warning for {legacy} must name {replacement}: {hit}"
+            );
+        }
+    }
+
+    // --- subset providers (issue #908, ADR-0016) -------------------------
+
+    /// A missing Strava client id (canonical and deprecated) disables the
+    /// provider — it does not panic the startup.
+    #[test]
+    fn missing_strava_client_id_disables_strava() {
+        let e = env(&[("ICU_CLIENT_ID", "iid"), ("ICU_CLIENT_SECRET", "isec")]);
+        let (config, warnings) = from_env(&e);
+        assert!(config.strava_client_id.is_none());
+        assert!(config.strava_client_secret.is_none());
+        assert_eq!(config.icu_client_id, Some("iid".to_string()));
+        assert!(warnings.is_empty());
+    }
+
+    /// A missing intervals.icu client id disables the provider — it does
+    /// not panic the startup.
+    #[test]
+    fn missing_icu_client_id_disables_icu() {
+        let e = env(&[
+            ("STRAVA_CLIENT_ID", "sid"),
+            ("STRAVA_CLIENT_SECRET", "ssec"),
+        ]);
+        let (config, warnings) = from_env(&e);
+        assert_eq!(config.strava_client_id, Some("sid".to_string()));
+        assert!(config.icu_client_id.is_none());
+        assert!(config.icu_client_secret.is_none());
+        assert!(warnings.is_empty());
+    }
+
+    /// Both client ids missing: the instance runs with no providers (the
+    /// frontend shows the failure page) — the startup does not panic.
+    #[test]
+    fn no_client_id_disables_every_provider() {
+        let e = HashMap::new();
+        let (config, warnings) = from_env(&e);
+        assert!(config.strava_client_id.is_none());
+        assert!(config.icu_client_id.is_none());
+        assert!(warnings.is_empty());
+    }
+
+    /// The deprecated `CLIENT_ID`/`CLIENT_SECRET` fallback (from #904)
+    /// still enables Strava and still warns: only a *missing* client id
+    /// (canonical and fallback both absent) disables the provider.
+    #[test]
+    fn deprecated_fallback_still_enables_and_warns() {
+        let e = env(&[("CLIENT_ID", "sid"), ("CLIENT_SECRET", "ssec")]);
+        let (config, warnings) = from_env(&e);
+        assert_eq!(config.strava_client_id, Some("sid".to_string()));
+        assert_eq!(config.strava_client_secret, Some("ssec".to_string()));
+        assert!(config.icu_client_id.is_none());
+        assert_eq!(warnings.len(), 2);
+        for (legacy, replacement) in [
             ("CLIENT_ID", "STRAVA_CLIENT_ID"),
             ("CLIENT_SECRET", "STRAVA_CLIENT_SECRET"),
         ] {

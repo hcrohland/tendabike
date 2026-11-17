@@ -141,6 +141,13 @@ where
             Ok(provider) => provider,
             Err(_) => return None,
         };
+        // A disabled provider's queued events are declined, not processed
+        // (ADR-0016): the event stays queued (the caller rolls back and
+        // backs off), so re-adding the credential restores the provider
+        // and its syncs.
+        if !crate::enabled_providers().contains(&provider) {
+            return None;
+        }
         match provider {
             Provider::Icu => crate::icu::event::process(user_id, &self.facade, store)
                 .await

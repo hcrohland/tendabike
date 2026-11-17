@@ -178,11 +178,11 @@ fn icu_webhook_secret() -> String {
     const SECRET: &str = "icu-test-webhook-secret";
     ONCE.call_once(|| {
         crate::init(crate::ProviderConfig {
-            strava_client_id: "test-client-id".to_string(),
-            strava_client_secret: "test-client-secret".to_string(),
+            strava_client_id: Some("test-client-id".to_string()),
+            strava_client_secret: Some("test-client-secret".to_string()),
             strava_redirect_url: "http://localhost:8000/strava/token".to_string(),
-            icu_client_id: "test-icu-client-id".to_string(),
-            icu_client_secret: "test-icu-client-secret".to_string(),
+            icu_client_id: Some("test-icu-client-id".to_string()),
+            icu_client_secret: Some("test-icu-client-secret".to_string()),
             icu_redirect_url: "http://localhost:8000/icu/token".to_string(),
             icu_webhook_secret: SECRET.to_string(),
         });

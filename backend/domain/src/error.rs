@@ -44,6 +44,12 @@ pub enum Error {
     /// same-minute duplicate is an error, not a silent first-match.
     #[error("Ambiguous match: {0}")]
     Ambiguous(String),
+    /// The requested service is not available on this server: the
+    /// provider it belongs to is disabled by configuration (ADR-0016).
+    /// The message states the reason, so the failure is loud and clear
+    /// rather than an opaque server error.
+    #[error("Service unavailable: {0}")]
+    Unavailable(String),
     #[error(transparent)]
     DatabaseFailure(anyhow::Error),
     #[error(transparent)]
