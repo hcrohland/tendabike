@@ -132,4 +132,11 @@ pub trait ProviderService: Send + Sync {
     /// layer's `GET /user` response calls it to populate the client's
     /// `user.provider` field.
     async fn user_provider(&self, id: UserId) -> TbResult<Provider>;
+
+    /// The enabled providers (ADR-0016): the runtime, ordered subset of
+    /// [`Provider`] (the enum's definition order) the server was
+    /// configured with — the provider layer's config-derived set. No
+    /// transaction: a pure config read. The web layer's `GET /api/providers`
+    /// answers with it, so the client offers only the configured providers.
+    fn enabled_providers(&self) -> Vec<Provider>;
 }

@@ -72,6 +72,24 @@ mod oauth_common;
 
 mod stream;
 
+/// The offline gate: the instance runs offline iff the
+/// enabled provider set is empty (ADR-0016). A proper subset is a normal
+/// mode and never trips the gate.
+fn is_offline() -> bool {
+    tb_provider::enabled_providers().is_empty()
+}
+
+/// The startup offline warning: once at startup, when the
+/// instance runs offline (no enabled providers), log an error naming the
+/// fix. A configured subset is a normal mode and logs nothing.
+fn warn_if_offline() {
+    if is_offline() {
+        tracing::error!(
+            "No activity providers are configured; the instance is running offline. Set STRAVA_CLIENT_ID or ICU_CLIENT_ID to enable activity sync."
+        );
+    }
+}
+
 fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> Router {
     let mut router = Router::new()
         .nest("/api", domain::router())
@@ -152,6 +170,10 @@ pub async fn start(
         .layer(session_layer);
 
     tracing::debug!("listening on {}", addr);
+
+    // Once at startup: warn when the instance runs offline (no enabled
+    // providers) — a configured subset is a normal mode.
+    warn_if_offline();
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
