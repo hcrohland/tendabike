@@ -20,11 +20,12 @@ futures = "0.3"
 http = { workspace = true }
 tracing = "0.1"
 tower-http = { version = "0.7", features = ["trace", "fs", "compression-full"] }
-# Pinned to 0.14: the latest tower-sessions-sqlx-store (0.15.0) is built
-# against tower-sessions 0.14, so bumping to 0.15 leaves PostgresStore
-# implementing the 0.14 SessionStore trait (a type mismatch at the layer).
+# Pinned to 0.14: the sqlx-store must be built against the same
+# tower-sessions-core as tower-sessions, or PostgresStore implements a
+# different SessionStore trait (a type mismatch at the layer). 0.15.1 moved
+# the store to core 0.15, so it is pinned to the last release on core 0.14.
 tower-sessions = "0.14"
-tower-sessions-sqlx-store = { version = "0.15", features = ["postgres"] }
+tower-sessions-sqlx-store = { version = "=0.15.0", features = ["postgres"] }
 sqlx = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 axum-macros = "0.5"
