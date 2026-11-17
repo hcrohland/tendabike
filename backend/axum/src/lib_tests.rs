@@ -753,7 +753,10 @@ async fn icu_login_redirects_to_icu_authorize() {
 /// distinct verifiers).
 #[tokio::test]
 async fn icu_login_issues_an_independent_verifier_per_login() {
-    let (store, mock, provider) = mock_ctx();
+    let (store, mock, mut provider) = mock_ctx();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Strava, tb_provider::Provider::Icu]);
     let app = build_app(&store, mock, provider);
     let (_, h1, _) = run(app.clone(), Method::GET, "/icu/login", None).await;
     let (_, h2, _) = run(app, Method::GET, "/icu/login", None).await;
@@ -824,6 +827,9 @@ async fn icu_token_submits_the_verifier_matching_the_authorize_challenge() {
     let (store, mock, mut provider) = mock_ctx();
     let captured: Arc<std::sync::Mutex<Option<String>>> = Arc::new(std::sync::Mutex::new(None));
     let captured_rec = captured.clone();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Strava, tb_provider::Provider::Icu]);
     provider
         .expect_login()
         .times(1)
