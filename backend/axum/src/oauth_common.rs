@@ -77,7 +77,7 @@ fn verified_message(state: &str) -> TbResult<String> {
 }
 
 /// Generate a CSRF state token encoding `path` (the OAuth return path).
-pub fn gentoken(path: String) -> CsrfToken {
+pub(crate) fn gentoken(path: String) -> CsrfToken {
     let nonce = fresh_nonce();
     signed(&(path + "+" + &nonce))
 }
@@ -86,13 +86,13 @@ pub fn gentoken(path: String) -> CsrfToken {
 /// PKCE `verifier`: the verifier round-trips through the same signed state as
 /// the path, so the callback recovers it for the token exchange (stateless —
 /// no server-side storage).
-pub fn gentoken_pkce(path: String, verifier: &str) -> CsrfToken {
+pub(crate) fn gentoken_pkce(path: String, verifier: &str) -> CsrfToken {
     let nonce = fresh_nonce();
     signed(&(path + "+" + &nonce + "+" + verifier))
 }
 
 /// Extract and verify the return path from a CSRF state token.
-pub fn getpath(state: String) -> TbResult<String> {
+pub(crate) fn getpath(state: String) -> TbResult<String> {
     let msg = verified_message(&state)?;
     Ok(msg.split('+').next().unwrap_or("").to_owned())
 }
@@ -103,7 +103,7 @@ pub fn getpath(state: String) -> TbResult<String> {
 /// last segment is the verifier, the second-last the nonce, and everything
 /// before is the return path (rejoined with `+` — a path may contain a
 /// literal `+`, which the nonce and the verifier, being base64url, never do).
-pub fn getpath_and_verifier(state: String) -> TbResult<(String, String)> {
+pub(crate) fn getpath_and_verifier(state: String) -> TbResult<(String, String)> {
     let msg = verified_message(&state)?;
     let parts: Vec<&str> = msg.split('+').collect();
     if parts.len() < 3 {
@@ -125,7 +125,7 @@ pub fn getpath_and_verifier(state: String) -> TbResult<(String, String)> {
 /// seam. The tower-session write stays in axum (the token is stored in the
 /// provider layer's user row, not the cookie), then the redirect to the
 /// return path.
-pub async fn login_and_redirect(
+pub(crate) async fn login_and_redirect(
     state: AppState,
     session: Session,
     provider: Provider,

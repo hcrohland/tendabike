@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![warn(unreachable_pub)]
 
 pub use tb_sqlx::{DbPool, SqlxConn};
 
