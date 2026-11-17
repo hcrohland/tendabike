@@ -28,6 +28,7 @@ App**. Set:
 | Webhook URL | `https://<your-domain>/icu/callback` — **one URL per app**, shared by every athlete who authorizes it. Must be publicly reachable (HTTPS in production; a tunnel such as ngrok for local dev). |
 | Webhook secret | Any long random string. This is the shared `secret` field in every webhook payload — copy it for `ICU_WEBHOOK_SECRET` (step 3). |
 | Webhook event types | **`ACTIVITY_UPLOADED`**, **`ACTIVITY_UPDATED`**, and **`ACTIVITY_DELETED`** — the types Tendabike subscribes to. |
+| PKCE | **On** — Tendabike's login flow always sends a PKCE code challenge (RFC 7636, S256); the option makes intervals.icu **enforce** it. Enable it for hardening. |
 
 ## 3. Environment variables
 

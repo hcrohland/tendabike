@@ -12,7 +12,7 @@
 use crate::facade::{Error, TbResult, UserId};
 
 #[cfg(any(feature = "strava", feature = "icu"))]
-use oauth2::{CsrfToken, Scope};
+use oauth2::{CsrfToken, PkceCodeChallenge, PkceCodeVerifier, Scope};
 
 use crate::ProviderActivityId;
 
@@ -62,9 +62,12 @@ impl Provider {
     /// The OAuth entry URL, assembled from the driver's client config and the
     /// CSRF state the web shell generates. The web shell generates the state
     /// (beside its other protocol secrets) and passes it here; the URL carries
-    /// the driver's client id, redirect URI, and scopes.
+    /// the driver's client id, redirect URI, and scopes. `code_verifier` is
+    /// the opaque PKCE code verifier the state carries (intervals.icu-only —
+    /// the icu arm derives the authorize URL's S256 challenge from it; the
+    /// Strava flow is a plain authorization-code exchange and passes `None`).
     #[cfg(any(feature = "strava", feature = "icu"))]
-    pub fn authorize_url(&self, state: &str) -> String {
+    pub fn authorize_url(&self, state: &str, code_verifier: Option<&str>) -> String {
         match self {
             #[cfg(feature = "strava")]
             Provider::Strava => {
@@ -76,10 +79,16 @@ impl Provider {
             }
             #[cfg(feature = "icu")]
             Provider::Icu => {
-                let (auth_url, _) = crate::icu::client::icu_client()
+                let mut builder = crate::icu::client::icu_client()
                     .authorize_url(|| CsrfToken::new(state.to_string()))
-                    .add_scope(Scope::new(crate::icu::client::SCOPES.to_string()))
-                    .url();
+                    .add_scope(Scope::new(crate::icu::client::SCOPES.to_string()));
+                if let Some(verifier) = code_verifier {
+                    let challenge = PkceCodeChallenge::from_code_verifier_sha256(
+                        &PkceCodeVerifier::new(verifier.to_string()),
+                    );
+                    builder = builder.set_pkce_challenge(challenge);
+                }
+                let (auth_url, _) = builder.url();
                 auth_url.to_string()
             }
             #[cfg(not(all(feature = "strava", feature = "icu")))]

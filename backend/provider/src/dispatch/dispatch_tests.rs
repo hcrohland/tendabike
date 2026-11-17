@@ -573,14 +573,15 @@ async fn delete_user_icu_deletes_the_user() -> TbResult<()> {
 // ─── login: both arms ───────────────────────────────────────────────────────
 
 /// The login's Strava arm rejects an insufficient scope (a `BadRequest` before
-/// the token exchange).
+/// the token exchange). The Strava flow is a plain authorization-code
+/// exchange: the (PKCE) code verifier is not used by it.
 #[tokio::test]
 async fn login_strava_rejects_an_insufficient_scope() -> TbResult<()> {
     init_config_once();
     let mut store = DispatchStore::default();
     let facade = MockEntityFacade::new();
 
-    let err = login(Provider::Strava, "code", "read", &facade, &mut store)
+    let err = login(Provider::Strava, "code", "read", None, &facade, &mut store)
         .await
         .expect_err("an insufficient scope is rejected");
     assert!(matches!(err, Error::BadRequest(_)));
@@ -595,9 +596,31 @@ async fn login_icu_rejects_an_insufficient_scope() -> TbResult<()> {
     let mut store = DispatchStore::default();
     let facade = MockEntityFacade::new();
 
-    let err = login(Provider::Icu, "code", "WRONG:SCOPE", &facade, &mut store)
+    let err = login(
+        Provider::Icu,
+        "code",
+        "WRONG:SCOPE",
+        Some("verifier"),
+        &facade,
+        &mut store,
+    )
+    .await
+    .expect_err("an insufficient scope is rejected");
+    assert!(matches!(err, Error::BadRequest(_)));
+    Ok(())
+}
+
+/// The login's icu arm rejects a missing code verifier (a `BadRequest`
+/// before the token exchange): the web layer always recovers the verifier
+/// from the signed state, so its absence is a protocol violation.
+#[tokio::test]
+async fn login_icu_rejects_a_missing_code_verifier() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let facade = MockEntityFacade::new();
+
+    let err = login(Provider::Icu, "code", "", None, &facade, &mut store)
         .await
-        .expect_err("an insufficient scope is rejected");
+        .expect_err("a missing verifier is rejected");
     assert!(matches!(err, Error::BadRequest(_)));
     Ok(())
 }

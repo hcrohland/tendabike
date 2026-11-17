@@ -31,8 +31,9 @@
 //! per-provider route acting on a user of the other provider follows the
 //! stated identity rule. The route-keyed ops (`login`,
 //! `accept_event`) take the typed [`Provider`] as a parameter (the route
-//! knows it from the URL) plus opaque string input (the authorization code
-//! and scope, the raw webhook body) — no driver wire type crosses the seam.
+//! knows it from the URL) plus opaque string input (the authorization code,
+//! scope, and PKCE code verifier, the raw webhook body) — no driver wire
+//! type crosses the seam.
 //! The redirect-URL ops (`activity_url`, `user_url` — total,
 //! `TbResult<String>` — and `gear_url`, the one non-total op,
 //! `TbResult<Option<String>>` (icu gear has no public page)) are keyed by
@@ -64,9 +65,16 @@ pub trait ProviderService: Send + Sync {
     /// does the provider's login work (the scope check, the token exchange,
     /// the athlete wire-shape parsing, and the upsert), returning the
     /// identity and the admin flag. The provider is the route's (it knows it
-    /// from the URL); `code` and `scope` are the opaque callback values — no
-    /// driver wire type crosses the seam.
-    async fn login(&self, provider: Provider, code: &str, scope: &str) -> TbResult<(UserId, bool)>;
+    /// from the URL); `code`, `scope`, and `verifier` are the opaque callback
+    /// values — no driver wire type crosses the seam. `verifier` is the PKCE
+    /// code verifier (intervals.icu-only — the Strava flow ignores it).
+    async fn login<'a>(
+        &self,
+        provider: Provider,
+        code: &'a str,
+        scope: &'a str,
+        verifier: Option<&'a str>,
+    ) -> TbResult<(UserId, bool)>;
 
     /// The webhook intake (ADR-0014): one transaction — the provider
     /// layer's dispatch does the provider's intake work (the envelope parse,
