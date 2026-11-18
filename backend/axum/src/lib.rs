@@ -14,11 +14,14 @@
 //! crates, not the crate-internal details.
 //!
 //! This file defines the `start` function, which is the entry point for the presentation layer. It takes the
-//! service API handle, the provider service, an [`AxumConfig`] (the CSRF secret,
-//! the static files path, and the bind address as raw strings), and the
-//! `PgPool` for the session store. It sets up the necessary components for the
-//! presentation layer, such as the router and the middleware, and starts the
-//! server.
+//! service API handle, the provider service, an [`AxumConfig`] (the CSRF
+//! secret, the static files path, and the bind address as raw strings, plus
+//! the public domain and the provider credentials), and the `PgPool` for the
+//! session store. It composes the provider's redirect and webhook URLs from
+//! the domain, initializes the provider crate's client statics (logging the
+//! webhook URL per enabled provider), sets up the necessary components for
+//! the presentation layer, such as the router and the middleware, and starts
+//! the server.
 //!
 //! This file also contains the definitions of various modules that implement the endpoints for the different resources
 //! of the Tendabike server, such as users, parts, attachments, activities, and Strava integration.
@@ -42,13 +45,22 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 /// The web layer's configuration: the CSRF secret (hex-encoded; `None`
 /// generates a random key and warns), the static files directory, and the
-/// bind address. All as raw strings — `start` does the parsing
-/// (`Path::canonicalize`, `SocketAddr::parse`) internally.
+/// bind address, all as raw strings — `start` does the parsing
+/// (`Path::canonicalize`, `SocketAddr::parse`) internally. It also carries the
+/// public domain (defaulted to the local-dev host by the composition root) and
+/// the provider credentials, from which `start` assembles the
+/// `tb_provider::ProviderConfig` and calls `tb_provider::init`.
 #[derive(Debug, Clone)]
 pub struct AxumConfig {
     pub csrf_secret: Option<String>,
     pub static_www: String,
     pub bind_addr: String,
+    pub domainname: String,
+    pub strava_client_id: Option<String>,
+    pub strava_client_secret: Option<String>,
+    pub icu_client_id: Option<String>,
+    pub icu_client_secret: Option<String>,
+    pub icu_webhook_secret: String,
 }
 
 mod domain;
@@ -71,6 +83,8 @@ mod error;
 use error::*;
 
 mod oauth_common;
+
+mod provider_urls;
 
 mod stream;
 
@@ -132,6 +146,32 @@ pub async fn start(
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
+
+    // Compose the provider's redirect and webhook URLs from the public domain,
+    // assemble the provider config, and initialize the provider crate's client
+    // statics — before `warn_if_offline` (below), so the OAuth `redirect_uri`
+    // and the enabled-set derivation are in place before any request.
+    let redirects = provider_urls::redirect_urls(&config.domainname);
+    let webhooks = provider_urls::webhook_urls(&config.domainname);
+    tb_provider::init(tb_provider::ProviderConfig {
+        strava_client_id: config.strava_client_id,
+        strava_client_secret: config.strava_client_secret,
+        strava_redirect_url: redirects.strava,
+        icu_client_id: config.icu_client_id,
+        icu_client_secret: config.icu_client_secret,
+        icu_redirect_url: redirects.icu,
+        icu_webhook_secret: config.icu_webhook_secret,
+    });
+
+    // Log the webhook URL at INFO, one line per enabled provider (a disabled
+    // provider — its client id unset — yields no line).
+    for provider in tb_provider::enabled_providers() {
+        let url = match provider {
+            Provider::Strava => &webhooks.strava,
+            Provider::Icu => &webhooks.icu,
+        };
+        tracing::info!("{} webhook URL: {url}", provider.wire_value());
+    }
 
     let app_state = AppState::new(api, provider, HEARTBEAT_INTERVAL);
 
