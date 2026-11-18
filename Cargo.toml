@@ -25,7 +25,6 @@ tb_exec = { path = "./backend/exec" }
 tb_provider = { path = "./backend/provider" }
 
 anyhow = "1.0"
-async-recursion = "1"
 async-trait = "^0.1"
 derive_more = "2"
 log = "0.4"
