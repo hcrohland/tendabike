@@ -40,12 +40,4 @@ SQLX_OFFLINE=true cargo test -q -p tb_<crate>          # one crate's DB-free sui
 
 A format-only change (`cargo fmt`) is behaviour-preserving: `cargo check` is the sufficient gate — no need to re-run the full behavioral suite (the seam takes ~8s).
 
-Before writing, changing, or exploring tests for a crate, read the shared guide and its crate guide:
-
-- shared → [./docs/tests.md](./docs/tests.md) — the seam model, shared writing conventions, the mockall `.times` gotcha, the shared provider kit
-- `tb_domain` → [./docs/tests/domain.md](./docs/tests/domain.md) — `MockStore` (the `mock!` store double), fixtures, the prepopulated snapshot and its data rules
-- `tb_provider` (Strava module) → [./docs/tests/strava.md](./docs/tests/strava.md) — `MockStravaDataStore` (the `automock` store double), `strava_session`/`strava_admin_session`, JSON helpers
-- `tb_provider` (ICU module) → [./docs/tests/icu.md](./docs/tests/icu.md) — `MockIcuDataStore` (the `automock` store double), `setup()`, the HTTP seam, fixtures
-- `tb_axum` → [./docs/tests/axum.md](./docs/tests/axum.md) — `test_app`, router tests, coverage map
-- `tb_exec` → [./docs/tests/exec.md](./docs/tests/exec.md) — `MockConn` (the `mock!` store/`Txn` witness), the loop's control-flow units, the frame-push/orchestration ownership boundary
-- `tb_sqlx` → [./docs/tests/sqlx.md](./docs/tests/sqlx.md) — entity-mapping roundtrips, the seam integration suites
+Before writing, changing, or exploring tests, read the shared guide — [./docs/tests.md](./docs/tests.md): the seam model, the shared writing conventions, the mockall `.times` gotcha, and a table linking each crate's guide.
