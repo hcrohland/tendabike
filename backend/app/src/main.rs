@@ -14,8 +14,7 @@ async fn main() -> anyhow::Result<()> {
 
     // The deprecation warnings for the legacy variables in use are printed
     // here, before the logging subscriber exists (it is set up by
-    // `tb_axum::start`). The webhook callback URLs are no longer printed: the
-    // web layer logs them at INFO, one line per enabled provider.
+    // `tb_axum::start`).
     let env = std::env::vars().collect();
     let (config, deprecations) = config::from_env(&env);
     for warning in &deprecations {
