@@ -4,10 +4,7 @@ All `tb_domain` tests run DB-free (no database). One `<name>_tests.rs` module pe
 
 ## Behavior ownership
 
-`tb_domain` owns the **domain-level results**: pure value-logic needs no store, and every store-touching test runs the real domain operation over a `mockall` `mock!` double, [`MockStore`], asserting the domain result (the `Summary`, the `TbResult`). The domain logic runs for real; only the store I/O the operation calls is scripted.
-
-- **What it mocks** — the **store trait seam**: [`MockStore`] accumulates the full `Store` surface (the nine sub-traits + the method-free `Store` marker). The double implements the trait; it never re-implements store behavior.
-- **What it delegates to the seam** — store *behavior*: keying, normalization, commit/abort, `RowNotFound` mapping, the read/write roundtrips. That is not duplicated here; it is verified once on the real Postgres path, the sqlx seam suite (`sqlx/tests/store_seam.rs`), which seeds a scratch database from the checked-in `SNAPSHOT_JSON` fixture and drives representative store paths through `SqlxConn`. It is the real-Postgres behavioral bar for database-specific behavior (PK violations, ordering, `RowNotFound` mapping). It is `#[ignore]`d by default and runs with `--include-ignored` + a scratch Postgres URL. See [`sqlx.md`](sqlx.md) for the run recipe and the seam contract (recorded in [`docs/agents/domain-flow.md`](../../../docs/agents/domain-flow.md), "The store seam").
+`tb_domain` owns the **domain-level results** (the `Summary`, the `TbResult`): pure value-logic needs no store, and every store-touching test runs the real domain operation over [`MockStore`], asserting the domain result. The domain logic runs for real; only the store I/O the operation calls is scripted. Store *behavior* (keying, normalization, commit/abort, `RowNotFound` mapping, the read/write roundtrips) is not duplicated here — it is verified once on the sqlx seam suite (see [`sqlx.md`](sqlx.md)); the seam contract is recorded in [`docs/agents/domain-flow.md`](../../../docs/agents/domain-flow.md), "The store seam".
 
 ## Test tiers
 
@@ -27,7 +24,7 @@ All in `domain/src/test_support.rs` (the `#[cfg(any(test, feature = "test-suppor
 - **Adding a method to any `Store` sub-trait** means adding it to the doubles that implement the seam — `domain/src/test_support/mock_store.rs` (`MockStore`) and the real store in `sqlx` — or the `tb_domain`/`tb_sqlx` builds fail with `E0046` (a trait method the double doesn't implement).
 - **`MockSession`** (`domain/src/traits.rs`) — the `Session` trait carries `#[automock]` under `test-support`, so every test session is a mockall `MockSession` with a fixed identity (`check_owner` is wired to the trait default). Build one with the `mock_session(user)` (customer), `mock_session_with_shop(user, shop)` (shop owner), or `mock_session_admin(user)` (admin) helpers in `domain/src/test_support.rs`.
 - **`part_type_ids`** (`domain/src/test_support.rs`) — constants: `BIKE=1`, `FRONT_WHEEL=2`, `TIRE=3`, `CHAIN=4`, `REAR_WHEEL=5`, etc.
-- **`fixtures`** (`domain/src/test_support/fixtures.rs`) — store-agnostic helpers: `test_user()` (a fixed `UserId`), `test_session()` (a `MockSession` for it), and `sample_purchase_date()` (a fixed `OffsetDateTime`). The suites have no wall clock, so every fixture time is a fixed value.
+- **`fixtures`** (`domain/src/test_support/fixtures.rs`) — store-agnostic helpers: `test_user()` (a fixed `UserId`), `test_session()` (a `MockSession` for it), and `sample_purchase_date()` (a fixed `OffsetDateTime`).
 - **`only_tombstone(id)` / `sole_live(map)`** (`domain/src/test_support.rs`) — summary assertion helpers: `only_tombstone` builds an `IdKeyedMap` holding exactly the tombstone for `id` (whole-map assertions), and `sole_live` clones out the one live entry (asserting the op reported exactly one entity).
 
 ## Writing new tests

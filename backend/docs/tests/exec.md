@@ -6,15 +6,7 @@ Shared conventions (the seam model, writing conventions, the mockall `.times` go
 
 ## Behavior ownership
 
-`tb_exec` owns the **frame-push / orchestration logic**: the executor loop's control flow — message selection, the reclaim decision, the frame construction and routing, the backoff discipline, and the oneshot reply — driving the domain (the `ApiWrite`/`ApiRead` dispatch through the `DomainFacade` door) and the provider (the `ProviderLane`'s queue probe / gear / stats) inside transactions it owns.
-
-- **What it mocks** — the **three seams the loop drives**:
-  - the **transaction** — [`MockConn`] is a `mockall` `mock!` witness carrying **only** the `Txn` lifecycle (`commit`/`rollback`), the `TxnSource::Conn` bound: the loop opens it, works in it, and closes it. It no longer carries the `Store`/`StravaStore` surface.
-  - the **domain** — [`MockDomainFacade`] is the `mockall` `#[automock]` witness for the `DomainFacade` door (the `exec`/`read`/`part`/`part_owner` dispatches). The domain logic runs for real behind the concrete `DomainFacadeImpl`; the tests swap in the mock.
-  - the **provider lane** — [`MockLane`] is a `mockall` `mock!` witness for the `ProviderLane` seam (`facade`/`probe`/`process`/`insert_sync`/`all_stats`/`activity_url`, and the `Facade` associated type). **Strava** is stubbed (canned) through it for the onboarding / stats paths.
-
-  The per-request tests assert on canned outcomes from these mocks — they verify the executor's behavior (how it drives each seam: `begin` → work → `commit`/`rollback`, and what it does with the results), not the seams'.
-- **What it delegates to the seam** — the **store I/O** (real Postgres) lives in `tb_sqlx`'s `executor_seam.rs` (see [`sqlx.md`](sqlx.md)); the **domain-level results** live in the `tb_domain` suite (see [`domain.md`](domain.md)); the **Strava JSON → Part mapping** lives in the Strava module of `tb_provider` (see [`strava.md`](strava.md)).
+`tb_exec` owns the **frame-push / orchestration logic**: the executor loop's control flow — message selection, the reclaim decision, the frame construction and routing, the backoff discipline, and the oneshot reply — driving the domain (the `ApiWrite`/`ApiRead` dispatch through the `DomainFacade` door) and the provider (the `ProviderLane`'s queue probe / gear / stats) inside transactions it owns. The loop drives three seams — the transaction ([`MockConn`]), the domain ([`MockDomainFacade`]), and the provider lane ([`MockLane`]) — all described in Key infrastructure.
 
 ## Coverage
 
