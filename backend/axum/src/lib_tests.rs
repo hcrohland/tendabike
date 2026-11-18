@@ -59,11 +59,11 @@ fn init_test_config_once() {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
         tb_provider::init(tb_provider::ProviderConfig {
-            strava_client_id: "test-client-id".to_string(),
-            strava_client_secret: "test-client-secret".to_string(),
+            strava_client_id: Some("test-client-id".to_string()),
+            strava_client_secret: Some("test-client-secret".to_string()),
             strava_redirect_url: "http://localhost:8000/strava/token".to_string(),
-            icu_client_id: "test-icu-client-id".to_string(),
-            icu_client_secret: "test-icu-client-secret".to_string(),
+            icu_client_id: Some("test-icu-client-id".to_string()),
+            icu_client_secret: Some("test-icu-client-secret".to_string()),
             icu_redirect_url: "http://localhost:8000/icu/token".to_string(),
             icu_webhook_secret: String::new(),
         });
@@ -80,7 +80,11 @@ fn test_app(
 ) -> Router {
     init_test_config_once();
     let session_layer = SessionManagerLayer::new(store);
-    routes(AppState::new(api, provider), None).layer(session_layer)
+    routes(
+        AppState::new(api, provider, Duration::from_millis(100)),
+        None,
+    )
+    .layer(session_layer)
 }
 
 /// Creates a session in `store` containing `value` and returns the cookie
@@ -560,7 +564,10 @@ async fn callback_validation_rejects_wrong_token() {
 
 #[tokio::test]
 async fn login_redirects_to_strava_authorize() {
-    let (store, mock, provider) = mock_ctx();
+    let (store, mock, mut provider) = mock_ctx();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Strava, tb_provider::Provider::Icu]);
     let app = build_app(&store, mock, provider);
     let (status, headers, _body) = run(app, Method::GET, "/strava/login", None).await;
     assert_eq!(status, StatusCode::SEE_OTHER);
@@ -571,6 +578,53 @@ async fn login_redirects_to_strava_authorize() {
     );
     assert!(location.contains("client_id=test-client-id"));
     assert!(location.contains("state="));
+    // The Strava flow is a plain authorization-code exchange: no PKCE.
+    assert!(!location.contains("code_challenge"));
+}
+
+/// A disabled provider's login entry point answers a clear "unavailable"
+/// (ADR-0016): no redirect, no 500 — the provider is hidden from the
+/// connect screen, and a direct hit degrades gracefully.
+#[tokio::test]
+async fn login_of_a_disabled_provider_is_unavailable() {
+    let (store, mock, mut provider) = mock_ctx();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Icu]);
+    let app = build_app(&store, mock, provider);
+    let (status, _headers, body) = run(app, Method::GET, "/strava/login", None).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        body,
+        b"Service unavailable: the strava provider is disabled on this server"
+    );
+}
+
+/// `GET /api/providers`: unauthenticated, the enabled providers as an
+/// ordered list of wire values — the connect screen offers only these,
+/// and renders the failure page when the list is empty.
+#[tokio::test]
+async fn providers_lists_the_enabled_providers_in_wire_order() {
+    let (store, mock, mut provider) = mock_ctx();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Strava]);
+    let app = build_app(&store, mock, provider);
+    let (status, _headers, body) = run(app, Method::GET, "/api/providers", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, br#"["strava"]"#);
+}
+
+/// `GET /api/providers` with no enabled providers: the empty list — the
+/// connect screen's failure page.
+#[tokio::test]
+async fn providers_lists_nothing_when_none_enabled() {
+    let (store, mock, mut provider) = mock_ctx();
+    provider.expect_enabled_providers().returning(Vec::new);
+    let app = build_app(&store, mock, provider);
+    let (status, _headers, body) = run(app, Method::GET, "/api/providers", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, br#"[]"#);
 }
 
 #[tokio::test]
@@ -600,8 +654,10 @@ async fn token_forwards_the_opaque_callback_to_login() {
     provider
         .expect_login()
         .times(1)
-        .withf(|p, code, scope| *p == Provider::Strava && code == "abc" && scope == "read")
-        .returning(|_p, _c, _s| Ok((UserId::from(1), false)));
+        .withf(|p, code, scope, verifier| {
+            *p == Provider::Strava && code == "abc" && scope == "read" && verifier.is_none()
+        })
+        .returning(|_p, _c, _s, _v| Ok((UserId::from(1), false)));
     let app = build_app(&store, mock, provider);
     let state = crate::oauth_common::gentoken("/return".to_string());
     let (status, headers, _body) = run(
@@ -623,11 +679,14 @@ async fn token_forwards_the_opaque_callback_to_login() {
 #[tokio::test]
 async fn token_login_failure_500s() {
     let (store, mock, mut provider) = mock_ctx();
-    provider.expect_login().times(1).returning(|_p, _c, _s| {
-        Err(tb_domain::Error::AnyFailure(anyhow::anyhow!(
-            "login failed"
-        )))
-    });
+    provider
+        .expect_login()
+        .times(1)
+        .returning(|_p, _c, _s, _v| {
+            Err(tb_domain::Error::AnyFailure(anyhow::anyhow!(
+                "login failed"
+            )))
+        });
     let app = build_app(&store, mock, provider);
     let state = crate::oauth_common::gentoken("/return".to_string());
     let (status, _headers, _body) = run(
@@ -654,9 +713,22 @@ async fn logout_redirects_to_root() {
 
 // ─── intervals.icu OAuth (spec #763) ──────────────────────────────────────
 
+/// Reads a query parameter from a URL (the authorize-redirect assertions).
+fn query_param(location: &str, name: &str) -> Option<String> {
+    location.split_once('?').and_then(|(_, query)| {
+        query.split('&').find_map(|pair| {
+            let (k, v) = pair.split_once('=')?;
+            (k == name).then(|| v.to_owned())
+        })
+    })
+}
+
 #[tokio::test]
 async fn icu_login_redirects_to_icu_authorize() {
-    let (store, mock, provider) = mock_ctx();
+    let (store, mock, mut provider) = mock_ctx();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Strava, tb_provider::Provider::Icu]);
     let app = build_app(&store, mock, provider);
     let (status, headers, _body) = run(app, Method::GET, "/icu/login", None).await;
     assert_eq!(status, StatusCode::SEE_OTHER);
@@ -667,6 +739,32 @@ async fn icu_login_redirects_to_icu_authorize() {
     );
     assert!(location.contains("client_id=test-icu-client-id"));
     assert!(location.contains("state="));
+    // PKCE (RFC 7636): the authorize URL carries the S256 code challenge.
+    let challenge = query_param(&location, "code_challenge").expect("code_challenge");
+    assert!(!challenge.is_empty());
+    assert_eq!(
+        query_param(&location, "code_challenge_method").as_deref(),
+        Some("S256")
+    );
+}
+
+/// Two logins get independent PKCE verifiers: the S256 challenges in their
+/// authorize URLs differ (S256 is injective, so distinct challenges mean
+/// distinct verifiers).
+#[tokio::test]
+async fn icu_login_issues_an_independent_verifier_per_login() {
+    let (store, mock, mut provider) = mock_ctx();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Strava, tb_provider::Provider::Icu]);
+    let app = build_app(&store, mock, provider);
+    let (_, h1, _) = run(app.clone(), Method::GET, "/icu/login", None).await;
+    let (_, h2, _) = run(app, Method::GET, "/icu/login", None).await;
+    let l1 = h1["location"].to_str().expect("location").to_owned();
+    let l2 = h2["location"].to_str().expect("location").to_owned();
+    let c1 = query_param(&l1, "code_challenge").expect("code_challenge");
+    let c2 = query_param(&l2, "code_challenge").expect("code_challenge");
+    assert_ne!(c1, c2, "two logins must get independent verifiers");
 }
 
 #[tokio::test]
@@ -689,17 +787,24 @@ async fn icu_token_error_redirects_to_root() {
 /// (ADR-0014): the scope check, the token exchange, and the wire-shape
 /// parsing are the provider layer's work. intervals.icu omits the `scope`
 /// query param on some callbacks: an absent scope is forwarded as the empty
-/// string (the provider layer accepts it).
+/// string (the provider layer accepts it). The PKCE verifier round-trips in
+/// the signed state: the callback recovers it and forwards it to the `login`
+/// op.
 #[tokio::test]
 async fn icu_token_forwards_the_opaque_callback_to_login() {
     let (store, mock, mut provider) = mock_ctx();
     provider
         .expect_login()
         .times(1)
-        .withf(|p, code, scope| *p == Provider::Icu && code == "abc" && scope.is_empty())
-        .returning(|_p, _c, _s| Ok((UserId::from(1), false)));
+        .withf(|p, code, scope, verifier| {
+            *p == Provider::Icu
+                && code == "abc"
+                && scope.is_empty()
+                && *verifier == Some("verifier-abc")
+        })
+        .returning(|_p, _c, _s, _v| Ok((UserId::from(1), false)));
     let app = build_app(&store, mock, provider);
-    let state = crate::oauth_common::gentoken("/return".to_string());
+    let state = crate::oauth_common::gentoken_pkce("/return".to_string(), "verifier-abc");
     let (status, headers, _body) = run(
         app,
         Method::GET,
@@ -712,6 +817,56 @@ async fn icu_token_forwards_the_opaque_callback_to_login() {
     .await;
     assert_eq!(status, StatusCode::SEE_OTHER);
     assert_eq!(headers["location"], "/return");
+}
+
+/// The PKCE binding end to end: the verifier the callback submits to the
+/// `login` op is the one whose S256 challenge the `/icu/login` authorize URL
+/// carried (both derive from the same signed state).
+#[tokio::test]
+async fn icu_token_submits_the_verifier_matching_the_authorize_challenge() {
+    let (store, mock, mut provider) = mock_ctx();
+    let captured: Arc<std::sync::Mutex<Option<String>>> = Arc::new(std::sync::Mutex::new(None));
+    let captured_rec = captured.clone();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Strava, tb_provider::Provider::Icu]);
+    provider
+        .expect_login()
+        .times(1)
+        .withf(|p, code, _scope, _verifier| *p == Provider::Icu && code == "abc")
+        .returning(move |_p, _c, _s, verifier| {
+            if let Some(v) = verifier {
+                captured_rec.lock().unwrap().replace(v.to_owned());
+            }
+            Ok((UserId::from(1), false))
+        });
+    let app = build_app(&store, mock, provider);
+
+    // The login redirect: the authorize URL's challenge and the signed state.
+    let (_, headers, _) = run(app.clone(), Method::GET, "/icu/login", None).await;
+    let location = headers["location"].to_str().expect("location").to_owned();
+    let challenge = query_param(&location, "code_challenge").expect("code_challenge");
+    let state = query_param(&location, "state").expect("state");
+
+    // The callback: the verifier is recovered from the state and submitted.
+    let (status, _, _) = run(
+        app,
+        Method::GET,
+        &format!("/icu/token?code=abc&state={state}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+
+    let verifier = captured
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("the verifier was submitted to the login op");
+    let expected = oauth2::PkceCodeChallenge::from_code_verifier_sha256(
+        &oauth2::PkceCodeVerifier::new(verifier),
+    );
+    assert_eq!(expected.as_str(), challenge);
 }
 
 /// `POST /icu/onboarding/gear` (spec #829, the first step) enqueues the
@@ -2489,7 +2644,7 @@ async fn webhook_ingest_failure_500s() {
 /// The intervals.icu webhook's wire shape: the shared `secret` plus an array
 /// of `events` (each an `athlete_id`, a `type`, a `timestamp`, and an
 /// `activity`).
-const ICU_WEBHOOK_BODY: &str = r#"{"secret":"test-icu-webhook-secret","events":[{"athlete_id":"i123456","type":"ACTIVITY_ANALYZED","timestamp":"2024-12-06T06:40:47.011+00:00","activity":{"id":"i55751783"}}]}"#;
+const ICU_WEBHOOK_BODY: &str = r#"{"secret":"test-icu-webhook-secret","events":[{"athlete_id":"i123456","type":"ACTIVITY_UPLOADED","timestamp":"2024-12-06T06:40:47.011+00:00","activity":{"id":"i55751783"}}]}"#;
 
 /// `POST /icu/callback` (the webhook, spec #764): the raw body is forwarded
 /// opaquely to the provider service's `accept_event` op (the provider layer
@@ -2521,16 +2676,16 @@ async fn icu_webhook_bad_secret_401s() {
         ))
     });
     let app = build_app(&store, mock, provider);
-    let body = r#"{"secret":"wrong-secret","events":[{"athlete_id":"i123456","type":"ACTIVITY_ANALYZED","timestamp":"2024-12-06T06:40:47.011+00:00","activity":{"id":"i55751783"}}]}"#;
+    let body = r#"{"secret":"wrong-secret","events":[{"athlete_id":"i123456","type":"ACTIVITY_UPLOADED","timestamp":"2024-12-06T06:40:47.011+00:00","activity":{"id":"i55751783"}}]}"#;
     let (status, _headers, _body) = run_json(app, Method::POST, "/icu/callback", None, body).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
 
-/// A delivery whose events are not `ACTIVITY_ANALYZED` is forwarded like any
-/// other body (the event filtering is the provider layer's work): the route
-/// answers the op's result — `200` for the mock's `Ok`.
+/// A delivery whose events are not a subscribed activity type is forwarded
+/// like any other body (the event filtering is the provider layer's work): the
+/// route answers the op's result — `200` for the mock's `Ok`.
 #[tokio::test]
-async fn icu_webhook_forwards_non_analyzed_events_to_the_op() {
+async fn icu_webhook_forwards_non_subscribed_events_to_the_op() {
     let (store, mock, mut provider) = mock_ctx();
     let body = r#"{"secret":"test-icu-webhook-secret","events":[{"athlete_id":"i123456","type":"WELLNESS_UPDATED","timestamp":"2024-12-06T06:40:47.011+00:00","activity":{"id":"i55751783"}}]}"#;
     provider
@@ -2881,8 +3036,8 @@ fn mock_sse_shop(api: &mut MockServiceApi) -> tokio::sync::broadcast::Sender<Sum
 }
 
 /// A connected stream is `text/event-stream` and emits `: ping` heartbeats
-/// (the SSE `KeepAlive` cadence is the 15s `tb_exec::HEARTBEAT_INTERVAL`
-/// constant, spec #558 §2.1, so the window spans one full cadence).
+/// (the SSE `KeepAlive` cadence is the injected 100ms test interval, so the
+/// window spans several cadences).
 #[tokio::test]
 async fn stream_is_event_stream_and_heartbeats() {
     let (store, mut mock, provider) = mock_ctx();
@@ -2896,7 +3051,7 @@ async fn stream_is_event_stream_and_heartbeats() {
         "text/event-stream",
         "the stream must be an event stream"
     );
-    let frames = read_sse_frames(&mut body, 3, Duration::from_secs(18)).await;
+    let frames = read_sse_frames(&mut body, 3, Duration::from_millis(300)).await;
     assert!(
         frames.iter().any(|f| f.contains(": ping")),
         "expected a `: ping` heartbeat within one `HEARTBEAT_INTERVAL` cadence, got: {frames:?}"
@@ -2920,7 +3075,7 @@ async fn stream_forwards_summary_frames() {
     frame_tx
         .send(Summary::default())
         .expect("the stream is attached");
-    let frames = read_sse_frames(&mut body, 3, Duration::from_secs(2)).await;
+    let frames = read_sse_frames(&mut body, 3, Duration::from_millis(200)).await;
     assert!(
         frames.iter().any(|f| f.contains(
             "data: {\"activities\":{},\"parts\":{},\"attachments\":{},\"usages\":{},\"services\":{},\"plans\":{},\"part_notes\":{},\"shops\":{},\"users\":{},\"notifications\":{}}"
@@ -2942,23 +3097,23 @@ async fn stream_survives_a_reaped_executor() {
     assert_eq!(status, StatusCode::OK);
     fate_tx.send_replace(ExecutorStatus::Reaped);
     // The settle heartbeat (the reap's `: ping`).
-    let settled = read_sse_frames(&mut body, 1, Duration::from_secs(2)).await;
+    let settled = read_sse_frames(&mut body, 1, Duration::from_millis(200)).await;
     assert!(
         settled.iter().any(|f| f.contains(": ping")),
         "a reaped executor must yield a heartbeat, got: {settled:?}"
     );
     // The frame is sent after the re-subscribe the next body poll
     // triggers (a frame sent before it would reach the old, dropped
-    // receiver): the 100ms delay bounds the re-subscribe, the 3s read
+    // receiver): the 100ms delay bounds the re-subscribe, the 500ms read
     // bounds the delivery.
     let sender = frame_tx.clone();
     tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
         sender
             .send(Summary::default())
             .expect("the stream re-subscribed");
     });
-    let frames = read_sse_frames(&mut body, 2, Duration::from_secs(10)).await;
+    let frames = read_sse_frames(&mut body, 2, Duration::from_millis(500)).await;
     assert!(
         frames.iter().any(|f| f.contains("data:")),
         "a frame pushed after the reap must be forwarded, got: {frames:?}"
@@ -2985,7 +3140,7 @@ async fn stream_ends_on_a_dead_executor() {
 /// Frames that arrive before the close are drained and ignored.
 async fn assert_stream_ends(body: &mut axum::body::Body) {
     use http_body_util::BodyExt;
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    let deadline = tokio::time::Instant::now() + Duration::from_millis(500);
     loop {
         match tokio::time::timeout_at(deadline, body.frame()).await {
             Ok(Some(Ok(frame))) => drop(frame),
@@ -3018,7 +3173,7 @@ async fn shop_stream_owner_forwards_frames() {
     frame_tx
         .send(Summary::default())
         .expect("the shop stream is attached");
-    let frames = read_sse_frames(&mut body, 3, Duration::from_secs(2)).await;
+    let frames = read_sse_frames(&mut body, 3, Duration::from_millis(200)).await;
     assert!(
         frames.iter().any(|f| f.contains(
             "data: {\"activities\":{},\"parts\":{},\"attachments\":{},\"usages\":{},\"services\":{},\"plans\":{},\"part_notes\":{},\"shops\":{},\"users\":{},\"notifications\":{}}"
@@ -3041,6 +3196,20 @@ async fn shop_stream_non_owner_is_forbidden() {
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
 
+// ─── Offline startup gate ─────────────────────────────────────
+
+/// The offline gate: the instance runs offline iff the enabled
+/// provider set is empty. The test process configures both providers, so a
+/// configured subset is a normal mode and must not trip the gate.
+#[test]
+fn offline_gate_is_false_for_a_configured_subset() {
+    init_test_config_once();
+    assert!(
+        !crate::is_offline(),
+        "a configured subset is a normal mode, not offline"
+    );
+}
+
 // ─── SPA fallback (static serving in the router) ────────────────────────────
 
 /// A client-side route returns the SPA entry document (`200.html`) with a 200
@@ -3048,18 +3217,30 @@ async fn shop_stream_non_owner_is_forbidden() {
 /// unaffected.
 #[tokio::test]
 async fn spa_fallback_serves_entry_document() {
-    let (store, mock, provider) = mock_ctx();
+    init_test_config_once();
+    let (store, mock, mut provider) = mock_ctx();
+    provider
+        .expect_enabled_providers()
+        .returning(|| vec![tb_provider::Provider::Strava, tb_provider::Provider::Icu]);
 
-    // Create a temp dir with the SPA entry document and a real static asset.
+    // Create a temp dir with the SPA entry document, a real static asset,
+    // and a content subdirectory with one markdown file.
     let temp_dir = std::env::temp_dir().join(format!("tendabike_spa_test_{}", std::process::id()));
     std::fs::create_dir_all(&temp_dir).unwrap();
     std::fs::write(temp_dir.join("200.html"), "<html>SPA</html>").unwrap();
     std::fs::write(temp_dir.join("asset.txt"), "asset content").unwrap();
+    let content_dir = temp_dir.join("content");
+    std::fs::create_dir_all(&content_dir).unwrap();
+    std::fs::write(content_dir.join("about.md"), "# About page").unwrap();
 
     let api: Arc<dyn ServiceApi> = Arc::new(mock);
     let provider: Arc<dyn tb_exec::providerservice::ProviderService> = Arc::new(provider);
     let session_layer = SessionManagerLayer::new(store);
-    let app = routes(AppState::new(api, provider), Some(temp_dir.clone())).layer(session_layer);
+    let app = routes(
+        AppState::new(api, provider, Duration::from_millis(100)),
+        Some(temp_dir.clone()),
+    )
+    .layer(session_layer);
 
     // Client-side route gets the SPA entry document.
     let (status, _headers, body) = run(app.clone(), Method::GET, "/part/123", None).await;
@@ -3078,6 +3259,20 @@ async fn spa_fallback_serves_entry_document() {
         body_str.contains("asset content"),
         "expected the real asset, got: {body_str}"
     );
+
+    // An existing content file is served as itself.
+    let (status, _headers, body) = run(app.clone(), Method::GET, "/content/about.md", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let body_str = String::from_utf8_lossy(&body);
+    assert!(
+        body_str.contains("# About page"),
+        "expected the content file, got: {body_str}"
+    );
+
+    // A missing content file returns 404.
+    let (status, _headers, _body) =
+        run(app.clone(), Method::GET, "/content/missing.md", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
 
     // API routes are unaffected (answered by their handlers, not the fallback).
     let (status, _headers, _body) = run(app.clone(), Method::GET, "/api/types/part", None).await;

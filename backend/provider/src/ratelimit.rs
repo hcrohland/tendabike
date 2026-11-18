@@ -23,7 +23,7 @@ struct Window {
 impl Window {
     /// Whether the budget is exhausted (usage >= limit).
     /// `None` values (no data yet) are not exhausted.
-    pub fn is_exhausted(&self) -> bool {
+    fn is_exhausted(&self) -> bool {
         match (self.usage, self.limit) {
             (Some(u), Some(l)) => u >= l,
             _ => false,
@@ -40,14 +40,14 @@ impl std::fmt::Display for Window {
 /// The cadence of a rate-limit window: determines which boundary function
 /// to use and which position in a `"15min,daily"` header pair to read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Cadence {
+pub(crate) enum Cadence {
     FifteenMin,
     Daily,
 }
 
 impl Cadence {
     /// The next boundary for this cadence in unix seconds.
-    pub fn boundary(&self) -> i64 {
+    fn boundary(&self) -> i64 {
         match self {
             Cadence::FifteenMin => next_15min_boundary(),
             Cadence::Daily => next_midnight_utc(),
@@ -65,7 +65,7 @@ impl Cadence {
 
 /// How the usage header's integer is to be interpreted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum UsageKind {
+pub(crate) enum UsageKind {
     /// The header reports the number of requests *used* (e.g. Strava's
     /// `X-RateLimit-Usage`). The value is stored as the window's usage.
     Used,
@@ -77,16 +77,16 @@ pub enum UsageKind {
 
 /// Ties one rate-limit window to its response headers and cadence.
 #[derive(Debug, Clone)]
-pub struct WindowSpec {
-    pub limit_header: HeaderName,
-    pub usage_header: HeaderName,
-    pub cadence: Cadence,
-    pub usage_kind: UsageKind,
+pub(crate) struct WindowSpec {
+    pub(crate) limit_header: HeaderName,
+    pub(crate) usage_header: HeaderName,
+    pub(crate) cadence: Cadence,
+    pub(crate) usage_kind: UsageKind,
 }
 
 /// A per-provider rate limiter: one [`Window`] of state per [`WindowSpec`],
 /// plus the `was_limited` transition tracker.
-pub struct RateLimiter {
+pub(crate) struct RateLimiter {
     label: &'static str,
     windows: Vec<Window>,
     specs: Vec<WindowSpec>,
@@ -100,7 +100,7 @@ impl RateLimiter {
     /// Create a new limiter with one window per spec.
     ///
     /// `label` identifies the provider in WARN logs (e.g. `"strava"`).
-    pub fn new(label: &'static str, specs: Vec<WindowSpec>) -> Self {
+    pub(crate) fn new(label: &'static str, specs: Vec<WindowSpec>) -> Self {
         let windows = vec![Window::default(); specs.len()];
         Self {
             label,
@@ -128,7 +128,7 @@ impl RateLimiter {
     /// Emits a WARN log on transition into (or out of) the state where any
     /// spec's header is missing from the response — a provider that should be
     /// sending its rate-limit headers but isn't leaves the limiter blind.
-    pub fn update_from_headers(&mut self, headers: &HeaderMap) {
+    pub(crate) fn update_from_headers(&mut self, headers: &HeaderMap) {
         let mut any_missing = false;
         for (window, spec) in self.windows.iter_mut().zip(self.specs.iter()) {
             let limit_pair = parse_pair(headers.get(&spec.limit_header));
@@ -170,7 +170,7 @@ impl RateLimiter {
 
     /// The latest boundary of any exhausted window, or `None` if budget
     /// remains (or no data yet). Pure: no logging, no mutation.
-    pub fn gate(&self) -> Option<i64> {
+    pub(crate) fn gate(&self) -> Option<i64> {
         self.windows
             .iter()
             .zip(self.specs.iter())
@@ -183,7 +183,7 @@ impl RateLimiter {
     /// remains (or no data yet).
     ///
     /// Emits a WARN log on transition into or out of the rate-limited state.
-    pub fn limited_until(&mut self) -> Option<i64> {
+    pub(crate) fn limited_until(&mut self) -> Option<i64> {
         let until = self.gate();
 
         let is_limited = until.is_some();
@@ -222,12 +222,12 @@ impl RateLimiter {
 /// specs), its own per-thread test-override `thread_local` (a thread-local
 /// can't live in a struct instance), and thin `limited_until` /
 /// `update_from_headers` passthroughs to the shim's methods.
-pub struct RateLimitShim(Mutex<RateLimiter>);
+pub(crate) struct RateLimitShim(Mutex<RateLimiter>);
 
 impl RateLimitShim {
     /// Create a new shim: a fresh [`RateLimiter`] with the given label and
     /// specs, behind the mutex.
-    pub fn new(label: &'static str, specs: Vec<WindowSpec>) -> Self {
+    pub(crate) fn new(label: &'static str, specs: Vec<WindowSpec>) -> Self {
         Self(Mutex::new(RateLimiter::new(label, specs)))
     }
 
@@ -235,7 +235,7 @@ impl RateLimitShim {
     /// resets, or `None` if budget remains (or no data yet).
     ///
     /// Emits a WARN log on transition into or out of the rate-limited state.
-    pub fn limited_until(&self) -> Option<i64> {
+    pub(crate) fn limited_until(&self) -> Option<i64> {
         self.0.lock().unwrap().limited_until()
     }
 
@@ -243,7 +243,7 @@ impl RateLimitShim {
     /// state. Each header is a `"15min,daily"` comma-separated pair of
     /// integers. Missing or malformed headers are ignored (the state keeps
     /// its previous values for those fields).
-    pub fn update_from_headers(&self, headers: &HeaderMap) {
+    pub(crate) fn update_from_headers(&self, headers: &HeaderMap) {
         self.0.lock().unwrap().update_from_headers(headers);
     }
 
@@ -251,7 +251,7 @@ impl RateLimitShim {
     /// and specs), populated from the given `"header", "value"` pairs — the
     /// test helper a provider's per-thread override is built from.
     #[cfg(test)]
-    pub fn limiter_from_headers(
+    pub(crate) fn limiter_from_headers(
         label: &'static str,
         specs: &[WindowSpec],
         pairs: &[(&str, &str)],

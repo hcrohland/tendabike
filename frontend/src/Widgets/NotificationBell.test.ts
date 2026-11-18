@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/svelte";
 import { flushSync } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { notifications } from "../lib/notification.svelte";
-import { setUser } from "../lib/user";
+import { setUser } from "../lib/user.svelte";
 import { resp } from "../test/helpers";
 import NotificationBell from "./NotificationBell.svelte";
 

@@ -1,0 +1,63 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO icu_events (icu_athlete_id, activity_id, event_time, object_type, event_type, oldest)\n             VALUES ($1, $2, $3, $4, $5, $6)\n             RETURNING id, icu_athlete_id, activity_id as \"activity_id!\", event_time, object_type as \"object_type!\", event_type as \"event_type!\", oldest",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "icu_athlete_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "activity_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "event_time",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "object_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "event_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "oldest",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "e1351da5750c54dc4f6e62362ae122ac495e300435451b2ad4191c48e0675978"
+}

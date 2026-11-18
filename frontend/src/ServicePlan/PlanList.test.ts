@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { attachments } from "../lib/attachment";
 import { parts, Part } from "../lib/part";
 import { plans, ServicePlan } from "../lib/serviceplan";
-import { getTypes } from "../lib/types";
+import { getTypes } from "../lib/types.svelte";
 import { usages } from "../lib/usage";
 import { resp, usage } from "../test/helpers";
 import PlanList from "./PlanList.svelte";

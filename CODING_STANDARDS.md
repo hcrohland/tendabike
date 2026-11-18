@@ -8,13 +8,21 @@ Prop defaults are set in the `$props()` destructuring, not as `?? fallback`s at 
 
 Comments describe what the code **does**, not what **changed**. The commit message is where the change is explained; the comment is where the code is explained.
 
-- No issue references in comments (`issue #717`, `Closes #N`, etc.): they are the tell for change-language — a comment that refers to what changed — and spotting those is the reviewer's judgement call. Spec references (`spec #795`, `spec #795 §2.1`) carry design rationale and are allowed
+- No issue references in comments (`issue #717`, `Closes #N`, etc.). Deliberately a reviewer judgement call, not a lint candidate: the ref is the *tell* for change-language, and acting on it rewords the "what changed" prose — a bigger fix than deleting the ref. A grep treats the symptom (drops the ref, keeps the change-language) and is evadable, so the reviewer is the gate. Spec references (`spec #795`, `spec #795 §2.1`) carry design rationale and are allowed
 - No change-language: "no longer", "previously", "now carries", "was removed", "moved to"
 - No restating the diff: if the code says `message: None`, the comment doesn't need to say "the message is no longer stored here"
 
 ## User-facing strings
 
 Reuse an existing message that already expresses the same text rather than adding a duplicate. The shared `action_*` labels (`action_delete`, `action_close`, …) cover most buttons and are the first place to look; a new message is for genuinely new phrasing, not a rewording of a string the app already has.
+
+## One file per module name
+
+A frontend lib module must not exist in both `<name>.ts` and `<name>.svelte.ts` forms. One file per module name: if a module uses `$state`, it is a single `.svelte.ts` file; if it does not, it is a single `.ts` file.
+
+## Wire shapes
+
+The type an endpoint returns is named in the entity's lib module (e.g. `UserState`, `Summary` in `frontend/src/lib/user.svelte.ts`); a fetch result is never `any[]` or an inline object literal at the call site. Naming the shape is what puts every field — including ones like `disabled` — in front of the type-checker; `any[]` hides them.
 
 ## Test guides
 

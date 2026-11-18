@@ -19,6 +19,7 @@
 */
 
 #![forbid(unsafe_code)]
+#![warn(unreachable_pub)]
 
 //! The provider-agnostic seams shared by every activity provider (spec #781).
 //!
@@ -44,7 +45,7 @@
 //! driver functions directly.
 
 mod config;
-pub use config::{ProviderConfig, init};
+pub use config::{ProviderConfig, disabled, enabled_providers, init};
 
 mod activity_id;
 pub use activity_id::*;

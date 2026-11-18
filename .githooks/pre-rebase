@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "rebase is disabled in this repo" >&2
+exit 1

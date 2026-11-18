@@ -15,7 +15,7 @@ vi.mock("$app/state", () => ({
     },
   },
 }));
-vi.mock("./lib/user", () => ({
+vi.mock("./lib/user.svelte", () => ({
   getUser: () => undefined,
   refresh: vi.fn(),
   setUser: vi.fn(),
@@ -25,7 +25,9 @@ vi.mock("./lib/stream", () => ({
   startStream: vi.fn(),
   stopStream: vi.fn(),
 }));
-vi.mock("./lib/types", () => ({ getCategory: () => ({ name: "Bike" }) }));
+vi.mock("./lib/types.svelte", () => ({
+  getCategory: () => ({ name: "Bike" }),
+}));
 
 /// The connect button (`/about#connect`) and the connect cards (the /about
 /// landing content) are both shown to anonymous visitors. On /about the button

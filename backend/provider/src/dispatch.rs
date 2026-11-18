@@ -44,7 +44,9 @@
 //!
 //! [`ProviderService`]: crate (re-exported in `tb_exec`)
 
-use crate::facade::{ActivityId, PartId, Session, TbResult, UserId};
+use log::{info, warn};
+
+use crate::facade::{ActivityId, Error, PartId, Session, TbResult, UserId};
 
 use crate::EntityFacade;
 use crate::Provider;
@@ -52,21 +54,34 @@ use crate::Provider;
 /// The provider-agnostic `login` dispatch (ADR-0014): the provider's login
 /// work — the scope check, the token exchange, the athlete wire-shape
 /// parsing, and the upsert — returning the identity and the admin flag. The
-/// provider is the route's (it knows it from the URL); `code` and `scope`
-/// are the opaque callback values (no driver wire type crosses the seam).
+/// provider is the route's (it knows it from the URL); `code`, `scope`, and
+/// `verifier` are the opaque callback values (no driver wire type crosses the
+/// seam). `verifier` is the PKCE code verifier (intervals.icu-only — the
+/// Strava flow is a plain authorization-code exchange and ignores it); the
+/// icu arm requires it (the web layer always recovers it from the signed
+/// state, so its absence is a protocol violation).
 pub async fn login<S, D: EntityFacade<S>>(
     provider: Provider,
     code: &str,
     scope: &str,
+    verifier: Option<&str>,
     facade: &D,
     store: &mut S,
 ) -> TbResult<(UserId, bool)>
 where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
+    // A disabled provider is a graceful freeze (ADR-0016): no OAuth without
+    // credentials — a clear "unavailable", not a token exchange.
+    crate::config::require_enabled(provider)?;
     match provider {
         Provider::Strava => crate::strava::login(code, scope, facade, store).await,
-        Provider::Icu => crate::icu::login(code, scope, facade, store).await,
+        Provider::Icu => {
+            let verifier = verifier.ok_or_else(|| {
+                Error::BadRequest("missing code verifier for the icu login".to_string())
+            })?;
+            crate::icu::login(code, scope, verifier, facade, store).await
+        }
     }
 }
 
@@ -81,6 +96,11 @@ pub async fn accept_event<S>(provider: Provider, body: &str, store: &mut S) -> T
 where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
+    // A disabled provider's webhook is declined (ADR-0016): the clear
+    // `Unavailable` error answers a non-2xx, so the sender retries and
+    // the event is not lost — re-adding the credential restores the
+    // provider and its syncs.
+    crate::config::require_enabled(provider)?;
     match provider {
         Provider::Strava => {
             let queued = crate::strava::event::accept_event(body, store).await?;
@@ -116,6 +136,9 @@ where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
     let provider = crate::provider_of(store, user_id).await?;
+    // A disabled provider's sync fails loudly (ADR-0016): the graceful
+    // freeze is a clear "provider disabled" error, not a silent no-op.
+    crate::config::require_enabled(provider)?;
     match provider {
         Provider::Strava => {
             // Import the gear (bikes + shoes) before queuing the activity
@@ -142,6 +165,8 @@ where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
     let provider = crate::provider_of(store, user_id).await?;
+    // A disabled provider's gear import fails loudly (ADR-0016).
+    crate::config::require_enabled(provider)?;
     match provider {
         Provider::Strava => crate::strava::StravaUser::update_gear(user_id, facade, store).await,
         Provider::Icu => crate::icu::gear::update_gear(user_id, facade, store).await,
@@ -150,24 +175,25 @@ where
 
 /// The onboarding activity sync (spec #829, the second step): queue the
 /// activity sync on the user's provider queue (the Strava `strava_events` row,
-/// the icu date-window backfill). No gear import — that was the first step
+/// the icu `SYNC` event). No gear import — that was the first step
 /// ([`import_gear_user`](crate::dispatch::import_gear_user)). The provider is
 /// the user's real one, read in-transaction.
-pub(crate) async fn queue_sync_user<S, D: EntityFacade<S>>(
+pub(crate) async fn queue_sync_user<S>(
     user_id: UserId,
     event_time: i64,
-    facade: &D,
     store: &mut S,
 ) -> TbResult<()>
 where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
     let provider = crate::provider_of(store, user_id).await?;
+    // A disabled provider's queued sync fails loudly (ADR-0016).
+    crate::config::require_enabled(provider)?;
     match provider {
         Provider::Strava => {
             crate::strava::event::insert_sync(user_id, event_time, false, store).await
         }
-        Provider::Icu => crate::icu::backfill::backfill(user_id, event_time, facade, store).await,
+        Provider::Icu => crate::icu::event::insert_sync(user_id, 0, store).await,
     }
 }
 
@@ -187,6 +213,85 @@ where
     sync_user(user_id, event_time, facade, store)
         .await
         .map(|_| ())
+}
+
+/// The provider-agnostic `trigger_processing` dispatch (spec #855): queue a
+/// sync for every non-disabled user on their own provider's lane — a Strava
+/// user gets a Strava `Sync` event via `insert_sync`, an icu user is queued
+/// via the icu onboarding path (the same [`sync_user`] arm the per-user `sync`
+/// direct op uses). `user_id` narrows the trigger to one
+/// user, regardless of provider (a user with no row in either table is a
+/// `NotFound`). Returns the tbids of the users a sync was queued for — the
+/// caller's per-user wake list.
+pub async fn sync_users<S, D: EntityFacade<S>>(
+    session: &mut dyn Session,
+    user_id: Option<UserId>,
+    time: i64,
+    migrate: bool,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<Vec<UserId>>
+where
+    S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
+{
+    if !session.is_admin() {
+        return Err(Error::Forbidden(
+            "only an admin can trigger processing".to_string(),
+        ));
+    }
+
+    // Which lanes to run: both for the all-users trigger, the one the target
+    // user belongs to for a single-user trigger (the `provider_of` lookup).
+    let provider = match user_id {
+        Some(id) => Some(crate::provider_of(store, id).await?),
+        None => None,
+    };
+
+    let mut queued = Vec::new();
+
+    // The Strava lane: a `Sync` event per non-disabled Strava user. A
+    // disabled provider's lane is skipped (ADR-0016: the admin sync skips
+    // its users — their syncs would fail with the clear error anyway).
+    if (provider.is_none() || provider == Some(Provider::Strava))
+        && crate::enabled_providers().contains(&Provider::Strava)
+    {
+        let users = match user_id {
+            Some(id) => vec![store.stravauser_get_by_tbid(id).await?],
+            None => store.stravauser_get_all().await?,
+        };
+        for user in users {
+            if user.disabled() {
+                warn!("user {} disabled, skipping", user.strava_id());
+                continue;
+            }
+            info!("Adding sync for {:?} at {time}", user.user_id());
+            crate::strava::event::insert_sync(user.user_id(), time, migrate, store).await?;
+            queued.push(user.user_id());
+        }
+    }
+
+    // The icu lane: gear import (inline) + a `SYNC` event (the durable
+    // backfill cursor) per non-disabled icu user. A disabled provider's
+    // lane is skipped (ADR-0016).
+    if (provider.is_none() || provider == Some(Provider::Icu))
+        && crate::enabled_providers().contains(&Provider::Icu)
+    {
+        let users = match user_id {
+            Some(id) => vec![store.icuser_get_by_tbid(id).await?],
+            None => store.icuser_get_all().await?,
+        };
+        for user in users {
+            if user.disabled() {
+                warn!("user {} disabled, skipping", user.user_id());
+                continue;
+            }
+            info!("Adding sync for {:?} at {time}", user.user_id());
+            crate::icu::onboard(user.user_id(), time, facade, store).await?;
+            queued.push(user.user_id());
+        }
+    }
+
+    Ok(queued)
 }
 
 /// The provider-agnostic `deauthorize` dispatch (ADR-0014): revoke the

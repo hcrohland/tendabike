@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getCategory } from "./lib/types";
+  import { getCategory } from "./lib/types.svelte";
   import {
     ButtonGroup,
     InputAddon,

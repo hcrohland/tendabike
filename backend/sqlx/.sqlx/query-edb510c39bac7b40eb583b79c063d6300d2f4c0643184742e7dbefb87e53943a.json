@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO users (firstname, name, is_admin, avatar, onboarding_status)\n             VALUES ($1, $2, $3, $4, $5)\n             RETURNING *",
+  "query": "WITH first AS (SELECT pg_advisory_xact_lock(9050001))\n             INSERT INTO users (firstname, name, is_admin, avatar, onboarding_status)\n             SELECT $1, $2, NOT EXISTS (SELECT 1 FROM users), $3, $4\n             FROM first\n             RETURNING *",
   "describe": {
     "columns": [
       {
@@ -38,7 +38,6 @@
       "Left": [
         "Text",
         "Text",
-        "Bool",
         "Text",
         "Int4"
       ]
@@ -52,5 +51,5 @@
       false
     ]
   },
-  "hash": "f154c3955d55e53f970348e427e76ac86b08a25724df8c2b55231fa6988fc78d"
+  "hash": "edb510c39bac7b40eb583b79c063d6300d2f4c0643184742e7dbefb87e53943a"
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ButtonGroup, InputAddon, Select } from "flowbite-svelte";
   import DateTime from "../Widgets/DateTime.svelte";
-  import { types } from "../lib/types";
+  import { types } from "../lib/types.svelte";
   import { Part } from "../lib/part";
   import { prev_attach_time } from "../lib/attachment";
   import SelectPart from "../Widgets/SelectPart.svelte";

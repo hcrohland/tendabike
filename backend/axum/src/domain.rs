@@ -8,6 +8,7 @@ mod attachment;
 mod notification;
 mod part;
 mod partnote;
+mod provider;
 mod service;
 mod serviceplan;
 mod shop;
@@ -44,6 +45,7 @@ pub(crate) fn result_mismatch(what: &str, payload: &str) -> crate::error::AppErr
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
+        .nest("/providers", provider::router())
         .nest("/user", user::router())
         .nest("/types", types::router())
         .nest("/shop", shop::router())

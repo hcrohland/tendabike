@@ -141,6 +141,13 @@ where
             Ok(provider) => provider,
             Err(_) => return None,
         };
+        // A disabled provider's queued events are declined, not processed
+        // (ADR-0016): the event stays queued (the caller rolls back and
+        // backs off), so re-adding the credential restores the provider
+        // and its syncs.
+        if crate::config::is_disabled(provider) {
+            return None;
+        }
         match provider {
             Provider::Icu => crate::icu::event::process(user_id, &self.facade, store)
                 .await
@@ -164,7 +171,7 @@ where
     /// date-window backfill). Delegates to the queue switch
     /// ([`crate::dispatch::queue_sync_user`]).
     async fn queue_sync(&self, user_id: UserId, time: i64, store: &mut S) -> TbResult<()> {
-        crate::dispatch::queue_sync_user(user_id, time, &self.facade, store).await
+        crate::dispatch::queue_sync_user(user_id, time, store).await
     }
 
     /// Read every user's provider-neutral stat (the admin read's provider

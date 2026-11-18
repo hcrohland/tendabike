@@ -27,7 +27,7 @@
   import { DropdownItem } from "flowbite-svelte";
   import { changeActivity } from "./ChangeActivity.svelte";
   import { fmtNumber, fmtSeconds } from "../lib/utils";
-  import { providerOfActivityId, providerMeta } from "../lib/provider";
+  import { providerOfActivityId, providerMeta } from "../lib/provider.svelte";
   import * as m from "../../paraglide/messages";
 
   let { activity }: { activity: Activity } = $props();

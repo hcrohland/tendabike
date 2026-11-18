@@ -22,6 +22,8 @@
 //!
 //! This file also contains the definitions of various modules that implement the endpoints for the different resources
 //! of the Tendabike server, such as users, parts, attachments, activities, and Strava integration.
+
+#![warn(unreachable_pub)]
 //!
 
 #![forbid(unsafe_code)]
@@ -32,7 +34,7 @@ use anyhow::Context;
 use axum::Router;
 use sqlx::PgPool;
 use tb_domain::TbResult;
-use tb_exec::{ServiceApi, providerservice::ProviderService};
+use tb_exec::{HEARTBEAT_INTERVAL, ServiceApi, providerservice::ProviderService};
 use tb_provider::Provider;
 use tower_sessions::{ExpiredDeletion, SessionManagerLayer};
 use tower_sessions_sqlx_store::PostgresStore;
@@ -72,6 +74,24 @@ mod oauth_common;
 
 mod stream;
 
+/// The offline gate: the instance runs offline iff the
+/// enabled provider set is empty (ADR-0016). A proper subset is a normal
+/// mode and never trips the gate.
+fn is_offline() -> bool {
+    tb_provider::enabled_providers().is_empty()
+}
+
+/// The startup offline warning: once at startup, when the
+/// instance runs offline (no enabled providers), log an error naming the
+/// fix. A configured subset is a normal mode and logs nothing.
+fn warn_if_offline() {
+    if is_offline() {
+        tracing::error!(
+            "No activity providers are configured; the instance is running offline. Set STRAVA_CLIENT_ID or ICU_CLIENT_ID to enable activity sync."
+        );
+    }
+}
+
 fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> Router {
     let mut router = Router::new()
         .nest("/api", domain::router())
@@ -82,9 +102,12 @@ fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> Route
 
     if let Some(path) = static_path {
         let fallback_file = path.join("200.html");
-        let static_service = tower_http::services::ServeDir::new(path)
+        let static_service = tower_http::services::ServeDir::new(&path)
             .fallback(tower_http::services::ServeFile::new(fallback_file));
-        router = router.fallback_service(static_service);
+        let content_service = tower_http::services::ServeDir::new(path.join("content"));
+        router = router
+            .nest_service("/content", content_service)
+            .fallback_service(static_service);
     }
 
     router
@@ -110,7 +133,7 @@ pub async fn start(
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let app_state = AppState::new(api, provider);
+    let app_state = AppState::new(api, provider, HEARTBEAT_INTERVAL);
 
     // Parse the config's raw strings into their typed forms.
     let path = std::path::Path::new(&config.static_www)
@@ -149,6 +172,10 @@ pub async fn start(
         .layer(session_layer);
 
     tracing::debug!("listening on {}", addr);
+
+    // Once at startup: warn when the instance runs offline (no enabled
+    // providers) — a configured subset is a normal mode.
+    warn_if_offline();
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await

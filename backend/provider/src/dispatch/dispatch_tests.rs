@@ -14,14 +14,14 @@ use std::sync::{Arc, Mutex, Once};
 
 use crate::Provider;
 use crate::facade::{Error, TbResult, UserId, mock_session_admin};
-use crate::icu::test_support::MockIcuDataStore;
-use crate::icu::{IcuDataStore, IcuEvent, IcuId, IcuUser};
+use crate::icu::test_support::{MockIcuDataStore, begin_test, queue};
+use crate::icu::{IcuDataStore, IcuEvent, IcuId, IcuObjectType, IcuUser};
 use crate::strava::event::Event;
 use crate::strava::test_support::MockStravaDataStore;
 use crate::strava::{StravaDataStore, StravaId, StravaUser};
 use crate::test_support::MockEntityFacade;
 
-use super::{accept_event, deauthorize, delete_user, login};
+use super::{accept_event, deauthorize, delete_user, login, queue_sync_user, sync_users};
 
 // ─── The composite store double ─────────────────────────────────────────────
 //
@@ -133,6 +133,9 @@ impl IcuDataStore for DispatchStore {
     async fn icu_events_delete_for_user(&mut self, user: &IcuId) -> TbResult<usize> {
         self.icu.icu_events_delete_for_user(user).await
     }
+    async fn icu_events_delete_sync_for_user(&mut self, user: &IcuId) -> TbResult<usize> {
+        self.icu.icu_events_delete_sync_for_user(user).await
+    }
 }
 
 // ─── Fixtures ───────────────────────────────────────────────────────────────
@@ -164,25 +167,38 @@ fn icu_event_json(athlete: &str, typ: &str, activity: &str, timestamp: &str) -> 
     )
 }
 
-/// Initialize the provider config once for the dispatch test process, with
-/// a known webhook secret the intake tests verify against. Returns the
-/// secret value.
-fn icu_webhook_secret() -> String {
+/// One intervals.icu webhook event element with **no** `activity` field (the
+/// test delivery: the app's shared secret but no activity object).
+fn icu_event_json_no_activity(athlete: &str, typ: &str, timestamp: &str) -> String {
+    format!("{{\"athlete_id\":\"{athlete}\",\"type\":\"{typ}\",\"timestamp\":\"{timestamp}\"}}")
+}
+
+/// Initialize the provider config once for the dispatch test process:
+/// both providers enabled (their ops' graceful-freeze guard reads the
+/// enabled set) and a known webhook secret the intake tests verify
+/// against.
+fn init_config_once() {
     static ONCE: Once = Once::new();
-    const SECRET: &str = "icu-test-webhook-secret";
     ONCE.call_once(|| {
         crate::init(crate::ProviderConfig {
-            strava_client_id: "test-client-id".to_string(),
-            strava_client_secret: "test-client-secret".to_string(),
+            strava_client_id: Some("test-client-id".to_string()),
+            strava_client_secret: Some("test-client-secret".to_string()),
             strava_redirect_url: "http://localhost:8000/strava/token".to_string(),
-            icu_client_id: "test-icu-client-id".to_string(),
-            icu_client_secret: "test-icu-client-secret".to_string(),
+            icu_client_id: Some("test-icu-client-id".to_string()),
+            icu_client_secret: Some("test-icu-client-secret".to_string()),
             icu_redirect_url: "http://localhost:8000/icu/token".to_string(),
-            icu_webhook_secret: SECRET.to_string(),
+            icu_webhook_secret: ICU_WEBHOOK_SECRET.to_string(),
         });
     });
-    SECRET.to_string()
 }
+
+/// The suite's shared webhook secret (initializes the provider config).
+fn icu_webhook_secret() -> String {
+    init_config_once();
+    ICU_WEBHOOK_SECRET.to_string()
+}
+
+const ICU_WEBHOOK_SECRET: &str = "icu-test-webhook-secret";
 
 // ─── accept_event: the Strava arm ───────────────────────────────────────────
 
@@ -190,6 +206,7 @@ fn icu_webhook_secret() -> String {
 /// row), returning the owner's TendaBike id (the caller's wake).
 #[tokio::test]
 async fn accept_event_strava_queues_an_activity_event() -> TbResult<()> {
+    init_config_once();
     let mut store = DispatchStore::default();
     let user = crate::strava::test_support::strava_user(UserId::from(7), 42, true);
     store
@@ -224,6 +241,7 @@ async fn accept_event_strava_queues_an_activity_event() -> TbResult<()> {
 /// events dropped, their token cleared), nothing is queued, no wake.
 #[tokio::test]
 async fn accept_event_strava_athlete_deauth_disables_the_user() -> TbResult<()> {
+    init_config_once();
     let mut store = DispatchStore::default();
     let user = crate::strava::test_support::strava_user(UserId::from(7), 42, true);
     let lookup = user.clone();
@@ -253,6 +271,7 @@ async fn accept_event_strava_athlete_deauth_disables_the_user() -> TbResult<()> 
 /// no user) — a `BadRequest`, nothing queued.
 #[tokio::test]
 async fn accept_event_strava_unknown_owner_is_rejected() -> TbResult<()> {
+    init_config_once();
     let mut store = DispatchStore::default();
     store
         .strava
@@ -270,6 +289,7 @@ async fn accept_event_strava_unknown_owner_is_rejected() -> TbResult<()> {
 /// `BadRequest` before any store work).
 #[tokio::test]
 async fn accept_event_strava_malformed_body_is_rejected() -> TbResult<()> {
+    init_config_once();
     let mut store = DispatchStore::default();
 
     let err = accept_event(Provider::Strava, "not a json body", &mut store)
@@ -281,11 +301,11 @@ async fn accept_event_strava_malformed_body_is_rejected() -> TbResult<()> {
 
 // ─── accept_event: the icu arm ──────────────────────────────────────────────
 
-/// The icu arm verifies the secret, filters to `ACTIVITY_ANALYZED`, parses the
-/// timestamp, and queues one row per analyzed event — returning the users a
-/// row was queued for (the caller's wake list).
+/// The icu arm verifies the secret, filters to the subscribed activity types,
+/// parses the timestamp, and queues one row per subscribed event — returning
+/// the users a row was queued for (the caller's wake list).
 #[tokio::test]
-async fn accept_event_icu_queues_analyzed_events_only() -> TbResult<()> {
+async fn accept_event_icu_queues_subscribed_events_only() -> TbResult<()> {
     let secret = icu_webhook_secret();
     let mut store = DispatchStore::default();
     let user = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
@@ -309,7 +329,7 @@ async fn accept_event_icu_queues_analyzed_events_only() -> TbResult<()> {
             "{},{}",
             icu_event_json(
                 "a1",
-                "ACTIVITY_ANALYZED",
+                "ACTIVITY_UPLOADED",
                 "act-1",
                 "2024-12-06T06:40:47.011+00:00"
             ),
@@ -323,7 +343,7 @@ async fn accept_event_icu_queues_analyzed_events_only() -> TbResult<()> {
     );
     let queued = accept_event(Provider::Icu, &body, &mut store).await?;
 
-    // Only the analyzed event was queued (the other type is not subscribed).
+    // Only the subscribed event was queued (the other type is not subscribed).
     assert_eq!(queued, vec![UserId::from(9)]);
     let created = created.lock().expect("the capture is not poisoned");
     assert_eq!(created.len(), 1);
@@ -337,12 +357,13 @@ async fn accept_event_icu_queues_analyzed_events_only() -> TbResult<()> {
 /// The icu arm rejects a bad secret (a `NotAuth`) before any store work.
 #[tokio::test]
 async fn accept_event_icu_rejects_a_bad_secret() -> TbResult<()> {
+    init_config_once();
     let mut store = DispatchStore::default();
     let body = icu_body(
         "a-different-secret",
         &icu_event_json(
             "a1",
-            "ACTIVITY_ANALYZED",
+            "ACTIVITY_UPLOADED",
             "act-1",
             "2024-12-06T06:40:47.011+00:00",
         ),
@@ -359,6 +380,7 @@ async fn accept_event_icu_rejects_a_bad_secret() -> TbResult<()> {
 /// `BadRequest` before any store work).
 #[tokio::test]
 async fn accept_event_icu_malformed_body_is_rejected() -> TbResult<()> {
+    init_config_once();
     let mut store = DispatchStore::default();
 
     let err = accept_event(Provider::Icu, "not a json body", &mut store)
@@ -376,13 +398,105 @@ async fn accept_event_icu_rejects_an_invalid_timestamp() -> TbResult<()> {
     let mut store = DispatchStore::default();
     let body = icu_body(
         &secret,
-        &icu_event_json("a1", "ACTIVITY_ANALYZED", "act-1", "not-a-timestamp"),
+        &icu_event_json("a1", "ACTIVITY_UPLOADED", "act-1", "not-a-timestamp"),
     );
 
     let err = accept_event(Provider::Icu, &body, &mut store)
         .await
         .expect_err("an invalid timestamp is rejected");
     assert!(matches!(err, Error::BadRequest(_)));
+    Ok(())
+}
+
+/// The icu arm accepts a **test delivery** (a valid secret, a `TEST` event
+/// that carries **no** `activity`) with nothing queued — the event is not
+/// queueable, so it is dropped (and info-logged) and intervals.icu does not
+/// retry it.
+#[tokio::test]
+async fn accept_event_icu_test_delivery_is_accepted_and_queues_nothing() -> TbResult<()> {
+    let secret = icu_webhook_secret();
+    let mut store = DispatchStore::default();
+    let body = icu_body(
+        &secret,
+        &icu_event_json_no_activity("a1", "TEST", "2024-12-06T06:40:47.011+00:00"),
+    );
+
+    let queued = accept_event(Provider::Icu, &body, &mut store).await?;
+
+    assert!(
+        queued.is_empty(),
+        "a test delivery queues nothing (no wake)"
+    );
+    Ok(())
+}
+
+/// The icu arm queues an **`ACTIVITY_DELETED`** event — it is a
+/// subscribed type, and the queued row carries the event type (the queue's
+/// delete dispatch key).
+#[tokio::test]
+async fn accept_event_icu_queues_a_deleted_event() -> TbResult<()> {
+    let secret = icu_webhook_secret();
+    let mut store = DispatchStore::default();
+    let user = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    store
+        .icu
+        .expect_icuser_get_by_icuid()
+        .returning(move |_id| Ok(Some(user.clone())));
+    let created = Arc::new(Mutex::new(Vec::new()));
+    let created_cell = created.clone();
+    store.icu.expect_icu_event_create().returning(move |e| {
+        created_cell
+            .lock()
+            .expect("the capture is not poisoned")
+            .push(e.clone());
+        Ok(())
+    });
+
+    let body = icu_body(
+        &secret,
+        &icu_event_json(
+            "a1",
+            "ACTIVITY_DELETED",
+            "act-1",
+            "2024-12-06T06:40:47.011+00:00",
+        ),
+    );
+    let queued = accept_event(Provider::Icu, &body, &mut store).await?;
+
+    // The deleted event is subscribed and queued (the wake list).
+    assert_eq!(queued, vec![UserId::from(9)]);
+    let created = created.lock().expect("the capture is not poisoned");
+    assert_eq!(created.len(), 1);
+    let event = &created[0];
+    assert_eq!(event.icu_athlete_id, IcuId::from("a1"));
+    assert_eq!(event.activity_id, "act-1");
+    assert_eq!(event.event_type, "ACTIVITY_DELETED");
+    Ok(())
+}
+
+/// The icu arm skips a **non-subscribed** event (even one that carries an
+/// `activity`) with nothing queued — only the subscribed activity types are
+/// imported, so the event is skipped (and debug-logged).
+#[tokio::test]
+async fn accept_event_icu_non_subscribed_event_is_skipped() -> TbResult<()> {
+    let secret = icu_webhook_secret();
+    let mut store = DispatchStore::default();
+    let body = icu_body(
+        &secret,
+        &icu_event_json(
+            "a1",
+            "ACTIVITY_HEART_RATE",
+            "act-1",
+            "2024-12-06T06:40:47.011+00:00",
+        ),
+    );
+
+    let queued = accept_event(Provider::Icu, &body, &mut store).await?;
+
+    assert!(
+        queued.is_empty(),
+        "a non-analyzed event queues nothing (no wake)"
+    );
     Ok(())
 }
 
@@ -462,13 +576,15 @@ async fn delete_user_icu_deletes_the_user() -> TbResult<()> {
 // ─── login: both arms ───────────────────────────────────────────────────────
 
 /// The login's Strava arm rejects an insufficient scope (a `BadRequest` before
-/// the token exchange).
+/// the token exchange). The Strava flow is a plain authorization-code
+/// exchange: the (PKCE) code verifier is not used by it.
 #[tokio::test]
 async fn login_strava_rejects_an_insufficient_scope() -> TbResult<()> {
+    init_config_once();
     let mut store = DispatchStore::default();
     let facade = MockEntityFacade::new();
 
-    let err = login(Provider::Strava, "code", "read", &facade, &mut store)
+    let err = login(Provider::Strava, "code", "read", None, &facade, &mut store)
         .await
         .expect_err("an insufficient scope is rejected");
     assert!(matches!(err, Error::BadRequest(_)));
@@ -479,12 +595,35 @@ async fn login_strava_rejects_an_insufficient_scope() -> TbResult<()> {
 /// `BadRequest` before the token exchange).
 #[tokio::test]
 async fn login_icu_rejects_an_insufficient_scope() -> TbResult<()> {
+    init_config_once();
     let mut store = DispatchStore::default();
     let facade = MockEntityFacade::new();
 
-    let err = login(Provider::Icu, "code", "WRONG:SCOPE", &facade, &mut store)
+    let err = login(
+        Provider::Icu,
+        "code",
+        "WRONG:SCOPE",
+        Some("verifier"),
+        &facade,
+        &mut store,
+    )
+    .await
+    .expect_err("an insufficient scope is rejected");
+    assert!(matches!(err, Error::BadRequest(_)));
+    Ok(())
+}
+
+/// The login's icu arm rejects a missing code verifier (a `BadRequest`
+/// before the token exchange): the web layer always recovers the verifier
+/// from the signed state, so its absence is a protocol violation.
+#[tokio::test]
+async fn login_icu_rejects_a_missing_code_verifier() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let facade = MockEntityFacade::new();
+
+    let err = login(Provider::Icu, "code", "", None, &facade, &mut store)
         .await
-        .expect_err("an insufficient scope is rejected");
+        .expect_err("a missing verifier is rejected");
     assert!(matches!(err, Error::BadRequest(_)));
     Ok(())
 }
@@ -548,4 +687,312 @@ async fn provider_of_not_found_when_no_row_exists() -> TbResult<()> {
         .expect_err("no row in either table is a NotFound");
     assert!(matches!(err, Error::NotFound(_)));
     Ok(())
+}
+
+// ─── sync_users: the provider-agnostic all-users sync ───────────────────────
+//
+// The admin `trigger_processing` op: queue a sync for every non-disabled user
+// on their own provider's lane — a Strava user gets a Strava `Sync` event, an
+// icu user is queued via the icu onboarding path.
+
+/// The icu lane: an enabled icu user gets gear imported (inline) and a
+/// `SYNC` event queued.
+#[tokio::test]
+async fn sync_users_queues_icu_users() -> TbResult<()> {
+    init_config_once();
+    let mut store = DispatchStore::default();
+    let facade = MockEntityFacade::new();
+    // The icu HTTP seam in test mode: the gear import fetches a canned empty
+    // gear list (no gear → the gear import is a no-op).
+    begin_test();
+    queue("/athlete/a1/gear", "[]");
+    // No Strava row for this user → the `provider_of` lookup resolves icu.
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(|_| Err(Error::NotFound("no strava user".into())));
+    // The provider lookup, the lane read, and the `insert_sync`'s
+    // `get_icu_id` all resolve the icu user.
+    let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    let icu_read = icu.clone();
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .returning(move |_| Ok(icu_read.clone()));
+    // The `insert_sync`'s REPLACE: no existing `SYNC` row to drop, then the
+    // fresh `SYNC` row is queued.
+    store
+        .icu
+        .expect_icu_events_delete_sync_for_user()
+        .returning(|_id| Ok(0));
+    let created = Arc::new(Mutex::new(Vec::new()));
+    let created_rec = created.clone();
+    store.icu.expect_icu_event_create().returning(move |e| {
+        created_rec.lock().unwrap().push(e);
+        Ok(())
+    });
+
+    let mut session = mock_session_admin(UserId::from(1));
+    let queued = sync_users(
+        &mut session,
+        Some(UserId::from(9)),
+        1_700_000_000,
+        false,
+        &facade,
+        &mut store,
+    )
+    .await?;
+
+    assert_eq!(
+        queued,
+        vec![UserId::from(9)],
+        "the icu user is queued on their own lane"
+    );
+    let events = created.lock().unwrap().clone();
+    assert_eq!(events.len(), 1, "one SYNC event is queued");
+    assert_eq!(
+        events[0].object_type,
+        IcuObjectType::Sync,
+        "the queued row is a SYNC"
+    );
+    assert_eq!(
+        events[0].oldest,
+        Some(1_700_000_000),
+        "the SYNC's lower bound is the trigger time"
+    );
+    assert_eq!(events[0].event_time, 0, "the newest sentinel is 0");
+    Ok(())
+}
+
+/// The onboarding arm (`queue_sync_user`): an icu user gets a `SYNC` event
+/// queued with `oldest = 0` (the full history) and the `0` `newest` sentinel —
+/// no gear import (that is the separate first step).
+#[tokio::test]
+async fn queue_sync_user_queues_icu_sync_with_full_history() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    // No Strava row for this user → the `provider_of` lookup resolves icu.
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(|_| Err(Error::NotFound("no strava user".into())));
+    // The provider lookup and the `insert_sync`'s `get_icu_id` resolve the
+    // icu user.
+    let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    let icu_read = icu.clone();
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .returning(move |_| Ok(icu_read.clone()));
+    // The `insert_sync`'s REPLACE: no existing `SYNC` row to drop, then the
+    // fresh `SYNC` row is queued.
+    store
+        .icu
+        .expect_icu_events_delete_sync_for_user()
+        .returning(|_id| Ok(0));
+    let created = Arc::new(Mutex::new(Vec::new()));
+    let created_rec = created.clone();
+    store.icu.expect_icu_event_create().returning(move |e| {
+        created_rec.lock().unwrap().push(e);
+        Ok(())
+    });
+
+    queue_sync_user(UserId::from(9), 1_700_000_000, &mut store).await?;
+
+    let events = created.lock().unwrap().clone();
+    assert_eq!(events.len(), 1, "one SYNC event is queued");
+    assert_eq!(
+        events[0].object_type,
+        IcuObjectType::Sync,
+        "the queued row is a SYNC"
+    );
+    assert_eq!(
+        events[0].oldest,
+        Some(0),
+        "the onboarding SYNC walks the full history"
+    );
+    assert_eq!(events[0].event_time, 0, "the newest sentinel is 0");
+    Ok(())
+}
+
+/// The Strava lane (existing behavior, preserved): an enabled Strava user gets
+/// a `Sync` event queued.
+#[tokio::test]
+async fn sync_users_queues_strava_users() -> TbResult<()> {
+    init_config_once();
+    let mut store = DispatchStore::default();
+    let facade = MockEntityFacade::new();
+    // The all-users Strava read; no icu users.
+    store.strava.expect_stravauser_get_all().returning(|| {
+        Ok(vec![crate::strava::test_support::strava_user(
+            UserId::from(7),
+            42,
+            true,
+        )])
+    });
+    store
+        .icu
+        .expect_icuser_get_all()
+        .returning(|| Ok(Vec::new()));
+    // The `insert_sync`'s `get_strava_id` read + the queue insert.
+    let strava = crate::strava::test_support::strava_user(UserId::from(7), 42, true);
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(move |_| Ok(strava.clone()));
+    let created = Arc::new(Mutex::new(Vec::new()));
+    let created_rec = created.clone();
+    store
+        .strava
+        .expect_strava_event_create()
+        .returning(move |e| {
+            created_rec.lock().unwrap().push(e.clone());
+            Ok(())
+        });
+
+    let mut session = mock_session_admin(UserId::from(1));
+    let queued = sync_users(
+        &mut session,
+        None,
+        1_700_000_000,
+        false,
+        &facade,
+        &mut store,
+    )
+    .await?;
+
+    assert_eq!(queued, vec![UserId::from(7)], "the Strava user is queued");
+    let events = created.lock().unwrap().clone();
+    assert_eq!(events.len(), 1, "one Sync event is queued");
+    assert_eq!(events[0].owner_id, StravaId::from(42));
+    Ok(())
+}
+
+/// Disabled users (both providers) are skipped (with a log warning) — no sync
+/// is queued for them.
+#[tokio::test]
+async fn sync_users_skips_disabled() -> TbResult<()> {
+    init_config_once();
+    let mut store = DispatchStore::default();
+    let facade = MockEntityFacade::new();
+    // A disabled Strava user and a disabled icu user.
+    store.strava.expect_stravauser_get_all().returning(|| {
+        Ok(vec![crate::strava::test_support::strava_user(
+            UserId::from(7),
+            42,
+            false,
+        )])
+    });
+    store.icu.expect_icuser_get_all().returning(|| {
+        Ok(vec![crate::icu::test_support::icu_user(
+            UserId::from(9),
+            "a1",
+            false,
+        )])
+    });
+
+    let mut session = mock_session_admin(UserId::from(1));
+    let queued = sync_users(
+        &mut session,
+        None,
+        1_700_000_000,
+        false,
+        &facade,
+        &mut store,
+    )
+    .await?;
+
+    assert!(queued.is_empty(), "disabled users are skipped");
+    Ok(())
+}
+
+/// A single-user trigger for a Strava user queues a `Sync` event for that
+/// user (on their own lane).
+#[tokio::test]
+async fn sync_users_single_strava() -> TbResult<()> {
+    init_config_once();
+    let mut store = DispatchStore::default();
+    let facade = MockEntityFacade::new();
+    // The provider lookup, the lane read, and the `insert_sync`'s read all
+    // resolve the Strava user.
+    let strava = crate::strava::test_support::strava_user(UserId::from(7), 42, true);
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(move |_| Ok(strava.clone()));
+    let created = Arc::new(Mutex::new(Vec::new()));
+    let created_rec = created.clone();
+    store
+        .strava
+        .expect_strava_event_create()
+        .returning(move |e| {
+            created_rec.lock().unwrap().push(e.clone());
+            Ok(())
+        });
+
+    let mut session = mock_session_admin(UserId::from(1));
+    let queued = sync_users(
+        &mut session,
+        Some(UserId::from(7)),
+        1_700_000_000,
+        false,
+        &facade,
+        &mut store,
+    )
+    .await?;
+
+    assert_eq!(
+        queued,
+        vec![UserId::from(7)],
+        "the single Strava user is queued"
+    );
+    assert_eq!(created.lock().unwrap().len(), 1);
+    Ok(())
+}
+
+/// A single-user trigger for a user with no row in either provider table is a
+/// `NotFound` (the `provider_of` lookup).
+#[tokio::test]
+async fn sync_users_unknown_user() {
+    let mut store = DispatchStore::default();
+    let facade = MockEntityFacade::new();
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(|_| Err(Error::NotFound("no strava user".into())));
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .returning(|_| Err(Error::NotFound("no icu user".into())));
+
+    let mut session = mock_session_admin(UserId::from(1));
+    let res = sync_users(
+        &mut session,
+        Some(UserId::from(99)),
+        1_700_000_000,
+        false,
+        &facade,
+        &mut store,
+    )
+    .await;
+    assert!(matches!(res, Err(Error::NotFound(_))));
+}
+
+/// The trigger is admin-only: a non-admin session is `Forbidden` before any
+/// store work.
+#[tokio::test]
+async fn sync_users_forbidden_for_non_admin() {
+    let mut store = DispatchStore::default();
+    let facade = MockEntityFacade::new();
+    let mut session = crate::facade::mock_session(UserId::from(1));
+
+    let res = sync_users(
+        &mut session,
+        None,
+        1_700_000_000,
+        false,
+        &facade,
+        &mut store,
+    )
+    .await;
+    assert!(matches!(res, Err(Error::Forbidden(_))));
 }

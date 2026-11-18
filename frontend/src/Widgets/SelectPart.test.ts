@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { parts, Part } from "../lib/part";
-import { getTypes, Type } from "../lib/types";
+import { getTypes, Type } from "../lib/types.svelte";
 import { resp } from "../test/helpers";
 import SelectPart from "./SelectPart.svelte";
 

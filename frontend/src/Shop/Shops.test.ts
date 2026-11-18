@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { shops, Shop } from "../lib/shop.svelte";
-import { setUser } from "../lib/user";
+import { setUser } from "../lib/user.svelte";
 import { resp } from "../test/helpers";
 import Shops from "./Shops.svelte";
 

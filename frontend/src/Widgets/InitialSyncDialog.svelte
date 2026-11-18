@@ -20,13 +20,13 @@
 <script lang="ts">
   import { Modal, P, Heading, Button } from "flowbite-svelte";
   import { myfetch, handleError, icons } from "../lib/utils";
-  import { getUser, setUser } from "../lib/user";
+  import { getUser, setUser } from "../lib/user.svelte";
   import {
     providerMeta,
     onboardingGearUrl,
     onboardingSyncUrl,
     type Provider,
-  } from "../lib/provider";
+  } from "../lib/provider.svelte";
   import ProviderMark from "./ProviderMark.svelte";
   import { m } from "../../paraglide/messages";
 

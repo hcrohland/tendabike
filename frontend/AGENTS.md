@@ -11,6 +11,10 @@
 - Run a subset: `npm run test -- src/<file>.test.ts` from the repo root — the path is relative to `frontend/`, so it omits the `frontend/` prefix.
 - **Prettier**: config lives in `frontend/.prettierrc` — run it via the root npm scripts (`npm run fmtcheck` / `npm run format`), never raw `npx prettier` from the repo root (no config there → defaults → false positives).
 
+## Verification
+
+- **Browser:** Playwright + Chromium is available system-wide (`npx playwright`). Use it for real-browser verification when a spec's acceptance criteria require it (e.g., confirming a page renders without console errors). Launch the dev server, drive the page, and check `page.on('console')` / `page.on('pageerror')` for the condition under test.
+
 ## Architecture
 
 - **UI**: Tailwind CSS v4 + flowbite-svelte (components) + flowbite-svelte-icons (icons). New UI comes from flowbite-svelte components — raw Svelte + Tailwind only where the library has no component.
@@ -20,12 +24,13 @@
 - **State**: the Summary collections in `src/lib/*.ts` are Svelte 5 `$state` objects from `mapableState()` in [`src/lib/mapable.svelte.ts`](src/lib/mapable.svelte.ts) — records keyed by id with `setMap`/`updateMap`/`deleteItem` ops; enumerate them with `stateValues()`, never `Object.values` (the ops ride on the record).
 - **State objects**: when adding or touching a `.svelte.ts` state module or its readers, read [`../docs/agents/state-object.md`](../docs/agents/state-object.md) first.
 - **Door convention**: lib-layer functions read the module's state objects in their bodies; signatures carry only entity values and time — see the door rule in [`../docs/agents/state-object.md`](../docs/agents/state-object.md).
-- **Entity classes**: `src/lib/*.ts` — async methods that call `myfetch()` and update collections via `updateSummary()` in [`src/lib/user.ts`](src/lib/user.ts).
+- **Entity classes**: `src/lib/*.ts` — async methods that call `myfetch()` and update collections via `updateSummary()` in [`src/lib/user.svelte.ts`](src/lib/user.svelte.ts).
 
 ## Code Style
 
 - **Runes mode**: `<script lang="ts">` blocks with runes (`$state`, `$derived`, `$effect`, `$props()`); module scope via the `<script module>` attribute (never the deprecated `context="module"` form).
-- **Widget wrappers**: use the shared `src/Widgets/` wrappers (e.g. `XsButton`) over raw flowbite components.
+- **Widget wrappers**: use the shared `src/Widgets/` wrappers over raw flowbite components. The load-bearing three: `Card` (entity container), `Menu` (per-entity action dropdown of `DropdownItem`s), `Chip` (label + value metric).
+- **Entity list pages**: one `Card` per entity in a card-list container, per-entity actions in a `Menu` in the card header. Reference: [`src/Activity/ActList.svelte`](src/Activity/ActList.svelte) + [`src/Activity/ActCard.svelte`](src/Activity/ActCard.svelte).
 - **UI open/close state**: component-local — a lib state module never carries it; a child that must close the UI takes a `close` callback prop.
 
 ## Key Gotchas

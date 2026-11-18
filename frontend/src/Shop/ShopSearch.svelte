@@ -6,7 +6,7 @@
   import { handleError, myfetch } from "../lib/utils";
   import { Shop } from "../lib/shop.svelte";
   import { type ShopSubscription } from "../lib/subscription";
-  import { getUser, type UserPublic } from "../lib/user";
+  import { getUser, type UserPublic } from "../lib/user.svelte";
   import { type Map } from "../lib/mapable.svelte";
 
   interface Props {

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ServicePlan, isTemplate } from "../lib/serviceplan";
-  import { getCategory, types } from "../lib/types";
+  import { getCategory, types } from "../lib/types.svelte";
   import { part_at_hook } from "../lib/attachment";
   import { parts } from "../lib/part";
   import { m } from "../../paraglide/messages";

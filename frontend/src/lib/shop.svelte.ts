@@ -1,6 +1,6 @@
 import { goto } from "$app/navigation";
 import { handleError, myfetch } from "./utils";
-import { refresh, getUser } from "./user";
+import { refresh, getUser } from "./user.svelte";
 import { mapableState } from "./mapable.svelte";
 import { type Part } from "./part";
 

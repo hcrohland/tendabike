@@ -1,6 +1,6 @@
 <script lang="ts">
   import { handleError, myfetch } from "../lib/utils";
-  import type { User } from "../lib/user";
+  import type { User } from "../lib/user.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";
   import * as m from "../../paraglide/messages";

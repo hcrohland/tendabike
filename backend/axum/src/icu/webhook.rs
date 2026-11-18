@@ -3,8 +3,9 @@
 //! The web shell keeps only the protocol (ADR-0014): it forwards the raw
 //! body opaquely to the provider service's `accept_event` op — the envelope
 //! parse, the shared `secret` verification (a constant-time compare against
-//! `ICU_WEBHOOK_SECRET`), the event filtering (only `ACTIVITY_ANALYZED` is
-//! subscribed), the timestamp parse, and the queue insert are the provider
+//! `ICU_WEBHOOK_SECRET`), the event filtering (only the subscribed activity
+//! types are imported, and a `TEST` delivery is dropped), the timestamp parse,
+//! and the queue insert are the provider
 //! layer's work. It answers `200` immediately (the processing is async via
 //! the executor); a refused delivery (a bad secret) is a `401` and a failed
 //! ingest a `500` (intervals.icu's own retry policy applies).

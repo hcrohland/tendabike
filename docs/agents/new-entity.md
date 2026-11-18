@@ -14,7 +14,7 @@ The implementation steps for a new entity, end to end. *Why* the pieces are wire
    *Test*: the new route.
 5. **Frontend class** — the class plus its `mapableState` collection in `frontend/src/lib/<name>.ts` (copy the shape of `part.ts`).
    *Test*: the class and its mapping from the backend JSON.
-6. **Summary wiring** — entries in `setSummary`/`updateSummary` in `frontend/src/lib/user.ts`.
+6. **Summary wiring** — entries in `setSummary`/`updateSummary` in `frontend/src/lib/user.svelte.ts`.
    *Test*: the new entity hydrates and merges through `setSummary`/`updateSummary`.
 
 Complete when every step's tests are green, the new entity flows through the `Summary`, and both halves carry tests.

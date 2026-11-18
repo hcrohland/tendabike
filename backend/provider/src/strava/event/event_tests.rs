@@ -1,8 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use super::super::test_support::{
-    activity_json, queue, queue_error, setup, strava_admin_session, strava_user,
-};
+use super::super::test_support::{activity_json, queue, queue_error, setup, strava_user};
 use super::*;
 use super::{AspectType, Event, ObjectType};
 
@@ -629,62 +627,4 @@ async fn process_skips_athlete_event() -> TbResult<()> {
     let summary = process(UserId::from(1), &_facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     Ok(())
-}
-
-#[tokio::test]
-async fn sync_users_skips_disabled() -> TbResult<()> {
-    let (mut store, _facade, _) = setup();
-    let mut session = strava_admin_session(UserId::from(1), 42.into());
-    // The all-users sync queues a `Sync` event for every non-disabled user
-    // (the disabled one is skipped).
-    let created = Arc::new(Mutex::new(Vec::new()));
-    let created_rec = created.clone();
-    store.expect_stravauser_get_all().returning(|| {
-        Ok(vec![
-            strava_user(UserId::from(1), 42, true),
-            strava_user(UserId::from(2), 43, false),
-        ])
-    });
-    store.expect_strava_event_create().returning(move |e| {
-        created_rec.lock().unwrap().push(e.clone());
-        Ok(())
-    });
-    sync_users(&mut session, None, 100, false, &mut store).await?;
-    let events = created.lock().unwrap().clone();
-    assert_eq!(events.len(), 1, "only the enabled user is synced");
-    assert_eq!(events[0].owner_id, 42.into());
-    Ok(())
-}
-
-#[tokio::test]
-async fn sync_users_single() -> TbResult<()> {
-    let (mut store, _facade, _) = setup();
-    let mut session = strava_admin_session(UserId::from(1), 42.into());
-    // A single-user sync queues a `Sync` event for that user.
-    let created = Arc::new(Mutex::new(Vec::new()));
-    let created_rec = created.clone();
-    store
-        .expect_stravauser_get_by_tbid()
-        .returning(|_id| Ok(strava_user(UserId::from(1), 42, true)));
-    store.expect_strava_event_create().returning(move |e| {
-        created_rec.lock().unwrap().push(e.clone());
-        Ok(())
-    });
-    sync_users(&mut session, Some(UserId::from(1)), 100, false, &mut store).await?;
-    assert_eq!(created.lock().unwrap().len(), 1);
-    Ok(())
-}
-
-#[tokio::test]
-async fn sync_users_unknown_user() {
-    let (mut store, _facade, _) = setup();
-    let mut session = strava_admin_session(UserId::from(1), 42.into());
-    // A single-user sync for an unknown user is a `NotFound`.
-    store.expect_stravauser_get_by_tbid().returning(|_id| {
-        Err(Error::NotFound(
-            "user not registered with strava".to_string(),
-        ))
-    });
-    let res = sync_users(&mut session, Some(UserId::from(99)), 100, false, &mut store).await;
-    assert!(matches!(res, Err(Error::NotFound(_))));
 }

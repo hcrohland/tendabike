@@ -17,7 +17,7 @@ import { Part, parts } from "./part";
 import { Attachment, attachments } from "./attachment";
 import { Service, services } from "./service";
 import { usages } from "./usage";
-import { getTypes } from "./types";
+import { getTypes } from "./types.svelte";
 import { maxDate } from "./utils";
 import { resp, usage } from "../test/helpers";
 

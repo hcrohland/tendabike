@@ -19,6 +19,7 @@
 */
 
 #![forbid(unsafe_code)]
+#![warn(unreachable_pub)]
 
 //! The per-user executor crate (ADR-0005, executable spec #446 §4).
 //!

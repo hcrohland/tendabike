@@ -18,7 +18,7 @@
 <script lang="ts">
   import { ButtonGroup, InputAddon } from "flowbite-svelte";
   import Modal from "../Widgets/Modal.svelte";
-  import { getCategory } from "../lib/types";
+  import { getCategory } from "../lib/types.svelte";
   import SelectPart from "../Widgets/SelectPart.svelte";
   import ChangeField from "./ChangeField.svelte";
   import Buttons from "../Widgets/Buttons.svelte";

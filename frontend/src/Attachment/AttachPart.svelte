@@ -25,7 +25,7 @@
 </script>
 
 <script lang="ts">
-  import { types } from "../lib/types";
+  import { types } from "../lib/types.svelte";
   import AttachForm from "./AttachForm.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";
