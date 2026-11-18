@@ -1,80 +1,30 @@
 //! Startup configuration: resolves the process's environment into the
 //! concrete config the crates consume.
 //!
-//! The public host (`HOSTNAME`) is the single source for both providers'
-//! redirect and webhook callback URLs. `STRAVA_*` and `DATABASE_URL` are
-//! the canonical variable names; `CLIENT_ID`, `CLIENT_SECRET`, and
-//! `DB_URL` remain as deprecated fallbacks — a warning is produced for
-//! each one that actually supplies a value.
+//! The public domain (`DOMAINNAME`) is the single source for both providers'
+//! redirect and webhook callback URLs — the value is resolved here and handed
+//! to the web layer, which composes the URLs (it composes none in this crate).
+//! `DOMAINNAME`, `STRAVA_*`, and `DATABASE_URL` are the canonical variable
+//! names; `HOSTNAME`, `CLIENT_ID`, `CLIENT_SECRET`, and `DB_URL` remain as
+//! deprecated fallbacks — a warning is produced for each one that actually
+//! supplies a value.
 
 use std::collections::HashMap;
 
-/// The resolved instance configuration: the database URL, both providers'
-/// credentials (optional — a missing client id disables the provider,
-/// ADR-0016), redirect and webhook callback URLs, and the ICU webhook
-/// secret.
+/// The resolved instance configuration: the database URL, the public domain
+/// (optional — an unset domain yields the web layer's local-dev default),
+/// both providers' credentials (optional — a missing client id disables the
+/// provider, ADR-0016), and the ICU webhook secret. The web layer composes
+/// the redirect and webhook callback URLs from the domain.
 #[derive(Debug, Clone)]
 pub(crate) struct AppConfig {
     pub(crate) database_url: String,
+    pub(crate) domainname: Option<String>,
     pub(crate) strava_client_id: Option<String>,
     pub(crate) strava_client_secret: Option<String>,
-    pub(crate) strava_redirect_url: String,
-    pub(crate) strava_webhook_url: String,
     pub(crate) icu_client_id: Option<String>,
     pub(crate) icu_client_secret: Option<String>,
-    pub(crate) icu_redirect_url: String,
-    pub(crate) icu_webhook_url: String,
     pub(crate) icu_webhook_secret: String,
-}
-
-/// The base URL (`<scheme>://<host>`) derived from the instance's public
-/// host: `http` when the host part is `localhost` or `127.0.0.1`, `https`
-/// otherwise. An unset `HOSTNAME` yields the local-dev default
-/// (`http://localhost:8000`).
-fn base_url(hostname: Option<&str>) -> String {
-    let host = hostname.unwrap_or("localhost:8000");
-    let host_part = host.split(':').next().unwrap_or(host);
-    let scheme = if matches!(host_part, "localhost" | "127.0.0.1") {
-        "http"
-    } else {
-        "https"
-    };
-    format!("{scheme}://{host}")
-}
-
-/// The provider redirect URLs derived from the instance's public host:
-/// `https://<HOSTNAME>/strava/token` and `https://<HOSTNAME>/icu/token`,
-/// with `http` when the host part is `localhost` or `127.0.0.1`. An unset
-/// `HOSTNAME` yields the local-dev defaults (`http://localhost:8000/…`).
-struct RedirectUrls {
-    strava: String,
-    icu: String,
-}
-
-fn redirect_urls(hostname: Option<&str>) -> RedirectUrls {
-    let base = base_url(hostname);
-    RedirectUrls {
-        strava: format!("{base}/strava/token"),
-        icu: format!("{base}/icu/token"),
-    }
-}
-
-/// The provider webhook callback URLs derived from the instance's public
-/// host: `https://<HOSTNAME>/strava/callback` and
-/// `https://<HOSTNAME>/icu/callback`, with `http` when the host part is
-/// `localhost` or `127.0.0.1`. An unset `HOSTNAME` yields the local-dev
-/// defaults (`http://localhost:8000/…`).
-struct WebhookUrls {
-    strava: String,
-    icu: String,
-}
-
-fn webhook_urls(hostname: Option<&str>) -> WebhookUrls {
-    let base = base_url(hostname);
-    WebhookUrls {
-        strava: format!("{base}/strava/callback"),
-        icu: format!("{base}/icu/callback"),
-    }
 }
 
 /// Resolves one variable: the canonical name wins; the deprecated name is
@@ -152,20 +102,19 @@ pub(crate) fn from_env(env: &HashMap<String, String>) -> (AppConfig, Vec<String>
     let (icu_client_secret, warning) = resolve_optional(env, "ICU_CLIENT_SECRET", None);
     warnings.extend(warning);
 
-    let hostname = env.get("HOSTNAME").map(String::as_str);
-    let urls = redirect_urls(hostname);
-    let webhooks = webhook_urls(hostname);
+    // The public domain is optional: `DOMAINNAME` is the canonical name,
+    // `HOSTNAME` the deprecated fallback (a missing domain yields the web
+    // layer's local-dev default, no warning).
+    let (domainname, warning) = resolve_optional(env, "DOMAINNAME", Some("HOSTNAME"));
+    warnings.extend(warning);
 
     let config = AppConfig {
         database_url,
+        domainname,
         strava_client_id,
         strava_client_secret,
-        strava_redirect_url: urls.strava,
-        strava_webhook_url: webhooks.strava,
         icu_client_id,
         icu_client_secret,
-        icu_redirect_url: urls.icu,
-        icu_webhook_url: webhooks.icu,
         icu_webhook_secret: env.get("ICU_WEBHOOK_SECRET").cloned().unwrap_or_default(),
     };
 
@@ -181,66 +130,6 @@ mod tests {
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect()
-    }
-
-    // --- redirect_urls --------------------------------------------------
-
-    #[test]
-    fn hostname_yields_https_redirects() {
-        let urls = redirect_urls(Some("tendabike.example.com"));
-        assert_eq!(urls.strava, "https://tendabike.example.com/strava/token");
-        assert_eq!(urls.icu, "https://tendabike.example.com/icu/token");
-    }
-
-    #[test]
-    fn localhost_hostname_yields_http_redirects() {
-        let urls = redirect_urls(Some("localhost:8000"));
-        assert_eq!(urls.strava, "http://localhost:8000/strava/token");
-        assert_eq!(urls.icu, "http://localhost:8000/icu/token");
-    }
-
-    #[test]
-    fn loopback_hostname_yields_http_redirects() {
-        let urls = redirect_urls(Some("127.0.0.1:8000"));
-        assert_eq!(urls.strava, "http://127.0.0.1:8000/strava/token");
-        assert_eq!(urls.icu, "http://127.0.0.1:8000/icu/token");
-    }
-
-    #[test]
-    fn missing_hostname_yields_local_dev_defaults() {
-        let urls = redirect_urls(None);
-        assert_eq!(urls.strava, "http://localhost:8000/strava/token");
-        assert_eq!(urls.icu, "http://localhost:8000/icu/token");
-    }
-
-    // --- webhook_urls -----------------------------------------------------
-
-    #[test]
-    fn hostname_yields_https_webhook_urls() {
-        let urls = webhook_urls(Some("tendabike.example.com"));
-        assert_eq!(urls.strava, "https://tendabike.example.com/strava/callback");
-        assert_eq!(urls.icu, "https://tendabike.example.com/icu/callback");
-    }
-
-    #[test]
-    fn localhost_hostname_yields_http_webhook_urls() {
-        let urls = webhook_urls(Some("localhost:8000"));
-        assert_eq!(urls.strava, "http://localhost:8000/strava/callback");
-        assert_eq!(urls.icu, "http://localhost:8000/icu/callback");
-    }
-
-    #[test]
-    fn loopback_hostname_yields_http_webhook_urls() {
-        let urls = webhook_urls(Some("127.0.0.1:8000"));
-        assert_eq!(urls.strava, "http://127.0.0.1:8000/strava/callback");
-        assert_eq!(urls.icu, "http://127.0.0.1:8000/icu/callback");
-    }
-
-    #[test]
-    fn missing_hostname_yields_local_dev_webhook_defaults() {
-        let urls = webhook_urls(None);
-        assert_eq!(urls.strava, "http://localhost:8000/strava/callback");
-        assert_eq!(urls.icu, "http://localhost:8000/icu/callback");
     }
 
     // --- resolve ----------------------------------------------------------
@@ -289,7 +178,7 @@ mod tests {
     fn canonical_env_resolves_without_warnings() {
         let e = env(&[
             ("DATABASE_URL", "postgres://db/tendabike"),
-            ("HOSTNAME", "tendabike.example.com"),
+            ("DOMAINNAME", "tendabike.example.com"),
             ("STRAVA_CLIENT_ID", "sid"),
             ("STRAVA_CLIENT_SECRET", "ssec"),
             ("ICU_CLIENT_ID", "iid"),
@@ -299,26 +188,11 @@ mod tests {
         let (config, warnings) = from_env(&e);
         assert!(warnings.is_empty());
         assert_eq!(config.database_url, "postgres://db/tendabike");
+        assert_eq!(config.domainname, Some("tendabike.example.com".to_string()));
         assert_eq!(config.strava_client_id, Some("sid".to_string()));
         assert_eq!(config.strava_client_secret, Some("ssec".to_string()));
-        assert_eq!(
-            config.strava_redirect_url,
-            "https://tendabike.example.com/strava/token"
-        );
-        assert_eq!(
-            config.strava_webhook_url,
-            "https://tendabike.example.com/strava/callback"
-        );
         assert_eq!(config.icu_client_id, Some("iid".to_string()));
         assert_eq!(config.icu_client_secret, Some("isec".to_string()));
-        assert_eq!(
-            config.icu_redirect_url,
-            "https://tendabike.example.com/icu/token"
-        );
-        assert_eq!(
-            config.icu_webhook_url,
-            "https://tendabike.example.com/icu/callback"
-        );
         assert_eq!(config.icu_webhook_secret, "hook");
     }
 
@@ -333,18 +207,11 @@ mod tests {
         ]);
         let (config, warnings) = from_env(&e);
         assert_eq!(config.database_url, "postgres://db/tendabike");
+        // No `DOMAINNAME`/`HOSTNAME` set: the domainname is `None` (the web
+        // layer applies the local-dev default when composing the URLs).
+        assert!(config.domainname.is_none());
         assert_eq!(config.strava_client_id, Some("sid".to_string()));
         assert_eq!(config.strava_client_secret, Some("ssec".to_string()));
-        assert_eq!(
-            config.strava_redirect_url,
-            "http://localhost:8000/strava/token"
-        );
-        assert_eq!(
-            config.strava_webhook_url,
-            "http://localhost:8000/strava/callback"
-        );
-        assert_eq!(config.icu_redirect_url, "http://localhost:8000/icu/token");
-        assert_eq!(config.icu_webhook_url, "http://localhost:8000/icu/callback");
         assert_eq!(warnings.len(), 3);
         for (legacy, replacement) in [
             ("DB_URL", "DATABASE_URL"),
@@ -360,6 +227,59 @@ mod tests {
                 "warning for {legacy} must name {replacement}: {hit}"
             );
         }
+    }
+
+    // --- domainname (DOMAINNAME canonical, HOSTNAME deprecated) -----------
+
+    /// `DOMAINNAME` is the canonical variable: it resolves the domainname and
+    /// emits no deprecation warning.
+    #[test]
+    fn domainname_canonical_resolves_without_warning() {
+        let e = env(&[("DOMAINNAME", "tendabike.example.com")]);
+        let (config, warnings) = from_env(&e);
+        assert_eq!(config.domainname, Some("tendabike.example.com".to_string()));
+        assert!(warnings.is_empty());
+    }
+
+    /// Only `HOSTNAME` set (no `DOMAINNAME`): the value is used and a
+    /// deprecation warning names both `HOSTNAME` and `DOMAINNAME`.
+    #[test]
+    fn hostname_deprecated_fallback_resolves_with_warning() {
+        let e = env(&[("HOSTNAME", "tendabike.example.com")]);
+        let (config, warnings) = from_env(&e);
+        assert_eq!(config.domainname, Some("tendabike.example.com".to_string()));
+        let hit = warnings
+            .iter()
+            .find(|w| w.contains("HOSTNAME"))
+            .expect("a deprecation warning naming HOSTNAME");
+        assert!(
+            hit.contains("DOMAINNAME"),
+            "the HOSTNAME warning must name DOMAINNAME: {hit}"
+        );
+    }
+
+    /// `DOMAINNAME` wins when both are set (the canonical name takes
+    /// precedence over the deprecated fallback), and no warning is emitted.
+    #[test]
+    fn domainname_wins_when_both_set() {
+        let e = env(&[
+            ("DOMAINNAME", "canonical.example.com"),
+            ("HOSTNAME", "deprecated.example.com"),
+        ]);
+        let (config, warnings) = from_env(&e);
+        assert_eq!(config.domainname, Some("canonical.example.com".to_string()));
+        assert!(warnings.is_empty());
+    }
+
+    /// Neither `DOMAINNAME` nor `HOSTNAME` set: the domainname is `None`
+    /// (axum applies the local-dev default when composing the URLs) and no
+    /// deprecation warning is emitted.
+    #[test]
+    fn neither_domainname_nor_hostname_yields_none() {
+        let e = HashMap::new();
+        let (config, warnings) = from_env(&e);
+        assert!(config.domainname.is_none());
+        assert!(warnings.is_empty());
     }
 
     // --- subset providers (ADR-0016) --------------------------------------
@@ -426,24 +346,5 @@ mod tests {
                 "warning for {legacy} must name {replacement}: {hit}"
             );
         }
-    }
-
-    #[test]
-    fn removed_redirect_vars_are_ignored() {
-        let e = env(&[
-            ("STRAVA_CLIENT_ID", "sid"),
-            ("STRAVA_CLIENT_SECRET", "ssec"),
-            ("ICU_CLIENT_ID", "iid"),
-            ("ICU_CLIENT_SECRET", "isec"),
-            ("REDIRECT_URL", "http://example.com/strava/token"),
-            ("ICU_REDIRECT_URL", "http://example.com/icu/token"),
-        ]);
-        let (config, warnings) = from_env(&e);
-        assert_eq!(
-            config.strava_redirect_url,
-            "http://localhost:8000/strava/token"
-        );
-        assert_eq!(config.icu_redirect_url, "http://localhost:8000/icu/token");
-        assert!(warnings.is_empty());
     }
 }

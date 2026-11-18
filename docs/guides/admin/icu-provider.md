@@ -40,8 +40,8 @@ Set in the backend's environment (`.env` is loaded via `dotenvy`):
 | `ICU_CLIENT_SECRET` | yes | The app's client secret. Panics at startup without it. |
 | `ICU_WEBHOOK_SECRET` | **effectively yes** | Defaults to *empty*. The webhook verification is a constant-time compare against this value, so with it unset **every delivery is refused with 401**. Set it to the exact webhook secret from step 2. |
 
-The redirect URI is derived from the instance's `HOSTNAME` variable
-(see [the instance setup](index.md)): `https://<HOSTNAME>/icu/token`
+The redirect URI is derived from the instance's `DOMAINNAME` variable
+(see [the instance setup](index.md)): `https://<DOMAINNAME>/icu/token`
 (`http` for `localhost`/`127.0.0.1`; defaults to
 `http://localhost:8000/icu/token`). The redirect URI in
 step 2 needs to be set to this.

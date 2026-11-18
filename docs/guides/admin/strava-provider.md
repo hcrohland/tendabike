@@ -30,8 +30,8 @@ Set in the backend's environment (`.env` is loaded via `dotenvy`):
 | `STRAVA_CLIENT_ID` | yes | The app's Client ID. The binary panics at startup without it. `CLIENT_ID` is a deprecated alias: it still works when `STRAVA_CLIENT_ID` is unset, but the binary prints a deprecation warning at startup. |
 | `STRAVA_CLIENT_SECRET` | yes | The app's Client Secret. Panics at startup without it. `CLIENT_SECRET` is a deprecated alias with the same behavior. |
 
-The redirect URI is derived from the instance's `HOSTNAME` variable
-(see [the instance setup](index.md)): `https://<HOSTNAME>/strava/token`
+The redirect URI is derived from the instance's `DOMAINNAME` variable
+(see [the instance setup](index.md)): `https://<DOMAINNAME>/strava/token`
 (`http` for `localhost`/`127.0.0.1`; defaults to
 `http://localhost:8000/strava/token`). The Redirect URI in
 step 1 needs to be set to this.

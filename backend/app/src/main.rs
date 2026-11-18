@@ -12,39 +12,34 @@ mod config;
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
 
-    // The deprecation warnings for the legacy variables in use and the
-    // webhook callback URLs are printed here, before the logging subscriber
-    // exists (it is set up by `tb_axum::start`).
+    // The deprecation warnings for the legacy variables in use are printed
+    // here, before the logging subscriber exists (it is set up by
+    // `tb_axum::start`). The webhook callback URLs are no longer printed: the
+    // web layer logs them at INFO, one line per enabled provider.
     let env = std::env::vars().collect();
     let (config, deprecations) = config::from_env(&env);
     for warning in &deprecations {
         eprintln!("warning: {warning}");
     }
-    eprintln!("strava webhook URL: {}", config.strava_webhook_url);
-    eprintln!("icu webhook URL: {}", config.icu_webhook_url);
 
     let pool = sqlx::PgPool::connect(&config.database_url).await?;
 
-    // Build the provider config from the environment and initialize the
-    // provider crate's client statics.
-    let provider_config = tb_provider::ProviderConfig {
-        strava_client_id: config.strava_client_id,
-        strava_client_secret: config.strava_client_secret,
-        strava_redirect_url: config.strava_redirect_url,
-        icu_client_id: config.icu_client_id,
-        icu_client_secret: config.icu_client_secret,
-        icu_redirect_url: config.icu_redirect_url,
-        icu_webhook_secret: config.icu_webhook_secret,
-    };
-    tb_provider::init(provider_config);
-
-    // Build the web layer's config.
+    // Build the web layer's config: the CSRF secret, the static files path,
+    // and the bind address as raw strings, plus the public domain and the
+    // provider credentials (the web layer composes the provider URLs from the
+    // domain and initializes the provider crate's client statics).
     let axum_config = tb_axum::AxumConfig {
         csrf_secret: std::env::var("CSRF_SECRET").ok(),
         static_www: std::env::var("STATIC_WWW").unwrap_or_else(|_| {
             concat!(env!("CARGO_MANIFEST_DIR"), "/../../frontend/build").to_string()
         }),
         bind_addr: std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8000".to_string()),
+        domainname: config.domainname,
+        strava_client_id: config.strava_client_id,
+        strava_client_secret: config.strava_client_secret,
+        icu_client_id: config.icu_client_id,
+        icu_client_secret: config.icu_client_secret,
+        icu_webhook_secret: config.icu_webhook_secret,
     };
 
     // The composition root wires the concrete crates and process setup;
