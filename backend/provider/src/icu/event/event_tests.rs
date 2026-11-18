@@ -6,6 +6,7 @@ use crate::facade::{
     ActivityId, Notification, NotificationKind, NotificationLifecycle, NotificationState,
     NotificationSubject, Summary,
 };
+use crate::test_support::icu_webhook_secret;
 use time::OffsetDateTime;
 
 fn event(id: i32, activity: &str) -> IcuEvent {
@@ -912,13 +913,6 @@ async fn process_sync_full_batch_on_start_day_steps_back_a_day() {
 }
 
 // ─── accept_event: APP_SCOPE_CHANGED ────────────────────────────────────────
-
-/// The suite's shared webhook secret (initializes the provider config via
-/// the shared process-wide initializer).
-fn icu_webhook_secret() -> String {
-    crate::test_support::init_test_config_once();
-    crate::test_support::ICU_WEBHOOK_SECRET.to_string()
-}
 
 /// A raw intervals.icu webhook body with the given `secret` and events JSON
 /// array elements.

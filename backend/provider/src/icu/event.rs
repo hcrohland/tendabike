@@ -199,7 +199,7 @@ const TEST_EVENT_TYPE: &str = "TEST";
 
 /// The `APP_SCOPE_CHANGED` event type: intervals.icu fires it when a user
 /// revokes the app or changes its scopes. Any scope change deauths (the user
-/// is disabled inline at intake — no scope-content check, issue #930).
+/// is disabled inline at intake — no scope-content check).
 const SCOPE_CHANGED_EVENT_TYPE: &str = "APP_SCOPE_CHANGED";
 
 /// The shared webhook secret (from the provider config).
@@ -281,7 +281,7 @@ pub async fn accept_event(body: &str, store: &mut impl IcuDataStore) -> TbResult
 }
 
 /// Handles an `APP_SCOPE_CHANGED` event inline at intake (mirroring the
-/// Strava driver's athlete-deauth handling, issue #930): the known user is
+/// Strava driver's athlete-deauth handling): the known user is
 /// disabled (their queued events dropped, their token cleared) with an INFO
 /// log naming the athlete and the event's `deauthorized`/`scope` context; an
 /// unknown athlete is a logged no-op. The event is neither queued nor added

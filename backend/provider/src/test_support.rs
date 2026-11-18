@@ -47,6 +47,13 @@ pub fn init_test_config_once() {
     });
 }
 
+/// The suite's shared webhook secret (initializes the provider config via
+/// the shared process-wide initializer).
+pub fn icu_webhook_secret() -> String {
+    init_test_config_once();
+    ICU_WEBHOOK_SECRET.to_string()
+}
+
 /// The per-thread canned-response state a provider's HTTP test seam owns.
 ///
 /// The common fields every seam needs: whether the thread is in test mode,
