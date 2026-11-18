@@ -2,7 +2,7 @@
 
 ## Commands
 
-- `cargo sqlx prepare` (run from `backend/sqlx/`) - Regenerate the crate-local offline query metadata in `backend/sqlx/.sqlx/`
+- `cargo sqlx prepare` - Regenerate the crate-local offline query metadata in `backend/sqlx/.sqlx/`
 - **rust-analyzer MCP**: available as direct tools (`rust-analyzer_rust_analyzer_references`, `…_symbols`, `…_hover`, `…_diagnostics`). Set the workspace first: `rust-analyzer_rust_analyzer_set_workspace` with `"."` (the project root — the Cargo workspace root). Use `references` for cross-module reference resolution.
 
 ## Architecture
@@ -31,7 +31,7 @@
 
 To verify your changes: `SQLX_OFFLINE=true cargo test -q -- --include-ignored | grep "test result:"` — every line should say `ok` and `0 failed`.
 
-The DB-free suites (domain, provider, axum) run against `mockall` `mock!` doubles; the `#[ignore]`d seam suites in `tb_sqlx` run against a real Postgres and are the behavioral bar — they need `--include-ignored` and `SCRATCH_DATABASE_URL`. If `SCRATCH_DATABASE_URL` is set in the environment, a database is available and the full suite runs locally as it does in CI.
+The `#[ignore]`d seam suites in `tb_sqlx` need `SCRATCH_DATABASE_URL` (a real Postgres) to run; if it's set, the full suite runs locally as it does in CI.
 
 ```bash
 SQLX_OFFLINE=true cargo test -q -- --include-ignored   # complete suite (seam included)
