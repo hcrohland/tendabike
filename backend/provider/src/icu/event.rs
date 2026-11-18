@@ -298,7 +298,10 @@ async fn handle_scope_change(
                 "icu scope change (deauthorized: {:?}, scope: {:?}): disabling icu user {icu_id}",
                 event.deauthorized, event.scope
             );
-            icu_id.disable(store).await?;
+            let res = icu_id.disable(store).await;
+            if let Err(err) = res {
+                error!("user disable returned: {err:#}")
+            }
         }
         None => {
             info!("icu scope change for unknown athlete {icu_id}: no-op");
