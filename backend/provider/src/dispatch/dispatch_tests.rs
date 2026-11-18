@@ -10,7 +10,7 @@
 //! the live provider API, so the login tests cover the arms' scope check
 //! (which precedes it).
 
-use std::sync::{Arc, Mutex, Once};
+use std::sync::{Arc, Mutex};
 
 use crate::Provider;
 use crate::facade::{Error, TbResult, UserId, mock_session_admin};
@@ -173,32 +173,18 @@ fn icu_event_json_no_activity(athlete: &str, typ: &str, timestamp: &str) -> Stri
     format!("{{\"athlete_id\":\"{athlete}\",\"type\":\"{typ}\",\"timestamp\":\"{timestamp}\"}}")
 }
 
-/// Initialize the provider config once for the dispatch test process:
-/// both providers enabled (their ops' graceful-freeze guard reads the
-/// enabled set) and a known webhook secret the intake tests verify
-/// against.
+/// Initialize the provider config once for the test process (the shared
+/// process-wide initializer — `crate::init` panics on a second call, so
+/// the suites must not each carry their own `Once`).
 fn init_config_once() {
-    static ONCE: Once = Once::new();
-    ONCE.call_once(|| {
-        crate::init(crate::ProviderConfig {
-            strava_client_id: Some("test-client-id".to_string()),
-            strava_client_secret: Some("test-client-secret".to_string()),
-            strava_redirect_url: "http://localhost:8000/strava/token".to_string(),
-            icu_client_id: Some("test-icu-client-id".to_string()),
-            icu_client_secret: Some("test-icu-client-secret".to_string()),
-            icu_redirect_url: "http://localhost:8000/icu/token".to_string(),
-            icu_webhook_secret: ICU_WEBHOOK_SECRET.to_string(),
-        });
-    });
+    crate::test_support::init_test_config_once();
 }
 
 /// The suite's shared webhook secret (initializes the provider config).
 fn icu_webhook_secret() -> String {
     init_config_once();
-    ICU_WEBHOOK_SECRET.to_string()
+    crate::test_support::ICU_WEBHOOK_SECRET.to_string()
 }
-
-const ICU_WEBHOOK_SECRET: &str = "icu-test-webhook-secret";
 
 // ─── accept_event: the Strava arm ───────────────────────────────────────────
 
