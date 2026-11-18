@@ -28,6 +28,7 @@
 //! revocation) and know nothing about refresh mechanics.
 
 use anyhow::Context;
+use http::StatusCode;
 use log::{debug, trace};
 use oauth2::AccessToken;
 use serde::de::DeserializeOwned;
@@ -67,15 +68,15 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
 ) -> TbResult<T> {
     let (_strava_id, access) = access_token(user_id, store).await?;
 
-    // The offline seams (test-only): first the thread-local canned response
-    // (per-test isolation: each test runs on its own thread), then the
-    // process-wide `CANNED_STRAVA` global (the seam suite's session, run in a
-    // spawned task on a thread the test-local map never reached). A
+    // The offline seams (test-only): first the kit's thread-local canned
+    // response (per-test isolation: each test runs on its own thread), then
+    // the process-wide `CANNED_STRAVA` global (the seam suite's session, run
+    // in a spawned task on a thread the test-local map never reached). A
     // test-support build has no real Strava API: an unscripted URI panics
     // rather than pretend (the seam suite's stubs never import from Strava;
     // the onboarding test expects the loop to panic on the sync's fetch).
     #[cfg(any(test, feature = "test-support"))]
-    if let Some(body) = super::test_support::pop_test_canned(uri) {
+    if let Some(body) = crate::test_support::pop_test_canned(uri, "strava") {
         let body = body?;
         return Ok(serde_json::from_str(&body).context("Could not parse response body")?);
     }
@@ -87,7 +88,14 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
         None => panic!("unexpected strava request: {uri}"),
     }
 
-    let r = get_strava(&access, uri).await?;
+    let r = crate::http::bearer_get(
+        API,
+        access.secret(),
+        uri,
+        &super::ratelimit::update_from_headers,
+        &StravaMapping,
+    )
+    .await?;
     trace!("{uri}:\n{r}");
     Ok(serde_json::from_str::<T>(&r).context("Could not parse response body")?)
 }
@@ -105,7 +113,7 @@ pub(crate) async fn deauthorize(user_id: UserId, store: &mut impl StravaDataStor
     // wide `CANNED_STRAVA` global does not cover the revocation — the seam
     // suite's real session attempts the real (non-fatal) revocation.
     #[cfg(any(test, feature = "test-support"))]
-    if super::test_support::in_test_mode() {
+    if crate::test_support::in_test_mode() {
         super::test_support::record_deauthorize(strava_id);
         debug!("user {} token revoked (test)", strava_id);
         return Ok(());
@@ -122,36 +130,28 @@ pub(crate) async fn deauthorize(user_id: UserId, store: &mut impl StravaDataStor
     Ok(())
 }
 
-/// The bearer GET of a Strava API `uri`, mapping the HTTP status to a domain
-/// error (the kit's status classification applied with Strava's messages).
-async fn get_strava(access: &AccessToken, uri: &str) -> TbResult<String> {
-    let resp = reqwest::Client::new()
-        .get(format!("{API}{uri}"))
-        .bearer_auth(access.secret())
-        .send()
-        .await
-        .context("Could not reach strava")?;
+/// Strava's status-to-error mapping: the kit's status classification applied
+/// with Strava's message wording. The `Permanent` arm does not read the
+/// response body (unlike intervals.icu).
+struct StravaMapping;
 
-    // Update the rate-limit state from the response headers: every Strava
-    // API response carries X-RateLimit-* headers (success or error).
-    super::ratelimit::update_from_headers(resp.headers());
-
-    let status = resp.status();
-    if status.is_success() {
-        return Ok(resp.text().await.context("could not reach strava")?);
+impl crate::http::BearerGetMapping for StravaMapping {
+    fn reads_body(&self) -> bool {
+        false
     }
-
-    match classify_status(status) {
-        StatusDecision::TryAgain => Err(Error::TryAgain(status.canonical_reason().unwrap())),
-        StatusDecision::NotAuth => Err(Error::NotAuth(format!(
-            "Strava request authorization withdrawn for {uri}"
-        ))),
-        StatusDecision::Permanent => Err(Error::BadRequest(format!(
-            "Strava request error: {}",
-            status
-                .canonical_reason()
-                .unwrap_or("Unknown status received")
-        ))),
+    fn map(&self, status: StatusCode, uri: &str, _body: Option<String>) -> Error {
+        match classify_status(status) {
+            StatusDecision::TryAgain => Error::TryAgain(status.canonical_reason().unwrap()),
+            StatusDecision::NotAuth => {
+                Error::NotAuth(format!("Strava request authorization withdrawn for {uri}"))
+            }
+            StatusDecision::Permanent => Error::BadRequest(format!(
+                "Strava request error: {}",
+                status
+                    .canonical_reason()
+                    .unwrap_or("Unknown status received")
+            )),
+        }
     }
 }
 

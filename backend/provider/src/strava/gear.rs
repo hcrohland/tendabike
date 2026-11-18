@@ -80,7 +80,7 @@ pub(crate) async fn into_partid<D: EntityFacade<S>, S: StravaDataStore>(
     let model = gear.model_name.unwrap_or("".into());
     let name = gear.name;
     let purchase = OffsetDateTime::now_utc();
-    let session = Box::new(OnBehalf(user_id));
+    let session = Box::new(OnBehalf::new(user_id));
     let tbid = facade
         .create_part(name, vendor, model, what, source, purchase, session, store)
         .await?

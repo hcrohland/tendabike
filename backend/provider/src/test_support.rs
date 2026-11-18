@@ -5,19 +5,19 @@
 //!   `cfg(test)`). Provider tests mock this seam instead of the concrete
 //!   domain ops — the domain logic runs for real behind the concrete
 //!   [`EntityFacadeImpl`].
-//! - The **common canned-response machinery** the provider HTTP test seams
-//!   share (spec #838): [`CannedState`] (the per-thread state) and the free
-//!   functions over it ([`begin_test`], [`in_test_mode`], [`queue`],
-//!   [`queue_error`], [`pop_test_canned`], [`requests`]). Each provider seam
-//!   owns its own `thread_local` (a thread-local can't live in a struct
-//!   instance) and thin free functions that reach it through these.
+//! - The **canned-response wiring** the provider HTTP test seams share
+//!   (spec #838): [`CannedState`] (the per-thread state), the single shared
+//!   thread-local map, and the free functions over it ([`begin_test`],
+//!   [`in_test_mode`], [`queue`], [`queue_error`], [`pop_test_canned`],
+//!   [`requests`]). The kit owns the thread-local and the accessors; a
+//!   driver's seam keeps only its fixture constructors and its
+//!   provider-specific canned data.
 //!
 //! [`EntityFacade`]: crate::EntityFacade
 //! [`EntityFacadeImpl`]: crate::EntityFacadeImpl
 
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
-use std::thread::LocalKey;
 
 use crate::facade::{Error, TbResult};
 
@@ -54,7 +54,8 @@ pub fn icu_webhook_secret() -> String {
     ICU_WEBHOOK_SECRET.to_string()
 }
 
-/// The per-thread canned-response state a provider's HTTP test seam owns.
+/// The per-thread canned-response state the provider HTTP test seams share:
+/// the single thread-local map the kit's accessors reach.
 ///
 /// The common fields every seam needs: whether the thread is in test mode,
 /// the queued responses (FIFO per URI), and the recorded request URIs.
@@ -68,27 +69,32 @@ pub struct CannedState {
     requests: Vec<String>,
 }
 
-/// Begin a test's thread-local scope on the seam's `CANNED` key: resets the
-/// state to a fresh [`CannedState`] and marks the thread in test mode
-/// (per-test isolation — each test runs on its own thread).
-///
-/// `key` is a `&'static` because the seam's `thread_local!` static is
-/// process-wide; `LocalKey::with` requires a `'static` receiver.
-pub fn begin_test(key: &'static LocalKey<RefCell<CannedState>>) {
-    key.with(|c| {
+// The single shared thread-local canned-response map (per-test isolation:
+// each test runs on its own thread, so the map is fresh per test). A
+// thread-local can't live in a struct instance, so the kit owns it here and
+// the accessors below reach it directly.
+thread_local! {
+    static CANNED: RefCell<CannedState> = RefCell::new(CannedState::default());
+}
+
+/// Begin a test's thread-local scope: resets the state to a fresh
+/// [`CannedState`] and marks the thread in test mode (per-test isolation —
+/// each test runs on its own thread).
+pub fn begin_test() {
+    CANNED.with(|c| {
         *c.borrow_mut() = CannedState::default();
         c.borrow_mut().test_mode = true;
     });
 }
 
-/// Whether the thread is in test mode on the seam's `CANNED` key.
-pub fn in_test_mode(key: &'static LocalKey<RefCell<CannedState>>) -> bool {
-    key.with(|c| c.borrow().test_mode)
+/// Whether the thread is in test mode.
+pub fn in_test_mode() -> bool {
+    CANNED.with(|c| c.borrow().test_mode)
 }
 
 /// Queue a canned JSON response for an exact request URI (FIFO per URI).
-pub fn queue(key: &'static LocalKey<RefCell<CannedState>>, uri: &str, json: &str) {
-    key.with(|c| {
+pub fn queue(uri: &str, json: &str) {
+    CANNED.with(|c| {
         c.borrow_mut()
             .responses
             .entry(uri.to_string())
@@ -98,8 +104,8 @@ pub fn queue(key: &'static LocalKey<RefCell<CannedState>>, uri: &str, json: &str
 }
 
 /// Queue an error for an exact request URI.
-pub fn queue_error(key: &'static LocalKey<RefCell<CannedState>>, uri: &str, err: Error) {
-    key.with(|c| {
+pub fn queue_error(uri: &str, err: Error) {
+    CANNED.with(|c| {
         c.borrow_mut()
             .responses
             .entry(uri.to_string())
@@ -116,12 +122,8 @@ pub fn queue_error(key: &'static LocalKey<RefCell<CannedState>>, uri: &str, err:
 /// `Some`: the queued body (or error), recording the request; an unqueued URI
 /// records the request and yields the "unexpected `{provider}` request"
 /// error.
-pub fn pop_test_canned(
-    key: &'static LocalKey<RefCell<CannedState>>,
-    uri: &str,
-    provider: &str,
-) -> Option<TbResult<String>> {
-    key.with(|c| {
+pub fn pop_test_canned(uri: &str, provider: &str) -> Option<TbResult<String>> {
+    CANNED.with(|c| {
         let mut c = c.borrow_mut();
         if !c.test_mode {
             return None;
@@ -139,6 +141,6 @@ pub fn pop_test_canned(
 }
 
 /// The requested URIs, in order (assert on these to verify API calls).
-pub fn requests(key: &'static LocalKey<RefCell<CannedState>>) -> Vec<String> {
-    key.with(|c| c.borrow().requests.clone())
+pub fn requests() -> Vec<String> {
+    CANNED.with(|c| c.borrow().requests.clone())
 }

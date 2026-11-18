@@ -8,7 +8,9 @@
 //! independent, process-wide limiter. The state is in-memory: on restart it
 //! starts empty and learns from the first response.
 
+use std::cell::RefCell;
 use std::sync::Mutex;
+use std::thread::LocalKey;
 
 use http::{HeaderMap, HeaderName, HeaderValue};
 
@@ -265,6 +267,36 @@ impl RateLimitShim {
         limiter.update_from_headers(&headers);
         limiter
     }
+}
+
+/// The test-override-aware rate-limit gate: reports from the per-thread
+/// `override_key` limiter when it is set (the test seam: parallel
+/// rate-limiter tests can't observe each other's process-global state), else
+/// from the process-wide `global` limiter.
+pub(crate) fn limited_until(
+    global: &RateLimitShim,
+    override_key: &'static LocalKey<RefCell<Option<RateLimiter>>>,
+) -> Option<i64> {
+    if let Some(until) = override_key.with(|o| o.borrow().as_ref().map(|l| l.gate())) {
+        return until;
+    }
+    global.limited_until()
+}
+
+/// The test-seam hook: set the per-thread `override_key` limiter to a fresh
+/// limiter in the shape of the process-wide one (the given label and specs),
+/// populated from the given `"header", "value"` pairs — the logic a driver's
+/// `test_set_limited` / `test_set_not_limited` thin wrappers drive.
+#[cfg(test)]
+pub(crate) fn set_override(
+    override_key: &'static LocalKey<RefCell<Option<RateLimiter>>>,
+    label: &'static str,
+    specs: &[WindowSpec],
+    pairs: &[(&str, &str)],
+) {
+    override_key.with(|o| {
+        *o.borrow_mut() = Some(RateLimitShim::limiter_from_headers(label, specs, pairs));
+    });
 }
 
 /// Parses a `"15min,daily"` comma-separated header value into a pair.
@@ -593,5 +625,63 @@ mod tests {
         ]);
         limiter.update_from_headers(&h);
         assert!(limiter.limited_until().is_some());
+    }
+
+    // ─── Wrapper (the shared scaffolding over the kernel) ──────────────────
+    //
+    // A per-thread override for the wrapper tests: the same shape a driver's
+    // named `TEST_OVERRIDE` thread-local carries. Each test runs on its own
+    // thread, so the override is fresh per test.
+
+    thread_local! {
+        static TEST_OVERRIDE: RefCell<Option<RateLimiter>> = const { RefCell::new(None) };
+    }
+
+    /// The test-override-aware gate reports a boundary when the override is
+    /// set to an exhausted window (a 15-minute mark in the future).
+    #[test]
+    fn limited_until_reports_from_the_override_when_exhausted() {
+        set_override(
+            &TEST_OVERRIDE,
+            "test",
+            &test_specs(),
+            &[("X-Read-Limit", "100,1000"), ("X-Read-Usage", "100,500")],
+        );
+        let global = RateLimitShim::new("test", test_specs());
+        let until =
+            limited_until(&global, &TEST_OVERRIDE).expect("exhausted override reports a boundary");
+        assert!(until > now_unix(), "boundary is in the future");
+        assert_eq!(until % 900, 0, "boundary is a 15-min mark");
+    }
+
+    /// The test-override-aware gate reports no limit when the override has
+    /// budget (no exhausted window).
+    #[test]
+    fn limited_until_is_none_when_the_override_has_budget() {
+        set_override(
+            &TEST_OVERRIDE,
+            "test",
+            &test_specs(),
+            &[("X-Read-Limit", "100,1000"), ("X-Read-Usage", "0,0")],
+        );
+        let global = RateLimitShim::new("test", test_specs());
+        assert_eq!(limited_until(&global, &TEST_OVERRIDE), None);
+    }
+
+    /// The remaining-style (intervals.icu) header shape feeds the wrapper: a
+    /// 0-remaining 15-minute window reads as exhausted and reports a boundary.
+    #[test]
+    fn remaining_style_headers_report_a_boundary_through_the_wrapper() {
+        set_override(
+            &TEST_OVERRIDE,
+            "icu",
+            &remaining_spec(),
+            &[("X-Limit", "2500,5000"), ("X-Remaining", "0,4500")],
+        );
+        let global = RateLimitShim::new("icu", remaining_spec());
+        let until = limited_until(&global, &TEST_OVERRIDE)
+            .expect("exhausted 15-minute window reports a boundary");
+        assert!(until > now_unix(), "boundary is in the future");
+        assert_eq!(until % 900, 0, "boundary is a 15-min mark");
     }
 }

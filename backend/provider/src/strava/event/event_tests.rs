@@ -1,8 +1,9 @@
 use std::sync::{Arc, Mutex};
 
-use super::super::test_support::{activity_json, queue, queue_error, setup, strava_user};
+use super::super::test_support::{activity_json, setup, strava_user};
 use super::*;
 use super::{AspectType, Event, ObjectType};
+use crate::test_support::{queue, queue_error};
 
 /// Sets this thread's rate-limiter override to "at limit" (read 15-min
 /// exhausted), so `get_event` reports `Limited`.

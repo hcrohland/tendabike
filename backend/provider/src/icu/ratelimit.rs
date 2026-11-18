@@ -60,13 +60,11 @@ thread_local! {
 /// resets, or `None` if budget remains (or no data yet).
 ///
 /// Emits a WARN log on transition into or out of the rate-limited state.
+/// The test-override-aware gate logic lives in the kit
+/// ([`crate::ratelimit::limited_until`]); this thin wrapper drives it with
+/// intervals.icu's named static and thread-local.
 pub(crate) fn limited_until() -> Option<i64> {
-    // Test seam: a per-thread override shadows the process-global limiter, so
-    // parallel rate-limiter tests can't observe each other's state.
-    if let Some(until) = TEST_OVERRIDE.with(|o| o.borrow().as_ref().map(|l| l.gate())) {
-        return until;
-    }
-    RATE_LIMITER.limited_until()
+    crate::ratelimit::limited_until(&RATE_LIMITER, &TEST_OVERRIDE)
 }
 
 /// Parses intervals.icu's `X-RateLimit-*` response headers into the shared
@@ -79,83 +77,32 @@ pub(crate) fn update_from_headers(headers: &HeaderMap) {
 
 #[cfg(test)]
 /// Sets this thread's rate-limiter override to "at limit" (15-min exhausted:
-/// 0 remaining), so [`limited_until`] reports a boundary.
+/// 0 remaining), so [`limited_until`] reports a boundary. The override-set
+/// logic lives in the kit ([`crate::ratelimit::set_override`]).
 pub(crate) fn test_set_limited() {
-    TEST_OVERRIDE.with(|o| {
-        *o.borrow_mut() = Some(RateLimitShim::limiter_from_headers(
-            "icu",
-            &icu_specs(),
-            &[
-                ("X-RateLimit-Limit", "100,1000"),
-                ("X-RateLimit-Remaining", "0,500"),
-            ],
-        ));
-    });
+    crate::ratelimit::set_override(
+        &TEST_OVERRIDE,
+        "icu",
+        &icu_specs(),
+        &[
+            ("X-RateLimit-Limit", "100,1000"),
+            ("X-RateLimit-Remaining", "0,500"),
+        ],
+    );
 }
 
 #[cfg(test)]
 /// Sets this thread's rate-limiter override to "no data" (allows all
-/// requests), so [`limited_until`] reports no limit.
+/// requests), so [`limited_until`] reports no limit. The override-set logic
+/// lives in the kit ([`crate::ratelimit::set_override`]).
 pub(crate) fn test_set_not_limited() {
-    TEST_OVERRIDE.with(|o| {
-        *o.borrow_mut() = Some(RateLimitShim::limiter_from_headers(
-            "icu",
-            &icu_specs(),
-            &[
-                ("X-RateLimit-Limit", "100,1000"),
-                ("X-RateLimit-Remaining", "100,1000"),
-            ],
-        ));
-    });
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn icu_limited_until_reports_boundary_when_exhausted() {
-        test_set_limited();
-        let until = limited_until().expect("exhausted read window reports a boundary");
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as i64;
-        assert!(until > now, "boundary is in the future");
-        assert_eq!(until % 900, 0, "boundary is a 15-min mark");
-    }
-
-    #[test]
-    fn icu_limited_until_is_none_when_not_exhausted() {
-        test_set_not_limited();
-        assert_eq!(limited_until(), None);
-    }
-
-    /// The intervals.icu API returns exactly these two headers (per the API
-    /// docs): `X-RateLimit-Limit: <15m>,<daily>` and
-    /// `X-RateLimit-Remaining: <15m>,<daily>`. This feeds the real shape and
-    /// asserts the limiter detects an exhausted 15-minute window (0 remaining).
-    #[test]
-    fn icu_limiter_works_with_real_api_headers() {
-        let mut m = HeaderMap::new();
-        m.insert(
-            HeaderName::from_bytes(b"X-RateLimit-Limit").unwrap(),
-            http::HeaderValue::from_str("2500,5000").unwrap(),
-        );
-        m.insert(
-            HeaderName::from_bytes(b"X-RateLimit-Remaining").unwrap(),
-            http::HeaderValue::from_str("0,4500").unwrap(),
-        );
-        let mut limiter = RateLimiter::new("icu", icu_specs());
-        limiter.update_from_headers(&m);
-        let until = limiter
-            .gate()
-            .expect("exhausted 15-minute window reports a boundary");
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as i64;
-        assert!(until > now, "boundary is in the future");
-        assert_eq!(until % 900, 0, "boundary is a 15-min mark");
-    }
+    crate::ratelimit::set_override(
+        &TEST_OVERRIDE,
+        "icu",
+        &icu_specs(),
+        &[
+            ("X-RateLimit-Limit", "100,1000"),
+            ("X-RateLimit-Remaining", "100,1000"),
+        ],
+    );
 }

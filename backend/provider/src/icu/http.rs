@@ -9,10 +9,10 @@
 //! the window boundary and the loop sleeps until it).
 
 use anyhow::Context;
+use http::StatusCode;
 use log::trace;
 use serde::de::DeserializeOwned;
 
-use super::client::HTTP_CLIENT;
 use super::{IcuDataStore, IcuId};
 use crate::facade::{Error, TbResult, UserId};
 use crate::{StatusDecision, classify_status};
@@ -46,55 +46,50 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
 ) -> TbResult<T> {
     let (_icuid, access) = access_token(user_id, store).await?;
 
-    // The offline seam (test-only): the thread-local canned response
+    // The offline seam (test-only): the kit's thread-local canned response
     // (per-test isolation: each test runs on its own thread). A test-support
     // build has no real intervals.icu API: an unscripted URI panics rather
     // than pretend.
     #[cfg(any(test, feature = "test-support"))]
-    if let Some(body) = super::test_support::pop_test_canned(uri) {
+    if let Some(body) = crate::test_support::pop_test_canned(uri, "icu") {
         let body = body?;
         return Ok(serde_json::from_str(&body).context("Could not parse response body")?);
     }
 
-    let r = get_icu(&access, uri).await?;
+    let r = crate::http::bearer_get(
+        API,
+        &access,
+        uri,
+        &super::ratelimit::update_from_headers,
+        &IcuMapping,
+    )
+    .await?;
     trace!("{uri}:\n{r}");
     Ok(serde_json::from_str::<T>(&r).context("Could not parse response body")?)
 }
 
-/// The bearer GET of an intervals.icu API `uri`, mapping the HTTP status to
-/// a domain error (the kit's status classification applied with icu's
-/// messages; the `Permanent` arm reads the response body into the detail —
-/// icu-specific, so it stays here).
-async fn get_icu(access: &str, uri: &str) -> TbResult<String> {
-    let resp = HTTP_CLIENT
-        .get(format!("{API}{uri}"))
-        .bearer_auth(access)
-        .send()
-        .await
-        .context("Could not reach intervals.icu")?;
+/// intervals.icu's status-to-error mapping: the kit's status classification
+/// applied with icu's message wording. The `Permanent` arm reads the response
+/// body into the error detail (icu-specific).
+struct IcuMapping;
 
-    // Update the rate-limit state from the response headers: every intervals.icu
-    // API response carries X-RateLimit-* headers (success or error).
-    super::ratelimit::update_from_headers(resp.headers());
-
-    let status = resp.status();
-    if status.is_success() {
-        return Ok(resp.text().await.context("could not reach intervals.icu")?);
+impl crate::http::BearerGetMapping for IcuMapping {
+    fn reads_body(&self) -> bool {
+        true
     }
-
-    match classify_status(status) {
-        StatusDecision::TryAgain => Err(Error::TryAgain(status.canonical_reason().unwrap())),
-        StatusDecision::NotAuth => Err(Error::NotAuth(format!(
-            "intervals.icu request authorization withdrawn for {uri}"
-        ))),
-        StatusDecision::Permanent => {
-            let body = resp.text().await.unwrap_or_default();
-            Err(Error::BadRequest(format!(
-                "intervals.icu request error: {} — {body}",
+    fn map(&self, status: StatusCode, uri: &str, body: Option<String>) -> Error {
+        match classify_status(status) {
+            StatusDecision::TryAgain => Error::TryAgain(status.canonical_reason().unwrap()),
+            StatusDecision::NotAuth => Error::NotAuth(format!(
+                "intervals.icu request authorization withdrawn for {uri}"
+            )),
+            StatusDecision::Permanent => Error::BadRequest(format!(
+                "intervals.icu request error: {} — {}",
                 status
                     .canonical_reason()
-                    .unwrap_or("Unknown status received")
-            )))
+                    .unwrap_or("Unknown status received"),
+                body.unwrap_or_default()
+            )),
         }
     }
 }

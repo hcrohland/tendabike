@@ -111,7 +111,7 @@ impl StravaActivity {
         store: &mut S,
     ) -> TbResult<Summary> {
         let activity = self.into_activity(user_id, facade, store).await?;
-        let session = Box::new(OnBehalf(user_id));
+        let session = Box::new(OnBehalf::new(user_id));
         facade.upsert_activity(activity, session, store).await
     }
 }
@@ -149,7 +149,7 @@ pub(crate) async fn delete_activity<D: EntityFacade<S>, S: StravaDataStore>(
     facade: &D,
     store: &mut S,
 ) -> TbResult<Summary> {
-    let session = Box::new(OnBehalf(user_id));
+    let session = Box::new(OnBehalf::new(user_id));
     facade
         .delete_activity(
             ProviderActivityId::Strava(StravaActivityId::from(act)).into(),

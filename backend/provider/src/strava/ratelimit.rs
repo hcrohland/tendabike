@@ -71,13 +71,11 @@ thread_local! {
 /// resets, or `None` if budget remains (or no data yet).
 ///
 /// Emits a WARN log on transition into or out of the rate-limited state.
+/// The test-override-aware gate logic lives in the kit
+/// ([`crate::ratelimit::limited_until`]); this thin wrapper drives it with
+/// Strava's named static and thread-local.
 pub(crate) fn limited_until() -> Option<i64> {
-    // Test seam: a per-thread override shadows the process-global limiter, so
-    // parallel rate-limiter tests can't observe each other's state.
-    if let Some(until) = TEST_OVERRIDE.with(|o| o.borrow().as_ref().map(|l| l.gate())) {
-        return until;
-    }
-    RATE_LIMITER.limited_until()
+    crate::ratelimit::limited_until(&RATE_LIMITER, &TEST_OVERRIDE)
 }
 
 /// Parses Strava's `X-RateLimit-*` response headers into the shared state.
@@ -91,32 +89,32 @@ pub(crate) fn update_from_headers(headers: &HeaderMap) {
 
 #[cfg(test)]
 /// Sets this thread's rate-limiter override to "at limit" (read 15-min
-/// exhausted), so [`limited_until`] reports a boundary.
+/// exhausted), so [`limited_until`] reports a boundary. The override-set
+/// logic lives in the kit ([`crate::ratelimit::set_override`]).
 pub(crate) fn test_set_limited() {
-    TEST_OVERRIDE.with(|o| {
-        *o.borrow_mut() = Some(RateLimitShim::limiter_from_headers(
-            "strava",
-            &strava_specs(),
-            &[
-                ("X-ReadRateLimit-Limit", "100,1000"),
-                ("X-ReadRateLimit-Usage", "100,500"),
-            ],
-        ));
-    });
+    crate::ratelimit::set_override(
+        &TEST_OVERRIDE,
+        "strava",
+        &strava_specs(),
+        &[
+            ("X-ReadRateLimit-Limit", "100,1000"),
+            ("X-ReadRateLimit-Usage", "100,500"),
+        ],
+    );
 }
 
 #[cfg(test)]
 /// Sets this thread's rate-limiter override to "no data" (allows all
-/// requests), so [`limited_until`] reports no limit.
+/// requests), so [`limited_until`] reports no limit. The override-set logic
+/// lives in the kit ([`crate::ratelimit::set_override`]).
 pub(crate) fn test_set_not_limited() {
-    TEST_OVERRIDE.with(|o| {
-        *o.borrow_mut() = Some(RateLimitShim::limiter_from_headers(
-            "strava",
-            &strava_specs(),
-            &[
-                ("X-ReadRateLimit-Limit", "100,1000"),
-                ("X-ReadRateLimit-Usage", "0,0"),
-            ],
-        ));
-    });
+    crate::ratelimit::set_override(
+        &TEST_OVERRIDE,
+        "strava",
+        &strava_specs(),
+        &[
+            ("X-ReadRateLimit-Limit", "100,1000"),
+            ("X-ReadRateLimit-Usage", "0,0"),
+        ],
+    );
 }
