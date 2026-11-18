@@ -82,7 +82,7 @@ mod http;
 pub use http::*;
 
 mod session;
-pub use session::*;
+pub(crate) use session::*;
 
 mod client;
 pub use client::*;

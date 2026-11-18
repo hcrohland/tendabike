@@ -1,8 +1,5 @@
-//! The provider kit's identity-only acting session (ADR-0011): the event lane
-//! has no acting session, so where it crosses into a session-typed domain call
-//! it constructs this adapter. Personal, non-admin, no shop — the event
-//! lane's actual context (ADR-0009). The single home for the verbatim
-//! identity session every driver's event lane shares.
+//! The identity-only acting session ([`OnBehalf`]) every driver's event lane
+//! shares.
 
 use crate::facade::{Session, ShopId, UserId};
 
@@ -11,12 +8,12 @@ use crate::facade::{Session, ShopId, UserId};
 /// domain call it constructs this adapter. Personal, non-admin, no shop —
 /// the event lane's actual context (ADR-0009).
 #[derive(Debug, Clone, Copy)]
-pub struct OnBehalf(UserId);
+pub(crate) struct OnBehalf(UserId);
 
 impl OnBehalf {
     /// Construct the identity-only session for `user_id`: no active shop, not
     /// an admin — the event lane's context.
-    pub fn new(user_id: UserId) -> Self {
+    pub(crate) fn new(user_id: UserId) -> Self {
         Self(user_id)
     }
 }

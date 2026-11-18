@@ -63,7 +63,8 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
         &super::ratelimit::update_from_headers,
         &IcuMapping,
     )
-    .await?;
+    .await
+    .with_context(|| "Could not reach intervals.icu")?;
     trace!("{uri}:\n{r}");
     Ok(serde_json::from_str::<T>(&r).context("Could not parse response body")?)
 }
