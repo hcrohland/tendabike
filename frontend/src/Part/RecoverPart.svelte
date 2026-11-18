@@ -17,7 +17,7 @@
 
 <script lang="ts">
   import { fmtDate } from "../lib/utils";
-  import { types } from "../lib/types";
+  import { types } from "../lib/types.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";
   import { m } from "../../paraglide/messages";

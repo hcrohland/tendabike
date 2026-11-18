@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Select } from "flowbite-svelte";
-  import { Type, getCategory } from "../lib/types";
+  import { Type, getCategory } from "../lib/types.svelte";
   import { m } from "../../paraglide/messages";
 
   interface Result {

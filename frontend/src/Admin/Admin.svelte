@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button, ButtonGroup, Spinner } from "flowbite-svelte";
   import { handleError, myfetch } from "../lib/utils";
-  import { type AdminRow, type User } from "../lib/user";
+  import { type AdminRow, type User } from "../lib/user.svelte";
   import AdminCard from "./AdminCard.svelte";
   import CreateSync from "./CreateSync.svelte";
   import DeleteUser from "./DeleteUser.svelte";

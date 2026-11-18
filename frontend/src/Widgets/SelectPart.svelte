@@ -1,7 +1,7 @@
 <script lang="ts">
   import { parts } from "../lib/part";
   import { stateValues } from "../lib/mapable.svelte";
-  import { getCategory, Type } from "../lib/types";
+  import { getCategory, Type } from "../lib/types.svelte";
   import { Select } from "flowbite-svelte";
   import { m } from "../../paraglide/messages";
 

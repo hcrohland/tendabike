@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ConnectProviders from "./ConnectProviders.svelte";
-import { loadProviders } from "../lib/provider";
+import { loadProviders } from "../lib/provider.svelte";
 
 const OFFLINE_TEXT =
   "We're running offline. No activity providers are configured, so importing and syncing activities is unavailable. Add a provider to get online.";

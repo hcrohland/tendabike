@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import Activities from "./Activities.svelte";
 import { activities } from "../lib/activity";
 import { parts } from "../lib/part";
-import { getTypes, setCategory } from "../lib/types";
+import { getTypes, setCategory } from "../lib/types.svelte";
 
 function json200(body: unknown) {
   return {

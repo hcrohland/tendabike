@@ -4,7 +4,7 @@ import { flushSync } from "svelte";
 import { markHydrated, resetHydrated, startStream, stopStream } from "./stream";
 import { parts } from "./part";
 import { stateValues } from "./mapable.svelte";
-import { setUser, getUser } from "./user";
+import { setUser, getUser } from "./user.svelte";
 import { Shop, setShop } from "./shop.svelte";
 import { resp, summary, summaryContent } from "../test/helpers";
 import StreamHarness from "../test/StreamHarness.svelte";

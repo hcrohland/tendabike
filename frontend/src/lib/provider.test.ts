@@ -4,7 +4,7 @@ import {
   getProvidersStatus,
   isOffline,
   loadProviders,
-} from "./provider";
+} from "./provider.svelte";
 
 /// Stub the `GET /api/providers` fetch with the enabled provider wire
 /// values.

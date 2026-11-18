@@ -1,6 +1,6 @@
 <script module lang="ts">
-  import { Type } from "../lib/types";
-  import { getUser } from "../lib/user";
+  import { Type } from "../lib/types.svelte";
+  import { getUser } from "../lib/user.svelte";
   import { Part } from "../lib/part";
   import { default_attach_date, prev_attach_time } from "../lib/attachment";
 

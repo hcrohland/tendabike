@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { activities, Activity } from "./lib/activity";
 import { parts, Part } from "./lib/part";
 import { Shop, setShop } from "./lib/shop.svelte";
-import { getTypes, setCategory, types } from "./lib/types";
-import { setUser } from "./lib/user";
+import { getTypes, setCategory, types } from "./lib/types.svelte";
+import { setUser } from "./lib/user.svelte";
 import { resp } from "./test/helpers";
 import ToyGroup from "./ToyGroup.svelte";
 

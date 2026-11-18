@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Provider } from "../lib/provider";
+  import type { Provider } from "../lib/provider.svelte";
 
   /// The provider's mark. `colored` (default) is for branded backgrounds
   /// (white Strava logo, white icu badge); `colored={false}` is for light

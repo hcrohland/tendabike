@@ -2,8 +2,8 @@ import { render, screen } from "@testing-library/svelte";
 import { flushSync } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Part } from "../lib/part";
-import { getTypes } from "../lib/types";
-import { setUser, users } from "../lib/user";
+import { getTypes } from "../lib/types.svelte";
+import { setUser, users } from "../lib/user.svelte";
 import { resp } from "../test/helpers";
 import GearCard from "./GearCard.svelte";
 

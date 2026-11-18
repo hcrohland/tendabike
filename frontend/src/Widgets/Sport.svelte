@@ -12,7 +12,7 @@
 
   import { myfetch, handleError } from "../lib/utils";
   import { Dropdown, DropdownItem, Spinner } from "flowbite-svelte";
-  import { setCategory, types } from "../lib/types";
+  import { setCategory, types } from "../lib/types.svelte";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
   import { m } from "../../paraglide/messages";
 </script>

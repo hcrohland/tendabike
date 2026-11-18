@@ -20,7 +20,7 @@
   import { requestSubscription } from "./SubscriptionRequestModal.svelte";
   import { allGear, Part, parts } from "../lib/part";
   import { stateValues } from "../lib/mapable.svelte";
-  import { getCategory } from "../lib/types";
+  import { getCategory } from "../lib/types.svelte";
 
   interface Props {
     shopid?: number;

@@ -3,15 +3,15 @@
   import { goto } from "$app/navigation";
   import { Part } from "../lib/part";
   import { fmtDate } from "../lib/utils";
-  import { types } from "../lib/types";
-  import { getUser, users } from "../lib/user";
+  import { types } from "../lib/types.svelte";
+  import { getUser, users } from "../lib/user.svelte";
   import UsageChips from "../Usage/UsageChips.svelte";
   import ProviderMark from "../Widgets/ProviderMark.svelte";
   import {
     providerOfActivityId,
     providerMeta,
     gearSourceUrl,
-  } from "../lib/provider";
+  } from "../lib/provider.svelte";
   import * as m from "../../paraglide/messages";
 
   interface Props {

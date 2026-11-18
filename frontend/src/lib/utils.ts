@@ -1,4 +1,4 @@
-import { getUser, setUser } from "./user";
+import { getUser, setUser } from "./user.svelte";
 import { error } from "./notification.svelte";
 import { getShop } from "./shop.svelte";
 

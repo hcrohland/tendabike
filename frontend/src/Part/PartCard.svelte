@@ -6,7 +6,7 @@
   import UsageChips from "../Usage/UsageChips.svelte";
   import type { Attachment } from "../lib/attachment";
   import { parts } from "../lib/part";
-  import { Type } from "../lib/types";
+  import { Type } from "../lib/types.svelte";
   import { usages } from "../lib/usage";
   import { plansForPart, duesForPlans } from "../lib/serviceplan";
   import PartLink from "./PartLink.svelte";

@@ -1,6 +1,6 @@
 import { mapableState } from "./mapable.svelte";
 import { Shop } from "./shop.svelte";
-import type { UserPublic } from "./user";
+import type { UserPublic } from "./user.svelte";
 
 export type SubscriptionStatus =
   "pending" | "active" | "rejected" | "cancelled";

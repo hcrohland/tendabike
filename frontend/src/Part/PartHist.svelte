@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { types } from "../lib/types";
+  import { types } from "../lib/types.svelte";
   import UsageChips from "../Usage/UsageChips.svelte";
   import PartLink from "./PartLink.svelte";
   import { parts } from "../lib/part";

@@ -4,7 +4,7 @@
   import Menu from "../Widgets/Menu.svelte";
   import ProviderMark from "../Widgets/ProviderMark.svelte";
   import { changeActivity } from "./ChangeActivity.svelte";
-  import { providerOfActivityId, providerMeta } from "../lib/provider";
+  import { providerOfActivityId, providerMeta } from "../lib/provider.svelte";
   import * as m from "../../paraglide/messages";
 
   let { row }: { row: Activity } = $props();

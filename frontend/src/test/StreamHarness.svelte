@@ -6,7 +6,7 @@
     stopStream,
     type EventSourceFactory,
   } from "../lib/stream";
-  import { getUser } from "../lib/user";
+  import { getUser } from "../lib/user.svelte";
 
   /// A test seam mirroring Header's stream effect: the stream opens once the
   /// user is known, and re-opens (closing the previous source) whenever

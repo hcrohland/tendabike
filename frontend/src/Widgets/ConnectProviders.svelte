@@ -6,7 +6,7 @@
     providerMeta,
     loginUrl,
     type Provider,
-  } from "../lib/provider";
+  } from "../lib/provider.svelte";
   import ProviderMark from "./ProviderMark.svelte";
   import * as m from "../../paraglide/messages";
 
