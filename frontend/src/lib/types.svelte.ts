@@ -4,6 +4,15 @@ import { Part, parts as allParts } from "./part";
 import { myfetch } from "./utils";
 import * as m from "../../paraglide/messages";
 
+// Translate a paraglide message key, falling back to `fallback` when the key
+// is missing or not a function.
+// SAFETY: the paraglide module exposes one function per compiled message key;
+// unknown keys are checked below and fall back.
+function translate(mod: typeof m, key: string, fallback: string): string {
+  const fn = (mod as unknown as Record<string, () => string>)[key];
+  return typeof fn === "function" ? fn() : fallback;
+}
+
 export class Type {
   id: number;
   name: string;
@@ -20,7 +29,6 @@ export class Type {
   // the activity types this type can use
   acts: ActType[];
 
-  // export let types: { [key: number]: Type };
   constructor(t: any) {
     this.id = t.id;
     this.name = t.name;
@@ -56,22 +64,14 @@ export class Type {
   /** translated display name, falls back to the raw backend name
    * if no translation key exists for this type id */
   localizedName(): string {
-    const key = `type_${this.id}`;
-    // SAFETY: the paraglide module exposes one function per compiled
-    // message key; unknown keys are checked below and fall back.
-    const fn = (m as unknown as Record<string, () => string>)[key];
-    return typeof fn === "function" ? fn() : this.name;
+    return translate(m, `type_${this.id}`, this.name);
   }
 
   /** translated position prefix (front/rear/left/right etc), falls back
    * to the raw prefix if no translation key exists */
   localizedPrefix(): string {
     if (!this.prefix) return "";
-    const key = `position_${this.prefix.toLowerCase()}`;
-    // SAFETY: the paraglide module exposes one function per compiled
-    // message key; unknown keys are checked below and fall back.
-    const fn = (m as unknown as Record<string, () => string>)[key];
-    return typeof fn === "function" ? fn() : this.prefix;
+    return translate(m, `position_${this.prefix.toLowerCase()}`, this.prefix);
   }
 
   /** translated group name, falls back to the raw group name
@@ -85,11 +85,7 @@ export class Type {
   labelWithPosition(prefix: string): string {
     const name = this.localizedName();
     if (!prefix) return name;
-    const key = `position_${prefix.toLowerCase()}`;
-    // SAFETY: the paraglide module exposes one function per compiled
-    // message key; unknown keys are checked below and fall back.
-    const fn = (m as unknown as Record<string, () => string>)[key];
-    const position = typeof fn === "function" ? fn() : prefix;
+    const position = translate(m, `position_${prefix.toLowerCase()}`, prefix);
     return m.type_with_position({ position, name });
   }
 
@@ -104,27 +100,15 @@ export class Type {
   }
 
   localizedAnyNominative(): string {
-    const key = `category_any_nom_${this.id}`;
-    // SAFETY: the paraglide module exposes one function per compiled
-    // message key; unknown keys are checked below and fall back.
-    const fn = (m as unknown as Record<string, () => string>)[key];
-    return typeof fn === "function" ? fn() : `any ${this.name}`;
+    return translate(m, `category_any_nom_${this.id}`, `any ${this.name}`);
   }
 
   localizedAnyDative(): string {
-    const key = `category_any_dat_${this.id}`;
-    // SAFETY: the paraglide module exposes one function per compiled
-    // message key; unknown keys are checked below and fall back.
-    const fn = (m as unknown as Record<string, () => string>)[key];
-    return typeof fn === "function" ? fn() : `any ${this.name}`;
+    return translate(m, `category_any_dat_${this.id}`, `any ${this.name}`);
   }
 
   localizedOldAccusative(): string {
-    const key = `type_old_acc_${this.id}`;
-    // SAFETY: the paraglide module exposes one function per compiled
-    // message key; unknown keys are checked below and fall back.
-    const fn = (m as unknown as Record<string, () => string>)[key];
-    return typeof fn === "function" ? fn() : `old ${this.name}`;
+    return translate(m, `type_old_acc_${this.id}`, `old ${this.name}`);
   }
 }
 
@@ -159,11 +143,11 @@ export async function getTypes() {
 
 export function localizeGroupName(group: string | undefined): string {
   if (!group) return "";
-  const key = `group_${group.toLowerCase().replace(/\s+/g, "_")}`;
-  // SAFETY: the paraglide module exposes one function per compiled
-  // message key; unknown keys are checked below and fall back.
-  const fn = (m as unknown as Record<string, () => string>)[key];
-  return typeof fn === "function" ? fn() : group;
+  return translate(
+    m,
+    `group_${group.toLowerCase().replace(/\s+/g, "_")}`,
+    group,
+  );
 }
 
 /**

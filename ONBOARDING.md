@@ -179,7 +179,7 @@ Marks the initial sync as postponed.
 
 ### Frontend
 
-**Type Definitions** (`frontend/src/lib/types.ts`):
+**Type Definitions** (`frontend/src/lib/types.svelte.ts`):
 ```typescript
 export type OnboardingStatus = "pending" | "completed" | "initial_sync_postponed";
 

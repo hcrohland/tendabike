@@ -46,11 +46,7 @@ export type UserPublic = {
 export type OnboardingStatus =
   "pending" | "completed" | "initial_sync_postponed";
 
-export type User = {
-  id: number;
-  firstname: string;
-  name: string;
-  avatar: string | undefined;
+export type User = UserPublic & {
   is_admin: boolean;
   onboarding_status: OnboardingStatus;
   /// The activity provider the user connected with (`'strava'` | `'icu'`),
