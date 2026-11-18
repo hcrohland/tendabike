@@ -1,6 +1,6 @@
 # ICU tests
 
-All tests run in-memory (no database, no network); one `<name>_tests.rs` module per module under `provider/src/icu/<name>/`, declared `#[cfg(test)]` in `activity.rs`, `event.rs`, `gear.rs`, `user.rs`, `http.rs`.
+All tests run in-memory (no database, no network); one `<name>_tests.rs` module per module under `provider/src/icu/<name>/`, declared `#[cfg(test)]` in `activity.rs`, `event.rs`, `gear.rs`, `user.rs`, `http.rs`. Shared conventions (the seam model, writing conventions, the mockall `.times` gotcha, the shared provider kit) are in [tests.md](../tests.md).
 
 ## Behavior ownership
 
@@ -42,7 +42,6 @@ async fn my_test() -> TbResult<()> {
 }
 ```
 
-- `#[tokio::test]`, return `TbResult<()>`.
 - Assert on the canned `mock!` store outcomes for store state; on `requests()` for API calls.
 - `setup()` calls `begin_test()` internally, so the HTTP seam is ready for `queue()` calls immediately after.
 

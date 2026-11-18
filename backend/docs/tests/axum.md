@@ -1,6 +1,6 @@
 # tb_axum tests
 
-All tests run in-memory (no database; the DB boundary is a fast-failing source, not a real connection). Unit tests are colocated in each module's `#[cfg(test)] mod tests` (`error.rs`, `oauth_common.rs`, `strava/webhook.rs`, `domain/partnote.rs`); router tests live in `lib_tests.rs` (the `#[cfg(test)]` module declared in `lib.rs`) and exercise the real router built by the private `routes()` helper.
+All tests run in-memory (no database; the DB boundary is a fast-failing source, not a real connection). Unit tests are colocated in each module's `#[cfg(test)] mod tests` (`error.rs`, `oauth_common.rs`, `strava/webhook.rs`, `domain/partnote.rs`); router tests live in `lib_tests.rs` (the `#[cfg(test)]` module declared in `lib.rs`) and exercise the real router built by the private `routes()` helper. Shared conventions (the seam model, writing conventions, the mockall `.times` gotcha) are in [tests.md](../tests.md).
 
 ## Behavior ownership
 

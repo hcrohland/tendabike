@@ -1,6 +1,6 @@
 # tb_sqlx tests
 
-The unit tests are pure (no database, no network), colocated in each module's `#[cfg(test)] mod tests`: `lib.rs`, `tb_sqlx.rs`, `stravastore.rs`, and `store/{user,part,activity,attachment,service,serviceplan,shop,usage}.rs`. Two integration suites are the exceptions: `tests/store_seam.rs` (store I/O) and `tests/executor_seam.rs` (the executor's transaction lifecycle) — both run against a real Postgres (below).
+The unit tests are pure (no database, no network), colocated in each module's `#[cfg(test)] mod tests`: `lib.rs`, `tb_sqlx.rs`, `stravastore.rs`, and `store/{user,part,activity,attachment,service,serviceplan,shop,usage}.rs`. Two integration suites are the exceptions: `tests/store_seam.rs` (store I/O) and `tests/executor_seam.rs` (the executor's transaction lifecycle) — both run against a real Postgres (below). Shared conventions (the seam model, writing conventions, the mockall `.times` gotcha) are in [tests.md](../tests.md).
 
 ## Coverage
 

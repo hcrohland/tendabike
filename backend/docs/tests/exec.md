@@ -2,6 +2,8 @@
 
 All `tb_exec` tests run in-memory (no database): the executor loop's control flow is structured as pure units testable with a channel and dummy futures (no store, no database), and the seams the loop drives are `mockall` witnesses, not hand-rolled stores. There are three of them: the **transaction** seam ([`MockConn`], `Txn`-only), the **domain** seam ([`MockDomainFacade`]), and the **provider lane** seam ([`MockLane`]). The loop tests live in `executor/executor_tests.rs` (the `#[cfg(test)]` module declared in `executor.rs`). The `Registry` lifecycle is split (spec #697): the lifecycle-core tests (spawn, `status`, `wake`, `stop_all`, the shop/user push no-op + delivery, the `push_to_recipient_shops` fan-out) live in `registry/core.rs`'s `#[cfg(test)] mod tests` (the core is driven **directly**, not through the facade). The one facade op with a store read — the `subscribe_shop` ownership gate and the shop-context delivery to an open shop stream — is verified against real Postgres in `tb_sqlx`'s `executor_seam.rs` (see [`sqlx.md`](sqlx.md)).
 
+Shared conventions (the seam model, writing conventions, the mockall `.times` gotcha) are in [tests.md](../tests.md).
+
 ## Behavior ownership
 
 `tb_exec` owns the **frame-push / orchestration logic**: the executor loop's control flow — message selection, the reclaim decision, the frame construction and routing, the backoff discipline, and the oneshot reply — driving the domain (the `ApiWrite`/`ApiRead` dispatch through the `DomainFacade` door) and the provider (the `ProviderLane`'s queue probe / gear / stats) inside transactions it owns.
@@ -78,10 +80,9 @@ async fn my_test() -> TbResult<()> {
 }
 ```
 
-- `#[tokio::test]` for async; return `TbResult<()>` so `?` propagates domain errors with context.
-- Script only the seam methods the operation under test calls — the `Txn` (`commit`/`rollback`) on `MockConn`, the dispatches on `MockDomainFacade`, the provider ops on `MockLane`. Each mock has no state: an unscripted call panics, which is a test bug, not a seam bug.
+- Script only the seam methods the operation calls — the `Txn` (`commit`/`rollback`) on `MockConn`, the dispatches on `MockDomainFacade`, the provider ops on `MockLane`.
 - The pure control-flow units (`next_action`, `select_message`, `stop_remaining`, `DbBackoff`) take a channel and dummy futures (`ready_probe` / `Never`) — no `MockConn` at all.
-- Canned domain values come from the fixtures (`summary_owned_by`, `non_empty_summary`, …); the suites have no wall clock, so every fixture time is a fixed value.
+- Canned domain values come from the fixtures (`summary_owned_by`, `non_empty_summary`, …).
 
 ## Gotchas
 

@@ -1,6 +1,6 @@
 # tb_domain tests
 
-All `tb_domain` tests run DB-free (no database). One `<name>_tests.rs` module per entity under `domain/src/entities/<name>/`.
+All `tb_domain` tests run DB-free (no database). One `<name>_tests.rs` module per entity under `domain/src/entities/<name>/`. Shared conventions (the seam model, writing conventions, the mockall `.times` gotcha) are in [tests.md](../tests.md).
 
 ## Behavior ownership
 
@@ -52,9 +52,7 @@ async fn my_test() -> TbResult<()> {
 }
 ```
 
-- `#[tokio::test]` for async; return `TbResult<()>` so `?` propagates domain errors with context.
-- Script only the store methods the operation under test calls (`MockStore` has no state — an unscripted call panics, which is a test bug, not a store bug).
-- Canned rows are built as struct literals (all domain entities have pub fields) via `sample_purchase_date()` for their times.
+- Canned row times come from `sample_purchase_date()` (the domain's fixed-date fixture).
 - Pure value-logic (a field projection, a static-table lookup with no I/O) needs no `MockStore` at all.
 - Where the rule is about the *database* (roundtrips, `RowNotFound`, offset rounding), do not re-implement it here — rest on the sqlx seam.
 

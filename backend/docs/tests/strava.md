@@ -1,6 +1,6 @@
 # Strava tests
 
-All tests run in-memory (no database, no network); one `<name>_tests.rs` module per module under `provider/src/strava/<name>/`, declared `#[cfg(test)]` in `activity.rs`, `event.rs`, `gear.rs`, `user.rs`.
+All tests run in-memory (no database, no network); one `<name>_tests.rs` module per module under `provider/src/strava/<name>/`, declared `#[cfg(test)]` in `activity.rs`, `event.rs`, `gear.rs`, `user.rs`. Shared conventions (the seam model, writing conventions, the mockall `.times` gotcha, the shared provider kit) are in [tests.md](../tests.md).
 
 ## Behavior ownership
 
@@ -36,7 +36,6 @@ async fn my_test() -> TbResult<()> {
 }
 ```
 
-- `#[tokio::test]`, return `TbResult<()>`.
 - Assert on the canned `mock!` store outcomes for store state; on `requests()` for Strava API calls.
 - The `CANNED_STRAVA` global (`test_support::canned_strava(uri, json)`, feature `test-support`) is a *separate*, process-wide offline seam for the `tb_sqlx` executor-seam suite, whose session runs in a spawned task on a thread the thread-local map never reaches. The thin free functions consult the thread-local map first, then `CANNED_STRAVA`.
 
