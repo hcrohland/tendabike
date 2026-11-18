@@ -1,13 +1,10 @@
 # tb_axum tests
 
-All tests run in-memory (no database; the DB boundary is a fast-failing source, not a real connection). Unit tests are colocated in each module's `#[cfg(test)] mod tests` (`error.rs`, `oauth_common.rs`, `strava/webhook.rs`, `domain/partnote.rs`); router tests live in `lib_tests.rs` (the `#[cfg(test)]` module declared in `lib.rs`) and exercise the real router built by the private `routes()` helper.
+All tests run in-memory (no database; the DB boundary is a fast-failing source, not a real connection). Unit tests are colocated in each module's `#[cfg(test)] mod tests` (`error.rs`, `oauth_common.rs`, `strava/webhook.rs`, `domain/partnote.rs`); router tests live in `lib_tests.rs` (the `#[cfg(test)]` module declared in `lib.rs`) and exercise the real router built by the private `routes()` helper. Shared conventions (the seam model, writing conventions, the mockall `.times` gotcha) are in [tests.md](../tests.md).
 
 ## Behavior ownership
 
-`tb_axum` owns the **HTTP layer behavior**: status codes, JSON shapes, routing, the `Error` → response mapping, the SSE/stream surface, and the executor integration at the HTTP boundary (writes riding the executor, onboarding sync / postpone, webhook wake, executor reap and respawn).
-
-- **What it mocks** — the **domain**: the whole suite runs against `MockServiceApi`, the `mockall` service-API double (no loop, no in-memory store, no executor tokio plumbing). The mock's expectations verify the handler called the right operation with the right args; the canned replies are the mock's; the error mapping (404/500/401/403/400/409/429) is the mock returning `Err(...)` directly — no failing `begin` anywhere.
-- **What it delegates to the seam** — loop + real-store truth (reads-as-messages, FIFO, rollback, reap, queue drain, Registry-level lifecycle, the direct ops' transactions) lives in `sqlx/tests/executor_seam.rs` on real Postgres; the read/write dispatch logic lives in the domain suite (`apiread_tests` beside `apiwrite_tests`).
+`tb_axum` owns the **HTTP layer behavior**: status codes, JSON shapes, routing, the `Error` → response mapping, the SSE/stream surface, and the executor integration at the HTTP boundary (writes riding the executor, onboarding sync / postpone, webhook wake, executor reap and respawn). The whole suite runs against `MockServiceApi` (see Key infrastructure); loop + real-store truth lives in `sqlx/tests/executor_seam.rs` on real Postgres, and the read/write dispatch logic in the domain suite.
 
 ## Coverage
 
@@ -28,7 +25,7 @@ All in `lib_tests.rs` (the `#[cfg(test)]` module declared in `lib.rs`).
 - **`run_sse` / `read_sse_frames`** — GET a long-lived SSE endpoint and keep the body open (collecting it would hang); read frames with a per-frame timeout.
 - **`user_cookie(store)` / `admin_cookie(store)`** — create a session via `RequestSession::new_dummy(is_admin)`, return the `id` cookie header.
 - **`RequestSession::new_dummy(is_admin)`** — `#[cfg(test)]` constructor in `session.rs` (fields are private; always construct sessions this way in tests).
-- **`CANNED_STRAVA` / `canned_strava(uri, json)`** — test-only hook in the production Strava module: maps a Strava URI to a canned JSON response, and the Strava `request_json` answers with the canned JSON instead of hitting the Strava API. The seam suite's onboarding path (the gear import's `/athlete` + `/gear/{id}` fetches) runs against these canned responses offline.
+- **`CANNED_STRAVA` / `canned_strava(uri, json)`** — the test-only Strava canned-response hook (defined in the Strava module, see [strava.md](strava.md)); the onboarding path's gear-import fetches (`/athlete` + `/gear/{id}`) run against these canned responses offline.
 - **`init_test_config_once()`** — `Once`-guarded test-process init: `tb_provider::init(ProviderConfig { … })` with fixed test credentials (so the redirect-URL assertions are deterministic, with no env vars to override) and `crate::oauth_common::init_csrf_key(&None)` (no secret, so the `CSRF_KEY` is a per-process random key, which is fine for token roundtrips).
 
 ## Gotchas

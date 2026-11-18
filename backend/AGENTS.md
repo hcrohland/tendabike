@@ -31,7 +31,7 @@
 
 To verify your changes: `SQLX_OFFLINE=true cargo test -q -- --include-ignored | grep "test result:"` — every line should say `ok` and `0 failed`.
 
-The DB-free suites (domain, provider, axum) run against `mockall` `mock!` doubles; the `#[ignore]`d seam suites in `tb_sqlx` run against a real Postgres and are the behavioral bar — they need `--include-ignored` and `SCRATCH_DATABASE_URL`. If `SCRATCH_DATABASE_URL` is set in the environment, a database is available and the full suite runs locally as it does in CI.
+The `#[ignore]`d seam suites in `tb_sqlx` need `SCRATCH_DATABASE_URL` (a real Postgres) to run; if it's set, the full suite runs locally as it does in CI.
 
 ```bash
 SQLX_OFFLINE=true cargo test -q -- --include-ignored   # complete suite (seam included)
@@ -40,10 +40,4 @@ SQLX_OFFLINE=true cargo test -q -p tb_<crate>          # one crate's DB-free sui
 
 A format-only change (`cargo fmt`) is behaviour-preserving: `cargo check` is the sufficient gate — no need to re-run the full behavioral suite (the seam takes ~8s).
 
-Before writing, changing, or exploring tests for a crate, read its guide:
-
-- `tb_domain` → [./docs/tests/domain.md](./docs/tests/domain.md) — `MockStore` (the `mock!` store double), fixtures, the prepopulated snapshot and its data rules
-- `tb_provider` (Strava module) → [./docs/tests/strava.md](./docs/tests/strava.md) — `MockStravaDataStore` (the `automock` store double), `strava_session`/`strava_admin_session`, JSON helpers
-- `tb_axum` → [./docs/tests/axum.md](./docs/tests/axum.md) — `test_app`, router tests, coverage map
-- `tb_exec` → [./docs/tests/exec.md](./docs/tests/exec.md) — `MockConn` (the `mock!` store/`Txn` witness), the loop's control-flow units, the frame-push/orchestration ownership boundary
-- `tb_sqlx` → [./docs/tests/sqlx.md](./docs/tests/sqlx.md) — entity-mapping roundtrips, the seam integration suites
+Before writing, changing, or exploring tests, read the shared guide — [./docs/tests.md](./docs/tests.md): the seam model, the shared writing conventions, the mockall `.times` gotcha, and a table linking each crate's guide.

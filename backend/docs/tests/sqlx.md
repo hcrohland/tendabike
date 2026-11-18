@@ -1,6 +1,6 @@
 # tb_sqlx tests
 
-The unit tests are pure (no database, no network), colocated in each module's `#[cfg(test)] mod tests`: `lib.rs`, `tb_sqlx.rs`, `stravastore.rs`, and `store/{user,part,activity,attachment,service,serviceplan,shop,usage}.rs`. Two integration suites are the exceptions: `tests/store_seam.rs` (store I/O) and `tests/executor_seam.rs` (the executor's transaction lifecycle) — both run against a real Postgres (below).
+The unit tests are pure (no database, no network), colocated in each module's `#[cfg(test)] mod tests`: `lib.rs`, `tb_sqlx.rs`, `stravastore.rs`, and `store/{user,part,activity,attachment,service,serviceplan,shop,usage}.rs`. Two integration suites are the exceptions: `tests/store_seam.rs` (store I/O) and `tests/executor_seam.rs` (the executor's transaction lifecycle) — both run against a real Postgres (below). Shared conventions (the seam model, writing conventions, the mockall `.times` gotcha) are in [tests.md](../tests.md).
 
 ## Coverage
 
@@ -11,10 +11,7 @@ The unit tests are pure (no database, no network), colocated in each module's `#
 
 ## The store-seam integration suite (`tests/store_seam.rs`)
 
-`tb_sqlx`'s `store_seam.rs` owns **store I/O and nothing else** (issue #406): the SQL clauses, the adapter mappings, the entity roundtrips, and the scratch canary — the store-level facts, verified on real Postgres. It loads the standard prepopulated fixture — the same snapshot the `tb_domain` in-memory suite runs against — into a real Postgres scratch database it manages itself, and drives representative store paths through `SqlxConn` asserting the store-level outcome (the PK violation → `DatabaseFailure`, the `RowNotFound` → `NotFound`, the `ORDER BY`, the `start >=` / `< end` range boundary, the `Db*` → domain roundtrip). It does **not** re-assert the domain-level results — those are owned by the in-memory `tb_domain` suite (see [`domain.md`](domain.md)). The contract — one store-level fact per path, with the Postgres behavior as the source of truth — is recorded in [`docs/agents/domain-flow.md`](../../../docs/agents/domain-flow.md) ("The store seam").
-
-- **What it mocks** — nothing at the store level: it runs real Postgres, and the domain logic runs for real over the live `SqlxConn` adapter (the Postgres adapter itself is the boundary under test).
-- **What it delegates to the seam** — the domain-level results (the `Summary`, the `TbResult`): owned by the in-memory `tb_domain` suite (see [`domain.md`](domain.md)); this suite asserts only the store-level fact, never re-asserting a domain result.
+`tb_sqlx`'s `store_seam.rs` owns **store I/O and nothing else** (issue #406): the SQL clauses, the adapter mappings, the entity roundtrips, and the scratch canary — the store-level facts, verified on real Postgres. It loads the standard prepopulated fixture — the same snapshot the `tb_domain` in-memory suite runs against — into a real Postgres scratch database it manages itself, and drives representative store paths through the live `SqlxConn` adapter (the Postgres adapter itself is the boundary under test; the domain logic runs for real over it), asserting the store-level outcome (the PK violation → `DatabaseFailure`, the `RowNotFound` → `NotFound`, the `ORDER BY`, the `start >=` / `< end` range boundary, the `Db*` → domain roundtrip). It does **not** re-assert the domain-level results — those are owned by the in-memory `tb_domain` suite (see [`domain.md`](domain.md)). The contract — one store-level fact per path, with the Postgres behavior as the source of truth — is recorded in [`docs/agents/domain-flow.md`](../../../docs/agents/domain-flow.md) ("The store seam").
 
 - **Ignored by default, run explicitly.** Every test carries `#[ignore]`, so a plain workspace run reports the whole suite ignored, executes none of it, and stays green without a database. The suite runs with `--include-ignored` (the `--` matters: it's a libtest flag, not a cargo flag).
 - **Fail loud, never skip.** Whenever the suite cannot run it fails instead of skipping: with no `SCRATCH_DATABASE_URL` (after the `.env` fallback) every test fails with the no-URL message, and with the URL set but the scratch database un-preparable (setup, pool, or transaction) every test fails with the one root-cause message naming the step. A test that verified nothing never passes. `database_is_reachable` is the named canary: it additionally bounds the one-time setup with a 10s guard, so a blackholed endpoint fails in seconds.
@@ -47,7 +44,6 @@ cargo test -q -p tb_sqlx --test executor_seam -- --include-ignored
 
 ## Gotchas
 
-- All domain entities have **pub fields** — tests construct them with struct literals; no extra dev-deps are needed.
 - `DbPool::lazy` (sqlx `connect_lazy`) requires a Tokio context — that one test is `#[tokio::test]` (tokio is already a dev-dependency).
 - `oauth2::RefreshToken` does not implement `PartialEq` — assert on `secret()` / `is_none()` instead.
 - UUIDs in tests are fixed `Uuid::from_str(...)` values.

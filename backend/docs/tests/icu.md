@@ -1,23 +1,16 @@
 # ICU tests
 
-All tests run in-memory (no database, no network); one `<name>_tests.rs` module per module under `provider/src/icu/<name>/`, declared `#[cfg(test)]` in `activity.rs`, `event.rs`, `gear.rs`, `user.rs`, `http.rs`.
+All tests run in-memory (no database, no network); one `<name>_tests.rs` module per module under `provider/src/icu/<name>/`, declared `#[cfg(test)]` in `activity.rs`, `event.rs`, `gear.rs`, `user.rs`, `http.rs`. Shared conventions (the seam model, writing conventions, the mockall `.times` gotcha, the shared provider kit) are in [tests.md](../tests.md).
 
 ## Behavior ownership
 
-The ICU module (`tb_provider::icu`) owns the **intervals.icu → domain mapping**: translating icu JSON into domain entities (gear JSON → `Part`, activity JSON → `Activity`, user JSON → `IcuUser`) and the icu-logic free functions over it (activity import, gear hydration, event processing).
-
-- **What it mocks** — the **IcuDataStore** (the icu-specific I/O boundary): `MockIcuDataStore` is a `mockall` `#[automock]` of the `IcuDataStore` trait, so the icu-logic runs for real against canned store outcomes. Domain operations are mocked via `MockEntityFacade` (the `EntityFacade` seam). The **intervals.icu HTTP API** is stubbed behind the thread-local canned-response map (`queue` / `queue_error` / `requests`).
-- **What it delegates to the seam** — the **store I/O** (real Postgres) lives in the sqlx seam suites (see [`sqlx.md`](sqlx.md)); the **frame-push / orchestration** (deciding what to push after hydration) lives in `tb_exec` (see [`exec.md`](exec.md)); the **domain-level results** live in the `tb_domain` suite (see [`domain.md`](domain.md)).
+The ICU module (`tb_provider::icu`) owns the **intervals.icu → domain mapping**: translating icu JSON into domain entities (gear JSON → `Part`, activity JSON → `Activity`, user JSON → `IcuUser`) and the icu-logic free functions over it (activity import, gear hydration, event processing). The icu-logic runs for real against [`MockIcuDataStore`], with the intervals.icu HTTP API stubbed behind the shared canned-response kit (see [tests.md](../tests.md) → *The shared provider kit*).
 
 ## Key infrastructure
 
 - **`MockIcuDataStore`** (`provider/src/icu/traits.rs`, via `#[automock]`) — the `IcuDataStore` automock: icu-table I/O is canned, domain ops go through `MockEntityFacade` (`C` inferred as `MockIcuDataStore`). The icu-logic tests (activity import, gear hydration, event processing) run the logic for real and assert on canned outcomes.
 - **`setup()`** (`provider/src/icu/test_support.rs`) — builds a fresh `MockIcuDataStore` and a `MockEntityFacade` (with `C` = `MockIcuDataStore`), and calls `begin_test()` to mark the thread in test mode so the HTTP seam's canned responses are replayed. Unlike the Strava driver there is no token cache to seed (intervals.icu tokens are durable, read straight from `icu_users`), so `setup()` is the only entry point.
-- **HTTP seam** (`provider/src/icu/test_support/seam.rs`) — thread-local canned responses for the intervals.icu API. The canned-response surface is free functions:
-  - `begin_test()` — mark the thread in test mode and clear any canned responses/records (per-test isolation)
-  - `queue(uri, json)` — script a JSON response body for an **exact** request URI (FIFO per URI)
-  - `queue_error(uri, error)` — script an error for an exact URI; unscripted URIs yield `Error::BadRequest`
-  - `requests() -> Vec<String>` — every requested URI, in order (assert on these to verify API calls)
+- **HTTP seam** (`provider/src/icu/test_support/seam.rs`) — thread-local canned responses for the intervals.icu API, wrapping the shared kit (see [tests.md](../tests.md) → *The shared provider kit*). ICU's extra: `begin_test()` — mark the thread in test mode and clear any canned responses/records (per-test isolation); `setup()` calls it.
 - **Fixtures** (`provider/src/icu/test_support.rs`):
   - `icu_user(tbid, icuathlete, enabled)` — an `IcuUser` row for the store
   - `user(id)` — a domain `User` with the icu provider
@@ -42,7 +35,6 @@ async fn my_test() -> TbResult<()> {
 }
 ```
 
-- `#[tokio::test]`, return `TbResult<()>`.
 - Assert on the canned `mock!` store outcomes for store state; on `requests()` for API calls.
 - `setup()` calls `begin_test()` internally, so the HTTP seam is ready for `queue()` calls immediately after.
 
