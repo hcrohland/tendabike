@@ -1,6 +1,6 @@
 <script lang="ts">
   import { filterValues } from "../lib/mapable.svelte";
-  import { types, getCategory } from "../lib/types";
+  import { types, getCategory } from "../lib/types.svelte";
   import SpareType from "./SpareType.svelte";
 
   let attachee = $state(0);

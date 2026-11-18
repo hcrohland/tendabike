@@ -16,13 +16,13 @@
     Button,
   } from "flowbite-svelte";
   import { handleError, myfetch } from "./lib/utils";
-  import { refresh, getUser, setUser } from "./lib/user";
-  import { onboardingSyncUrl } from "./lib/provider";
+  import { refresh, getUser, setUser } from "./lib/user.svelte";
+  import { onboardingSyncUrl } from "./lib/provider.svelte";
   import { markHydrated, startStream, stopStream } from "./lib/stream";
   import { activities } from "./lib/activity";
   import { stateValues } from "./lib/mapable.svelte";
   import Sport from "./Widgets/Sport.svelte";
-  import { getCategory } from "./lib/types";
+  import { getCategory } from "./lib/types.svelte";
   import { page } from "$app/state";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
   import Garmin from "./Activity/Garmin.svelte";

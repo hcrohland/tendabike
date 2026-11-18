@@ -4,7 +4,7 @@
   import Chip from "../Widgets/Chip.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { handleError, myfetch } from "../lib/utils";
-  import type { AdminRow, User } from "../lib/user";
+  import type { AdminRow, User } from "../lib/user.svelte";
   import * as m from "../../paraglide/messages";
 
   let {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { isOffline } from "./lib/provider";
+  import { isOffline } from "./lib/provider.svelte";
   import * as m from "../paraglide/messages";
 </script>
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Input, Label } from "flowbite-svelte";
-  import { Type } from "../lib/types";
+  import { Type } from "../lib/types.svelte";
   import { Part } from "../lib/part";
   import DateTime from "../Widgets/DateTime.svelte";
   import { m } from "../../paraglide/messages";

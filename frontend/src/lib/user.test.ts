@@ -7,7 +7,7 @@ import {
   getUser,
   setUser,
   users,
-} from "./user";
+} from "./user.svelte";
 import { parts } from "./part";
 import { partNotes, PartNote } from "./partnote";
 import { attachments, Attachment } from "./attachment";

@@ -1,7 +1,7 @@
 <script module lang="ts">
   import { Attachment } from "../lib/attachment";
-  import { getUser } from "../lib/user";
-  import { types, Type } from "../lib/types";
+  import { getUser } from "../lib/user.svelte";
+  import { types, Type } from "../lib/types.svelte";
   import { parts, Part } from "../lib/part";
 
   const modal = $state<{

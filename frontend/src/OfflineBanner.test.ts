@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
 import OfflineBanner from "./OfflineBanner.svelte";
-import { loadProviders } from "./lib/provider";
+import { loadProviders } from "./lib/provider.svelte";
 
 const BANNER_TEXT = "Running offline — no activity providers configured.";
 

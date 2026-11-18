@@ -1,5 +1,5 @@
 <script module lang="ts">
-  import { Type, types } from "../lib/types";
+  import { Type, types } from "../lib/types.svelte";
   import { Part } from "../lib/part";
 
   const modal = $state<{

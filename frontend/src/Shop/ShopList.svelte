@@ -6,7 +6,11 @@
   import ShopCard from "./ShopCard.svelte";
   import { type Shop } from "../lib/shop.svelte";
   import { requestSubscription } from "./SubscriptionRequestModal.svelte";
-  import { getUser, users as global_users, type UserPublic } from "../lib/user";
+  import {
+    getUser,
+    users as global_users,
+    type UserPublic,
+  } from "../lib/user.svelte";
   import ShopOwnerMenu from "./ShopOwnerMenu.svelte";
   import { type Map } from "../lib/mapable.svelte";
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getCategory } from "../lib/types";
+  import { getCategory } from "../lib/types.svelte";
   import { Activity, activities } from "../lib/activity";
   import ActList from "./ActList.svelte";
   import { stateValues } from "../lib/mapable.svelte";

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { types, Type } from "../lib/types";
+  import { types, Type } from "../lib/types.svelte";
   import { filterValues, by } from "../lib/mapable.svelte";
   import PartCard from "./PartCard.svelte";
   import { Part } from "../lib/part";

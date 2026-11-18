@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { setUser } from "../lib/user";
+import { setUser } from "../lib/user.svelte";
 import { resp } from "../test/helpers";
 import InitialSyncDialog from "./InitialSyncDialog.svelte";
 

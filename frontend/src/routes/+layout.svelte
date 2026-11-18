@@ -9,7 +9,7 @@
   import Actions from "../Widgets/Actions.svelte";
   import ShopFrame from "../Shop/ShopFrame.svelte";
   import Footer from "../Footer.svelte";
-  import { loadProviders } from "../lib/provider";
+  import { loadProviders } from "../lib/provider.svelte";
 
   // The enabled providers are app-wide state: the layout
   // fetches them once so the offline banner and the connect screen read

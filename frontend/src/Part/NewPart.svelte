@@ -1,7 +1,7 @@
 <script module lang="ts">
-  import { Type } from "../lib/types";
+  import { Type } from "../lib/types.svelte";
   import { Part } from "../lib/part";
-  import { getUser } from "../lib/user";
+  import { getUser } from "../lib/user.svelte";
 
   const modal = $state<{
     open: boolean;

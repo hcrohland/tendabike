@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Select } from "flowbite-svelte";
-  import { getCategory } from "../lib/types";
+  import { getCategory } from "../lib/types.svelte";
   import { allGear, parts } from "../lib/part";
 
   interface Props {

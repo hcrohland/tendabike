@@ -1,5 +1,5 @@
 import { handleError, myfetch } from "./utils";
-import { refresh, updateSummary, type Summary } from "./user";
+import { refresh, updateSummary, type Summary } from "./user.svelte";
 import { getShop } from "./shop.svelte";
 
 /// The native EventSource is not available in jsdom, so the suite injects a

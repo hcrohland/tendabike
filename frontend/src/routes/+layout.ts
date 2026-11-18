@@ -1,8 +1,8 @@
 export const ssr = false;
 
 import { redirect } from "@sveltejs/kit";
-import { getTypes } from "../lib/types";
-import { initData, getUser } from "../lib/user";
+import { getTypes } from "../lib/types.svelte";
+import { initData, getUser } from "../lib/user.svelte";
 
 export async function load({ url }) {
   // Step 1: load types (hard prerequisite)

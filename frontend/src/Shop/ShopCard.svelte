@@ -4,7 +4,7 @@
   import * as m from "../../paraglide/messages";
 
   import type { Shop } from "../lib/shop.svelte";
-  import { type UserPublic } from "../lib/user";
+  import { type UserPublic } from "../lib/user.svelte";
   import { type Map } from "../lib/mapable.svelte";
 
   interface Props {

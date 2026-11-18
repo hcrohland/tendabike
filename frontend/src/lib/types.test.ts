@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getTypes, types, Type, getCategory } from "./types";
+import { getTypes, types, Type, getCategory } from "./types.svelte";
 import { Activity, activities } from "./activity";
 import { Part, parts } from "./part";
 import type { Map } from "./mapable.svelte";

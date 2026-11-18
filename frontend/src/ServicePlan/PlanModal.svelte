@@ -1,7 +1,7 @@
 <script module lang="ts">
   import { ServicePlan } from "../lib/serviceplan";
   import { parts, type Part } from "../lib/part";
-  import { getCategory, types, type Type } from "../lib/types";
+  import { getCategory, types, type Type } from "../lib/types.svelte";
   import { m } from "../../paraglide/messages";
 
   const modal = $state<{

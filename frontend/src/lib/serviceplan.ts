@@ -8,7 +8,7 @@ import { by, mapableState, stateValues } from "./mapable.svelte";
 import { Part, parts } from "./part";
 import { Service, services } from "./service";
 import { handleError, myfetch } from "./utils";
-import { Type, types } from "./types";
+import { Type, types } from "./types.svelte";
 import { m } from "../../paraglide/messages";
 
 export type limit_keys =

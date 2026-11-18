@@ -1,6 +1,6 @@
 <script lang="ts">
   import { by, stateValues } from "./lib/mapable.svelte";
-  import { getCategory } from "./lib/types";
+  import { getCategory } from "./lib/types.svelte";
   import { parts } from "./lib/part";
   import ShowMore from "./Widgets/ShowMore.svelte";
   import { getShop } from "./lib/shop.svelte";

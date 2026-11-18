@@ -2,7 +2,7 @@
   import { stateValues } from "../lib/mapable.svelte";
   import type { Part } from "../lib/part";
   import { plans, plansForAssembly, planCmp } from "../lib/serviceplan";
-  import { getCategory, types } from "../lib/types";
+  import { getCategory, types } from "../lib/types.svelte";
   import PlanBlock from "./PlanBlock.svelte";
 
   interface Props {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { myfetch, checkStatus, handleError } from "./utils";
-import { getUser, setUser } from "./user";
+import { getUser, setUser } from "./user.svelte";
 import { toastsDoor, clearToasts } from "./notification.svelte";
 import { Shop, setShop } from "./shop.svelte";
 import { resp } from "../test/helpers";
