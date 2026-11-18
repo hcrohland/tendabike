@@ -158,9 +158,16 @@ struct IcuWebhookEvent {
     /// The event's RFC 3339 timestamp.
     timestamp: String,
     /// The activity the event refers to (its id is the `icu_events` key).
-    /// `None` for an event that carries no activity (e.g. a test delivery).
+    /// `None` for an event that carries no activity (a test delivery, an
+    /// `APP_SCOPE_CHANGED`).
     activity: Option<IcuWebhookActivity>,
-    /// Any field the app does not yet model (e.g. `scope` on an
+    /// Whether the app was fully revoked (`true`) or its scope reduced
+    /// (`false`): present only on an `APP_SCOPE_CHANGED` event.
+    deauthorized: Option<bool>,
+    /// The app's scope after the change (empty on a full revocation):
+    /// present only on an `APP_SCOPE_CHANGED` event.
+    scope: Option<String>,
+    /// Any field the app does not yet model (e.g. `client_id` on an
     /// `APP_SCOPE_CHANGED`): serde would otherwise drop it, so the skip log
     /// (`{event:?}`) would hide the part of the shape we most need to see.
     /// Read only through the derived `Debug` impl in that log; the leading
@@ -189,6 +196,11 @@ const DELETED_EVENT_TYPE: &str = "ACTIVITY_DELETED";
 /// The `TEST` event type: intervals.icu fires a single `TEST` delivery (with
 /// no activity) when the webhook is configured on the *Manage App* page.
 const TEST_EVENT_TYPE: &str = "TEST";
+
+/// The `APP_SCOPE_CHANGED` event type: intervals.icu fires it when a user
+/// revokes the app or changes its scopes. Any scope change deauths (the user
+/// is disabled inline at intake — no scope-content check).
+const SCOPE_CHANGED_EVENT_TYPE: &str = "APP_SCOPE_CHANGED";
 
 /// The shared webhook secret (from the provider config).
 fn webhook_secret() -> String {
@@ -228,8 +240,9 @@ fn parse_timestamp(timestamp: &str) -> TbResult<i64> {
 
 /// The webhook intake (ADR-0014): the provider's webhook work behind the
 /// seam — the envelope parse of the raw body, the secret verification, the
-/// event filtering (only the subscribed activity types are imported, and a
-/// `TEST` delivery is logged and dropped), the timestamp
+/// event filtering (only the subscribed activity types are imported, a
+/// `TEST` delivery is logged and dropped, and an `APP_SCOPE_CHANGED`
+/// delivery disables its user inline), the timestamp
 /// parse, and the queue insert. `body` is the raw webhook body the
 /// presentation layer forwards (no driver wire type crosses the seam).
 /// Returns the TendaBike users a row was queued for (the caller's wake list).
@@ -243,6 +256,10 @@ pub async fn accept_event(body: &str, store: &mut impl IcuDataStore) -> TbResult
         if event.type_ == TEST_EVENT_TYPE {
             info!("icu webhook test delivery: {event:?}");
             continue; // a test delivery (no activity) is not queueable
+        }
+        if event.type_ == SCOPE_CHANGED_EVENT_TYPE {
+            handle_scope_change(event, store).await?;
+            continue; // a scope change is handled inline: not queued, no wake
         }
         let Some(activity) = &event.activity else {
             debug!("Skipping icu webhook event (no activity): {event:?}");
@@ -261,6 +278,36 @@ pub async fn accept_event(body: &str, store: &mut impl IcuDataStore) -> TbResult
         queued.push(icu_event.accept(store).await?);
     }
     Ok(queued)
+}
+
+/// Handles an `APP_SCOPE_CHANGED` event inline at intake (mirroring the
+/// Strava driver's athlete-deauth handling): the known user is
+/// disabled (their queued events dropped, their token cleared) with an INFO
+/// log naming the athlete and the event's `deauthorized`/`scope` context; an
+/// unknown athlete is a logged no-op. The event is neither queued nor added
+/// to the wake list — the disable drops the queue, so there is nothing to
+/// process.
+async fn handle_scope_change(
+    event: &IcuWebhookEvent,
+    store: &mut impl IcuDataStore,
+) -> TbResult<()> {
+    let icu_id = IcuId::from(event.athlete_id.as_str());
+    match icu_id.read(store).await? {
+        Some(_) => {
+            info!(
+                "icu scope change (deauthorized: {:?}, scope: {:?}): disabling icu user {icu_id}",
+                event.deauthorized, event.scope
+            );
+            let res = icu_id.disable(store).await;
+            if let Err(err) = res {
+                error!("user disable returned: {err:#}")
+            }
+        }
+        None => {
+            info!("icu scope change for unknown athlete {icu_id}: no-op");
+        }
+    }
+    Ok(())
 }
 
 /// The icu athlete id for a TendaBike user (the `icu_events` queue's key).

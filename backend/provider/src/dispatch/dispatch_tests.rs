@@ -10,7 +10,7 @@
 //! the live provider API, so the login tests cover the arms' scope check
 //! (which precedes it).
 
-use std::sync::{Arc, Mutex, Once};
+use std::sync::{Arc, Mutex};
 
 use crate::Provider;
 use crate::facade::{Error, TbResult, UserId, mock_session_admin};
@@ -19,7 +19,7 @@ use crate::icu::{IcuDataStore, IcuEvent, IcuId, IcuObjectType, IcuUser};
 use crate::strava::event::Event;
 use crate::strava::test_support::MockStravaDataStore;
 use crate::strava::{StravaDataStore, StravaId, StravaUser};
-use crate::test_support::MockEntityFacade;
+use crate::test_support::{MockEntityFacade, icu_webhook_secret, init_test_config_once};
 
 use super::{accept_event, deauthorize, delete_user, login, queue_sync_user, sync_users};
 
@@ -173,40 +173,13 @@ fn icu_event_json_no_activity(athlete: &str, typ: &str, timestamp: &str) -> Stri
     format!("{{\"athlete_id\":\"{athlete}\",\"type\":\"{typ}\",\"timestamp\":\"{timestamp}\"}}")
 }
 
-/// Initialize the provider config once for the dispatch test process:
-/// both providers enabled (their ops' graceful-freeze guard reads the
-/// enabled set) and a known webhook secret the intake tests verify
-/// against.
-fn init_config_once() {
-    static ONCE: Once = Once::new();
-    ONCE.call_once(|| {
-        crate::init(crate::ProviderConfig {
-            strava_client_id: Some("test-client-id".to_string()),
-            strava_client_secret: Some("test-client-secret".to_string()),
-            strava_redirect_url: "http://localhost:8000/strava/token".to_string(),
-            icu_client_id: Some("test-icu-client-id".to_string()),
-            icu_client_secret: Some("test-icu-client-secret".to_string()),
-            icu_redirect_url: "http://localhost:8000/icu/token".to_string(),
-            icu_webhook_secret: ICU_WEBHOOK_SECRET.to_string(),
-        });
-    });
-}
-
-/// The suite's shared webhook secret (initializes the provider config).
-fn icu_webhook_secret() -> String {
-    init_config_once();
-    ICU_WEBHOOK_SECRET.to_string()
-}
-
-const ICU_WEBHOOK_SECRET: &str = "icu-test-webhook-secret";
-
 // ─── accept_event: the Strava arm ───────────────────────────────────────────
 
 /// The Strava arm parses the raw body and queues the event (the `strava_events`
 /// row), returning the owner's TendaBike id (the caller's wake).
 #[tokio::test]
 async fn accept_event_strava_queues_an_activity_event() -> TbResult<()> {
-    init_config_once();
+    init_test_config_once();
     let mut store = DispatchStore::default();
     let user = crate::strava::test_support::strava_user(UserId::from(7), 42, true);
     store
@@ -241,7 +214,7 @@ async fn accept_event_strava_queues_an_activity_event() -> TbResult<()> {
 /// events dropped, their token cleared), nothing is queued, no wake.
 #[tokio::test]
 async fn accept_event_strava_athlete_deauth_disables_the_user() -> TbResult<()> {
-    init_config_once();
+    init_test_config_once();
     let mut store = DispatchStore::default();
     let user = crate::strava::test_support::strava_user(UserId::from(7), 42, true);
     let lookup = user.clone();
@@ -271,7 +244,7 @@ async fn accept_event_strava_athlete_deauth_disables_the_user() -> TbResult<()> 
 /// no user) — a `BadRequest`, nothing queued.
 #[tokio::test]
 async fn accept_event_strava_unknown_owner_is_rejected() -> TbResult<()> {
-    init_config_once();
+    init_test_config_once();
     let mut store = DispatchStore::default();
     store
         .strava
@@ -289,7 +262,7 @@ async fn accept_event_strava_unknown_owner_is_rejected() -> TbResult<()> {
 /// `BadRequest` before any store work).
 #[tokio::test]
 async fn accept_event_strava_malformed_body_is_rejected() -> TbResult<()> {
-    init_config_once();
+    init_test_config_once();
     let mut store = DispatchStore::default();
 
     let err = accept_event(Provider::Strava, "not a json body", &mut store)
@@ -357,7 +330,7 @@ async fn accept_event_icu_queues_subscribed_events_only() -> TbResult<()> {
 /// The icu arm rejects a bad secret (a `NotAuth`) before any store work.
 #[tokio::test]
 async fn accept_event_icu_rejects_a_bad_secret() -> TbResult<()> {
-    init_config_once();
+    init_test_config_once();
     let mut store = DispatchStore::default();
     let body = icu_body(
         "a-different-secret",
@@ -380,7 +353,7 @@ async fn accept_event_icu_rejects_a_bad_secret() -> TbResult<()> {
 /// `BadRequest` before any store work).
 #[tokio::test]
 async fn accept_event_icu_malformed_body_is_rejected() -> TbResult<()> {
-    init_config_once();
+    init_test_config_once();
     let mut store = DispatchStore::default();
 
     let err = accept_event(Provider::Icu, "not a json body", &mut store)
@@ -580,7 +553,7 @@ async fn delete_user_icu_deletes_the_user() -> TbResult<()> {
 /// exchange: the (PKCE) code verifier is not used by it.
 #[tokio::test]
 async fn login_strava_rejects_an_insufficient_scope() -> TbResult<()> {
-    init_config_once();
+    init_test_config_once();
     let mut store = DispatchStore::default();
     let facade = MockEntityFacade::new();
 
@@ -595,7 +568,7 @@ async fn login_strava_rejects_an_insufficient_scope() -> TbResult<()> {
 /// `BadRequest` before the token exchange).
 #[tokio::test]
 async fn login_icu_rejects_an_insufficient_scope() -> TbResult<()> {
-    init_config_once();
+    init_test_config_once();
     let mut store = DispatchStore::default();
     let facade = MockEntityFacade::new();
 
@@ -699,7 +672,7 @@ async fn provider_of_not_found_when_no_row_exists() -> TbResult<()> {
 /// `SYNC` event queued.
 #[tokio::test]
 async fn sync_users_queues_icu_users() -> TbResult<()> {
-    init_config_once();
+    init_test_config_once();
     let mut store = DispatchStore::default();
     let facade = MockEntityFacade::new();
     // The icu HTTP seam in test mode: the gear import fetches a canned empty
@@ -818,7 +791,7 @@ async fn queue_sync_user_queues_icu_sync_with_full_history() -> TbResult<()> {
 /// a `Sync` event queued.
 #[tokio::test]
 async fn sync_users_queues_strava_users() -> TbResult<()> {
-    init_config_once();
+    init_test_config_once();
     let mut store = DispatchStore::default();
     let facade = MockEntityFacade::new();
     // The all-users Strava read; no icu users.
@@ -871,7 +844,7 @@ async fn sync_users_queues_strava_users() -> TbResult<()> {
 /// is queued for them.
 #[tokio::test]
 async fn sync_users_skips_disabled() -> TbResult<()> {
-    init_config_once();
+    init_test_config_once();
     let mut store = DispatchStore::default();
     let facade = MockEntityFacade::new();
     // A disabled Strava user and a disabled icu user.
@@ -909,7 +882,7 @@ async fn sync_users_skips_disabled() -> TbResult<()> {
 /// user (on their own lane).
 #[tokio::test]
 async fn sync_users_single_strava() -> TbResult<()> {
-    init_config_once();
+    init_test_config_once();
     let mut store = DispatchStore::default();
     let facade = MockEntityFacade::new();
     // The provider lookup, the lane read, and the `insert_sync`'s read all

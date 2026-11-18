@@ -23,6 +23,37 @@ use crate::facade::{Error, TbResult};
 
 pub use crate::facade::MockEntityFacade;
 
+/// The test process's shared webhook secret (the intake tests verify
+/// deliveries against it).
+pub const ICU_WEBHOOK_SECRET: &str = "icu-test-webhook-secret";
+
+/// Initialize the provider config exactly once for the test process: both
+/// providers enabled (their ops' graceful-freeze guard reads the enabled
+/// set) and the known [`ICU_WEBHOOK_SECRET`]. `crate::init` panics on a
+/// second call, so every test suite that needs the config shares this one
+/// initializer (a per-suite `Once` would race with the others').
+pub fn init_test_config_once() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        crate::init(crate::ProviderConfig {
+            strava_client_id: Some("test-client-id".to_string()),
+            strava_client_secret: Some("test-client-secret".to_string()),
+            strava_redirect_url: "http://localhost:8000/strava/token".to_string(),
+            icu_client_id: Some("test-icu-client-id".to_string()),
+            icu_client_secret: Some("test-icu-client-secret".to_string()),
+            icu_redirect_url: "http://localhost:8000/icu/token".to_string(),
+            icu_webhook_secret: ICU_WEBHOOK_SECRET.to_string(),
+        });
+    });
+}
+
+/// The suite's shared webhook secret (initializes the provider config via
+/// the shared process-wide initializer).
+pub fn icu_webhook_secret() -> String {
+    init_test_config_once();
+    ICU_WEBHOOK_SECRET.to_string()
+}
+
 /// The per-thread canned-response state a provider's HTTP test seam owns.
 ///
 /// The common fields every seam needs: whether the thread is in test mode,

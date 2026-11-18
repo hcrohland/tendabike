@@ -6,6 +6,7 @@ use crate::facade::{
     ActivityId, Notification, NotificationKind, NotificationLifecycle, NotificationState,
     NotificationSubject, Summary,
 };
+use crate::test_support::icu_webhook_secret;
 use time::OffsetDateTime;
 
 fn event(id: i32, activity: &str) -> IcuEvent {
@@ -909,4 +910,77 @@ async fn process_sync_full_batch_on_start_day_steps_back_a_day() {
         reqs[1].contains(&format!("newest={}", super::date_str(cursor - 86400))),
         "the next batch starts at the start day minus one"
     );
+}
+
+// ─── accept_event: APP_SCOPE_CHANGED ────────────────────────────────────────
+
+/// A raw intervals.icu webhook body with the given `secret` and events JSON
+/// array elements.
+fn icu_body(secret: &str, events: &str) -> String {
+    format!(r#"{{"secret":"{secret}","events":[{events}]}}"#)
+}
+
+/// One `APP_SCOPE_CHANGED` event element (the live wire shape: `client_id`
+/// and `client_name` are unmodeled — they land in the `_extra` catch-all).
+fn scope_changed_json(athlete: &str, deauthorized: bool, scope: &str) -> String {
+    format!(
+        r#"{{"athlete_id":"{athlete}","type":"APP_SCOPE_CHANGED","timestamp":"2024-12-06T06:40:47.011+00:00","client_id":1714,"client_name":"tendabike","deauthorized":{deauthorized},"scope":"{scope}"}}"#
+    )
+}
+
+/// An `APP_SCOPE_CHANGED` delivery for a **connected** user disables the user
+/// (their queued events dropped, their token cleared) — the event is not
+/// queued and adds nothing to the wake list.
+#[tokio::test]
+async fn accept_event_scope_change_disables_a_known_athlete() {
+    let secret = icu_webhook_secret();
+    let (mut store, _facade) = setup();
+    // The athlete is resolved to a connected user (the lookup runs once).
+    store
+        .expect_icuser_get_by_icuid()
+        .times(1)
+        .returning(|_id| Ok(Some(icu_user(UserId::from(1), "a1", true))));
+    // The disable: the queued events are dropped and the token is cleared.
+    store
+        .expect_icu_events_delete_for_user()
+        .times(1)
+        .returning(|_id| Ok(2));
+    store
+        .expect_icuser_update_token()
+        .times(1)
+        .returning(|_id, token| {
+            assert!(token.is_none(), "the scope change clears the token");
+            Ok(icu_user(UserId::from(1), "a1", false))
+        });
+    // Not queued: no `icu_event_create`.
+    store.expect_icu_event_create().times(0);
+
+    let body = icu_body(&secret, &scope_changed_json("a1", true, ""));
+    let queued = accept_event(&body, &mut store).await.unwrap();
+    assert!(queued.is_empty(), "a scope change wakes no user");
+}
+
+/// An `APP_SCOPE_CHANGED` delivery for an **unknown** athlete is a logged
+/// no-op: no error, no disable, nothing queued.
+#[tokio::test]
+async fn accept_event_scope_change_is_a_noop_for_an_unknown_athlete() {
+    let secret = icu_webhook_secret();
+    let (mut store, _facade) = setup();
+    // The athlete is looked up (once) and not found.
+    store
+        .expect_icuser_get_by_icuid()
+        .times(1)
+        .returning(|_id| Ok(None));
+    // No disable: the queue drop and the token clear never run.
+    store.expect_icu_events_delete_for_user().times(0);
+    store.expect_icuser_update_token().times(0);
+    store.expect_icu_event_create().times(0);
+
+    let body = icu_body(
+        &secret,
+        &scope_changed_json("i-unknown", false, "athlete.read"),
+    );
+    let queued = accept_event(&body, &mut store).await.unwrap();
+
+    assert!(queued.is_empty(), "an unknown athlete wakes no user");
 }

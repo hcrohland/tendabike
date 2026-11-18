@@ -27,7 +27,7 @@ App**. Set:
 | Redirect URI | `https://<your-domain>/icu/token` (local dev: `http://localhost:8000/icu/token`) |
 | Webhook URL | `https://<your-domain>/icu/callback` — **one URL per app**, shared by every athlete who authorizes it. Must be publicly reachable (HTTPS in production; a tunnel such as ngrok for local dev). |
 | Webhook secret | Any long random string. This is the shared `secret` field in every webhook payload — copy it for `ICU_WEBHOOK_SECRET` (step 3). |
-| Webhook event types | **`ACTIVITY_UPLOADED`**, **`ACTIVITY_UPDATED`**, and **`ACTIVITY_DELETED`** — the types Tendabike subscribes to. |
+| Webhook event types | **`ACTIVITY_UPLOADED`**, **`ACTIVITY_UPDATED`**, **`ACTIVITY_DELETED`**, and **`APP_SCOPE_CHANGED`** — the types Tendabike subscribes to. |
 | PKCE | **On** — Tendabike's login flow always sends a PKCE code challenge (RFC 7636, S256); the option makes intervals.icu **enforce** it. Enable it for hardening. |
 
 ## 3. Environment variables
@@ -55,17 +55,22 @@ intervals.icu ──POST /icu/callback──▶ Tendabike
 
 1. The endpoint (`POST /icu/callback`) forwards the raw body to the provider
    layer, which verifies `secret` against `ICU_WEBHOOK_SECRET`
-   (constant-time compare), drops the `TEST` delivery, and keeps only the
-    subscribed activity events (`ACTIVITY_UPLOADED`, `ACTIVITY_UPDATED`,
-    `ACTIVITY_DELETED`).
+   (constant-time compare), drops the `TEST` delivery, handles
+   `APP_SCOPE_CHANGED` inline (step 3), and keeps only the subscribed
+   activity events (`ACTIVITY_UPLOADED`, `ACTIVITY_UPDATED`,
+   `ACTIVITY_DELETED`).
 2. Each event's `athlete_id` is mapped to a TendaBike user. **The athlete must
    have already connected via the OAuth flow** (`/icu/login`); events for
    unknown athletes are refused.
-3. Accepted events are queued in the `icu_events` table (each row carries the
-   event's type) and the user's executor is woken. The executor drains the
-   queue: `ACTIVITY_UPLOADED` / `ACTIVITY_UPDATED` fetch the full activity via
-   `GET /activity/{id}` and import it; `ACTIVITY_DELETED` deletes the
-   corresponding activity (and unregisters its part usage).
+3. Accepted activity events are queued in the `icu_events` table (each row
+   carries the event's type) and the user's executor is woken. The executor
+   drains the queue: `ACTIVITY_UPLOADED` / `ACTIVITY_UPDATED` fetch the full
+   activity via `GET /activity/{id}` and import it; `ACTIVITY_DELETED` deletes
+   the corresponding activity (and unregisters its part usage).
+   `APP_SCOPE_CHANGED` is **not queued**: it is handled inline at intake — a
+   scope change (a revocation or a reduction) **disables the connected user**
+   (their queued events are dropped and their token cleared); a scope change
+   for an unknown athlete is a logged no-op.
 4. The endpoint answers `200` immediately; processing is asynchronous.
 
 ## 5. Troubleshooting
