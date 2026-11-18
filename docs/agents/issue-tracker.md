@@ -9,7 +9,6 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 - **Labels are additive/removal**: `gh issue edit --add-label` / `--remove-label` modify the set; `--label` replaces it entirely.
 - **Labels must exist before use**: create with `gh label create <name> --color <hex>` (bare hex like `0366d6`, not a UI color name).
 - **Sub-issues and dependencies** use issue numbers (`#N`), not database ids.
-- **Close an issue**: `gh issue close <n> --reason completed`.
 - **Creating a PR**: write the body with the `pr` skill (there is no PR template in the repo).
 - **Close from a PR**: a squash merge **collects each commit's `Closes #N` line** into the squashed commit, so each ticket closes via the `Closes #N` in its **own commit** (one issue per line — a line with several space-separated numbers closes only the first). The PR body carries `Closes` for the **umbrella spec only**. Take the collection as a given: just merge and GitHub assembles the squash commit (title + PR body + each commit's `Closes` line) — no verifying, no custom squash commit message.
 - **Sync**: merge `main` into the feature branch (`git merge origin/main`); the `.githooks/pre-push` hook rejects force-pushes (non-fast-forward).
@@ -50,11 +49,11 @@ GitHub shares one number space across issues and PRs, so a bare `#42` may be eit
 
 ## When a skill says "publish to the issue tracker"
 
-`gh issue create`.
+The **Create an issue** command above.
 
 ## When a skill says "fetch the relevant ticket"
 
-`gh issue view <n> --json title,body,labels,assignees,state,comments,subIssues`.
+The **View an issue** command above.
 
 ## Wayfinding operations
 
@@ -62,11 +61,11 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
 
 - **Map**: a single issue labelled `wayfinder:map`, holding the Notes / Decisions-so-far / Fog body.
 - **Child ticket**: an issue linked to the map as a GitHub sub-issue. Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`). Once claimed, the ticket is assigned to the driving dev.
-- **Blocking**: GitHub's native issue dependencies (UI-visible). Add with `gh issue edit <n> --add-blocked-by <blocker>`. A ticket is unblocked when every blocker is closed.
+- **Blocking**: GitHub's native issue dependencies (UI-visible) — the **Add blocked-by** command above. A ticket is unblocked when every blocker is closed.
 - **Frontier query**: list open issues with `wayfinder:` labels (excluding `wayfinder:map`), filter to unassigned, then check `blockedBy` on the candidates. First in number order wins.
   ```bash
   gh issue list --state open --json number,title,assignees,labels,blockedBy \
     | jq '[.[] | select(.labels | any(.name | startswith("wayfinder:") and .name != "wayfinder:map")) | select((.assignees | length) == 0) | select((.blockedBy | length) == 0)]'
   ```
-- **Claim**: `gh issue edit <n> --add-assignee <login>` — the session's first write.
-- **Resolve**: `gh issue comment <n> --body "…"` → `gh issue close <n> --reason completed` → append to the map's Decisions-so-far (read its body with `gh issue view`, append the one-line gist + link, `gh issue edit <map> --body "…"`).
+- **Claim**: the **Assign** command above with `<login>` set to `@me` — the session's first write.
+- **Resolve**: **Comment** → **Close** (commands above) → append to the map's Decisions-so-far: read the map's body (`gh issue view`), append the one-line gist + link, `gh issue edit <map> --body "…"`.
