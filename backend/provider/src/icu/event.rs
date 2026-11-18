@@ -160,6 +160,14 @@ struct IcuWebhookEvent {
     /// The activity the event refers to (its id is the `icu_events` key).
     /// `None` for an event that carries no activity (e.g. a test delivery).
     activity: Option<IcuWebhookActivity>,
+    /// Any field the app does not yet model (e.g. `scope` on an
+    /// `APP_SCOPE_CHANGED`): serde would otherwise drop it, so the skip log
+    /// (`{event:?}`) would hide the part of the shape we most need to see.
+    /// Read only through the derived `Debug` impl in that log; the leading
+    /// underscore keeps the dead-code lint quiet (it does not count a derived
+    /// `Debug` read as a use).
+    #[serde(flatten)]
+    _extra: serde_json::Map<String, serde_json::Value>,
 }
 
 /// The activity an intervals.icu activity event refers to.
