@@ -20,7 +20,6 @@ serde_derive = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
 derive_more = { workspace = true, features = ["from", "into", "display"], optional = true }
-async-recursion = { workspace = true, optional = true }
 
 [features]
 default = ["strava", "icu"]
@@ -32,7 +31,6 @@ strava = [
     "dep:serde_json",
     "dep:anyhow",
     "dep:derive_more",
-    "dep:async-recursion",
 ]
 icu = [
     "dep:reqwest",
@@ -42,7 +40,6 @@ icu = [
     "dep:serde_json",
     "dep:anyhow",
     "dep:derive_more",
-    "dep:async-recursion",
 ]
 test-support = ["dep:mockall", "tb_domain/test-support"]
 

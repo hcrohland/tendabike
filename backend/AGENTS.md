@@ -38,6 +38,8 @@ SQLX_OFFLINE=true cargo test -q -- --include-ignored   # complete suite (seam in
 SQLX_OFFLINE=true cargo test -q -p tb_<crate>          # one crate's DB-free suites
 ```
 
+A format-only change (`cargo fmt`) is behaviour-preserving: `cargo check` is the sufficient gate — no need to re-run the full behavioral suite (the seam takes ~8s).
+
 Before writing, changing, or exploring tests for a crate, read its guide:
 
 - `tb_domain` → [./docs/tests/domain.md](./docs/tests/domain.md) — `MockStore` (the `mock!` store double), fixtures, the prepopulated snapshot and its data rules
