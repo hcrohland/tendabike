@@ -418,6 +418,59 @@ async fn user_strava_url() {
     assert!(matches!(res, Err(Error::NotFound(_))));
 }
 
+/// The driver's `onboard` primitive (mirroring intervals.icu's): import the
+/// user's gear (bikes + shoes) and enqueue the durable activity-sync event,
+/// returning the created gear part ids. The Strava sync is enqueued with the
+/// non-migrate flag (onboarding is not a migration).
+#[tokio::test]
+async fn onboard_imports_gear_and_queues_the_sync() -> TbResult<()> {
+    let (mut store, mut facade, _session) = setup();
+    // The gear list: a bike and a pair of shoes (each fetch creates a part).
+    queue(
+        "/athlete",
+        r#"{"bikes":[{"id":"b1"}],"shoes":[{"id":"g1"}]}"#,
+    );
+    queue("/gear/b1", &gear_json("b1", Some(0)));
+    queue("/gear/g1", &gear_json("g1", None));
+    // No gear is imported yet: each fetch creates a part. The facade assigns
+    // ids in order.
+    let next_id = Arc::new(std::sync::atomic::AtomicI32::new(0));
+    let next_id_rec = next_id.clone();
+    facade
+        .expect_part_by_source()
+        .returning(|_s, _store| Ok(None));
+    facade.expect_create_part().returning(
+        move |_name, _vendor, _model, what, _source, _purchase, _user, _store| {
+            let id = next_id_rec.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+            Ok(super::super::test_support::part(
+                PartId::from(id),
+                UserId::from(1),
+                what,
+                None,
+            ))
+        },
+    );
+    // The sync enqueue: a `Sync` event for the user's strava id (42, from the
+    // warm token cache).
+    let created = Arc::new(Mutex::new(None));
+    let created_rec = created.clone();
+    store.expect_strava_event_create().returning(move |e| {
+        created_rec.lock().unwrap().replace(e.clone());
+        Ok(())
+    });
+
+    let parts = onboard(UserId::from(1), 100, &facade, &mut store).await?;
+
+    // The gear ids are returned (the onboarding response lists them).
+    assert_eq!(parts, vec![PartId::from(1), PartId::from(2)]);
+    // The sync is enqueued with the non-migrate flag (object_id 0).
+    let event = created.lock().unwrap().take().expect("the sync was queued");
+    assert_eq!(event.object_type, ObjectType::Sync);
+    assert_eq!(event.object_id, 0, "onboarding is not a migration");
+    assert_eq!(event.owner_id, 42.into());
+    Ok(())
+}
+
 #[tokio::test]
 async fn update_gear_imports_bikes_and_shoes() -> TbResult<()> {
     let (mut store, mut facade, _session) = setup();

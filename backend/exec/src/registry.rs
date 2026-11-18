@@ -385,10 +385,11 @@ where
     /// Trigger processing for all (or one) users (spec #558 §5.2): admin-only
     /// (the acting `session` must be an admin — `Forbidden` otherwise). One
     /// transaction (`sync_users`) queuing a sync per (non-disabled) user on
-    /// their own provider's lane (a Strava `Sync` event, the icu onboarding
-    /// path), then — per queued user — spawn the executor (a no-op if it is
-    /// already running) and wake it. `user_id` narrows the trigger to one
-    /// user, regardless of provider (the route's `?user_id=` query).
+    /// their own provider's lane (a pure activity re-sync — a Strava `Sync`
+    /// event, the icu `SYNC` event; no gear import), then — per queued user —
+    /// spawn the executor (a no-op if it is already running) and wake it.
+    /// `user_id` narrows the trigger to one user, regardless of provider (the
+    /// route's `?user_id=` query).
     async fn trigger_processing(
         &self,
         mut session: Box<dyn Session>,
@@ -402,7 +403,6 @@ where
             user_id,
             event_time,
             migrate,
-            self.lane.facade(),
             &mut store,
         )
         .await?;
