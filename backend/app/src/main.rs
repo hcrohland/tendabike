@@ -23,24 +23,6 @@ async fn main() -> anyhow::Result<()> {
 
     let pool = sqlx::PgPool::connect(&config.database_url).await?;
 
-    // Build the web layer's config: the CSRF secret, the static files path,
-    // and the bind address as raw strings, plus the public domain and the
-    // provider credentials (the web layer composes the provider URLs from the
-    // domain and initializes the provider crate's client statics).
-    let axum_config = tb_axum::AxumConfig {
-        csrf_secret: std::env::var("CSRF_SECRET").ok(),
-        static_www: std::env::var("STATIC_WWW").unwrap_or_else(|_| {
-            concat!(env!("CARGO_MANIFEST_DIR"), "/../../frontend/build").to_string()
-        }),
-        bind_addr: std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8000".to_string()),
-        domainname: config.domainname,
-        strava_client_id: config.strava_client_id,
-        strava_client_secret: config.strava_client_secret,
-        icu_client_id: config.icu_client_id,
-        icu_client_secret: config.icu_client_secret,
-        icu_webhook_secret: config.icu_webhook_secret,
-    };
-
     // The composition root wires the concrete crates and process setup;
     // the crate-internal details (the session store, the logging
     // subscriber) live in `tb_axum::start`.
@@ -62,5 +44,5 @@ async fn main() -> anyhow::Result<()> {
     let provider = std::sync::Arc::new(registry)
         as std::sync::Arc<dyn tb_exec::providerservice::ProviderService>;
 
-    Ok(tb_axum::start(api, provider, axum_config, pool.clone()).await?)
+    Ok(tb_axum::start(api, provider, config.axum, pool.clone()).await?)
 }

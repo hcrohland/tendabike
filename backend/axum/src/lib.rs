@@ -47,16 +47,15 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 /// generates a random key and warns), the static files directory, and the
 /// bind address, all as raw strings — `start` does the parsing
 /// (`Path::canonicalize`, `SocketAddr::parse`) internally. It also carries the
-/// public domain (optional — an unset domain yields the local-dev default
-/// when composing the provider URLs) and the provider credentials, from which
-/// `start` assembles the `tb_provider::ProviderConfig` and calls
-/// `tb_provider::init`.
+/// public domain (defaulted to the local-dev host by the composition root) and
+/// the provider credentials, from which `start` assembles the
+/// `tb_provider::ProviderConfig` and calls `tb_provider::init`.
 #[derive(Debug, Clone)]
 pub struct AxumConfig {
     pub csrf_secret: Option<String>,
     pub static_www: String,
     pub bind_addr: String,
-    pub domainname: Option<String>,
+    pub domainname: String,
     pub strava_client_id: Option<String>,
     pub strava_client_secret: Option<String>,
     pub icu_client_id: Option<String>,
@@ -152,9 +151,8 @@ pub async fn start(
     // assemble the provider config, and initialize the provider crate's client
     // statics — before `warn_if_offline` (below), so the OAuth `redirect_uri`
     // and the enabled-set derivation are in place before any request.
-    let domainname = config.domainname.as_deref();
-    let redirects = provider_urls::redirect_urls(domainname);
-    let webhooks = provider_urls::webhook_urls(domainname);
+    let redirects = provider_urls::redirect_urls(&config.domainname);
+    let webhooks = provider_urls::webhook_urls(&config.domainname);
     tb_provider::init(tb_provider::ProviderConfig {
         strava_client_id: config.strava_client_id,
         strava_client_secret: config.strava_client_secret,
