@@ -1209,10 +1209,9 @@ async fn accept_event_queues_the_event() {
     );
 }
 
-/// The webhook accept with a 64-bit owner id (Strava's post-June 2027 64-bit
-/// identifier rollout): the queue insert stores `strava_events.owner_id` as
-/// a 64-bit value, and a fresh connection reads it back intact (not
-/// truncated, not rejected).
+/// The webhook accept with a 64-bit owner id: the queue insert stores
+/// `strava_events.owner_id` as a 64-bit value, and a fresh connection reads
+/// it back intact.
 #[tokio::test]
 #[ignore]
 async fn accept_event_stores_a_64bit_owner_id() {

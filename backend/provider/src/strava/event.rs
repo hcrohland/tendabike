@@ -19,8 +19,7 @@ pub struct InEvent {
     //     and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone).
     // For app deauthorization events, there is always an "authorized" : "false" key-value pair.
     updates: HashMap<String, String>,
-    // The athlete's ID (64-bit: Strava's post-June 2027 64-bit identifier
-    // rollout).
+    // The athlete's ID.
     owner_id: i64,
     // The push subscription ID that is receiving this event.
     subscription_id: i32,

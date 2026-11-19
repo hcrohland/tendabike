@@ -153,9 +153,8 @@ async fn accept_stores_activity_event() -> TbResult<()> {
     Ok(())
 }
 
-/// The webhook accepts a 64-bit owner id (Strava's post-June 2027 64-bit
-/// identifier rollout): an owner above `i32::MAX` is parsed from the wire
-/// and queued intact (not truncated, not rejected).
+/// The webhook accepts a 64-bit owner id: an owner above `i32::MAX` is
+/// parsed from the wire and queued intact.
 #[tokio::test]
 async fn accept_stores_a_64bit_owner() -> TbResult<()> {
     let (mut store, _facade, _) = setup();

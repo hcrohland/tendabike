@@ -7,9 +7,8 @@ use super::super::test_support::{
 use super::*;
 use crate::test_support::queue;
 
-/// The 64-bit athlete id (Strava's post-June 2027 64-bit identifier rollout)
-/// round-trips through the `i64` conversions: a value above `i32::MAX` is
-/// held intact, not truncated.
+/// The athlete id round-trips through the `i64` conversions: a value
+/// above `i32::MAX` is held intact.
 #[test]
 fn strava_id_round_trips_a_64bit_value() {
     let id: i64 = 5_000_000_000;
@@ -70,10 +69,9 @@ async fn upsert_creates_new_user() -> TbResult<()> {
     Ok(())
 }
 
-/// The login's wire parse accepts a 64-bit athlete id (Strava's post-June
-/// 2027 64-bit identifier rollout): the token response's `athlete` field
-/// deserializes an id above `i32::MAX`, and the upsert stores the full value
-/// (not truncated, not rejected).
+/// The login's wire parse accepts a 64-bit athlete id: the token response's
+/// `athlete` field deserializes an id above `i32::MAX`, and the upsert
+/// stores the full value.
 #[tokio::test]
 async fn upsert_accepts_a_64bit_strava_id() -> TbResult<()> {
     let (mut store, mut facade, _) = setup();
