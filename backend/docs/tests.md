@@ -5,8 +5,7 @@ Shared conventions for every `tb_*` test suite. Each crate's guide covers its ow
 | Crate | Guide |
 |-------|-------|
 | `tb_domain` | [domain.md](tests/domain.md) |
-| `tb_provider` (Strava) | [strava.md](tests/strava.md) |
-| `tb_provider` (ICU) | [icu.md](tests/icu.md) |
+| `tb_provider` | [provider.md](tests/provider.md) |
 | `tb_axum` | [axum.md](tests/axum.md) |
 | `tb_exec` | [exec.md](tests/exec.md) |
 | `tb_sqlx` | [sqlx.md](tests/sqlx.md) |
