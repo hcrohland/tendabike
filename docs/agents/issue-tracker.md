@@ -28,8 +28,8 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 | Close | `gh issue close <n> --reason completed` |
 | Create PR | `gh pr create --head <branch> --title "…" --body "…"` |
 | Merge PR | `gh pr checks <n> --watch --interval 30 --fail-fast >/dev/null 2>&1 && gh pr merge <n> --squash` |
-| View PR inline review comments | `gh api pulls/<n>/comments` |
-| Reply to a review comment | `gh api pulls/<n>/comments -F in_reply_to=<id> -f body="…"` |
+| View PR inline review comments | `gh api repos/<owner>/<repo>/pulls/<n>/comments` |
+| Reply to a review comment | `gh api repos/<owner>/<repo>/pulls/<n>/comments -F in_reply_to=<id> -f body="…"` |
 | Add sub-issue | `gh issue edit <parent> --add-sub-issue <child1>,<child2>` |
 | Add blocked-by | `gh issue edit <n> --add-blocked-by <blocker1>,<blocker2>` |
 | Add blocking | `gh issue edit <n> --add-blocking <n1>,<n2>` |
