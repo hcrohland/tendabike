@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use super::activity::StravaActivity;
 use super::*;
 use crate::EntityFacade;
+use crate::lane::QueueRead;
 
 #[derive(Debug, Serialize, Deserialize)]
 /// A struct representing an incoming Strava event.
@@ -456,20 +457,6 @@ pub async fn sync_queued_for_user(
     Ok(syncs.iter().any(|event| event.event_time == event_time))
 }
 
-/// One outcome of a read of the `strava_events` queue (spec #446 §4.6):
-/// what is interesting for the user right now, and when the queue is paused.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum QueueRead {
-    /// The event to process (the read-side dedup already applied).
-    Event(Event),
-    /// The Strava rate-limit budget is exhausted until this unix time: the
-    /// queue is paused, and the caller sleeps until the window boundary
-    /// as an interruptible branch of its select — API writes are never delayed.
-    Limited { until: i64 },
-    /// The queue holds nothing interesting for this user.
-    Empty,
-}
-
 /// Read the next queued Strava event for the user, with the queue's read-side
 /// rules applied (ADR-0005, executable spec #446 §4.3):
 ///
@@ -485,7 +472,7 @@ pub(crate) enum QueueRead {
 pub(crate) async fn get_event(
     user_id: UserId,
     store: &mut impl StravaDataStore,
-) -> TbResult<QueueRead> {
+) -> TbResult<QueueRead<Event>> {
     // Proactive rate-limit gate: if the budget is exhausted, report the
     // window boundary without dequeuing (the event stays queued).
     if let Some(until) = super::ratelimit::limited_until() {

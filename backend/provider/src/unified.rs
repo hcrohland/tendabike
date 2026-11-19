@@ -115,19 +115,11 @@ where
         };
         match provider {
             Provider::Icu => match crate::icu::event::get_event(user_id, store).await {
-                Ok(crate::icu::event::QueueRead::Event(event)) => {
-                    Probe::Event(LaneEvent::Icu(event))
-                }
-                Ok(crate::icu::event::QueueRead::Limited { until }) => Probe::Limited(until),
-                Ok(crate::icu::event::QueueRead::Empty) => Probe::Empty,
+                Ok(read) => read.into_probe(LaneEvent::Icu),
                 Err(_) => Probe::Error,
             },
             Provider::Strava => match crate::strava::event::get_event(user_id, store).await {
-                Ok(crate::strava::event::QueueRead::Event(event)) => {
-                    Probe::Event(LaneEvent::Strava(event))
-                }
-                Ok(crate::strava::event::QueueRead::Limited { until }) => Probe::Limited(until),
-                Ok(crate::strava::event::QueueRead::Empty) => Probe::Empty,
+                Ok(read) => read.into_probe(LaneEvent::Strava),
                 Err(_) => Probe::Error,
             },
         }

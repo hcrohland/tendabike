@@ -4,6 +4,7 @@ use crate::facade::{
     ActivityId, Notification, NotificationKind, NotificationLifecycle, NotificationState,
     NotificationSubject, Summary,
 };
+use crate::lane::QueueRead;
 use crate::test_support::icu_webhook_secret;
 use crate::test_support::{queue, queue_error};
 use time::OffsetDateTime;

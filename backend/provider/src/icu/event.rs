@@ -18,6 +18,7 @@ use super::http::request_json;
 use super::{IcuDataStore, IcuId};
 use crate::EntityFacade;
 use crate::facade::{Error, Summary, TbResult, UserId};
+use crate::lane::QueueRead;
 
 /// The `activity_id` sentinel a `SYNC` row carries (the column is `NOT NULL`,
 /// but a `SYNC` refers to no single activity).
@@ -333,26 +334,13 @@ pub(crate) async fn insert_sync(
     Ok(())
 }
 
-/// One outcome of a read of the `icu_events` queue (spec #764): what is
-/// interesting for the user right now, and when the queue is paused.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum QueueRead {
-    /// An event to process (the next queued row).
-    Event(IcuEvent),
-    /// The icu rate-limit budget is exhausted until this unix time: the queue
-    /// is paused, and the caller sleeps until the window boundary.
-    Limited { until: i64 },
-    /// The queue holds nothing for this user.
-    Empty,
-}
-
 /// Read the queue for the user, with the queue's read-side rules (the
 /// rate-limit gate, then the oldest queued event). Crate-internal: the lane's
 /// `probe` is the only caller.
 pub(crate) async fn get_event(
     user_id: UserId,
     store: &mut impl IcuDataStore,
-) -> TbResult<QueueRead> {
+) -> TbResult<QueueRead<IcuEvent>> {
     // Proactive rate-limit gate: budget exhausted → report the window boundary
     // without dequeuing (the event stays queued).
     if let Some(until) = super::ratelimit::limited_until() {

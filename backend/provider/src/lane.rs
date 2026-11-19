@@ -102,6 +102,37 @@ pub enum Probe<E> {
     Error,
 }
 
+/// One outcome of a read of a provider's event queue (one transaction): what
+/// is interesting for the user right now, and when the queue is paused.
+/// Generic over the driver's event type. The input to the probe outcome
+/// ([`Probe`]): the lane's `probe` maps it to the `Probe` the loop consumes,
+/// so the queue-read concept and its translation live together in the kit,
+/// not per driver.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum QueueRead<E> {
+    /// An event to process (the read-side rules already applied).
+    Event(E),
+    /// The driver's rate-limit budget is exhausted until this unix time: the
+    /// queue is paused, and the caller sleeps until the window boundary.
+    Limited { until: i64 },
+    /// The queue holds nothing for this user.
+    Empty,
+}
+
+impl<E> QueueRead<E> {
+    /// The probe outcome this queue read maps to, wrapping the carried event
+    /// with `into` (the lane's unified-event arm). Total over the three queue
+    /// read outcomes; the user-gone and error probe outcomes are the
+    /// provider-identity lookup's, not the queue read's.
+    pub(crate) fn into_probe<W>(self, into: impl FnOnce(E) -> W) -> Probe<W> {
+        match self {
+            QueueRead::Event(event) => Probe::Event(into(event)),
+            QueueRead::Limited { until } => Probe::Limited(until),
+            QueueRead::Empty => Probe::Empty,
+        }
+    }
+}
+
 /// The narrow provider seam the executor loop calls through: `probe` reads
 /// the provider's event queue (one transaction's housekeeping), and
 /// `process` handles a queued event (the work transaction). The loop is
@@ -173,4 +204,25 @@ pub trait ProviderLane: Send + Sync {
     /// side, spec #558 §3.3): the domain [`UserStat`] — the stat plus the
     /// provider's queued-event count and disabled flag.
     async fn all_stats(&self, store: &mut Self::Store) -> TbResult<Vec<UserStat>>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Probe, QueueRead};
+
+    /// The queue-read-to-probe mapping is total over the three queue-read
+    /// outcomes: the event is wrapped, the pause carries its deadline, and
+    /// empty is empty. Pure — no store, no mocks.
+    #[test]
+    fn into_probe_maps_all_three_outcomes() {
+        assert_eq!(
+            QueueRead::<i32>::Event(42).into_probe(|e| e),
+            Probe::Event(42)
+        );
+        assert_eq!(
+            QueueRead::<i32>::Limited { until: 123 }.into_probe(|e| e),
+            Probe::Limited(123)
+        );
+        assert_eq!(QueueRead::<i32>::Empty.into_probe(|e| e), Probe::Empty);
+    }
 }
