@@ -4,7 +4,12 @@
 
 use time::OffsetDateTime;
 
-use super::*;
+use super::{
+    Context, Deserialize, Error, OnBehalf, PartId, PartTypeId, Serialize, Session, StravaDataStore,
+    TbResult, UserId, debug, request_json,
+};
+#[cfg(test)]
+use super::{MockStravaDataStore, Part};
 use crate::EntityFacade;
 
 #[derive(Serialize, Deserialize, Debug)]

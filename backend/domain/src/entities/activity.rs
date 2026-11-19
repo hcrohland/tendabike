@@ -32,7 +32,13 @@ use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
 use time::{OffsetDateTime, PrimitiveDateTime, macros::format_description};
 
-use crate::*;
+use crate::{
+    ActTypeId, ActivityStore, Attachment, AttachmentStore, IdKeyed, PartId, PartStore,
+    ServiceStore, Session, ShopStore, Summary, TbResult, Usage, UsageId, UsageStore, UserId, debug,
+    info, trace, warn,
+};
+#[cfg(test)]
+use crate::{Error, IdKeyedMap, MAX_TIME, Part, PartTypeId, round_time};
 
 /// The Id of an Activity
 ///

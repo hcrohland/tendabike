@@ -28,7 +28,12 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::traits::{AttachmentStore, PartStore, ServiceStore, UsageStore};
 
-use crate::*;
+#[cfg(test)]
+use crate::UserId;
+use crate::{
+    Activity, ActivityStore, Error, IdKeyed, MAX_TIME, Part, PartId, PartTypeId, Service, Session,
+    ShopStore, Summary, TbResult, Usage, UsageId, debug, round_time, trace,
+};
 use time::OffsetDateTime;
 
 /// Timeline of attachments

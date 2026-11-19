@@ -31,7 +31,16 @@ use serde_with::serde_as;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
-use crate::*;
+#[cfg(test)]
+use crate::{
+    Attachment, MAX_TIME, NotificationId, NotificationState, PartTypeId, Usage, UsageId,
+    attach_assembly, detach_assembly,
+};
+use crate::{
+    AttachmentStore, Error, IdKeyed, Notification, NotificationKind, NotificationLifecycle,
+    NotificationStore, NotificationSubject, Part, PartId, PartStore, Session, ShopStore, Summary,
+    TbResult, UserId, UserPublic, UserStore, is_attached, subparts,
+};
 
 pub mod subscription;
 pub use subscription::*;

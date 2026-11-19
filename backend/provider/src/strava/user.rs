@@ -10,7 +10,13 @@ use derive_more::{Display, From, Into};
 use oauth2::{AuthorizationCode, RefreshToken, TokenResponse};
 use serde::Deserialize;
 
-use super::*;
+#[cfg(test)]
+use super::Stat;
+use super::{
+    Context, Error, HTTP_CLIENT, PartId, SCOPES, Serialize, Session, StravaAthleteInfo,
+    StravaDataStore, TbResult, UserId, UserStat, deauthorize, debug, gear, get_strava_id, info,
+    request_json, strava_client, warn,
+};
 use crate::EntityFacade;
 
 /// The Strava athlete/user id.

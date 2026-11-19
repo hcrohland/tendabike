@@ -25,7 +25,9 @@ use crate::facade::{
     MockSession, OnboardingStatus, UsageId, User, mock_session, mock_session_admin,
 };
 
-use super::super::*;
+use super::super::{
+    ActTypeId, Activity, ActivityId, Part, PartId, PartTypeId, StravaId, StravaUser, UserId,
+};
 use crate::test_support as kit;
 
 // The recorded `deauthorize()` calls — Strava's extra, kept in its own

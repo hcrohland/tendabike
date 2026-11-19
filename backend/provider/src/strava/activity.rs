@@ -8,7 +8,12 @@
 
 use time::{OffsetDateTime, UtcOffset};
 
-use super::*;
+#[cfg(test)]
+use super::PartId;
+use super::{
+    ActTypeId, Activity, ActivityId, Context, Deserialize, Error, OnBehalf, Serialize, Session,
+    StravaDataStore, Summary, TbResult, UserId, gear, request_json,
+};
 use crate::{EntityFacade, ProviderActivityId, StravaActivityId};
 
 #[derive(Serialize, Deserialize, Debug)]

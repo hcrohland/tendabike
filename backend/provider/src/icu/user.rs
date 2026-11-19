@@ -15,7 +15,10 @@ use derive_more::{Display, From, Into};
 use oauth2::{AuthorizationCode, PkceCodeVerifier, TokenResponse};
 use serde::Deserialize;
 
-use super::*;
+use super::{
+    Error, HTTP_CLIENT, IcuAthleteInfo, IcuDataStore, PartId, SCOPES, Serialize, Session, TbResult,
+    UserId, UserStat, debug, icu_client, info, warn,
+};
 use crate::EntityFacade;
 
 /// The icu athlete ID: a provider text id (intervals.icu ids are not

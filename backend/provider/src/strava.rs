@@ -19,7 +19,14 @@ use log::{debug, info, trace, warn};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::OnBehalf;
-use crate::facade::*;
+#[cfg(any(test, feature = "test-support"))]
+use crate::facade::Part;
+#[cfg(test)]
+use crate::facade::Stat;
+use crate::facade::{
+    ActTypeId, Activity, ActivityId, Error, PartId, PartTypeId, Session, Summary, TbResult, UserId,
+    UserStat,
+};
 
 mod traits;
 pub use traits::*;
@@ -28,10 +35,10 @@ pub mod client;
 pub use client::*;
 
 mod session;
-use session::*;
+use session::{get_strava_id, get_token};
 
 mod http;
-use http::*;
+use http::{deauthorize, request_json};
 
 pub mod activity;
 pub mod event;

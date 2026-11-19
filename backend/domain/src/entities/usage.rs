@@ -22,13 +22,12 @@
 //! The `Usage` struct represents the usage of a part, including time, distance, climbing, descending, power, and count.
 //! It also provides methods to add an activity to the usage.
 
+use crate::{Error, IdKeyed, TbResult, UsageStore};
 use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::ops::{Add, Neg, Sub};
 use uuid::Uuid;
-
-use crate::*;
 
 #[derive(
     Clone,

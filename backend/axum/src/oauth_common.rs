@@ -37,7 +37,7 @@ fn csrf_key() -> &'static [u8] {
 }
 
 fn hmac_signature(key: &[u8], msg: &str) -> String {
-    use base64::prelude::*;
+    use base64::prelude::{BASE64_STANDARD, Engine};
     use hmac::{Hmac, KeyInit, Mac};
 
     type HmacSha256 = Hmac<sha2::Sha256>;
@@ -52,7 +52,7 @@ fn hmac_signature(key: &[u8], msg: &str) -> String {
 /// A fresh random nonce (the state's per-request secret, base64url-encoded —
 /// neither it nor a PKCE verifier can contain a `+`).
 fn fresh_nonce() -> String {
-    use base64::prelude::*;
+    use base64::prelude::{BASE64_URL_SAFE_NO_PAD, Engine};
 
     let random: Vec<u8> = (0..16).map(|_| rand::random()).collect();
     BASE64_URL_SAFE_NO_PAD.encode(random)

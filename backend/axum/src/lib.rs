@@ -77,10 +77,10 @@ use session::{AxumAdmin, RequestSession};
 mod strava;
 
 mod appstate;
-use appstate::*;
+use appstate::AppState;
 
 mod error;
-use error::*;
+use error::ApiResult;
 
 mod oauth_common;
 
