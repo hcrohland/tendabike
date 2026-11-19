@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::Provider;
 use crate::facade::{Error, TbResult, UserId, mock_session_admin};
-use crate::icu::test_support::{MockIcuDataStore, begin_test, queue};
+use crate::icu::test_support::{MockIcuDataStore, begin_test, gear_json, queue};
 use crate::icu::{IcuDataStore, IcuEvent, IcuId, IcuObjectType, IcuUser};
 use crate::strava::event::Event;
 use crate::strava::test_support::MockStravaDataStore;
@@ -668,17 +668,24 @@ async fn provider_of_not_found_when_no_row_exists() -> TbResult<()> {
 // on their own provider's lane — a Strava user gets a Strava `Sync` event, an
 // icu user is queued via the icu onboarding path.
 
-/// The icu lane: an enabled icu user gets gear imported (inline) and a
-/// `SYNC` event queued.
+/// The icu lane: an enabled icu user gets a `SYNC` event queued — a pure
+/// activity re-sync, no gear import (gear import is an onboarding-only
+/// concern).
 #[tokio::test]
 async fn sync_users_queues_icu_users() -> TbResult<()> {
     init_test_config_once();
     let mut store = DispatchStore::default();
-    let facade = MockEntityFacade::new();
-    // The icu HTTP seam in test mode: the gear import fetches a canned empty
-    // gear list (no gear → the gear import is a no-op).
+    let mut facade: MockEntityFacade<DispatchStore> = MockEntityFacade::new();
+    // The icu HTTP seam in test mode: the gear list is non-empty, so a gear
+    // import WOULD call the gear store — the re-trigger must not.
     begin_test();
-    queue("/athlete/a1/gear", "[]");
+    queue(
+        "/athlete/a1/gear",
+        &format!("[{}]", gear_json("g1", "Bike")),
+    );
+    // The re-trigger is a pure activity re-sync: the gear store is not called.
+    facade.expect_part_by_source().times(0);
+    facade.expect_create_part().times(0);
     // No Strava row for this user → the `provider_of` lookup resolves icu.
     store
         .strava
@@ -711,7 +718,6 @@ async fn sync_users_queues_icu_users() -> TbResult<()> {
         Some(UserId::from(9)),
         1_700_000_000,
         false,
-        &facade,
         &mut store,
     )
     .await?;
@@ -793,7 +799,6 @@ async fn queue_sync_user_queues_icu_sync_with_full_history() -> TbResult<()> {
 async fn sync_users_queues_strava_users() -> TbResult<()> {
     init_test_config_once();
     let mut store = DispatchStore::default();
-    let facade = MockEntityFacade::new();
     // The all-users Strava read; no icu users.
     store.strava.expect_stravauser_get_all().returning(|| {
         Ok(vec![crate::strava::test_support::strava_user(
@@ -823,15 +828,7 @@ async fn sync_users_queues_strava_users() -> TbResult<()> {
         });
 
     let mut session = mock_session_admin(UserId::from(1));
-    let queued = sync_users(
-        &mut session,
-        None,
-        1_700_000_000,
-        false,
-        &facade,
-        &mut store,
-    )
-    .await?;
+    let queued = sync_users(&mut session, None, 1_700_000_000, false, &mut store).await?;
 
     assert_eq!(queued, vec![UserId::from(7)], "the Strava user is queued");
     let events = created.lock().unwrap().clone();
@@ -846,7 +843,6 @@ async fn sync_users_queues_strava_users() -> TbResult<()> {
 async fn sync_users_skips_disabled() -> TbResult<()> {
     init_test_config_once();
     let mut store = DispatchStore::default();
-    let facade = MockEntityFacade::new();
     // A disabled Strava user and a disabled icu user.
     store.strava.expect_stravauser_get_all().returning(|| {
         Ok(vec![crate::strava::test_support::strava_user(
@@ -864,15 +860,7 @@ async fn sync_users_skips_disabled() -> TbResult<()> {
     });
 
     let mut session = mock_session_admin(UserId::from(1));
-    let queued = sync_users(
-        &mut session,
-        None,
-        1_700_000_000,
-        false,
-        &facade,
-        &mut store,
-    )
-    .await?;
+    let queued = sync_users(&mut session, None, 1_700_000_000, false, &mut store).await?;
 
     assert!(queued.is_empty(), "disabled users are skipped");
     Ok(())
@@ -884,7 +872,6 @@ async fn sync_users_skips_disabled() -> TbResult<()> {
 async fn sync_users_single_strava() -> TbResult<()> {
     init_test_config_once();
     let mut store = DispatchStore::default();
-    let facade = MockEntityFacade::new();
     // The provider lookup, the lane read, and the `insert_sync`'s read all
     // resolve the Strava user.
     let strava = crate::strava::test_support::strava_user(UserId::from(7), 42, true);
@@ -908,7 +895,6 @@ async fn sync_users_single_strava() -> TbResult<()> {
         Some(UserId::from(7)),
         1_700_000_000,
         false,
-        &facade,
         &mut store,
     )
     .await?;
@@ -927,7 +913,6 @@ async fn sync_users_single_strava() -> TbResult<()> {
 #[tokio::test]
 async fn sync_users_unknown_user() {
     let mut store = DispatchStore::default();
-    let facade = MockEntityFacade::new();
     store
         .strava
         .expect_stravauser_get_by_tbid()
@@ -943,7 +928,6 @@ async fn sync_users_unknown_user() {
         Some(UserId::from(99)),
         1_700_000_000,
         false,
-        &facade,
         &mut store,
     )
     .await;
@@ -955,17 +939,8 @@ async fn sync_users_unknown_user() {
 #[tokio::test]
 async fn sync_users_forbidden_for_non_admin() {
     let mut store = DispatchStore::default();
-    let facade = MockEntityFacade::new();
     let mut session = crate::facade::mock_session(UserId::from(1));
 
-    let res = sync_users(
-        &mut session,
-        None,
-        1_700_000_000,
-        false,
-        &facade,
-        &mut store,
-    )
-    .await;
+    let res = sync_users(&mut session, None, 1_700_000_000, false, &mut store).await;
     assert!(matches!(res, Err(Error::Forbidden(_))));
 }

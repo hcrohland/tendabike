@@ -110,17 +110,16 @@ where
     }
 }
 
-/// The sync switch (ADR-0014): the single home for the user's provider
-/// identity read plus the Strava gear-import-and-`insert_sync(…, false, …)`
-/// / icu `onboard` arms. The provider is the user's real one, read
-/// in-transaction (a per-provider route acting on a user of the other
-/// provider follows the stated identity rule). The admin trigger delegates
-/// here (the registry's [`sync`](crate::dispatch::sync)): one `match` for the
-/// combined gear-import-plus-queue sync op.
-///
-/// Returns the created gear part ids (spec #829): the Strava arm imports the
-/// gear (bikes + shoes) before queuing the activity sync, and the icu arm
-/// returns the gear its onboarding imported. The admin trigger drops them.
+/// The per-user onboarding sync (ADR-0014): the single home for the user's
+/// provider identity read plus the per-driver `onboard` arms. The provider is
+/// the user's real one, read in-transaction (a per-provider route acting on a
+/// user of the other provider follows the stated identity rule). Each driver's
+/// `onboard` primitive (the Strava [`onboard`](crate::strava::onboard), the
+/// icu [`onboard`](crate::icu::onboard)) imports the user's gear (bikes +
+/// shoes) and enqueues the activity sync, returning the created gear part ids
+/// (spec #829) — the combined gear-import-plus-queue sync op. The admin
+/// trigger delegates here (the registry's
+/// [`sync`](crate::dispatch::sync)); it drops the gear ids.
 ///
 /// The onboarding's two steps do not run through this combined op: they use
 /// the split [`import_gear_user`](crate::dispatch::import_gear_user) and
@@ -140,13 +139,7 @@ where
     // freeze is a clear "provider disabled" error, not a silent no-op.
     crate::config::require_enabled(provider)?;
     match provider {
-        Provider::Strava => {
-            // Import the gear (bikes + shoes) before queuing the activity
-            // sync (spec #829): the gear is the onboarding's provider side.
-            let gear = crate::strava::StravaUser::update_gear(user_id, facade, store).await?;
-            crate::strava::event::insert_sync(user_id, event_time, false, store).await?;
-            Ok(gear)
-        }
+        Provider::Strava => crate::strava::onboard(user_id, event_time, facade, store).await,
         Provider::Icu => crate::icu::onboard(user_id, event_time, facade, store).await,
     }
 }
@@ -215,20 +208,20 @@ where
         .map(|_| ())
 }
 
-/// The provider-agnostic `trigger_processing` dispatch (spec #855): queue a
-/// sync for every non-disabled user on their own provider's lane — a Strava
-/// user gets a Strava `Sync` event via `insert_sync`, an icu user is queued
-/// via the icu onboarding path (the same [`sync_user`] arm the per-user `sync`
-/// direct op uses). `user_id` narrows the trigger to one
-/// user, regardless of provider (a user with no row in either table is a
-/// `NotFound`). Returns the tbids of the users a sync was queued for — the
-/// caller's per-user wake list.
-pub async fn sync_users<S, D: EntityFacade<S>>(
+/// The provider-agnostic `trigger_processing` dispatch (spec #855): a pure
+/// activity re-sync — queue a sync for every non-disabled user on their own
+/// provider's lane, without re-importing gear (gear import is an
+/// onboarding-only concern). A Strava user gets a Strava `Sync` event via
+/// `insert_sync` (the `migrate` flag passes through to the Strava driver — a
+/// Strava-internal concern, ADR-0013); an icu user gets the bare `SYNC`
+/// event. `user_id` narrows the trigger to one user, regardless of provider
+/// (a user with no row in either table is a `NotFound`). Returns the tbids of
+/// the users a sync was queued for — the caller's per-user wake list.
+pub async fn sync_users<S>(
     session: &mut dyn Session,
     user_id: Option<UserId>,
     time: i64,
     migrate: bool,
-    facade: &D,
     store: &mut S,
 ) -> TbResult<Vec<UserId>>
 where
@@ -270,9 +263,10 @@ where
         }
     }
 
-    // The icu lane: gear import (inline) + a `SYNC` event (the durable
-    // backfill cursor) per non-disabled icu user. A disabled provider's
-    // lane is skipped (ADR-0016).
+    // The icu lane: a `SYNC` event (the durable backfill cursor) per
+    // non-disabled icu user — a pure activity re-sync, no gear import (gear
+    // import is an onboarding-only concern). A disabled provider's lane is
+    // skipped (ADR-0016).
     if (provider.is_none() || provider == Some(Provider::Icu))
         && crate::enabled_providers().contains(&Provider::Icu)
     {
@@ -286,7 +280,7 @@ where
                 continue;
             }
             info!("Adding sync for {:?} at {time}", user.user_id());
-            crate::icu::onboard(user.user_id(), time, facade, store).await?;
+            crate::icu::event::insert_sync(user.user_id(), time, store).await?;
             queued.push(user.user_id());
         }
     }
