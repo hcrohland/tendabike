@@ -1,12 +1,13 @@
-use log::error;
+use log::{debug, error, info, trace, warn};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use super::activity::StravaActivity;
 #[cfg(test)]
 use super::{ActivityId, MockStravaDataStore, Session};
 use super::{
-    Deserialize, Error, Serialize, StravaDataStore, StravaId, Summary, TbResult, UserId, activity,
-    debug, get_strava_id, get_time, info, request_json, trace, warn,
+    Error, StravaDataStore, StravaId, Summary, TbResult, UserId, activity, get_strava_id, get_time,
+    request_json,
 };
 use crate::EntityFacade;
 use crate::lane::QueueRead;

@@ -12,12 +12,13 @@
 
 use anyhow::Context;
 use derive_more::{Display, From, Into};
+use log::{debug, info, warn};
 use oauth2::{AuthorizationCode, PkceCodeVerifier, TokenResponse};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::{
-    Error, HTTP_CLIENT, IcuAthleteInfo, IcuDataStore, PartId, SCOPES, Serialize, Session, TbResult,
-    UserId, UserStat, debug, icu_client, info, warn,
+    Error, HTTP_CLIENT, IcuAthleteInfo, IcuDataStore, PartId, SCOPES, Session, TbResult, UserId,
+    UserStat, icu_client,
 };
 use crate::EntityFacade;
 

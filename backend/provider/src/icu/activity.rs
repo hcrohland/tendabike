@@ -10,7 +10,10 @@
 
 use time::OffsetDateTime;
 
-use super::{Deserialize, IcuDataStore, OnBehalf, Serialize, Session, TbResult, debug};
+use log::debug;
+use serde::{Deserialize, Serialize};
+
+use super::{IcuDataStore, OnBehalf, Session, TbResult};
 use crate::facade::{
     ActTypeId, Activity, ActivityId, Error, Notification, NotificationKind, NotificationLifecycle,
     NotificationSubject, PartId, Summary, UserId,

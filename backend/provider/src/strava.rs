@@ -14,10 +14,6 @@
 //! # Examples
 //!
 
-use anyhow::Context;
-use log::{debug, info, trace, warn};
-use serde_derive::{Deserialize, Serialize};
-
 use crate::OnBehalf;
 #[cfg(any(test, feature = "test-support"))]
 use crate::facade::Part;
