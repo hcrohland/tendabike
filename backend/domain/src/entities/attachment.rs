@@ -24,11 +24,17 @@
 //! This module also contains the implementation of the `Event` struct, which describes an attach or detach request.
 //!
 
+use log::{debug, trace};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::traits::{AttachmentStore, PartStore, ServiceStore, UsageStore};
 
-use crate::*;
+#[cfg(test)]
+use crate::UserId;
+use crate::{
+    Activity, ActivityStore, Error, IdKeyed, MAX_TIME, Part, PartId, PartTypeId, Service, Session,
+    ShopStore, Summary, TbResult, Usage, UsageId, round_time,
+};
 use time::OffsetDateTime;
 
 /// Timeline of attachments

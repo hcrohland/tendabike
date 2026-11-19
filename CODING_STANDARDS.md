@@ -38,6 +38,10 @@ Every item has the narrowest visibility that compiles: `pub` only if a different
 
 The test: drop the modifier. If it still compiles, the item was over-exposed. A public item no consumer names is case-specific weight exported past the seam (see [Generality](#generality)).
 
+## Glob imports
+
+No glob imports (`use x::*`) — name the items. The one exception is `pub use <module>::*;`, which collects a module's exports for public consumption (the `lib.rs`/aggregator re-exports). Two narrower allowances: `use super::*;` inside a test module (`*_tests.rs` or an inline `#[cfg(test)] mod tests`), and an enum-variant glob (`use SomeEnum::*;`) inside a `match` arm.
+
 ## Generality
 
 Flag designs that are more specific than their weakest consumer requires. The seam should be as general as the least-capable caller needs:

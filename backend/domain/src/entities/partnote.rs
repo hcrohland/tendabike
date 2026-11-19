@@ -28,13 +28,14 @@
 //! contract requires no `Summary`. File bytes are fetched on demand via [`PartNote::file`],
 //! never as part of any `Summary`.
 
+use crate::{Error, IdKeyed, PartId, PartNoteStore, PartStore, Session, ShopStore, TbResult};
+#[cfg(test)]
+use crate::{Part, PartTypeId, Shop, ShopId, UsageId, UserId};
 use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
 use serde_with::serde_as;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
-
-use crate::*;
 
 /// A note or file attached to a part.
 ///

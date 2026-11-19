@@ -1,8 +1,12 @@
+use crate::{
+    IdKeyed, PartId, PartStore, PartTypeId, Service, ServicePlanStore, ServiceStore, Session,
+    ShopStore, TbResult, UserId,
+};
+#[cfg(test)]
+use crate::{Part, ServiceId, Shop, ShopId, UsageId};
 use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
 use uuid::Uuid;
-
-use crate::*;
 
 #[derive(
     Clone, Copy, Debug, Display, From, Into, Hash, PartialEq, Eq, Serialize, Deserialize, Default,

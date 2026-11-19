@@ -51,9 +51,12 @@
 //! pattern-matches its own result; a mismatch is a bug, guarded the way
 //! `write_descend` guards its report.
 
+use crate::{
+    Activity, ActivityId, Part, PartId, PartNote, PartNoteId, PartTypeId, Session, Shop, ShopId,
+    ShopSubscription, ShopSubscriptionWithDetails, Store, SubscriptionId, TbResult, User,
+    UserPublic, UserState,
+};
 use std::collections::HashSet;
-
-use crate::*;
 
 /// One per-user read API route, as the per-user loop receives it.
 ///

@@ -16,7 +16,11 @@ use std::{
     ops::{Add, AddAssign},
 };
 
-use crate::*;
+use crate::{
+    Activity, ActivityId, AttachmentDetail, Notification, NotificationId, Part, PartId, PartNote,
+    PartNoteId, Service, ServiceId, ServicePlan, ServicePlanId, Shop, ShopId, Usage, UsageId,
+    UserId, UserPublic,
+};
 
 /// An entity that carries its own map key: the id under which its [`IdKeyedMap`] entry lives.
 ///

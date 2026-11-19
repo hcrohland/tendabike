@@ -1,9 +1,14 @@
+#[cfg(test)]
+use crate::{ActTypeId, ActivityId, Error, PartTypeId};
+use crate::{
+    Activity, ActivityStore, Attachment, AttachmentStore, IdKeyed, MAX_TIME, MIN_TIME, Part,
+    PartId, PartStore, ServicePlanId, ServiceStore, Session, ShopStore, Summary, TbResult, Usage,
+    UsageId, UsageStore, UserId,
+};
 use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
-
-use crate::*;
 
 #[derive(
     Clone, Copy, Debug, Display, From, Into, Hash, PartialEq, Eq, Serialize, Deserialize, Default,

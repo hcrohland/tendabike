@@ -33,7 +33,8 @@ use oauth2::AccessToken;
 use serde::de::DeserializeOwned;
 
 use super::client::{HTTP_CLIENT, strava_client};
-use super::{StravaDataStore, StravaId, get_token};
+use super::session::get_token;
+use super::{StravaDataStore, StravaId};
 use crate::facade::{TbResult, UserId};
 
 const API: &str = "https://www.strava.com/api/v3";

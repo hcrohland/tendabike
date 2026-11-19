@@ -14,12 +14,15 @@
 //! # Examples
 //!
 
-use anyhow::Context;
-use log::{debug, info, trace, warn};
-use serde_derive::{Deserialize, Serialize};
-
 use crate::OnBehalf;
-use crate::facade::*;
+#[cfg(any(test, feature = "test-support"))]
+use crate::facade::Part;
+#[cfg(test)]
+use crate::facade::Stat;
+use crate::facade::{
+    ActTypeId, Activity, ActivityId, Error, PartId, PartTypeId, Session, Summary, TbResult, UserId,
+    UserStat,
+};
 
 mod traits;
 pub use traits::*;
@@ -28,10 +31,8 @@ pub mod client;
 pub use client::*;
 
 mod session;
-use session::*;
 
 mod http;
-use http::*;
 
 pub mod activity;
 pub mod event;

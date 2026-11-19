@@ -27,11 +27,8 @@
 //! (required params, sort order, date format, rate-limit headers).
 //!
 
-use log::{debug, info, warn};
-use serde_derive::{Deserialize, Serialize};
-
 use crate::OnBehalf;
-use crate::facade::*;
+use crate::facade::{Error, PartId, Session, TbResult, UserId, UserStat};
 
 mod traits;
 pub use traits::*;

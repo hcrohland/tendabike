@@ -66,7 +66,7 @@ where
 
 use std::hash::Hash;
 
-use crate::*;
+use crate::{IdKeyedMap, MockSession, ShopId, UserId};
 
 /// A [`MockSession`] for `user`, `shop`, and `admin`, whose `check_owner`
 /// behaves like the trait default (delegating to `user_id`). The

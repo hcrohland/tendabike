@@ -35,9 +35,14 @@
 
 use anyhow::Context;
 use derive_more::{Display, From, Into};
+use log::debug;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::*;
+use crate::{
+    Activity, ActivityStore, Attachment, AttachmentStore, Error, IdKeyed, Notification, Part,
+    PartNote, PartNoteStore, PartStore, Service, ServicePlan, ServicePlanStore, ServiceStore, Shop,
+    ShopId, Store, Summary, TbResult, Usage, UsageStore, UserStore,
+};
 
 #[derive(
     Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize, From, Into, Display,
@@ -301,7 +306,6 @@ impl UserId {
         caller: Option<UserPublic>,
         store: &mut impl Store,
     ) -> TbResult<Summary> {
-        use crate::*;
         let activities = Activity::get_all(self, store).await?;
         let shops = Shop::get_all_for_user(self, store).await?;
         let users = Shop::get_users(&shops, self, caller, store).await?;

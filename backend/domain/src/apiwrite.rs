@@ -57,10 +57,14 @@
 //!   skipped (the [`DescendReport`]) ride the HTTP response body — the
 //!   matched activities' state still rides the frame (the §6.2 deviation).
 
+use crate::{
+    Activity, ActivityId, DescendReport, Error, Notification, NotificationId, OnboardingStatus,
+    Part, PartId, PartNote, PartNoteId, PartTypeId, Service, ServiceId, ServicePlan, ServicePlanId,
+    Session, Shop, ShopId, Store, SubscriptionId, Summary, TbResult, attach_assembly,
+    detach_assembly, dispose_assembly, recover_assembly,
+};
 use serde_derive::{Deserialize, Serialize};
 use time::OffsetDateTime;
-
-use crate::*;
 
 /// The parsed multipart file of a file-note upload — the raw fields as the
 /// handler's parser extracts them, before any fallback. Fallbacks for

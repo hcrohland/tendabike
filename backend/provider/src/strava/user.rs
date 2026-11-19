@@ -6,11 +6,20 @@
 //! The methods implemented for the StravaUser struct allow for reading and updating user data, as well as
 //! checking the validity of the user's access token.
 
+use anyhow::Context;
 use derive_more::{Display, From, Into};
+use log::{debug, info, warn};
 use oauth2::{AuthorizationCode, RefreshToken, TokenResponse};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-use super::*;
+#[cfg(test)]
+use super::Stat;
+use super::client::{HTTP_CLIENT, SCOPES, strava_client};
+use super::http::{deauthorize, request_json};
+use super::session::get_strava_id;
+use super::{
+    Error, PartId, Session, StravaAthleteInfo, StravaDataStore, TbResult, UserId, UserStat, gear,
+};
 use crate::EntityFacade;
 
 /// The Strava athlete/user id.

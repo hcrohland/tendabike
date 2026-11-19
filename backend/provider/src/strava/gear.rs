@@ -2,9 +2,15 @@
 //! It also contains functions to convert StravaGear to Tendabike's Part object and to map Strava gear_id to Tendabike gear_id.
 //!
 
+use anyhow::Context;
+use log::debug;
+use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
-use super::*;
+use super::http::request_json;
+use super::{Error, OnBehalf, PartId, PartTypeId, Session, StravaDataStore, TbResult, UserId};
+#[cfg(test)]
+use super::{MockStravaDataStore, Part};
 use crate::EntityFacade;
 
 #[derive(Serialize, Deserialize, Debug)]

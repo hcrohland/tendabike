@@ -6,9 +6,17 @@
 // The file imports the OffsetDateTime struct from the time crate.
 // The file also has two comments that indicate the beginning and end of a code block.
 
+use anyhow::Context;
+use serde::{Deserialize, Serialize};
 use time::{OffsetDateTime, UtcOffset};
 
-use super::*;
+#[cfg(test)]
+use super::PartId;
+use super::http::request_json;
+use super::{
+    ActTypeId, Activity, ActivityId, Error, OnBehalf, Session, StravaDataStore, Summary, TbResult,
+    UserId, gear,
+};
 use crate::{EntityFacade, ProviderActivityId, StravaActivityId};
 
 #[derive(Serialize, Deserialize, Debug)]
