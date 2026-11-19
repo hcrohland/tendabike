@@ -187,6 +187,23 @@ impl StravaUser {
     }
 }
 
+/// The driver's `onboard` primitive (mirroring intervals.icu's): import the
+/// user's Strava gear (bikes + shoes), then enqueue the durable activity-sync
+/// event, returning the created gear part ids (the onboarding response lists
+/// them). The Strava sync is enqueued with the non-migrate flag — onboarding
+/// is not a migration, so the `migrate` flag stays a Strava-internal concern
+/// (ADR-0013).
+pub async fn onboard<D: EntityFacade<S>, S: StravaDataStore>(
+    user_id: UserId,
+    event_time: i64,
+    facade: &D,
+    store: &mut S,
+) -> TbResult<Vec<PartId>> {
+    let gear = StravaUser::update_gear(user_id, facade, store).await?;
+    super::event::insert_sync(user_id, event_time, false, store).await?;
+    Ok(gear)
+}
+
 /// The all-user stat read (spec #558 §3.3): every Strava user's provider
 /// neutral [`UserStat`] — the domain [`Stat`] plus this provider's queued
 /// event count and disabled flag. The [`UserStat`] type is provider-neutral
