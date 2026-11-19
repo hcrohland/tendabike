@@ -10,7 +10,6 @@ tb_domain = { workspace = true }
 tb_provider = { workspace = true, features = ["strava", "icu"] }
 tb_exec = { workspace = true }
 
-reqwest = { workspace = true }
 hmac = "0.13"
 sha2 = "0.11"
 base64 = "0.23"
