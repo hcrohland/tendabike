@@ -31,10 +31,8 @@ pub mod client;
 pub use client::*;
 
 mod session;
-use session::{get_strava_id, get_token};
 
 mod http;
-use http::{deauthorize, request_json};
 
 pub mod activity;
 pub mod event;

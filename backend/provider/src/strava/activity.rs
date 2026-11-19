@@ -12,9 +12,10 @@ use time::{OffsetDateTime, UtcOffset};
 
 #[cfg(test)]
 use super::PartId;
+use super::http::request_json;
 use super::{
     ActTypeId, Activity, ActivityId, Error, OnBehalf, Session, StravaDataStore, Summary, TbResult,
-    UserId, gear, request_json,
+    UserId, gear,
 };
 use crate::{EntityFacade, ProviderActivityId, StravaActivityId};
 

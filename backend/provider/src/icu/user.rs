@@ -16,10 +16,8 @@ use log::{debug, info, warn};
 use oauth2::{AuthorizationCode, PkceCodeVerifier, TokenResponse};
 use serde::{Deserialize, Serialize};
 
-use super::{
-    Error, HTTP_CLIENT, IcuAthleteInfo, IcuDataStore, PartId, SCOPES, Session, TbResult, UserId,
-    UserStat, icu_client,
-};
+use super::client::{HTTP_CLIENT, SCOPES, icu_client};
+use super::{Error, IcuAthleteInfo, IcuDataStore, PartId, Session, TbResult, UserId, UserStat};
 use crate::EntityFacade;
 
 /// The icu athlete ID: a provider text id (intervals.icu ids are not

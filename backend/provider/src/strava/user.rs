@@ -14,9 +14,11 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use super::Stat;
+use super::client::{HTTP_CLIENT, SCOPES, strava_client};
+use super::http::{deauthorize, request_json};
+use super::session::get_strava_id;
 use super::{
-    Error, HTTP_CLIENT, PartId, SCOPES, Session, StravaAthleteInfo, StravaDataStore, TbResult,
-    UserId, UserStat, deauthorize, gear, get_strava_id, request_json, strava_client,
+    Error, PartId, Session, StravaAthleteInfo, StravaDataStore, TbResult, UserId, UserStat, gear,
 };
 use crate::EntityFacade;
 

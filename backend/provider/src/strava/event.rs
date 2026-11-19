@@ -3,12 +3,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use super::activity::StravaActivity;
+use super::http::request_json;
+use super::session::get_strava_id;
 #[cfg(test)]
 use super::{ActivityId, MockStravaDataStore, Session};
-use super::{
-    Error, StravaDataStore, StravaId, Summary, TbResult, UserId, activity, get_strava_id, get_time,
-    request_json,
-};
+use super::{Error, StravaDataStore, StravaId, Summary, TbResult, UserId, activity, get_time};
 use crate::EntityFacade;
 use crate::lane::QueueRead;
 

@@ -7,9 +7,8 @@ use log::debug;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
-use super::{
-    Error, OnBehalf, PartId, PartTypeId, Session, StravaDataStore, TbResult, UserId, request_json,
-};
+use super::http::request_json;
+use super::{Error, OnBehalf, PartId, PartTypeId, Session, StravaDataStore, TbResult, UserId};
 #[cfg(test)]
 use super::{MockStravaDataStore, Part};
 use crate::EntityFacade;
