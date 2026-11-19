@@ -1,9 +1,8 @@
 use std::sync::{Arc, Mutex};
 
-use super::super::test_support::{
-    activity, activity_json, gear_json, part, queue, queue_error, requests, setup,
-};
+use super::super::test_support::{activity, activity_json, gear_json, part, setup};
 use super::*;
+use crate::test_support::{queue, queue_error, requests};
 
 fn strava_activity(gear: Option<&str>) -> StravaActivity {
     serde_json::from_str(&activity_json(10, "Ride", gear)).unwrap()

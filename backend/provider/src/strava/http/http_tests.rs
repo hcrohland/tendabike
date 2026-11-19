@@ -7,11 +7,10 @@
 //! panic.
 
 use super::super::StravaId;
-use super::super::test_support::{
-    MockStravaDataStore, begin_test, deauthorizes, queue, seed_token_cache,
-};
+use super::super::test_support::{MockStravaDataStore, begin_test, deauthorizes, seed_token_cache};
 use super::*;
 use crate::facade::UserId;
+use crate::test_support::queue;
 
 /// `request_json` uses the `TokenCache`'s warm token and persists nothing
 /// (a warm token returns `None` for the new refresh token): the store witness

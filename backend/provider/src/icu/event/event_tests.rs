@@ -1,12 +1,11 @@
-use super::super::test_support::{
-    activity_json, icu_user, queue, queue_error, setup, stub_activity_json,
-};
+use super::super::test_support::{activity_json, icu_user, setup, stub_activity_json};
 use super::*;
 use crate::facade::{
     ActivityId, Notification, NotificationKind, NotificationLifecycle, NotificationState,
     NotificationSubject, Summary,
 };
 use crate::test_support::icu_webhook_secret;
+use crate::test_support::{queue, queue_error};
 use time::OffsetDateTime;
 
 fn event(id: i32, activity: &str) -> IcuEvent {
@@ -415,7 +414,7 @@ async fn process_drain_routes_sync_row_to_its_walk() {
         "the SYNC row was deleted by its walk"
     );
     // The walk fetched the list URI (not an import of the `"sync"` sentinel).
-    let reqs = super::super::test_support::requests();
+    let reqs = crate::test_support::requests();
     assert!(
         reqs.iter().any(|r| r.starts_with("/athlete/a1/activities")),
         "the SYNC row went through its walk's list fetch"
@@ -743,7 +742,7 @@ async fn process_sync_resumes_from_stored_cursor() {
         "the walk resumes from the stored cursor"
     );
     // The first fetch used the stored cursor (one day before now), not now.
-    let reqs = super::super::test_support::requests();
+    let reqs = crate::test_support::requests();
     assert_eq!(reqs.len(), 1, "exactly one batch is fetched");
     assert!(
         reqs[0].contains(&format!("newest={}", super::date_str(cursor))),
@@ -824,7 +823,7 @@ async fn process_sync_advances_cursor_per_batch() {
     );
     // The second fetch is bounded by the oldest activity's day (the same day,
     // not the day before): remaining same-day activities get fetched.
-    let reqs = super::super::test_support::requests();
+    let reqs = crate::test_support::requests();
     assert_eq!(reqs.len(), 2, "two batches are fetched");
     assert!(
         reqs[1].contains(&format!("newest={}", super::date_str(oldest_ts))),
@@ -904,7 +903,7 @@ async fn process_sync_full_batch_on_start_day_steps_back_a_day() {
     );
     // The second fetch is bounded by the start day minus one (not the same
     // day, which would loop).
-    let reqs = super::super::test_support::requests();
+    let reqs = crate::test_support::requests();
     assert_eq!(reqs.len(), 2, "two batches are fetched");
     assert!(
         reqs[1].contains(&format!("newest={}", super::date_str(cursor - 86400))),

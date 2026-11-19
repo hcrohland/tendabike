@@ -1,8 +1,7 @@
-use super::super::test_support::{
-    activity_json, icu_user, part, queue, queue_error, requests, setup, stub_activity_json,
-};
+use super::super::test_support::{activity_json, icu_user, part, setup, stub_activity_json};
 use super::*;
 use crate::facade::{PartId, Summary};
+use crate::test_support::{queue, queue_error, requests};
 
 /// The `request_json` → `access_token` path reads the durable token from
 /// `icu_users`; the import tests seed a tokened user.

@@ -14,12 +14,14 @@ use std::sync::{Arc, Mutex};
 
 use crate::Provider;
 use crate::facade::{Error, TbResult, UserId, mock_session_admin};
-use crate::icu::test_support::{MockIcuDataStore, begin_test, gear_json, queue};
+use crate::icu::test_support::{MockIcuDataStore, gear_json};
 use crate::icu::{IcuDataStore, IcuEvent, IcuId, IcuObjectType, IcuUser};
 use crate::strava::event::Event;
 use crate::strava::test_support::MockStravaDataStore;
 use crate::strava::{StravaDataStore, StravaId, StravaUser};
-use crate::test_support::{MockEntityFacade, icu_webhook_secret, init_test_config_once};
+use crate::test_support::{
+    MockEntityFacade, begin_test, icu_webhook_secret, init_test_config_once, queue,
+};
 
 use super::{accept_event, deauthorize, delete_user, login, queue_sync_user, sync_users};
 

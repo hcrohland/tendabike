@@ -10,7 +10,7 @@ The ICU module (`tb_provider::icu`) owns the **intervals.icu → domain mapping*
 
 - **`MockIcuDataStore`** (`provider/src/icu/traits.rs`, via `#[automock]`) — the `IcuDataStore` automock: icu-table I/O is canned, domain ops go through `MockEntityFacade` (`C` inferred as `MockIcuDataStore`). The icu-logic tests (activity import, gear hydration, event processing) run the logic for real and assert on canned outcomes.
 - **`setup()`** (`provider/src/icu/test_support.rs`) — builds a fresh `MockIcuDataStore` and a `MockEntityFacade` (with `C` = `MockIcuDataStore`), and calls `begin_test()` to mark the thread in test mode so the HTTP seam's canned responses are replayed. Unlike the Strava driver there is no token cache to seed (intervals.icu tokens are durable, read straight from `icu_users`), so `setup()` is the only entry point.
-- **HTTP seam** (`provider/src/icu/test_support/seam.rs`) — thread-local canned responses for the intervals.icu API, wrapping the shared kit (see [tests.md](../tests.md) → *The shared provider kit*). ICU's extra: `begin_test()` — mark the thread in test mode and clear any canned responses/records (per-test isolation); `setup()` calls it.
+- **HTTP canned responses** — the shared kit's thread-local map (see [tests.md](../tests.md) → *The shared provider kit*); the icu driver has no provider-specific canned data of its own (its tokens are durable), so `setup()` enables the kit's test mode directly (`crate::test_support::begin_test()`).
 - **Fixtures** (`provider/src/icu/test_support.rs`):
   - `icu_user(tbid, icuathlete, enabled)` — an `IcuUser` row for the store
   - `user(id)` — a domain `User` with the icu provider

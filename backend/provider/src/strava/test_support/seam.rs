@@ -1,17 +1,19 @@
-//! The Strava HTTP test seam: `thread_local`s over the kit's canned-response
-//! machinery (spec #838), plus Strava's extras — the `TokenCache` seeder, the
-//! deauthorization recorder, the `CANNED_STRAVA` global, and the test fixtures.
+//! The Strava HTTP test seam: Strava's provider-specific canned data on top
+//! of the kit's canned-response wiring (spec #838) — the `TokenCache` seeder,
+//! the deauthorization recorder, the `CANNED_STRAVA` global, and the test
+//! fixtures.
 //!
 //! Available in both build modes:
 //! - `test-support` feature: the `tb_exec`/`tb_sqlx` seam suites map canned
 //!   responses for the URIs the real loop asks for.
 //! - `#[cfg(test)]`: the in-memory Strava-logic tests queue per-thread canned
-//!   responses and record the requested URIs / deauthorizations they assert on.
+//!   responses (through the kit's shared thread-local map) and record the
+//!   deauthorizations they assert on.
 //!
-//! The common machinery (`CannedState`, `begin_test`, `queue`, `pop_test_canned`,
-//! `requests`) lives in the kit's [`crate::test_support`]; this seam owns the
-//! per-provider `thread_local`s (a thread-local can't live in a struct
-//! instance) and the thin free functions that reach them.
+//! The shared canned-response wiring (the thread-local map and the
+//! `begin_test` / `queue` / `pop_test_canned` / `requests` accessors) lives
+//! in the kit's [`crate::test_support`]; this seam owns only Strava's
+//! provider-specific extras.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -24,22 +26,7 @@ use crate::facade::{
 };
 
 use super::super::*;
-use crate::test_support::{self as kit, CannedState};
-
-// ─── Thread-local canned responses ──────────────────────────────────────────
-//
-// The thin free functions (`request_json`/`deauthorize`) take `&mut dyn
-// Session` and cannot downcast to a scripted session, so the per-test
-// canned responses live in a thread-local map the free functions consult.
-// Each test runs on its own thread, so the map gives per-test isolation.
-// `strava_session` (and the `tb_exec` gear tests) write to it; the free
-// functions read from it. The process-wide `CANNED_STRAVA` global below is a
-// separate seam for the seam suite's session, which runs in a spawned
-// task on a thread this map never reaches.
-
-thread_local! {
-    static CANNED: RefCell<CannedState> = RefCell::new(CannedState::default());
-}
+use crate::test_support as kit;
 
 // The recorded `deauthorize()` calls — Strava's extra, kept in its own
 // thread-local (the kit's `CannedState` carries no provider-specific fields).
@@ -47,16 +34,17 @@ thread_local! {
     static DEAUTHORIZES: RefCell<Vec<StravaId>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Begin a test's thread-local scope: marks the thread in test mode and clears
-/// any canned responses/records a previous test left on this thread (per-test
-/// isolation — each test runs on its own thread).
+/// Begin a test's thread-local scope: marks the thread in test mode (through
+/// the kit's shared map) and clears the deauthorization records a previous
+/// test left on this thread (per-test isolation — each test runs on its own
+/// thread).
 ///
 /// The process-wide `TokenCache` is *not* cleared here: the in-memory tests
 /// run in parallel threads and all seed the same warm token (via
 /// [`seed_token_cache`]), so a per-test clear would let one test's clear race
 /// another test's `get_token` (a cache miss would force a real refresh).
 pub fn begin_test() {
-    kit::begin_test(&CANNED);
+    kit::begin_test();
     DEAUTHORIZES.with(|d| *d.borrow_mut() = Vec::new());
 }
 
@@ -73,43 +61,10 @@ pub fn seed_token_cache(user_id: UserId, strava_id: StravaId, access_token: &str
         );
 }
 
-/// Whether the current thread is in test mode (`strava_session` was built,
-/// or `begin_test` was called).
-pub fn in_test_mode() -> bool {
-    kit::in_test_mode(&CANNED)
-}
-
-/// Queue a canned JSON response for an exact request URI (FIFO per URI).
-pub fn queue(uri: &str, json: &str) {
-    kit::queue(&CANNED, uri, json);
-}
-
-/// Queue an error for an exact request URI.
-pub fn queue_error(uri: &str, err: Error) {
-    kit::queue_error(&CANNED, uri, err);
-}
-
-/// Pop the canned response for `uri` (the free function's thread-local offline
-/// seam).
-///
-/// Returns `None` when not in test mode (the caller falls through to the
-/// process-wide `CANNED_STRAVA` global, then the real API). In test mode it
-/// always returns `Some`: the queued body (or error), recording the request;
-/// an unqueued URI records the request and yields the "unexpected request"
-/// error.
-pub fn pop_test_canned(uri: &str) -> Option<TbResult<String>> {
-    kit::pop_test_canned(&CANNED, uri, "strava")
-}
-
 /// Record a deauthorization in the thread-local map (the free function's
 /// offline seam).
 pub fn record_deauthorize(strava: StravaId) {
     DEAUTHORIZES.with(|d| d.borrow_mut().push(strava));
-}
-
-/// The requested URIs, in order (assert on these to verify API calls).
-pub fn requests() -> Vec<String> {
-    kit::requests(&CANNED)
 }
 
 /// The recorded `deauthorize()` calls.

@@ -37,7 +37,7 @@ Every suite runs the crate's own logic for real and scripts only its I/O seams, 
 
 ## The shared provider kit
 
-The provider HTTP seams share one canned-response kit, `tb_provider::test_support` (`provider/src/test_support.rs`): `CannedState` plus the `begin_test` / `in_test_mode` / `queue` / `queue_error` / `pop_test_canned` / `requests` free functions. Each driver's seam (`strava/test_support/seam.rs`, `icu/test_support/seam.rs`) is a thin wrapper over it — it owns the per-provider `thread_local` and re-exposes the free functions. The shared scripting surface:
+The provider HTTP seams share one canned-response kit, `tb_provider::test_support` (`provider/src/test_support.rs`): `CannedState`, the single shared per-thread `thread_local` map, and the `begin_test` / `in_test_mode` / `queue` / `queue_error` / `pop_test_canned` / `requests` free functions over it. The kit owns the `thread_local` and the accessors; each driver's seam keeps only its fixture constructors and its provider-specific canned data (e.g. Strava's `CANNED_STRAVA` global and deauthorization recorder). The shared scripting surface:
 
 - `queue(uri, json)` — script a JSON response body for an **exact** request URI (FIFO per URI)
 - `queue_error(uri, error)` — script an error for an exact URI; unscripted URIs yield `Error::BadRequest`

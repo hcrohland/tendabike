@@ -34,8 +34,7 @@ use serde::de::DeserializeOwned;
 
 use super::client::{HTTP_CLIENT, strava_client};
 use super::{StravaDataStore, StravaId, get_token};
-use crate::facade::{Error, TbResult, UserId};
-use crate::{StatusDecision, classify_status};
+use crate::facade::{TbResult, UserId};
 
 const API: &str = "https://www.strava.com/api/v3";
 
@@ -67,15 +66,15 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
 ) -> TbResult<T> {
     let (_strava_id, access) = access_token(user_id, store).await?;
 
-    // The offline seams (test-only): first the thread-local canned response
-    // (per-test isolation: each test runs on its own thread), then the
-    // process-wide `CANNED_STRAVA` global (the seam suite's session, run in a
-    // spawned task on a thread the test-local map never reached). A
+    // The offline seams (test-only): first the kit's thread-local canned
+    // response (per-test isolation: each test runs on its own thread), then
+    // the process-wide `CANNED_STRAVA` global (the seam suite's session, run
+    // in a spawned task on a thread the test-local map never reached). A
     // test-support build has no real Strava API: an unscripted URI panics
     // rather than pretend (the seam suite's stubs never import from Strava;
     // the onboarding test expects the loop to panic on the sync's fetch).
     #[cfg(any(test, feature = "test-support"))]
-    if let Some(body) = super::test_support::pop_test_canned(uri) {
+    if let Some(body) = crate::test_support::pop_test_canned(uri, "strava") {
         let body = body?;
         return Ok(serde_json::from_str(&body).context("Could not parse response body")?);
     }
@@ -87,7 +86,15 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
         None => panic!("unexpected strava request: {uri}"),
     }
 
-    let r = get_strava(&access, uri).await?;
+    let r = crate::http::bearer_get(
+        API,
+        access.secret(),
+        uri,
+        &super::ratelimit::update_from_headers,
+        "Strava",
+    )
+    .await
+    .with_context(|| "Could not reach strava")?;
     trace!("{uri}:\n{r}");
     Ok(serde_json::from_str::<T>(&r).context("Could not parse response body")?)
 }
@@ -105,7 +112,7 @@ pub(crate) async fn deauthorize(user_id: UserId, store: &mut impl StravaDataStor
     // wide `CANNED_STRAVA` global does not cover the revocation — the seam
     // suite's real session attempts the real (non-fatal) revocation.
     #[cfg(any(test, feature = "test-support"))]
-    if super::test_support::in_test_mode() {
+    if crate::test_support::in_test_mode() {
         super::test_support::record_deauthorize(strava_id);
         debug!("user {} token revoked (test)", strava_id);
         return Ok(());
@@ -120,39 +127,6 @@ pub(crate) async fn deauthorize(user_id: UserId, store: &mut impl StravaDataStor
         .context("token exchange failed")?;
     debug!("user {} token revoked", strava_id);
     Ok(())
-}
-
-/// The bearer GET of a Strava API `uri`, mapping the HTTP status to a domain
-/// error (the kit's status classification applied with Strava's messages).
-async fn get_strava(access: &AccessToken, uri: &str) -> TbResult<String> {
-    let resp = reqwest::Client::new()
-        .get(format!("{API}{uri}"))
-        .bearer_auth(access.secret())
-        .send()
-        .await
-        .context("Could not reach strava")?;
-
-    // Update the rate-limit state from the response headers: every Strava
-    // API response carries X-RateLimit-* headers (success or error).
-    super::ratelimit::update_from_headers(resp.headers());
-
-    let status = resp.status();
-    if status.is_success() {
-        return Ok(resp.text().await.context("could not reach strava")?);
-    }
-
-    match classify_status(status) {
-        StatusDecision::TryAgain => Err(Error::TryAgain(status.canonical_reason().unwrap())),
-        StatusDecision::NotAuth => Err(Error::NotAuth(format!(
-            "Strava request authorization withdrawn for {uri}"
-        ))),
-        StatusDecision::Permanent => Err(Error::BadRequest(format!(
-            "Strava request error: {}",
-            status
-                .canonical_reason()
-                .unwrap_or("Unknown status received")
-        ))),
-    }
 }
 
 #[cfg(test)]

@@ -1,7 +1,8 @@
 use std::sync::{Arc, Mutex};
 
-use super::super::test_support::{gear_json, icu_user, part, queue, requests, setup};
+use super::super::test_support::{gear_json, icu_user, part, setup};
 use super::*;
+use crate::test_support::{queue, requests};
 
 /// The `request_json` → `access_token` path reads the durable token from
 /// `icu_users`; the import tests seed a tokened user for icu id `a1`.

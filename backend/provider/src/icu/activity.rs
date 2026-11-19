@@ -181,7 +181,7 @@ pub(crate) async fn import_activity_data<D: EntityFacade<S>, S: IcuDataStore>(
         return Ok(None);
     }
     let activity = act.into_activity(user_id, facade, store).await?;
-    let session = Box::new(OnBehalf(user_id));
+    let session = Box::new(OnBehalf::new(user_id));
     Ok(Some(
         facade.upsert_activity(activity, session, store).await?,
     ))
@@ -202,7 +202,7 @@ pub(crate) async fn import_activity<D: EntityFacade<S>, S: IcuDataStore>(
         return Ok(None);
     }
     let activity = act.into_activity(user_id, facade, store).await?;
-    let session = Box::new(OnBehalf(user_id));
+    let session = Box::new(OnBehalf::new(user_id));
     Ok(Some(
         facade.upsert_activity(activity, session, store).await?,
     ))
@@ -221,7 +221,7 @@ pub(crate) async fn delete_activity<D: EntityFacade<S>, S: IcuDataStore>(
 ) -> TbResult<Summary> {
     let id: ActivityId =
         ProviderActivityId::Icu(IcuActivityId::from(activity_id.to_string())).into();
-    let session = Box::new(OnBehalf(user_id));
+    let session = Box::new(OnBehalf::new(user_id));
     facade.delete_activity(id, session, store).await
 }
 

@@ -30,6 +30,7 @@
 use log::{debug, info, warn};
 use serde_derive::{Deserialize, Serialize};
 
+use crate::OnBehalf;
 use crate::facade::*;
 
 mod traits;
@@ -51,22 +52,3 @@ mod ratelimit;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
-
-/// A minimal, identity-only [`Session`] for the event lane (ADR-0011): the
-/// event lane has no acting session, so where it crosses into a session-typed
-/// domain call it constructs this adapter. Personal, non-admin, no shop —
-/// the event lane's actual context (ADR-0009).
-#[derive(Debug, Clone, Copy)]
-struct OnBehalf(UserId);
-
-impl Session for OnBehalf {
-    fn user_id(&self) -> UserId {
-        self.0
-    }
-    fn shop(&self) -> Option<ShopId> {
-        None
-    }
-    fn is_admin(&self) -> bool {
-        false
-    }
-}

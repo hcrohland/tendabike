@@ -1,6 +1,6 @@
-use super::super::test_support::{begin_test, queue, requests};
 use super::*;
 use crate::facade::{TbResult, UserId};
+use crate::test_support::{begin_test, queue, requests};
 
 /// `request_json` reads the durable token from `icu_users` and replays the
 /// canned response (the offline seam): the URI is recorded and the body

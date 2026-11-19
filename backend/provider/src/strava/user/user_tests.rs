@@ -2,9 +2,10 @@ use std::sync::{Arc, Mutex};
 
 use super::super::event::{AspectType, Event, ObjectType};
 use super::super::test_support::{
-    deauthorizes, gear_json, queue, setup, strava_admin_session, strava_user, user,
+    deauthorizes, gear_json, setup, strava_admin_session, strava_user, user,
 };
 use super::*;
+use crate::test_support::queue;
 
 #[tokio::test]
 async fn upsert_creates_new_user() -> TbResult<()> {

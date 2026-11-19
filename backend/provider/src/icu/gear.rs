@@ -70,7 +70,7 @@ pub(crate) async fn into_partid<D: EntityFacade<S>, S: IcuDataStore>(
     let vendor = String::new();
     let model = String::new();
     let purchase = OffsetDateTime::now_utc();
-    let session = Box::new(OnBehalf(user_id));
+    let session = Box::new(OnBehalf::new(user_id));
     let part = facade
         .create_part(
             name,
