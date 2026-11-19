@@ -35,12 +35,13 @@
 
 use anyhow::Context;
 use derive_more::{Display, From, Into};
+use log::debug;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::{
     Activity, ActivityStore, Attachment, AttachmentStore, Error, IdKeyed, Notification, Part,
     PartNote, PartNoteStore, PartStore, Service, ServicePlan, ServicePlanStore, ServiceStore, Shop,
-    ShopId, Store, Summary, TbResult, Usage, UsageStore, UserStore, debug,
+    ShopId, Store, Summary, TbResult, Usage, UsageStore, UserStore,
 };
 
 #[derive(

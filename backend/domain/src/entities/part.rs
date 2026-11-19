@@ -29,6 +29,7 @@
 use std::collections::HashSet;
 
 use derive_more::{Display, From, Into};
+use log::{debug, info};
 use serde_derive::{Deserialize, Serialize};
 use serde_with::serde_as;
 use time::OffsetDateTime;
@@ -37,7 +38,7 @@ use time::format_description::well_known::Rfc3339;
 use crate::{
     Attachment, AttachmentStore, Error, IdKeyed, PartStore, PartTypeId, Service, ServicePlan,
     ServicePlanStore, ServiceStore, Session, ShopId, ShopStore, TbResult, UsageId, UsageStore,
-    UserId, debug, info, round_time,
+    UserId, round_time,
 };
 
 /// The database's representation of a part.

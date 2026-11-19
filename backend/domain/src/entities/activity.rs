@@ -29,13 +29,13 @@
 
 use anyhow::Context;
 use derive_more::{Display, From, Into};
+use log::{debug, info, trace, warn};
 use serde_derive::{Deserialize, Serialize};
 use time::{OffsetDateTime, PrimitiveDateTime, macros::format_description};
 
 use crate::{
     ActTypeId, ActivityStore, Attachment, AttachmentStore, IdKeyed, PartId, PartStore,
-    ServiceStore, Session, ShopStore, Summary, TbResult, Usage, UsageId, UsageStore, UserId, debug,
-    info, trace, warn,
+    ServiceStore, Session, ShopStore, Summary, TbResult, Usage, UsageId, UsageStore, UserId,
 };
 #[cfg(test)]
 use crate::{Error, IdKeyedMap, MAX_TIME, Part, PartTypeId, round_time};
