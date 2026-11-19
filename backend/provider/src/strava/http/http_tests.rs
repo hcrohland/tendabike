@@ -10,7 +10,6 @@ use super::super::StravaId;
 use super::super::test_support::{MockStravaDataStore, begin_test, deauthorizes, seed_token_cache};
 use super::*;
 use crate::facade::UserId;
-use crate::http::BearerGetMapping;
 use crate::test_support::queue;
 
 /// `request_json` uses the `TokenCache`'s warm token and persists nothing
@@ -49,24 +48,4 @@ async fn access_token_uses_the_token_cache_warm_token() -> TbResult<()> {
     let (_strava_id, access) = access_token(UserId::from(1), &mut store).await?;
     assert_eq!(access.secret(), "test-access-token");
     Ok(())
-}
-
-/// Strava's status mapping: the provider-specific wording, and no body read
-/// in the `Permanent` arm (the body is ignored).
-#[test]
-fn strava_mapping_carries_strava_wording_and_reads_no_body() {
-    let m = StravaMapping;
-    assert!(!m.reads_body());
-    assert!(matches!(
-        m.map(StatusCode::TOO_MANY_REQUESTS, "/activities", None),
-        Error::TryAgain(_)
-    ));
-    let not_auth = m.map(StatusCode::UNAUTHORIZED, "/activities", None);
-    assert!(
-        matches!(&not_auth, Error::NotAuth(msg) if msg.contains("Strava") && msg.contains("/activities"))
-    );
-    let perm = m.map(StatusCode::NOT_FOUND, "/activities", Some("ignored".into()));
-    assert!(
-        matches!(&perm, Error::BadRequest(msg) if msg.contains("Strava request error") && !msg.contains("ignored"))
-    );
 }

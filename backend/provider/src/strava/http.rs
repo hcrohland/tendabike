@@ -28,15 +28,13 @@
 //! revocation) and know nothing about refresh mechanics.
 
 use anyhow::Context;
-use http::StatusCode;
 use log::{debug, trace};
 use oauth2::AccessToken;
 use serde::de::DeserializeOwned;
 
 use super::client::{HTTP_CLIENT, strava_client};
 use super::{StravaDataStore, StravaId, get_token};
-use crate::facade::{Error, TbResult, UserId};
-use crate::{StatusDecision, classify_status};
+use crate::facade::{TbResult, UserId};
 
 const API: &str = "https://www.strava.com/api/v3";
 
@@ -93,7 +91,7 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
         access.secret(),
         uri,
         &super::ratelimit::update_from_headers,
-        &StravaMapping,
+        "Strava",
     )
     .await
     .with_context(|| "Could not reach strava")?;
@@ -129,31 +127,6 @@ pub(crate) async fn deauthorize(user_id: UserId, store: &mut impl StravaDataStor
         .context("token exchange failed")?;
     debug!("user {} token revoked", strava_id);
     Ok(())
-}
-
-/// Strava's status-to-error mapping: the kit's status classification applied
-/// with Strava's message wording. The `Permanent` arm does not read the
-/// response body (unlike intervals.icu).
-struct StravaMapping;
-
-impl crate::http::BearerGetMapping for StravaMapping {
-    fn reads_body(&self) -> bool {
-        false
-    }
-    fn map(&self, status: StatusCode, uri: &str, _body: Option<String>) -> Error {
-        match classify_status(status) {
-            StatusDecision::TryAgain => Error::TryAgain(status.canonical_reason().unwrap()),
-            StatusDecision::NotAuth => {
-                Error::NotAuth(format!("Strava request authorization withdrawn for {uri}"))
-            }
-            StatusDecision::Permanent => Error::BadRequest(format!(
-                "Strava request error: {}",
-                status
-                    .canonical_reason()
-                    .unwrap_or("Unknown status received")
-            )),
-        }
-    }
 }
 
 #[cfg(test)]
