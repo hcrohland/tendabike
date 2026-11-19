@@ -24,6 +24,10 @@ A frontend lib module must not exist in both `<name>.ts` and `<name>.svelte.ts` 
 
 The type an endpoint returns is named in the entity's lib module (e.g. `UserState`, `Summary` in `frontend/src/lib/user.svelte.ts`); a fetch result is never `any[]` or an inline object literal at the call site. Naming the shape is what puts every field — including ones like `disabled` — in front of the type-checker; `any[]` hides them.
 
+## ID types
+
+A struct field that carries a domain ID is typed as the newtype (`StravaId`, `UserId`, …), not the bare integer. The newtype's serde derives handle (de)serialization from the wire number transparently.
+
 ## Test guides
 
 Each crate's test guide (`backend/docs/tests/<crate>.md`) is the navigation surface for its test infrastructure. When a test double, fixture, or seam is added, renamed, or removed, update the guide in the same commit — a guide pointing at a double that no longer exists is a broken pointer.
