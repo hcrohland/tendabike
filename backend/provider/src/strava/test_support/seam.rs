@@ -108,7 +108,7 @@ pub fn setup() -> (
 }
 
 /// Builds a [`StravaUser`] for tests.
-pub fn strava_user(tbid: UserId, stravaid: i32, enabled: bool) -> StravaUser {
+pub fn strava_user(tbid: UserId, stravaid: i64, enabled: bool) -> StravaUser {
     StravaUser {
         id: stravaid.into(),
         tendabike_id: tbid,

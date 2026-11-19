@@ -10,7 +10,7 @@ use tb_provider::strava::{StravaId, StravaUser, event::Event};
 
 #[derive(Clone, Debug, Default, FromRow)]
 struct DbStravaUser {
-    id: i32,
+    id: i64,
     tendabike_id: i32,
     refresh_token: Option<String>,
 }
@@ -51,7 +51,7 @@ struct DbEvent {
     object_id: i64,
     aspect_type: String,
     updates: String,
-    owner_id: i32,
+    owner_id: i64,
     subscription_id: i32,
     event_time: i64,
 }
@@ -181,7 +181,7 @@ impl<'c> tb_provider::strava::StravaDataStore for SqlxConn<'c> {
              WHERE object_id = $1 AND owner_id = $2
              ORDER BY event_time ASC"#,
             obj_id,
-            i32::from(oid)
+            i64::from(oid)
         )
         .fetch_all(&mut **self.inner())
         .await
@@ -221,7 +221,7 @@ impl<'c> tb_provider::strava::StravaDataStore for SqlxConn<'c> {
         sqlx::query_as!(
             DbStravaUser,
             "SELECT * FROM strava_users WHERE id = $1",
-            i32::from(*id)
+            i64::from(*id)
         )
         .fetch_optional(&mut **self.inner())
         .await
@@ -257,7 +257,7 @@ impl<'c> tb_provider::strava::StravaDataStore for SqlxConn<'c> {
              SET refresh_token = $2
              WHERE id = $1
              RETURNING *",
-            i32::from(stravaid),
+            i64::from(stravaid),
             refresh
         )
         .fetch_one(&mut **self.inner())
@@ -274,7 +274,7 @@ impl<'c> tb_provider::strava::StravaDataStore for SqlxConn<'c> {
     async fn strava_events_get_count_for_user(&mut self, user: &StravaId) -> TbResult<i64> {
         let count = sqlx::query_scalar!(
             "SELECT COUNT(*) FROM strava_events WHERE owner_id = $1",
-            i32::from(*user)
+            i64::from(*user)
         )
         .fetch_one(&mut **self.inner())
         .await
@@ -285,7 +285,7 @@ impl<'c> tb_provider::strava::StravaDataStore for SqlxConn<'c> {
     async fn strava_events_delete_for_user(&mut self, user: &StravaId) -> TbResult<usize> {
         let result = sqlx::query!(
             "DELETE FROM strava_events WHERE owner_id = $1",
-            i32::from(*user)
+            i64::from(*user)
         )
         .execute(&mut **self.inner())
         .await

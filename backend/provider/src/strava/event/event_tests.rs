@@ -22,7 +22,7 @@ fn in_event(
     object_type: &str,
     object_id: i64,
     aspect_type: &str,
-    owner: i32,
+    owner: i64,
     updates: serde_json::Map<String, serde_json::Value>,
 ) -> InEvent {
     serde_json::from_value(serde_json::json!({
@@ -150,6 +150,39 @@ async fn accept_stores_activity_event() -> TbResult<()> {
         .expect("the event was queued");
     assert_eq!(event.object_id, 10);
     assert_eq!(event.object_type, ObjectType::Activity);
+    Ok(())
+}
+
+/// The webhook accepts a 64-bit owner id (Strava's post-June 2027 64-bit
+/// identifier rollout): an owner above `i32::MAX` is parsed from the wire
+/// and queued intact (not truncated, not rejected).
+#[tokio::test]
+async fn accept_stores_a_64bit_owner() -> TbResult<()> {
+    let (mut store, _facade, _) = setup();
+    let owner: i64 = 5_000_000_000;
+    // An activity event is queued: the owner (a 64-bit id) is known, and the
+    // event is stored with the full id.
+    let created = Arc::new(Mutex::new(None));
+    let created_rec = created.clone();
+    store
+        .expect_stravauser_get_by_stravaid()
+        .returning(move |_id| Ok(Some(strava_user(UserId::from(1), owner, true))));
+    store.expect_strava_event_create().returning(move |e| {
+        created_rec.lock().unwrap().replace(e.clone());
+        Ok(())
+    });
+    assert_eq!(
+        in_event("activity", 10, "create", owner, serde_json::Map::new())
+            .accept(&mut store)
+            .await?,
+        Some(UserId::from(1))
+    );
+    let event = created
+        .lock()
+        .unwrap()
+        .take()
+        .expect("the event was queued");
+    assert_eq!(event.owner_id, StravaId::from(owner));
     Ok(())
 }
 

@@ -31,7 +31,7 @@
       {
         "ordinal": 5,
         "name": "owner_id",
-        "type_info": "Int4"
+        "type_info": "Int8"
       },
       {
         "ordinal": 6,
@@ -46,7 +46,7 @@
     ],
     "parameters": {
       "Left": [
-        "Int4Array"
+        "Int8Array"
       ]
     },
     "nullable": [

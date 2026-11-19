@@ -13,10 +13,13 @@ use serde::Deserialize;
 use super::*;
 use crate::EntityFacade;
 
+/// The Strava athlete/user id, widened to 64-bit for Strava's post-June 2027
+/// 64-bit identifier rollout: the wire `id` field deserializes into the newtype
+/// (Rust's `i64` holds the full range, so no `id_str` handling is needed).
 #[derive(
     Clone, Copy, Debug, Display, From, Into, Default, Hash, PartialEq, Eq, Serialize, Deserialize,
 )]
-pub struct StravaId(i32);
+pub struct StravaId(i64);
 
 impl StravaId {
     pub(crate) async fn read(

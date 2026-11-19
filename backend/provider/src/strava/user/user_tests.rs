@@ -7,6 +7,15 @@ use super::super::test_support::{
 use super::*;
 use crate::test_support::queue;
 
+/// The 64-bit athlete id (Strava's post-June 2027 64-bit identifier rollout)
+/// round-trips through the `i64` conversions: a value above `i32::MAX` is
+/// held intact, not truncated.
+#[test]
+fn strava_id_round_trips_a_64bit_value() {
+    let id: i64 = 5_000_000_000;
+    assert_eq!(i64::from(StravaId::from(id)), id);
+}
+
 #[tokio::test]
 async fn upsert_creates_new_user() -> TbResult<()> {
     let (mut store, mut facade, _) = setup();
@@ -58,6 +67,60 @@ async fn upsert_creates_new_user() -> TbResult<()> {
         .expect("the strava row was created");
     assert_eq!(su.tendabike_id, UserId::from(1));
     assert_eq!(su.id, 42.into());
+    Ok(())
+}
+
+/// The login's wire parse accepts a 64-bit athlete id (Strava's post-June
+/// 2027 64-bit identifier rollout): the token response's `athlete` field
+/// deserializes an id above `i32::MAX`, and the upsert stores the full value
+/// (not truncated, not rejected).
+#[tokio::test]
+async fn upsert_accepts_a_64bit_strava_id() -> TbResult<()> {
+    let (mut store, mut facade, _) = setup();
+    let id: i64 = 5_000_000_000;
+    // The token response's athlete extra fields, as the login parses them.
+    let athlete: StravaAthleteInfo = serde_json::from_value(serde_json::json!({
+        "id": id,
+        "firstname": "First",
+        "lastname": "Last",
+        "profile_medium": null
+    }))
+    .unwrap();
+    // A new Strava user: the strava read is `None`, so the domain user and
+    // the strava row are created.
+    store
+        .expect_stravauser_get_by_stravaid()
+        .returning(|_id| Ok(None));
+    facade
+        .expect_create_user()
+        .returning(|_f, _l, _a, _s| Ok(UserId::from(1)));
+    let created_strava = Arc::new(Mutex::new(None));
+    let created_strava_rec = created_strava.clone();
+    store.expect_stravauser_create().returning(move |su| {
+        created_strava_rec.lock().unwrap().replace(su.clone());
+        Ok(su)
+    });
+    let user = StravaUser::upsert(
+        athlete.id,
+        &athlete.firstname,
+        &athlete.lastname,
+        &athlete.avatar,
+        Some(&RefreshToken::new("tok".to_string())),
+        &facade,
+        &mut store,
+    )
+    .await?;
+    assert_eq!(user.id, StravaId::from(id));
+    let su = created_strava
+        .lock()
+        .unwrap()
+        .take()
+        .expect("the strava row was created");
+    assert_eq!(
+        su.id,
+        StravaId::from(id),
+        "the row carries the full 64-bit id"
+    );
     Ok(())
 }
 
