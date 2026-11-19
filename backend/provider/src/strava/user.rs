@@ -13,10 +13,11 @@ use serde::Deserialize;
 use super::*;
 use crate::EntityFacade;
 
+/// The Strava athlete/user id.
 #[derive(
     Clone, Copy, Debug, Display, From, Into, Default, Hash, PartialEq, Eq, Serialize, Deserialize,
 )]
-pub struct StravaId(i32);
+pub struct StravaId(i64);
 
 impl StravaId {
     pub(crate) async fn read(

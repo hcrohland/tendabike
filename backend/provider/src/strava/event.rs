@@ -20,7 +20,7 @@ pub struct InEvent {
     // For app deauthorization events, there is always an "authorized" : "false" key-value pair.
     updates: HashMap<String, String>,
     // The athlete's ID.
-    owner_id: i32,
+    owner_id: StravaId,
     // The push subscription ID that is receiving this event.
     subscription_id: i32,
     // The time that the event occurred.
@@ -38,10 +38,7 @@ impl InEvent {
     ///
     /// Returns a `Result` containing an `Event` struct if the conversion is successful, or an `anyhow::Error` if it fails.
     async fn into_event(self, store: &mut impl StravaDataStore) -> TbResult<Event> {
-        if StravaId::read(&self.owner_id.into(), store)
-            .await?
-            .is_none()
-        {
+        if StravaId::read(&self.owner_id, store).await?.is_none() {
             return Err(Error::BadRequest(format!(
                 "Unknown event owner received: {self:?}"
             )));
@@ -57,7 +54,6 @@ impl InEvent {
         } = self;
         let object_type = object_type.try_into()?;
         let aspect_type = aspect_type.try_into()?;
-        let owner_id = owner_id.into();
         Ok(Event {
             id: None,
             object_type,
@@ -77,7 +73,7 @@ impl InEvent {
     /// the caller can wake that user), or `None` for an athlete
     /// (de)authorization (nothing was queued, so there is nothing to wake).
     pub async fn accept(self, store: &mut impl StravaDataStore) -> TbResult<Option<UserId>> {
-        let user_id = StravaId::read(&self.owner_id.into(), store)
+        let user_id = StravaId::read(&self.owner_id, store)
             .await?
             .map(|user| user.tendabike_id)
             .ok_or_else(|| Error::BadRequest(format!("Unknown event owner received: {self:?}")))?;

@@ -896,7 +896,7 @@ async fn queue_sync_count(pool: &DbPool, strava: StravaId, event_time: i64) -> i
         "SELECT count(*) FROM strava_events \
          WHERE object_type = 'sync' AND owner_id = $1 AND event_time = $2",
     )
-    .bind(i32::from(strava))
+    .bind(i64::from(strava))
     .bind(event_time)
     .fetch_one(&mut **conn)
     .await
@@ -921,7 +921,7 @@ async fn sync_enqueues() {
         sqlx::query(
             "INSERT INTO strava_users (id, tendabike_id, refresh_token) VALUES ($1, $2, 'tok')",
         )
-        .bind(i32::from(strava))
+        .bind(i64::from(strava))
         .bind(i32::from(user))
         .execute(&mut **conn)
         .await
@@ -972,7 +972,7 @@ async fn trigger_processing_drains_each_queued_user() {
         sqlx::query(
             "INSERT INTO strava_users (id, tendabike_id, refresh_token) VALUES ($1, $2, 'tok')",
         )
-        .bind(i32::from(strava))
+        .bind(i64::from(strava))
         .bind(i32::from(user))
         .execute(&mut **conn)
         .await
@@ -980,7 +980,7 @@ async fn trigger_processing_drains_each_queued_user() {
         sqlx::query(
             "INSERT INTO strava_users (id, tendabike_id, refresh_token) VALUES ($1, $2, 'tok')",
         )
-        .bind(i32::from(strava2))
+        .bind(i64::from(strava2))
         .bind(i32::from(user2))
         .execute(&mut **conn)
         .await
@@ -1057,7 +1057,7 @@ async fn seed_strava_user(pool: &DbPool, queue_event: bool) {
     sqlx::query(
         "INSERT INTO strava_users (id, tendabike_id, refresh_token) VALUES ($1, $2, 'tok')",
     )
-    .bind(i32::from(strava))
+    .bind(i64::from(strava))
     .bind(i32::from(user))
     .execute(&mut **conn)
     .await
@@ -1068,7 +1068,7 @@ async fn seed_strava_user(pool: &DbPool, queue_event: bool) {
              (object_type, object_id, aspect_type, updates, owner_id, subscription_id, event_time) \
              VALUES ('activity', 7, 'create', '{}', $1, 0, 100)",
         )
-        .bind(i32::from(strava))
+        .bind(i64::from(strava))
         .execute(&mut **conn)
         .await
         .expect("seeding the queued event");
@@ -1094,7 +1094,7 @@ fn registry(
 async fn queue_count(pool: &DbPool, strava: StravaId) -> i64 {
     let mut conn = pool.begin().await.expect("a fresh connection");
     let n: i64 = sqlx::query_scalar("SELECT count(*) FROM strava_events WHERE owner_id = $1")
-        .bind(i32::from(strava))
+        .bind(i64::from(strava))
         .fetch_one(&mut **conn)
         .await
         .expect("reading the queue");
@@ -1173,7 +1173,7 @@ async fn accept_event_queues_the_event() {
         "object_id": 7,
         "aspect_type": "create",
         "updates": {},
-        "owner_id": i32::from(strava),
+        "owner_id": i64::from(strava),
         "subscription_id": 0,
         "event_time": 100
     })
@@ -1209,6 +1209,56 @@ async fn accept_event_queues_the_event() {
     );
 }
 
+/// The webhook accept with a 64-bit owner id: the queue insert stores
+/// `strava_events.owner_id` as a 64-bit value, and a fresh connection reads
+/// it back intact.
+#[tokio::test]
+#[ignore]
+async fn accept_event_stores_a_64bit_owner_id() {
+    let seam = ready().await;
+    // The intake reads the enabled set (ADR-0016): the suite's all-enabled
+    // config keeps the arm's behavior unchanged.
+    init_provider_config_once();
+    // The Strava row, with an athlete id above i32::MAX.
+    let owner: i64 = 5_000_000_000;
+    {
+        let mut conn = seam.pool.begin().await.expect("a transaction");
+        sqlx::query(
+            "INSERT INTO strava_users (id, tendabike_id, refresh_token) VALUES ($1, $2, 'tok')",
+        )
+        .bind(owner)
+        .bind(1i32)
+        .execute(&mut **conn)
+        .await
+        .expect("seeding the strava user");
+        conn.commit().await.expect("committing the seed");
+    }
+    let reg = registry(&seam.pool);
+
+    let body = serde_json::json!({
+        "object_type": "activity",
+        "object_id": 7,
+        "aspect_type": "create",
+        "updates": {},
+        "owner_id": owner,
+        "subscription_id": 0,
+        "event_time": 100
+    })
+    .to_string();
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.accept_event(Provider::Strava, &body))
+        .await
+        .expect("the accept must finish in time");
+    outcome.expect("the accept must succeed");
+
+    // The event is queued for the 64-bit owner (read back on a fresh
+    // connection, which the i64 bind proves).
+    let n = queue_count(&seam.pool, StravaId::from(owner)).await;
+    assert_eq!(
+        n, 1,
+        "the accepted event must be queued for the 64-bit owner"
+    );
+}
+
 /// The webhook accept's athlete-deauth branch (spec #558 §5.2): one
 /// transaction — the deauthorization disables the user (the queued events
 /// dropped, the refresh token cleared) — and no wake (nothing was queued).
@@ -1227,7 +1277,7 @@ async fn accept_event_athlete_deauth_disables_the_user() {
         "object_id": 0,
         "aspect_type": "update",
         "updates": {"authorized": "false"},
-        "owner_id": i32::from(strava),
+        "owner_id": i64::from(strava),
         "subscription_id": 0,
         "event_time": 100
     })
@@ -1242,7 +1292,7 @@ async fn accept_event_athlete_deauth_disables_the_user() {
     let mut conn = seam.pool.begin().await.expect("a fresh connection");
     let token: Option<String> =
         sqlx::query_scalar("SELECT refresh_token FROM strava_users WHERE id = $1")
-            .bind(i32::from(strava))
+            .bind(i64::from(strava))
             .fetch_one(&mut **conn)
             .await
             .expect("reading the strava user");
@@ -1287,7 +1337,7 @@ async fn deauthorize_disables_the_user_and_clears_the_queue() {
     let mut conn = seam.pool.begin().await.expect("a fresh connection");
     let token: Option<String> =
         sqlx::query_scalar("SELECT refresh_token FROM strava_users WHERE id = $1")
-            .bind(i32::from(strava))
+            .bind(i64::from(strava))
             .fetch_one(&mut **conn)
             .await
             .expect("reading the strava user");
@@ -1321,7 +1371,7 @@ async fn delete_user_removes_the_rows() {
     // The rows are gone: the Strava row, the user row, the user's parts.
     let mut conn = seam.pool.begin().await.expect("a fresh connection");
     let n: i64 = sqlx::query_scalar("SELECT count(*) FROM strava_users WHERE id = $1")
-        .bind(i32::from(strava))
+        .bind(i64::from(strava))
         .fetch_one(&mut **conn)
         .await
         .expect("reading the strava users");
