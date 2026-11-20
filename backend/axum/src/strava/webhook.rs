@@ -63,12 +63,9 @@ use serde_derive::{Deserialize, Serialize};
 use http::StatusCode;
 
 use crate::{
-    ApiResult, AxumAdmin, RequestSession,
-    appstate::AppState,
-    domain::{result_mismatch, user::InitialSyncQuery},
-    error::AppError,
+    ApiResult, AxumAdmin, appstate::AppState, domain::user::InitialSyncQuery, error::AppError,
 };
-use tb_domain::{ApiRead, ApiWrite, Error, ReadOutcome, TbResult};
+use tb_domain::{Error, TbResult};
 use tb_provider::Provider;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -167,27 +164,6 @@ pub(super) async fn sync(
         .sync(Box::new(admin.session()), user_id, query.time)
         .await?;
     Ok(StatusCode::NO_CONTENT)
-}
-
-/// Postpone initial sync for a user
-/// This endpoint allows users to postpone the initial activity sync.
-/// It can only be called if the user is still in pending status.
-/// Returns the updated user object.
-pub(crate) async fn postpone_initial_sync(
-    user: RequestSession,
-    State(state): State<AppState>,
-) -> ApiResult<tb_domain::User> {
-    // The domain's status guard and postponement run on the user's
-    // executor (spec §6.2); the 200 body reads the `User` record back
-    // (the light record-only read — no `Summary` computation needed).
-    state
-        .api
-        .write(Box::new(user.clone()), ApiWrite::UserOnboardingPostpone)
-        .await?;
-    match state.api.read(Box::new(user), ApiRead::UserRecord).await? {
-        ReadOutcome::UserRecord(user) => Ok(Json(user)),
-        _ => Err(result_mismatch("user", "user record")),
-    }
 }
 
 #[cfg(test)]

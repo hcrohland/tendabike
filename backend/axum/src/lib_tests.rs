@@ -2502,11 +2502,11 @@ async fn onboarding_sync_returns_200_and_user() {
     );
 }
 
-/// `POST /strava/onboarding/postpone` enqueues the
-/// `UserOnboardingPostpone` write, then reads the `User` record back
-/// (the light record-only read) and answers `200` with the user.
-#[tokio::test]
-async fn onboarding_postpone_returns_200_and_user() {
+/// The shared body of the two postpone-route contract tests (Strava and
+/// ICU): the route enqueues the `UserOnboardingPostpone` write, then reads
+/// the `User` record back (the light record-only read) and answers `200`
+/// with the user.
+async fn test_postpone_route(url: &str) {
     let (store, mut mock, provider) = mock_ctx();
     mock.expect_write()
         .times(1)
@@ -2516,18 +2516,30 @@ async fn onboarding_postpone_returns_200_and_user() {
         .returning(|_session, _read| Ok(ReadOutcome::UserRecord(user())));
     let app = build_app(&store, mock, provider);
     let cookie = user_cookie(&store).await;
-    let (status, _headers, body) = run(
-        app,
-        Method::POST,
-        "/strava/onboarding/postpone",
-        Some(&cookie),
-    )
-    .await;
+    let (status, _headers, body) = run(app, Method::POST, url, Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
         r#"{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"}"#
     );
+}
+
+/// `POST /strava/onboarding/postpone` enqueues the
+/// `UserOnboardingPostpone` write, then reads the `User` record back
+/// (the light record-only read) and answers `200` with the user.
+#[tokio::test]
+async fn onboarding_postpone_returns_200_and_user() {
+    test_postpone_route("/strava/onboarding/postpone").await;
+}
+
+/// `POST /icu/onboarding/postpone` (spec #974) enqueues the
+/// `UserOnboardingPostpone` write, then reads the `User` record back
+/// (the light record-only read) and answers `200` with the user — the
+/// same surface as the Strava route: the postponement is
+/// provider-agnostic.
+#[tokio::test]
+async fn icu_onboarding_postpone_returns_200_and_user() {
+    test_postpone_route("/icu/onboarding/postpone").await;
 }
 
 /// `GET /api/activ/rescan` (admin) is the rescan direct op (the spec

@@ -38,7 +38,10 @@ pub(crate) fn router() -> Router<AppState> {
             "/onboarding/sync",
             post(crate::domain::user::trigger_initial_sync),
         )
-        .route("/onboarding/postpone", post(webhook::postpone_initial_sync))
+        .route(
+            "/onboarding/postpone",
+            post(crate::domain::user::postpone_initial_sync),
+        )
         .route("/bikes/{id}", get(crate::redirect::strava_gear_redirect))
         .route("/users/{id}", get(crate::redirect::strava_user_redirect))
         .route("/disable/{id}", post(redirect::revoke_user))

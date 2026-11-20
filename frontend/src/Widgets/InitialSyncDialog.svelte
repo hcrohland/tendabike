@@ -25,6 +25,7 @@
     providerMeta,
     onboardingGearUrl,
     onboardingSyncUrl,
+    onboardingPostponeUrl,
     type Provider,
   } from "../lib/provider.svelte";
   import ProviderMark from "./ProviderMark.svelte";
@@ -90,12 +91,29 @@
     }
   }
 
-  /// The postpone route exists only for Strava: an intervals.icu user
-  /// always backfills on first connect.
+  /// ESC on the welcome dialog (spec #974): the same effect as Skip for
+  /// Now — record the postponement. The dialog stays open until the write
+  /// lands (it closes on success), so a failed postponement cannot leave
+  /// the dialog closed on a still-`pending` user (it would reopen on the
+  /// next load).
+  function onEscape(ev: Event) {
+    if (loading) return;
+    ev.preventDefault();
+    skipSync();
+  }
+
+  /// Postpone the historic import (spec #974): the onboarding status
+  /// becomes `initial_sync_postponed` — the import is postponed, not
+  /// cancelled, and the provider-agnostic entry points (the top-bar
+  /// Import Activities button, the user menu's Sync → Import Historic
+  /// Activities) serve the user later.
   async function skipSync() {
     loading = true;
     try {
-      const updatedUser = await myfetch("/strava/onboarding/postpone", "POST");
+      const updatedUser = await myfetch(
+        onboardingPostponeUrl(provider),
+        "POST",
+      );
       setUser(updatedUser);
       open = false;
     } catch (e) {
@@ -112,6 +130,7 @@
   autoclose={false}
   dismissable={false}
   outsideclose={false}
+  oncancel={onEscape}
 >
   <div
     class="rounded-lg border-2 overflow-hidden"
@@ -174,9 +193,10 @@
             </div>
           </div>
         {/if}
-        <!-- The CTA and the skip (Strava only) are visible alongside the gear
+        <!-- The CTA and the skip are visible alongside the gear
              chips: the user sees the imported gear and decides on the
-             activity sync in one screen (spec #829). -->
+             activity sync in one screen (spec #829). The skip is
+             provider-agnostic (spec #974). -->
         <div class="flex justify-center gap-4">
           <Button
             color={provider === "strava" ? "orange" : "gray"}
@@ -185,11 +205,9 @@
           >
             {loading ? m.action_importing() : m.header_import_activities()}
           </Button>
-          {#if provider === "strava"}
-            <Button color="alternative" disabled={loading} onclick={skipSync}>
-              {m.initialsync_skip()}
-            </Button>
-          {/if}
+          <Button color="alternative" disabled={loading} onclick={skipSync}>
+            {m.initialsync_skip()}
+          </Button>
         </div>
       </div>
     </div>
