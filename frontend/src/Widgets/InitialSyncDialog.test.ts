@@ -152,8 +152,8 @@ describe("InitialSyncDialog", () => {
     });
   });
 
-  it("postpones and closes on ESC (strava)", async () => {
-    setUser(pendingUser("strava"));
+  async function testEscPostpones(provider: "strava" | "icu") {
+    setUser(pendingUser(provider));
     render(InitialSyncDialog);
     // Wait for the gear import (Step 1) to land so the dialog is idle.
     await screen.findByText("Canyon Aeroad");
@@ -165,7 +165,7 @@ describe("InitialSyncDialog", () => {
     );
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/strava/onboarding/postpone",
+        `/${provider}/onboarding/postpone`,
         expect.objectContaining({ method: "POST" }),
       );
     });
@@ -173,25 +173,14 @@ describe("InitialSyncDialog", () => {
     await vi.waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
+  }
+
+  it("postpones and closes on ESC (strava)", async () => {
+    await testEscPostpones("strava");
   });
 
   it("postpones and closes on ESC (icu)", async () => {
-    setUser(pendingUser("icu"));
-    render(InitialSyncDialog);
-    await screen.findByText("Canyon Aeroad");
-    const dialog = screen.getByRole("dialog");
-    dialog.dispatchEvent(
-      new Event("cancel", { bubbles: true, cancelable: true }),
-    );
-    await vi.waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/icu/onboarding/postpone",
-        expect.objectContaining({ method: "POST" }),
-      );
-    });
-    await vi.waitFor(() => {
-      expect(screen.queryByRole("dialog")).toBeNull();
-    });
+    await testEscPostpones("icu");
   });
 
   it("renders each gear chip with its type icon", async () => {
