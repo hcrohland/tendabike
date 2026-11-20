@@ -83,7 +83,9 @@ asks where it goes:
 - **at** — the day it goes on.
 
 Click **Attach**. The part's card now shows **Attached to** and what it is
-on, and the bike's **Attached Parts** tab has it in the tree.
+on, and the bike's **Attached Parts** tab has it in the tree. If the place
+is already taken, the part on it comes off at the same time — the new part
+pushes the old one off, and if the old one carries others, they stay on it.
 
 ## Move a part
 
@@ -93,7 +95,8 @@ choose the new **to**, **of**, and **at**, and click **Attach**. The part
 is on the new place from the new date, and its old place ends on that same
 date and stays in its history. If the part carries others — a wheel with
 its tire — the group moves together and the tire comes along, no extra
-step.
+step. And if the new place is already taken, the part on it is pushed off
+at the same time.
 
 ## What a bike is carrying
 
