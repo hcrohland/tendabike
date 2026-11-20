@@ -144,15 +144,20 @@ A part comes off in two ways, and the app keeps the difference.
 - **Detach** — it comes off, but you keep it. Open the part, choose
   **Detach** from the **⋮** menu, and set the day. For a part that carries
   others — a wheel, say — **detach all attached parts** is on by default,
-  so the parts on it come off it too and end up loose on your shelf; that
-  is the option to keep the group apart when it comes off. Untick it and
-  the parts stay on it, and the whole group comes off together. The dialog
-  also offers **dispose tire when detached** — the kind's name, in plain
-  words — if you are done with the part itself.
+  so the parts on it stay on it: the whole group comes off the bike together
+  as a loose unit, the tire still on the wheel. Untick it and the parts come
+  off it too, ending up loose on your shelf. The dialog also offers
+  **dispose tire when detached** — the kind's name, in plain words — if
+  you are done with the part itself.
 - **Dispose** — you are done with it. The menu shows **Dispose** for a part
   that is not on anything; set the day. **dispose all attached parts** is
   on by default, so the parts on it are retired with it; untick to keep
   them.
+
+Behind the **Detach** switch is a quirk worth knowing: the app has no way
+to put a loose tire onto a wheel by hand — you attach parts to a bike, not
+to other parts. A group stays a group because detaching the part keeps its
+parts on it.
 
 A disposed part is faded on the **Parts** page, with **disposed** and the
 date. Open it and choose **Recover gear** to bring it back.
