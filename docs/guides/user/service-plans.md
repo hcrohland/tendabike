@@ -74,6 +74,10 @@ The choice matters when a part is replaced: a plan for a *place* follows the
 new part into the slot, while a plan for a *specific part* stays with the old
 one.
 
+When more than one plan fits a part, the most specific one rules: a plan for
+the *part* overrules one for the *place on a bike*, which overrules one for
+*any bike*.
+
 The common case is a distance — *a derailleur every 5,000 km* — but a plan can
 combine any of the counters, and a **days** limit suits a service that's due on
 a schedule.
