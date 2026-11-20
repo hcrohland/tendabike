@@ -58,6 +58,11 @@ If you imported, there's nothing to do. The import runs in the background and
 you can keep using the app; as activities arrive, they appear under
 **Activities** in the menu at the top.
 
+New rides are a separate matter from the historic import: the app pulls in
+every new activity automatically — even if you skipped the import — and if
+you change or delete an activity on the service side (in Strava or
+intervals.icu), TendaBike follows along. You never have to sync by hand.
+
 If you skipped, the import is waiting for you. Two ways to start it:
 
 - the **Import Activities** button in the top bar — it's visible until your
@@ -65,8 +70,7 @@ If you skipped, the import is waiting for you. Two ways to start it:
 - your user menu (top right) → **Sync** → **Import Historic Activities** — the
   item is there for as long as the historic import hasn't run.
 
-Either way the import starts running in the background, and from then on new
-rides are pulled in automatically — you never have to sync by hand again.
+Either way the import starts running in the background.
 
 If your gear page looks empty, TendaBike hasn't found any bikes on your
 account (yet) — check that your gear is set up on the service side.
