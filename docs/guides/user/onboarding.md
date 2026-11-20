@@ -48,9 +48,8 @@ Your choice:
 - **Import Activities** starts the import. The button briefly reads
   **Importing...**, then the dialog closes and the import keeps running in the
   background.
-- **Skip for Now** (Strava only) postpones the import — it's not cancelled.
-  With intervals.icu there is no skip: the historic import always runs on
-  first connect.
+- **Skip for Now** postpones the import — it's not cancelled. Pressing ESC
+  does the same.
 
 ## After you choose
 
