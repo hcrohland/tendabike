@@ -64,11 +64,11 @@ describe("InitialSyncDialog", () => {
     expect(screen.getByRole("button", { name: "Skip for Now" })).toBeTruthy();
   });
 
-  it("opens branded for a pending intervals.icu user, without the skip option", async () => {
+  it("opens branded for a pending intervals.icu user, with the skip option", async () => {
     setUser(pendingUser("icu"));
     render(InitialSyncDialog);
     expect(await screen.findByText("Import from intervals.icu")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Skip for Now" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Skip for Now" })).toBeTruthy();
   });
 
   it("imports the gear on open (Strava)", async () => {
@@ -138,6 +138,49 @@ describe("InitialSyncDialog", () => {
         expect.objectContaining({ method: "POST" }),
       );
     });
+  });
+
+  it("postpones on Skip for now (icu)", async () => {
+    setUser(pendingUser("icu"));
+    render(InitialSyncDialog);
+    fireEvent.click(screen.getByRole("button", { name: "Skip for Now" }));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/icu/onboarding/postpone",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+  });
+
+  async function testEscPostpones(provider: "strava" | "icu") {
+    setUser(pendingUser(provider));
+    render(InitialSyncDialog);
+    // Wait for the gear import (Step 1) to land so the dialog is idle.
+    await screen.findByText("Canyon Aeroad");
+    const dialog = screen.getByRole("dialog");
+    // ESC on a modal dialog: the browser fires `cancel` on the dialog
+    // element — the boundary the dialog hooks (spec #974).
+    dialog.dispatchEvent(
+      new Event("cancel", { bubbles: true, cancelable: true }),
+    );
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/${provider}/onboarding/postpone`,
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+    // The dialog closes once the postponement lands.
+    await vi.waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+  }
+
+  it("postpones and closes on ESC (strava)", async () => {
+    await testEscPostpones("strava");
+  });
+
+  it("postpones and closes on ESC (icu)", async () => {
+    await testEscPostpones("icu");
   });
 
   it("renders each gear chip with its type icon", async () => {

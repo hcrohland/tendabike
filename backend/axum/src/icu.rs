@@ -2,9 +2,10 @@
 //! using the Axum web framework. It mirrors the Strava driver's `strava`
 //! module: the OAuth connect flow (`/icu/login`, `/icu/token`), the webhook
 //! (`/icu/callback`, spec #764), the onboarding backfill trigger
-//! (`/icu/onboarding/sync`, spec #766), and the redirect routes (ADR-0014) —
-//! the user profile page (a new capability) and the gear no-op (icu gear has
-//! no public page).
+//! (`/icu/onboarding/sync`, spec #766), the onboarding postponement
+//! (`/icu/onboarding/postpone`, spec #974), and the redirect routes
+//! (ADR-0014) — the user profile page (a new capability) and the gear no-op
+//! (icu gear has no public page).
 
 use axum::{
     Router,
@@ -28,6 +29,10 @@ pub(crate) fn router() -> Router<AppState> {
         .route(
             "/onboarding/sync",
             post(crate::domain::user::trigger_initial_sync),
+        )
+        .route(
+            "/onboarding/postpone",
+            post(crate::domain::user::postpone_initial_sync),
         )
         .route("/bikes/{id}", get(crate::redirect::icu_gear_redirect))
         .route("/users/{id}", get(crate::redirect::icu_user_redirect))
