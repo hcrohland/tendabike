@@ -15,6 +15,10 @@ A part is always either **on a bike** or **on another part** that is on a
 bike: a chain is on the bike itself; a tire is on its wheel, and the wheel
 is on the bike. When a part goes on, you say where, so the app knows which.
 
+A part that carries others carries them as a group. A wheel with its tire,
+a brake with its pads: move the part and the group moves with it, because
+that is how they sit together on the real bike.
+
 Every "on" has a beginning and an end. A part that is on right now shows
 **since** and the day it went on. A part that has come off shows the whole
 span — the day it went on and the day it came off — and each span keeps its
@@ -87,7 +91,9 @@ A part that is on something shows **Move** where **Attach** would be — on
 its card on the **Parts** page and in the tree. The dialog is the same:
 choose the new **to**, **of**, and **at**, and click **Attach**. The part
 is on the new place from the new date, and its old place ends on that same
-date and stays in its history.
+date and stays in its history. If the part carries others — a wheel with
+its tire — the group moves together and the tire comes along, no extra
+step.
 
 ## What a bike is carrying
 
@@ -109,7 +115,11 @@ each kind of thing that can be on it.
 
 For a part that is on, the card's **⋮** menu offers **Log Service**,
 **Move**, and **Replace** with the kind's name — **Replace tire**, for
-instance.
+instance. **Replace** opens a dialog for the new part — **New tire for
+Front Wheel** — prefilled with the part being replaced. For a part that
+carries others, a **Keep all attached parts** switch decides what happens
+to them: on, they are kept and end up loose on your shelf; off, they are
+retired with the old part.
 
 The part's own page keeps its full history in the **Attached to** panel
 under the header: every bike — or part — it has been on, with the position
@@ -133,13 +143,16 @@ A part comes off in two ways, and the app keeps the difference.
 
 - **Detach** — it comes off, but you keep it. Open the part, choose
   **Detach** from the **⋮** menu, and set the day. For a part that carries
-  others — a wheel, say — **detach all attached parts** is on by default:
-  the parts on it come off with it. The dialog also offers
-  **dispose tire when detached** — the kind's name, in plain words — if
-  you are done with the part itself.
+  others — a wheel, say — **detach all attached parts** is on by default,
+  so the parts on it come off it too and end up loose on your shelf; that
+  is the option to keep the group apart when it comes off. Untick it and
+  the parts stay on it, and the whole group comes off together. The dialog
+  also offers **dispose tire when detached** — the kind's name, in plain
+  words — if you are done with the part itself.
 - **Dispose** — you are done with it. The menu shows **Dispose** for a part
   that is not on anything; set the day. **dispose all attached parts** is
-  on by default, so a wheel's tires go with it; untick to keep them.
+  on by default, so the parts on it are retired with it; untick to keep
+  them.
 
 A disposed part is faded on the **Parts** page, with **disposed** and the
 date. Open it and choose **Recover gear** to bring it back.
