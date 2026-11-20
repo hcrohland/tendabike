@@ -12,9 +12,10 @@ components](parts-assemblies.md).
 
 ## The due-ness badge
 
-Each part carries a small badge that shows how close its service is to being
-due. You'll see it on the part's card on the **Parts** page, in a bike's
-**Attached Parts** tree, and on its service logs.
+A part with a service plan carries a small badge that shows how close its
+service is to being due; a part with no plan has none. You'll see it on the
+part's card on the **Parts** page, in a bike's **Attached Parts** tree, and on
+its service logs.
 
 The badge is a percentage: how much of the plan's limit you've already used.
 The higher it is, the closer the service is to being due. Hover it and it shows
@@ -49,30 +50,33 @@ combined, and the badge shows the closest of a part's limits to being due.
 
 ## Set a service plan
 
-You set a plan in two places, depending on what you want it to follow.
+You set a plan from the **Service Plans** tab, and where you set it decides what
+the plan follows.
 
-**For a place on a bike.** Open the bike, go to the **Service Plans** tab, and
-click **add**. The dialog is titled **New service plan for …** and asks which
-part it is for — the kind, like **chain** or **front tire** — **of** which bike,
-and a **Name** for the plan.
+**On a part**, it's for that specific part. Open the part, go to its
+**Service Plans** tab, and click **add**: the dialog is titled **New service
+plan for {the part's name}** and has a **Name** field and the limit fields
+(below). The plan belongs to this one part and stays with it.
+
+**On a bike**, it's for a *place* — a kind of part. Open the bike, go to its
+**Service Plans** tab, and click **add**: the dialog is titled **New service
+plan for …** and asks which part it is for — the kind, like **derailleur** or
+**front tire** — **of** which bike, and a **Name** for the plan. For the bike,
+pick this one or **any bike**, to cover that kind of part on every bike you
+have.
 
 Then set the limit(s): click **+** to add a unit — **days**, **rides**,
 **hours**, **km**, **climb**, **descend**, **energy** — and type how much of it
 the part should last. Add as many as you like, and **−** drops one. Click
 **Save**.
 
-Because this plan is tied to the *place* — the chain slot on your gravel bike —
-it follows the part. When you later replace the chain, the new chain sits in the
-same slot and picks up the same plan on its own.
+The choice matters when a part is replaced: a plan for a *place* follows the
+new part into the slot, while a plan for a *specific part* stays with the old
+one.
 
-**For a specific part.** Open the part, go to its **Service Plans** tab, and
-click **add**. The dialog is titled **New service plan for {the part's name}**
-and has the same **Name** and limit fields, with no choice of part or bike: the
-plan belongs to this one part and stays with it.
-
-Either way, a plan is just a name and one or more limits. The common case is a
-distance — *a chain every 3,000 km* — but a plan can combine any of the
-counters, and a **days** limit suits a service that's due on a schedule.
+The common case is a distance — *a derailleur every 5,000 km* — but a plan can
+combine any of the counters, and a **days** limit suits a service that's due on
+a schedule.
 
 ## When a service comes due
 
@@ -87,7 +91,7 @@ When the service is done, log it. Open the part (or the bike), go to the
 **Service Logs** tab, and click **add**. The dialog is titled **New Service for
 {the part}** — **New Service for Front One Schwalbe One**, say — and has:
 
-- **Name** — what the service was, like *Chain replacement*.
+- **Name** — what the service was, like *Chain cleaning*.
 - **Notes** — anything to remember.
 - **Resolves:** — the part's service plans as a tick list; tick the one(s) this
   service completes.
@@ -105,7 +109,7 @@ Each logged service has a **⋮** menu: **Change Service**, **Repeat Service**
 ## Replace a part
 
 Replacing a part is in the part's card menu — **Replace {type}**, like
-**Replace chain** — and it opens a **New {type} for {the bike}** dialog,
+**Replace derailleur** — and it opens a **New {type} for {the bike}** dialog,
 prefilled with the part being replaced, with a switch to **dispose** the old
 one. For a part that carries others, a **Keep all attached parts** switch
 decides whether the parts on it come along.
@@ -121,20 +125,22 @@ What happens to the plan depends on what it was set for:
 
 ## Example
 
-Your gravel bike's chain is due a new one. On the bike's **Service Plans** tab,
-click **add**: the kind is **chain**, **of** *Gravel Bike*, the name is *Chain
-service*, and you add a **km** limit of **3,000**. **Save**.
+Your gravel bike's rear derailleur is due an adjustment. On the bike's
+**Service Plans** tab, click **add**: the kind is **derailleur**, **of**
+*Gravel Bike*, the name is *Derailleur service*, and you add a **km** limit of
+**5,000**. **Save**.
 
-The chain's card now shows the badge at a low green percentage. Rides add up,
-and one morning it's amber — `2,850/3,000`, you're close. A few days later it's
-red: the service is due.
+The derailleur's card now shows the badge at a low green percentage. Rides add
+up, and one morning it's amber — `4,600/5,000`, you're close. A few days later
+it's red: the service is due.
 
-You take the bike in. On the chain's page, **Service Logs** → **add**: name
-*Chain replacement*, tick **Resolves: Chain service**, **at** today, **Save**.
-The badge snaps back to green — the counter is now measuring from today.
+You take the bike in and get the derailleur adjusted. On its page,
+**Service Logs** → **add**: name *Derailleur service*, tick **Resolves:
+Derailleur service**, **at** today, **Save**. The badge snaps back to green —
+the counter is now measuring from today.
 
-A season later the chain is done for. In its card menu, **Replace chain**: the
-dialog is prefilled, you set the new model, tick **dispose old chain?**, and
-click **Replace**. The new chain is on the bike and already under the *Chain
-service* plan, its badge at zero and climbing — because the plan was set for the
-place, not the old chain.
+A year later the derailleur is worn out. In its card menu, **Replace
+derailleur**: the dialog is prefilled, you set the new model, tick **dispose
+old derailleur?**, and click **Replace**. The new derailleur is on the bike and
+already under the *Derailleur service* plan, its badge at zero and climbing —
+because the plan was set for the place, not the old derailleur.
