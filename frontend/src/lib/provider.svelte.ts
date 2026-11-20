@@ -35,6 +35,12 @@ export function onboardingSyncUrl(provider: Provider): string {
   return `/${provider}/onboarding/sync`;
 }
 
+/// The provider's onboarding postponement (spec #974):
+/// `/strava/onboarding/postpone` or `/icu/onboarding/postpone`.
+export function onboardingPostponeUrl(provider: Provider): string {
+  return `/${provider}/onboarding/postpone`;
+}
+
 /// The provider of a prefixed activity id (the `ActivityId` model,
 /// spec #760): `icu:` ids are intervals.icu's, everything else is
 /// Strava's.

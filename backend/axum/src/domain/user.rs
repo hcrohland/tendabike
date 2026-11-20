@@ -165,6 +165,26 @@ pub(crate) async fn trigger_initial_sync(
     }
 }
 
+/// `POST /{provider}/onboarding/postpone` (spec #974): postpone the initial
+/// activity sync and return the updated user. Provider-agnostic — mounted on
+/// both the Strava and the intervals.icu router. The domain's status guard
+/// and postponement run on the user's executor (spec §6.2); the 200 body
+/// reads the `User` record back (the light record-only read — no `Summary`
+/// computation needed).
+pub(crate) async fn postpone_initial_sync(
+    user: RequestSession,
+    State(state): State<AppState>,
+) -> ApiResult<tb_domain::User> {
+    state
+        .api
+        .write(Box::new(user.clone()), ApiWrite::UserOnboardingPostpone)
+        .await?;
+    match state.api.read(Box::new(user), ApiRead::UserRecord).await? {
+        ReadOutcome::UserRecord(user) => Ok(Json(user)),
+        _ => Err(result_mismatch("user", "user record")),
+    }
+}
+
 async fn export(user: RequestSession, State(state): State<AppState>) -> ApiResult<Export> {
     // The unified user read (spec #558 §3.5): the export is a projection
     // of the `UserState` composite (the bare `User` plus the `Summary`),

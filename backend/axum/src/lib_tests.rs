@@ -2530,6 +2530,31 @@ async fn onboarding_postpone_returns_200_and_user() {
     );
 }
 
+/// `POST /icu/onboarding/postpone` (spec #974) enqueues the
+/// `UserOnboardingPostpone` write, then reads the `User` record back
+/// (the light record-only read) and answers `200` with the user — the
+/// same surface as the Strava route: the postponement is
+/// provider-agnostic.
+#[tokio::test]
+async fn icu_onboarding_postpone_returns_200_and_user() {
+    let (store, mut mock, provider) = mock_ctx();
+    mock.expect_write()
+        .times(1)
+        .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
+    mock.expect_read()
+        .times(1)
+        .returning(|_session, _read| Ok(ReadOutcome::UserRecord(user())));
+    let app = build_app(&store, mock, provider);
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, body) =
+        run(app, Method::POST, "/icu/onboarding/postpone", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        String::from_utf8_lossy(&body),
+        r#"{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"}"#
+    );
+}
+
 /// `GET /api/activ/rescan` (admin) is the rescan direct op (the spec
 /// §3/§6.4 carve-out) and answers `204`. The op's `stop_all` (the open
 /// streams end, the clients re-hydrate) is the seam suite's territory.
