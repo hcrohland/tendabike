@@ -121,7 +121,7 @@ pub(crate) struct InitialSyncQuery {
     pub(crate) time: i64,
 }
 
-/// `POST /{provider}/onboarding/gear` (spec #829, the first step): import the
+/// `POST /api/onboarding/gear` (spec #829, the first step): import the
 /// user's gear from the provider and return the discovered gear items. No
 /// activity sync is queued — the user decides on that next (the second step,
 /// [`trigger_initial_sync`]). The domain's status guard runs on the user's
@@ -141,7 +141,7 @@ pub(crate) async fn trigger_gear_import(
     Ok(Json(OnboardingGearResponse { gear }))
 }
 
-/// `POST /{provider}/onboarding/sync` (spec #829, the second step): queue the
+/// `POST /api/onboarding/sync` (spec #829, the second step): queue the
 /// activity sync and return the updated user. No gear import — that was the
 /// first step ([`trigger_gear_import`]). The domain's status guard and
 /// completion update run on the user's executor in one loop-owned transaction
@@ -165,10 +165,11 @@ pub(crate) async fn trigger_initial_sync(
     }
 }
 
-/// `POST /{provider}/onboarding/postpone` (spec #974): postpone the initial
-/// activity sync and return the updated user. Provider-agnostic — mounted on
-/// both the Strava and the intervals.icu router. The domain's status guard
-/// and postponement run on the user's executor (spec §6.2); the 200 body
+/// `POST /api/onboarding/postpone` (spec #974): postpone the initial
+/// activity sync and return the updated user. Provider-agnostic — mounted
+/// once at the neutral path (the user's provider is derived from their
+/// identity in-transaction, ADR-0014). The domain's status guard and
+/// postponement run on the user's executor (spec §6.2); the 200 body
 /// reads the `User` record back (the light record-only read — no `Summary`
 /// computation needed).
 pub(crate) async fn postpone_initial_sync(

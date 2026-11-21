@@ -43,8 +43,8 @@
   let open = $state(getUser()?.onboarding_status === "pending");
 
   /// The dialog is only open for a known user in pending status, so the
-  /// provider (and with it the branding and the onboarding routes) is derived
-  /// from the current user.
+  /// provider (and with it the branding and the provider-specific copy) is
+  /// derived from the current user.
   let provider = $derived((getUser()?.provider ?? "strava") as Provider);
   let meta = $derived(providerMeta[provider]);
 
@@ -67,7 +67,7 @@
   async function importGear() {
     loading = true;
     try {
-      const res = await myfetch(onboardingGearUrl(provider), "POST");
+      const res = await myfetch(onboardingGearUrl(), "POST");
       gear = res.gear ?? [];
       gearLoaded = true;
     } catch (e) {
@@ -81,7 +81,7 @@
   async function importActivities() {
     loading = true;
     try {
-      const updatedUser = await myfetch(onboardingSyncUrl(provider), "POST");
+      const updatedUser = await myfetch(onboardingSyncUrl(), "POST");
       setUser(updatedUser);
       open = false;
     } catch (e) {
@@ -110,10 +110,7 @@
   async function skipSync() {
     loading = true;
     try {
-      const updatedUser = await myfetch(
-        onboardingPostponeUrl(provider),
-        "POST",
-      );
+      const updatedUser = await myfetch(onboardingPostponeUrl(), "POST");
       setUser(updatedUser);
       open = false;
     } catch (e) {
