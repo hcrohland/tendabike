@@ -482,8 +482,7 @@ async fn user_strava_url() {
 
 /// The driver's `onboard` primitive (mirroring intervals.icu's): import the
 /// user's gear (bikes + shoes) and enqueue the durable activity-sync event,
-/// returning the created gear part ids. The Strava sync is enqueued with the
-/// non-migrate flag (onboarding is not a migration).
+/// returning the created gear part ids.
 #[tokio::test]
 async fn onboard_imports_gear_and_queues_the_sync() -> TbResult<()> {
     let (mut store, mut facade, _session) = setup();
@@ -525,10 +524,10 @@ async fn onboard_imports_gear_and_queues_the_sync() -> TbResult<()> {
 
     // The gear ids are returned (the onboarding response lists them).
     assert_eq!(parts, vec![PartId::from(1), PartId::from(2)]);
-    // The sync is enqueued with the non-migrate flag (object_id 0).
+    // The sync is enqueued (object_id 0).
     let event = created.lock().unwrap().take().expect("the sync was queued");
     assert_eq!(event.object_type, ObjectType::Sync);
-    assert_eq!(event.object_id, 0, "onboarding is not a migration");
+    assert_eq!(event.object_id, 0, "the sync is queued with object_id 0");
     assert_eq!(event.owner_id, 42.into());
     Ok(())
 }

@@ -183,10 +183,8 @@ where
     // A disabled provider's queued sync fails loudly (ADR-0016).
     crate::config::require_enabled(provider)?;
     match provider {
-        Provider::Strava => {
-            crate::strava::event::insert_sync(user_id, event_time, false, store).await
-        }
-        Provider::Icu => crate::icu::event::insert_sync(user_id, 0, store).await,
+        Provider::Strava => crate::strava::event::insert_sync(user_id, event_time, store).await,
+        Provider::Icu => crate::icu::event::insert_sync(user_id, event_time, store).await,
     }
 }
 
@@ -212,16 +210,14 @@ where
 /// activity re-sync — queue a sync for every non-disabled user on their own
 /// provider's lane, without re-importing gear (gear import is an
 /// onboarding-only concern). A Strava user gets a Strava `Sync` event via
-/// `insert_sync` (the `migrate` flag passes through to the Strava driver — a
-/// Strava-internal concern, ADR-0013); an icu user gets the bare `SYNC`
-/// event. `user_id` narrows the trigger to one user, regardless of provider
-/// (a user with no row in either table is a `NotFound`). Returns the tbids of
-/// the users a sync was queued for — the caller's per-user wake list.
+/// `insert_sync`; an icu user gets the bare `SYNC` event. `user_id` narrows
+/// the trigger to one user, regardless of provider (a user with no row in
+/// either table is a `NotFound`). Returns the tbids of the users a sync was
+/// queued for — the caller's per-user wake list.
 pub async fn sync_users<S>(
     session: &mut dyn Session,
     user_id: Option<UserId>,
     time: i64,
-    migrate: bool,
     store: &mut S,
 ) -> TbResult<Vec<UserId>>
 where
@@ -258,7 +254,7 @@ where
                 continue;
             }
             info!("Adding sync for {:?} at {time}", user.user_id());
-            crate::strava::event::insert_sync(user.user_id(), time, migrate, store).await?;
+            crate::strava::event::insert_sync(user.user_id(), time, store).await?;
             queued.push(user.user_id());
         }
     }

@@ -395,17 +395,11 @@ where
         mut session: Box<dyn Session>,
         user_id: Option<UserId>,
         event_time: i64,
-        migrate: bool,
     ) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        let queued = tb_provider::dispatch::sync_users(
-            &mut *session,
-            user_id,
-            event_time,
-            migrate,
-            &mut store,
-        )
-        .await?;
+        let queued =
+            tb_provider::dispatch::sync_users(&mut *session, user_id, event_time, &mut store)
+                .await?;
         store.commit().await?;
         // Per queued user: spawn the executor (a no-op if it is already
         // running) so it drains the queued Sync even when the user is

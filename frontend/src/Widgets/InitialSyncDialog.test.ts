@@ -77,7 +77,7 @@ describe("InitialSyncDialog", () => {
     // The gear import (Step 1) fires on dialog open.
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/strava/onboarding/gear",
+        "/api/onboarding/gear",
         expect.objectContaining({ method: "POST" }),
       );
     });
@@ -91,7 +91,7 @@ describe("InitialSyncDialog", () => {
     render(InitialSyncDialog);
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/icu/onboarding/gear",
+        "/api/onboarding/gear",
         expect.objectContaining({ method: "POST" }),
       );
     });
@@ -107,7 +107,7 @@ describe("InitialSyncDialog", () => {
     );
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/strava/onboarding/sync",
+        "/api/onboarding/sync",
         expect.objectContaining({ method: "POST" }),
       );
     });
@@ -122,7 +122,7 @@ describe("InitialSyncDialog", () => {
     );
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/icu/onboarding/sync",
+        "/api/onboarding/sync",
         expect.objectContaining({ method: "POST" }),
       );
     });
@@ -134,7 +134,7 @@ describe("InitialSyncDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Skip for Now" }));
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/strava/onboarding/postpone",
+        "/api/onboarding/postpone",
         expect.objectContaining({ method: "POST" }),
       );
     });
@@ -146,7 +146,7 @@ describe("InitialSyncDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Skip for Now" }));
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/icu/onboarding/postpone",
+        "/api/onboarding/postpone",
         expect.objectContaining({ method: "POST" }),
       );
     });
@@ -165,7 +165,7 @@ describe("InitialSyncDialog", () => {
     );
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        `/${provider}/onboarding/postpone`,
+        "/api/onboarding/postpone",
         expect.objectContaining({ method: "POST" }),
       );
     });

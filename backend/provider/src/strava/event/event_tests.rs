@@ -233,18 +233,18 @@ async fn accept_athlete_deauth_disables_user() -> TbResult<()> {
 #[tokio::test]
 async fn insert_sync_stores_event() -> TbResult<()> {
     let (mut store, _facade, _) = setup();
-    // A migrate sync queues a `Sync` event with `object_id` 1 for the user's
-    // strava id (42, from the warm token cache).
+    // A sync queues a `Sync` event with `object_id` 0 for the user's strava
+    // id (42, from the warm token cache).
     let created = Arc::new(Mutex::new(None));
     let created_rec = created.clone();
     store.expect_strava_event_create().returning(move |e| {
         created_rec.lock().unwrap().replace(e.clone());
         Ok(())
     });
-    insert_sync(UserId::from(1), 100, true, &mut store).await?;
+    insert_sync(UserId::from(1), 100, &mut store).await?;
     let event = created.lock().unwrap().take().expect("the sync was queued");
     assert_eq!(event.object_type, ObjectType::Sync);
-    assert_eq!(event.object_id, 1);
+    assert_eq!(event.object_id, 0);
     assert_eq!(event.owner_id, 42.into());
     Ok(())
 }
@@ -253,7 +253,7 @@ async fn insert_sync_stores_event() -> TbResult<()> {
 async fn insert_sync_rejects_future() {
     let (mut store, _facade, _) = setup();
     // A future event time is a `BadRequest` (no store write fires).
-    let res = insert_sync(UserId::from(1), get_time() + 1000, false, &mut store).await;
+    let res = insert_sync(UserId::from(1), get_time() + 1000, &mut store).await;
     assert!(matches!(res, Err(Error::BadRequest(_))));
 }
 

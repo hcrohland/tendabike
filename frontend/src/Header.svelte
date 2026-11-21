@@ -59,8 +59,7 @@
 
   async function triggerHistoricSync() {
     try {
-      const provider = getUser()?.provider ?? "strava";
-      const updatedUser = await myfetch(onboardingSyncUrl(provider), "POST");
+      const updatedUser = await myfetch(onboardingSyncUrl, "POST");
       setUser(updatedUser);
       fullrefresh();
     } catch (e) {
