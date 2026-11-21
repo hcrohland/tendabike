@@ -42,6 +42,20 @@ visible to them. You can do it two ways:
 - From any part's **⋮** menu: choose **Put into** and pick a shop. A part that
   is already registered with a shop shows **Move out of {the shop}** instead.
 
+## A part belongs to the bike it's on
+
+A part is owned by the bike it's on, so ownership moves as the shop works on
+your gear:
+
+- When the shop fits a part to your registered bike, it becomes **yours** — it's
+  on your bike, so it counts against your plans. It also stays visible to the
+  shop.
+- When the shop moves that part off your bike onto another bike, it stops being
+  yours — it belongs to that bike's owner now.
+
+What's on your bike is yours; the shop sees what's on the bikes registered with
+it.
+
 ## Unsubscribing
 
 You can't unsubscribe while any of your gear is still registered with the shop.
