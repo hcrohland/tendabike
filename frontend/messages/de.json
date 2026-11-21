@@ -359,7 +359,6 @@
   "sync_create_header_named": "Sync erstellen für {name} ({id})",
   "sync_create_header_all": "Sync für alle Benutzer erstellen",
   "sync_start_label": "Start",
-  "sync_migration_label": "Migration",
   "sync_process_queue": "Warteschlange abarbeiten",
   "notif_title_sub_request": "Werkstatt-Anmeldung",
   "notif_body_sub_request": "Eine Person möchte sich bei deiner Werkstatt anmelden. Prüfe die Anfrage und antworte.",

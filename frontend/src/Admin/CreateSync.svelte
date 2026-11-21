@@ -4,7 +4,6 @@
   import type { User } from "../lib/user.svelte";
   import DateTime from "../Widgets/DateTime.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
-  import Switch from "../Widgets/Switch.svelte";
   import { by, stateValues } from "../lib/mapable.svelte";
   import { activities } from "../lib/activity";
   import Modal from "../Widgets/Modal.svelte";
@@ -15,15 +14,10 @@
   let date = $state(new Date());
   let open = $state(false);
   let userParam = $state("");
-  let checked = $state(false);
 
   async function onaction() {
     await myfetch(
-      "/strava/sync?time=" +
-        (date.getTime() / 1000).toFixed(0) +
-        "&migrate=" +
-        checked +
-        userParam,
+      "/strava/sync?time=" + (date.getTime() / 1000).toFixed(0) + userParam,
     ).catch(handleError);
     open = false;
     refresh();
@@ -62,7 +56,6 @@
     <InputAddon>{m.sync_start_label()}</InputAddon>
     <DateTime bind:date prevdate={user ? prevdate : undefined} />
   </ButtonGroup>
-  <Switch bind:checked>{m.sync_migration_label()}</Switch>
 
   {#snippet footer()}
     <Buttons bind:open label={m.header_sync()} />
