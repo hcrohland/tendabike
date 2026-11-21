@@ -68,10 +68,13 @@ it:
 - **Import Historic Activities** — your whole riding history, offered for as
   long as you haven't imported it. See [Getting started](onboarding.md) for
   the first import and the **Import Activities** button in the top bar.
-- **With CSV File** — for riders who track with a Garmin device. Upload a CSV
-  exported from Garmin Connect and TendaBike adds the data your device
-  recorded — such as descent — to the rides it can match by start time; rides
-  it can't match are skipped and listed.
+- **With CSV File** — for riders who track with a Garmin device. Strava doesn't
+  record descent, so the descent your Garmin measured is missing from your
+  Strava rides; you can add it from a CSV exported from Garmin Connect.
+  TendaBike matches each row of the file to a ride by its start time and writes
+  the descent (and the climb, if the file carries one) onto that ride; a row
+  with no matching ride is skipped and listed. You can upload the file again
+  any time.
 
 ## Example
 
