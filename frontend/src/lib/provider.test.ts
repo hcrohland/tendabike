@@ -78,18 +78,18 @@ describe("provider state", () => {
   });
 });
 
-describe("onboarding URL builders", () => {
-  /// The onboarding routes are provider-neutral (spec #977): the builders
-  /// take no provider argument and return the `/api/onboarding/…` paths.
+describe("onboarding URLs", () => {
+  /// The onboarding routes are provider-neutral (spec #977): the consts
+  /// are the `/api/onboarding/…` paths.
   it("the gear import URL is the neutral path", () => {
-    expect(onboardingGearUrl()).toBe("/api/onboarding/gear");
+    expect(onboardingGearUrl).toBe("/api/onboarding/gear");
   });
 
   it("the activity sync URL is the neutral path", () => {
-    expect(onboardingSyncUrl()).toBe("/api/onboarding/sync");
+    expect(onboardingSyncUrl).toBe("/api/onboarding/sync");
   });
 
   it("the postponement URL is the neutral path", () => {
-    expect(onboardingPostponeUrl()).toBe("/api/onboarding/postpone");
+    expect(onboardingPostponeUrl).toBe("/api/onboarding/postpone");
   });
 });

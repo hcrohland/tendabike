@@ -59,7 +59,7 @@
 
   async function triggerHistoricSync() {
     try {
-      const updatedUser = await myfetch(onboardingSyncUrl(), "POST");
+      const updatedUser = await myfetch(onboardingSyncUrl, "POST");
       setUser(updatedUser);
       fullrefresh();
     } catch (e) {

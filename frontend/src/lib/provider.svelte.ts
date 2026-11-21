@@ -25,21 +25,15 @@ export function loginUrl(provider: Provider): string {
 
 /// The onboarding gear import (spec #829, the first step):
 /// `/api/onboarding/gear`.
-export function onboardingGearUrl(): string {
-  return `/api/onboarding/gear`;
-}
+export const onboardingGearUrl = "/api/onboarding/gear";
 
 /// The onboarding activity sync (spec #829, the second step):
 /// `/api/onboarding/sync`.
-export function onboardingSyncUrl(): string {
-  return `/api/onboarding/sync`;
-}
+export const onboardingSyncUrl = "/api/onboarding/sync";
 
 /// The onboarding postponement (spec #974):
 /// `/api/onboarding/postpone`.
-export function onboardingPostponeUrl(): string {
-  return `/api/onboarding/postpone`;
-}
+export const onboardingPostponeUrl = "/api/onboarding/postpone";
 
 /// The provider of a prefixed activity id (the `ActivityId` model,
 /// spec #760): `icu:` ids are intervals.icu's, everything else is

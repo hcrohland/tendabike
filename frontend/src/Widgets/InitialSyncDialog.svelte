@@ -66,7 +66,7 @@
   async function importGear() {
     loading = true;
     try {
-      const res = await myfetch(onboardingGearUrl(), "POST");
+      const res = await myfetch(onboardingGearUrl, "POST");
       gear = res.gear ?? [];
       gearLoaded = true;
     } catch (e) {
@@ -80,7 +80,7 @@
   async function importActivities() {
     loading = true;
     try {
-      const updatedUser = await myfetch(onboardingSyncUrl(), "POST");
+      const updatedUser = await myfetch(onboardingSyncUrl, "POST");
       setUser(updatedUser);
       open = false;
     } catch (e) {
@@ -109,7 +109,7 @@
   async function skipSync() {
     loading = true;
     try {
-      const updatedUser = await myfetch(onboardingPostponeUrl(), "POST");
+      const updatedUser = await myfetch(onboardingPostponeUrl, "POST");
       setUser(updatedUser);
       open = false;
     } catch (e) {
