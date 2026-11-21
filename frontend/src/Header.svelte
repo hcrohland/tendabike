@@ -59,8 +59,6 @@
 
   async function triggerHistoricSync() {
     try {
-      // The onboarding sync URL is provider-neutral (spec #977): the
-      // user's provider is derived from their identity in-transaction.
       const updatedUser = await myfetch(onboardingSyncUrl(), "POST");
       setUser(updatedUser);
       fullrefresh();

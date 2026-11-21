@@ -44,7 +44,6 @@
 
   /// The dialog is only open for a known user in pending status, so the
   /// provider (and with it the branding) is derived from the current user.
-  /// The onboarding URLs are provider-neutral (spec #977).
   let provider = $derived((getUser()?.provider ?? "strava") as Provider);
   let meta = $derived(providerMeta[provider]);
 

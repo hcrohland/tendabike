@@ -74,8 +74,7 @@ describe("InitialSyncDialog", () => {
   it("imports the gear on open (Strava)", async () => {
     setUser(pendingUser("strava"));
     render(InitialSyncDialog);
-    // The gear import (Step 1) fires on dialog open. The URL is the
-    // provider-neutral path (spec #977).
+    // The gear import (Step 1) fires on dialog open.
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/onboarding/gear",
@@ -90,7 +89,6 @@ describe("InitialSyncDialog", () => {
   it("imports the gear on open (icu)", async () => {
     setUser(pendingUser("icu"));
     render(InitialSyncDialog);
-    // The icu user hits the same neutral URL (spec #977).
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/onboarding/gear",
@@ -122,7 +120,6 @@ describe("InitialSyncDialog", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Import Activities" }),
     );
-    // The icu user hits the same neutral URL (spec #977).
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/onboarding/sync",
@@ -147,7 +144,6 @@ describe("InitialSyncDialog", () => {
     setUser(pendingUser("icu"));
     render(InitialSyncDialog);
     fireEvent.click(screen.getByRole("button", { name: "Skip for Now" }));
-    // The icu user hits the same neutral URL (spec #977).
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/onboarding/postpone",
@@ -167,7 +163,6 @@ describe("InitialSyncDialog", () => {
     dialog.dispatchEvent(
       new Event("cancel", { bubbles: true, cancelable: true }),
     );
-    // Both providers hit the same neutral URL (spec #977).
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/onboarding/postpone",

@@ -2392,8 +2392,7 @@ async fn notification_delete_not_found_maps_to_404() {
 /// `POST /api/onboarding/gear` (spec #829, the first step) enqueues the
 /// `UserOnboardingGear` write and answers `200` with the gear items the
 /// provider import discovered. No `User` read — the user record is unchanged
-/// (the status stays `pending`). The route is provider-neutral (spec #977):
-/// the handler derives the user's provider in-transaction.
+/// (the status stays `pending`).
 #[tokio::test]
 async fn onboarding_gear_returns_200_and_gear() {
     let (store, mut mock, provider) = mock_ctx();
@@ -2420,8 +2419,7 @@ async fn onboarding_gear_returns_200_and_gear() {
 /// `POST /api/onboarding/sync?time=N` (spec #829, the second step) enqueues
 /// the `UserOnboardingSync` write, then reads the `User` record back (the
 /// light record-only read) and answers `200` with the updated user. No gear —
-/// that was the first step. The route is provider-neutral (spec #977): the
-/// handler derives the user's provider in-transaction.
+/// that was the first step.
 #[tokio::test]
 async fn onboarding_sync_returns_200_and_user() {
     let (store, mut mock, provider) = mock_ctx();
@@ -2449,9 +2447,7 @@ async fn onboarding_sync_returns_200_and_user() {
 
 /// `POST /api/onboarding/postpone` (spec #974) enqueues the
 /// `UserOnboardingPostpone` write, then reads the `User` record back
-/// (the light record-only read) and answers `200` with the user. The route
-/// is provider-neutral (spec #977): the postponement is provider-agnostic
-/// and the handler derives the user's provider in-transaction.
+/// (the light record-only read) and answers `200` with the user.
 #[tokio::test]
 async fn onboarding_postpone_returns_200_and_user() {
     let (store, mut mock, provider) = mock_ctx();
@@ -2472,9 +2468,8 @@ async fn onboarding_postpone_returns_200_and_user() {
     );
 }
 
-/// The old provider-prefixed onboarding URLs are no longer routed (spec
-/// #977): a request to any of them is not matched (404). The onboarding
-/// routes exist only at the provider-neutral `/api/onboarding/…`.
+/// A request to a provider-prefixed onboarding path is not matched (404);
+/// the onboarding routes live at `/api/onboarding/…` (spec #977).
 #[tokio::test]
 async fn provider_prefixed_onboarding_paths_are_not_routed() {
     let (store, mock, provider) = mock_ctx();

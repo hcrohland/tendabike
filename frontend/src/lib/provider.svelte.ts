@@ -24,20 +24,19 @@ export function loginUrl(provider: Provider): string {
 }
 
 /// The onboarding gear import (spec #829, the first step):
-/// `/api/onboarding/gear`. Provider-neutral (spec #977) — the user's
-/// provider is derived from their identity in-transaction.
+/// `/api/onboarding/gear`.
 export function onboardingGearUrl(): string {
   return `/api/onboarding/gear`;
 }
 
 /// The onboarding activity sync (spec #829, the second step):
-/// `/api/onboarding/sync`. Provider-neutral (spec #977).
+/// `/api/onboarding/sync`.
 export function onboardingSyncUrl(): string {
   return `/api/onboarding/sync`;
 }
 
 /// The onboarding postponement (spec #974):
-/// `/api/onboarding/postpone`. Provider-neutral (spec #977).
+/// `/api/onboarding/postpone`.
 export function onboardingPostponeUrl(): string {
   return `/api/onboarding/postpone`;
 }
