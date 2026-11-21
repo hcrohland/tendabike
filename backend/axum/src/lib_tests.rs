@@ -869,63 +869,6 @@ async fn icu_token_submits_the_verifier_matching_the_authorize_challenge() {
     assert_eq!(expected.as_str(), challenge);
 }
 
-/// `POST /icu/onboarding/gear` (spec #829, the first step) enqueues the
-/// `UserOnboardingGear` write and answers `200` with the gear items the
-/// provider import discovered. No `User` read — the user record is unchanged
-/// (the status stays `pending`).
-#[tokio::test]
-async fn icu_onboarding_gear_returns_200_and_gear() {
-    let (store, mut mock, provider) = mock_ctx();
-    mock.expect_write().times(1).returning(|_session, _write| {
-        Ok(WriteOutcome::OnboardingGear {
-            summary: Summary::default(),
-            gear: vec![GearItem {
-                name: "Icu Bike".to_string(),
-                what: PartTypeId::from(1),
-            }],
-        })
-    });
-    let app = build_app(&store, mock, provider);
-    let cookie = user_cookie(&store).await;
-    let (status, _headers, body) =
-        run(app, Method::POST, "/icu/onboarding/gear", Some(&cookie)).await;
-    assert_eq!(status, StatusCode::OK);
-    let body = String::from_utf8_lossy(&body);
-    assert!(
-        body.contains("\"gear\":[{\"name\":\"Icu Bike\",\"what\":1}]"),
-        "the discovered gear is returned: {body}"
-    );
-}
-
-/// `POST /icu/onboarding/sync?time=N` (spec #829, the second step) enqueues the
-/// `UserOnboardingSync` write, then reads the `User` record back and answers
-/// `200` with the updated user. No gear — that was the first step.
-#[tokio::test]
-async fn icu_onboarding_sync_returns_200_and_user() {
-    let (store, mut mock, provider) = mock_ctx();
-    mock.expect_write()
-        .times(1)
-        .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
-    mock.expect_read()
-        .times(1)
-        .returning(|_session, _read| Ok(ReadOutcome::UserRecord(user())));
-    let app = build_app(&store, mock, provider);
-    let cookie = user_cookie(&store).await;
-    let (status, _headers, body) = run(
-        app,
-        Method::POST,
-        "/icu/onboarding/sync?time=1700000000",
-        Some(&cookie),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    let body = String::from_utf8_lossy(&body);
-    assert!(
-        body.contains("\"id\":1"),
-        "the updated user is returned: {body}"
-    );
-}
-
 // ─── Auth gates (401/404 before the service API) ──────────────────────────
 
 #[tokio::test]
@@ -2446,7 +2389,7 @@ async fn notification_delete_not_found_maps_to_404() {
 
 // ─── The direct ops (the carve-out surface, spec #558 §5.2) ───────────────
 
-/// `POST /strava/onboarding/gear` (spec #829, the first step) enqueues the
+/// `POST /api/onboarding/gear` (spec #829, the first step) enqueues the
 /// `UserOnboardingGear` write and answers `200` with the gear items the
 /// provider import discovered. No `User` read — the user record is unchanged
 /// (the status stays `pending`).
@@ -2465,7 +2408,7 @@ async fn onboarding_gear_returns_200_and_gear() {
     let app = build_app(&store, mock, provider);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) =
-        run(app, Method::POST, "/strava/onboarding/gear", Some(&cookie)).await;
+        run(app, Method::POST, "/api/onboarding/gear", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
@@ -2473,7 +2416,7 @@ async fn onboarding_gear_returns_200_and_gear() {
     );
 }
 
-/// `POST /strava/onboarding/sync?time=N` (spec #829, the second step) enqueues
+/// `POST /api/onboarding/sync?time=N` (spec #829, the second step) enqueues
 /// the `UserOnboardingSync` write, then reads the `User` record back (the
 /// light record-only read) and answers `200` with the updated user. No gear —
 /// that was the first step.
@@ -2491,7 +2434,7 @@ async fn onboarding_sync_returns_200_and_user() {
     let (status, _headers, body) = run(
         app,
         Method::POST,
-        "/strava/onboarding/sync?time=1700000000",
+        "/api/onboarding/sync?time=1700000000",
         Some(&cookie),
     )
     .await;
@@ -2502,11 +2445,11 @@ async fn onboarding_sync_returns_200_and_user() {
     );
 }
 
-/// The shared body of the two postpone-route contract tests (Strava and
-/// ICU): the route enqueues the `UserOnboardingPostpone` write, then reads
-/// the `User` record back (the light record-only read) and answers `200`
-/// with the user.
-async fn test_postpone_route(url: &str) {
+/// `POST /api/onboarding/postpone` (spec #974) enqueues the
+/// `UserOnboardingPostpone` write, then reads the `User` record back
+/// (the light record-only read) and answers `200` with the user.
+#[tokio::test]
+async fn onboarding_postpone_returns_200_and_user() {
     let (store, mut mock, provider) = mock_ctx();
     mock.expect_write()
         .times(1)
@@ -2516,7 +2459,8 @@ async fn test_postpone_route(url: &str) {
         .returning(|_session, _read| Ok(ReadOutcome::UserRecord(user())));
     let app = build_app(&store, mock, provider);
     let cookie = user_cookie(&store).await;
-    let (status, _headers, body) = run(app, Method::POST, url, Some(&cookie)).await;
+    let (status, _headers, body) =
+        run(app, Method::POST, "/api/onboarding/postpone", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
@@ -2524,22 +2468,24 @@ async fn test_postpone_route(url: &str) {
     );
 }
 
-/// `POST /strava/onboarding/postpone` enqueues the
-/// `UserOnboardingPostpone` write, then reads the `User` record back
-/// (the light record-only read) and answers `200` with the user.
+/// A request to a provider-prefixed onboarding path is not matched (404);
+/// the onboarding routes live at `/api/onboarding/…` (spec #977).
 #[tokio::test]
-async fn onboarding_postpone_returns_200_and_user() {
-    test_postpone_route("/strava/onboarding/postpone").await;
-}
-
-/// `POST /icu/onboarding/postpone` (spec #974) enqueues the
-/// `UserOnboardingPostpone` write, then reads the `User` record back
-/// (the light record-only read) and answers `200` with the user — the
-/// same surface as the Strava route: the postponement is
-/// provider-agnostic.
-#[tokio::test]
-async fn icu_onboarding_postpone_returns_200_and_user() {
-    test_postpone_route("/icu/onboarding/postpone").await;
+async fn provider_prefixed_onboarding_paths_are_not_routed() {
+    let (store, mock, provider) = mock_ctx();
+    let app = build_app(&store, mock, provider);
+    let cookie = user_cookie(&store).await;
+    for url in [
+        "/strava/onboarding/gear",
+        "/strava/onboarding/sync",
+        "/strava/onboarding/postpone",
+        "/icu/onboarding/gear",
+        "/icu/onboarding/sync",
+        "/icu/onboarding/postpone",
+    ] {
+        let (status, _headers, _body) = run(app.clone(), Method::POST, url, Some(&cookie)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{url} is no longer routed");
+    }
 }
 
 /// `GET /api/activ/rescan` (admin) is the rescan direct op (the spec
@@ -2584,12 +2530,12 @@ async fn admin_trigger_processing_returns_200() {
     let (store, mut mock, provider) = mock_ctx();
     mock.expect_trigger_processing()
         .times(1)
-        .withf(|_session, user, time, _migrate| user.is_none() && *time == 0)
-        .returning(|_session, _u, _t, _m| Ok(()));
+        .withf(|_session, user, time| user.is_none() && *time == 0)
+        .returning(|_session, _u, _t| Ok(()));
     mock.expect_trigger_processing()
         .times(1)
-        .withf(|_session, user, time, _migrate| user == &Some(UserId::from(1)) && *time == 0)
-        .returning(|_session, _u, _t, _m| Ok(()));
+        .withf(|_session, user, time| user == &Some(UserId::from(1)) && *time == 0)
+        .returning(|_session, _u, _t| Ok(()));
     let app = build_app(&store, mock, provider);
     let admin = admin_cookie(&store).await;
     let (status, _headers, body) = run(

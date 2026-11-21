@@ -117,8 +117,6 @@ pub(super) async fn validate_subscription(Query(hub): Query<Hub>) -> ApiResult<H
 pub(super) struct SyncQuery {
     time: i64,
     user_id: Option<i32>,
-    #[serde(default)]
-    migrate: bool,
 }
 
 pub(super) async fn sync_api(
@@ -135,12 +133,7 @@ pub(super) async fn sync_api(
     // route's `?user_id=` query).
     state
         .api
-        .trigger_processing(
-            Box::new(admin.session()),
-            user_id,
-            query.time,
-            query.migrate,
-        )
+        .trigger_processing(Box::new(admin.session()), user_id, query.time)
         .await?;
     Ok(Json(()))
 }

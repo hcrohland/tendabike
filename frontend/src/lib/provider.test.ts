@@ -4,6 +4,9 @@ import {
   getProvidersStatus,
   isOffline,
   loadProviders,
+  onboardingGearUrl,
+  onboardingPostponeUrl,
+  onboardingSyncUrl,
 } from "./provider.svelte";
 
 /// Stub the `GET /api/providers` fetch with the enabled provider wire
@@ -72,5 +75,21 @@ describe("provider state", () => {
     expect(getProvidersStatus()).toBe("error");
     expect(getEnabledProviders()).toEqual([]);
     expect(isOffline()).toBe(false);
+  });
+});
+
+describe("onboarding URL builders", () => {
+  /// The onboarding routes are provider-neutral (spec #977): the builders
+  /// take no provider argument and return the `/api/onboarding/…` paths.
+  it("the gear import URL is the neutral path", () => {
+    expect(onboardingGearUrl()).toBe("/api/onboarding/gear");
+  });
+
+  it("the activity sync URL is the neutral path", () => {
+    expect(onboardingSyncUrl()).toBe("/api/onboarding/sync");
+  });
+
+  it("the postponement URL is the neutral path", () => {
+    expect(onboardingPostponeUrl()).toBe("/api/onboarding/postpone");
   });
 });

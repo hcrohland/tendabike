@@ -1,4 +1,4 @@
-use axum::Router;
+use axum::{Router, routing::post};
 use tb_domain::IdKeyedMap;
 
 use crate::appstate::AppState;
@@ -47,6 +47,12 @@ pub(super) fn router() -> Router<AppState> {
     Router::new()
         .nest("/providers", provider::router())
         .nest("/user", user::router())
+        // The onboarding routes (spec #829/#974/#977): provider-neutral,
+        // mounted once here — the handlers derive the user's provider
+        // in-transaction (the domain stores no provider, ADR-0014).
+        .route("/onboarding/gear", post(user::trigger_gear_import))
+        .route("/onboarding/sync", post(user::trigger_initial_sync))
+        .route("/onboarding/postpone", post(user::postpone_initial_sync))
         .nest("/types", types::router())
         .nest("/shop", shop::router())
         .nest("/part", part::router())

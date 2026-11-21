@@ -719,7 +719,6 @@ async fn sync_users_queues_icu_users() -> TbResult<()> {
         &mut session,
         Some(UserId::from(9)),
         1_700_000_000,
-        false,
         &mut store,
     )
     .await?;
@@ -746,10 +745,12 @@ async fn sync_users_queues_icu_users() -> TbResult<()> {
 }
 
 /// The onboarding arm (`queue_sync_user`): an icu user gets a `SYNC` event
-/// queued with `oldest = 0` (the full history) and the `0` `newest` sentinel —
-/// no gear import (that is the separate first step).
+/// queued with `oldest = event_time` (the user's `time` param — the same reach
+/// as the Strava arm) and the `0` `newest` sentinel — no gear import (that is
+/// the separate first step).
 #[tokio::test]
-async fn queue_sync_user_queues_icu_sync_with_full_history() -> TbResult<()> {
+async fn queue_sync_user_queues_icu_sync_with_event_time() -> TbResult<()> {
+    init_test_config_once();
     let mut store = DispatchStore::default();
     // No Strava row for this user → the `provider_of` lookup resolves icu.
     store
@@ -788,8 +789,8 @@ async fn queue_sync_user_queues_icu_sync_with_full_history() -> TbResult<()> {
     );
     assert_eq!(
         events[0].oldest,
-        Some(0),
-        "the onboarding SYNC walks the full history"
+        Some(1_700_000_000),
+        "the onboarding SYNC walks back to the user's event_time"
     );
     assert_eq!(events[0].event_time, 0, "the newest sentinel is 0");
     Ok(())
@@ -830,7 +831,7 @@ async fn sync_users_queues_strava_users() -> TbResult<()> {
         });
 
     let mut session = mock_session_admin(UserId::from(1));
-    let queued = sync_users(&mut session, None, 1_700_000_000, false, &mut store).await?;
+    let queued = sync_users(&mut session, None, 1_700_000_000, &mut store).await?;
 
     assert_eq!(queued, vec![UserId::from(7)], "the Strava user is queued");
     let events = created.lock().unwrap().clone();
@@ -862,7 +863,7 @@ async fn sync_users_skips_disabled() -> TbResult<()> {
     });
 
     let mut session = mock_session_admin(UserId::from(1));
-    let queued = sync_users(&mut session, None, 1_700_000_000, false, &mut store).await?;
+    let queued = sync_users(&mut session, None, 1_700_000_000, &mut store).await?;
 
     assert!(queued.is_empty(), "disabled users are skipped");
     Ok(())
@@ -896,7 +897,6 @@ async fn sync_users_single_strava() -> TbResult<()> {
         &mut session,
         Some(UserId::from(7)),
         1_700_000_000,
-        false,
         &mut store,
     )
     .await?;
@@ -929,7 +929,6 @@ async fn sync_users_unknown_user() {
         &mut session,
         Some(UserId::from(99)),
         1_700_000_000,
-        false,
         &mut store,
     )
     .await;
@@ -943,6 +942,6 @@ async fn sync_users_forbidden_for_non_admin() {
     let mut store = DispatchStore::default();
     let mut session = crate::facade::mock_session(UserId::from(1));
 
-    let res = sync_users(&mut session, None, 1_700_000_000, false, &mut store).await;
+    let res = sync_users(&mut session, None, 1_700_000_000, &mut store).await;
     assert!(matches!(res, Err(Error::Forbidden(_))));
 }

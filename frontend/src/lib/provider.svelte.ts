@@ -23,22 +23,22 @@ export function loginUrl(provider: Provider): string {
   return `/${provider}/login`;
 }
 
-/// The provider's onboarding gear import (spec #829, the first step):
-/// `/strava/onboarding/gear` or `/icu/onboarding/gear`.
-export function onboardingGearUrl(provider: Provider): string {
-  return `/${provider}/onboarding/gear`;
+/// The onboarding gear import (spec #829, the first step):
+/// `/api/onboarding/gear`.
+export function onboardingGearUrl(): string {
+  return `/api/onboarding/gear`;
 }
 
-/// The provider's onboarding activity sync (spec #829, the second step):
-/// `/strava/onboarding/sync` or `/icu/onboarding/sync`.
-export function onboardingSyncUrl(provider: Provider): string {
-  return `/${provider}/onboarding/sync`;
+/// The onboarding activity sync (spec #829, the second step):
+/// `/api/onboarding/sync`.
+export function onboardingSyncUrl(): string {
+  return `/api/onboarding/sync`;
 }
 
-/// The provider's onboarding postponement (spec #974):
-/// `/strava/onboarding/postpone` or `/icu/onboarding/postpone`.
-export function onboardingPostponeUrl(provider: Provider): string {
-  return `/${provider}/onboarding/postpone`;
+/// The onboarding postponement (spec #974):
+/// `/api/onboarding/postpone`.
+export function onboardingPostponeUrl(): string {
+  return `/api/onboarding/postpone`;
 }
 
 /// The provider of a prefixed activity id (the `ActivityId` model,

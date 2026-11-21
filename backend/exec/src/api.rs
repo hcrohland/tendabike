@@ -124,6 +124,5 @@ pub trait ServiceApi: Send + Sync {
         session: Box<dyn Session>,
         user_id: Option<UserId>,
         event_time: i64,
-        migrate: bool,
     ) -> TbResult<()>;
 }
