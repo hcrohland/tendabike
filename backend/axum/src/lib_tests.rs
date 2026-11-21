@@ -2535,12 +2535,12 @@ async fn admin_trigger_processing_returns_200() {
     let (store, mut mock, provider) = mock_ctx();
     mock.expect_trigger_processing()
         .times(1)
-        .withf(|_session, user, time, _migrate| user.is_none() && *time == 0)
-        .returning(|_session, _u, _t, _m| Ok(()));
+        .withf(|_session, user, time| user.is_none() && *time == 0)
+        .returning(|_session, _u, _t| Ok(()));
     mock.expect_trigger_processing()
         .times(1)
-        .withf(|_session, user, time, _migrate| user == &Some(UserId::from(1)) && *time == 0)
-        .returning(|_session, _u, _t, _m| Ok(()));
+        .withf(|_session, user, time| user == &Some(UserId::from(1)) && *time == 0)
+        .returning(|_session, _u, _t| Ok(()));
     let app = build_app(&store, mock, provider);
     let admin = admin_cookie(&store).await;
     let (status, _headers, body) = run(

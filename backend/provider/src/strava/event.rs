@@ -411,17 +411,15 @@ impl Event {
 pub async fn insert_sync(
     user_id: UserId,
     event_time: i64,
-    migrate: bool,
     store: &mut impl StravaDataStore,
 ) -> TbResult<()> {
     if event_time > get_time() {
         return Err(Error::BadRequest(format!("eventtime {event_time} > now!")));
     }
     let owner_id = get_strava_id(user_id, store).await?;
-    let object_id = if migrate { 1 } else { 0 };
     let event = Event {
         owner_id,
-        object_id,
+        object_id: 0,
         event_time,
         object_type: ObjectType::Sync,
         ..Default::default()
@@ -445,9 +443,8 @@ pub async fn is_sync_for_user(
 }
 
 /// Whether `user_id`'s queue still holds the sync at `event_time` (the admin
-/// sync's fallback completion check, spec #4.6): a non-migrate sync is queued
-/// with `object_id` 0, so the user's `object_id` 0 events are exactly their
-/// syncs.
+/// sync's fallback completion check, spec #4.6): every sync is queued with
+/// `object_id` 0, so the user's `object_id` 0 events are exactly their syncs.
 pub async fn sync_queued_for_user(
     user_id: UserId,
     event_time: i64,

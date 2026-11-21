@@ -1021,7 +1021,6 @@ async fn trigger_processing_drains_each_queued_user() {
             Box::new(mock_session_admin(UserId::from(1))),
             None,
             200,
-            false,
         ),
     )
     .await
