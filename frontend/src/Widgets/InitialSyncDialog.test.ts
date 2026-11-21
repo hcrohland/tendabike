@@ -74,10 +74,11 @@ describe("InitialSyncDialog", () => {
   it("imports the gear on open (Strava)", async () => {
     setUser(pendingUser("strava"));
     render(InitialSyncDialog);
-    // The gear import (Step 1) fires on dialog open.
+    // The gear import (Step 1) fires on dialog open — the provider-neutral
+    // path (spec #977).
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/strava/onboarding/gear",
+        "/api/onboarding/gear",
         expect.objectContaining({ method: "POST" }),
       );
     });
@@ -89,9 +90,10 @@ describe("InitialSyncDialog", () => {
   it("imports the gear on open (icu)", async () => {
     setUser(pendingUser("icu"));
     render(InitialSyncDialog);
+    // The icu user hits the same provider-neutral path (spec #977).
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/icu/onboarding/gear",
+        "/api/onboarding/gear",
         expect.objectContaining({ method: "POST" }),
       );
     });
@@ -107,7 +109,7 @@ describe("InitialSyncDialog", () => {
     );
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/strava/onboarding/sync",
+        "/api/onboarding/sync",
         expect.objectContaining({ method: "POST" }),
       );
     });
@@ -122,7 +124,7 @@ describe("InitialSyncDialog", () => {
     );
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/icu/onboarding/sync",
+        "/api/onboarding/sync",
         expect.objectContaining({ method: "POST" }),
       );
     });
@@ -134,7 +136,7 @@ describe("InitialSyncDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Skip for Now" }));
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/strava/onboarding/postpone",
+        "/api/onboarding/postpone",
         expect.objectContaining({ method: "POST" }),
       );
     });
@@ -146,7 +148,7 @@ describe("InitialSyncDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Skip for Now" }));
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/icu/onboarding/postpone",
+        "/api/onboarding/postpone",
         expect.objectContaining({ method: "POST" }),
       );
     });
@@ -165,7 +167,7 @@ describe("InitialSyncDialog", () => {
     );
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        `/${provider}/onboarding/postpone`,
+        "/api/onboarding/postpone",
         expect.objectContaining({ method: "POST" }),
       );
     });
