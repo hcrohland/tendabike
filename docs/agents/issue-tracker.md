@@ -67,7 +67,8 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
 - **Frontier query**: list open issues with `wayfinder:` labels (excluding `wayfinder:map`), filter to unassigned, then check `blockedBy` on the candidates. First in number order wins.
   ```bash
   gh issue list --state open --json number,title,assignees,labels,blockedBy \
-    | jq '[.[] | select(.labels | any(.name | startswith("wayfinder:") and . != "wayfinder:map")) | select((.assignees | length) == 0) | select((.blockedBy.totalCount) == 0)]'
+    | jq '[.[] | select(.labels | any(.name | startswith("wayfinder:") and . != "wayfinder:map")) | select((.assignees | length) == 0) | select(.blockedBy.nodes | all(.state == "CLOSED"))]'
   ```
 - **Claim**: the **Assign** command above with `<login>` set to `@me` — the session's first write.
-- **Resolve**: **Comment** → **Close** (commands above) → append to the map's Decisions-so-far: read the map's body (`gh issue view`), append the one-line gist + link, `gh issue edit <map> --body "…"`.
+- **Resolve**: **Comment** → **Close** (commands above) → append to the map's Decisions-so-far in a single shell call: `gh issue view <map> --json body --jq .body > /tmp/map.md && sed -i '/^## Not yet specified/i\
+- [<title>](<link>): <gist>' /tmp/map.md && gh issue edit <map> --body-file /tmp/map.md`.
