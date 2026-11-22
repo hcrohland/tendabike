@@ -11,4 +11,5 @@ You can create parts and attach them to your bikes. You can move parts between b
 TendaBike will calculate the use for any part you create.
 
 ## Docs
+- [User guide](docs/guides/user/index.md) — track your bikes, parts, and maintenance
 - [Admin guide](docs/guides/admin/index.md) — setup and operations for running a Tendabike instance
