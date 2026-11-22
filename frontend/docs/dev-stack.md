@@ -1,0 +1,75 @@
+# Local dev stack
+
+Recipe for a full local stack (Postgres + backend + Vite dev server) for
+real-browser verification with Playwright. Everything is throwaway: nothing
+is written into the repo, and no real provider credentials are needed.
+
+## Steps
+
+1. **Create a fresh database.** The `tendabike` database behind
+   `DATABASE_URL` may carry a migration history that diverges from the
+   checkout — `cargo sqlx migrate run` then fails with "previously applied
+   but has been modified". There is no `psql` client on this machine; create
+   the database with a throwaway Node client:
+
+   ```bash
+   mkdir -p /tmp/dbtool && cd /tmp/dbtool
+   test -d node_modules/pg || npm install pg --no-audit --no-fund
+   node -e "const{Client}=require('pg');const c=new Client({connectionString:'postgres://tendabike@localhost/postgres'});c.connect().then(()=>c.query('DROP DATABASE IF EXISTS tendabike_dev')).then(()=>c.query('CREATE DATABASE tendabike_dev')).then(()=>{process.stdout.write('ready\n');return c.end()})"
+   ```
+
+   Done when: `tendabike_dev` exists.
+
+2. **Migrate it.** From `backend/sqlx/`:
+
+   ```bash
+   DATABASE_URL=postgres://tendabike@localhost/tendabike_dev cargo sqlx migrate run
+   ```
+
+   Done when: the last line reads `Applied …`.
+
+3. **Build the backend.** From the repo root: `cargo build`. The binary is
+   `target/debug/tendabike` — the Cargo workspace root is the repo root, not
+   `backend/`.
+
+4. **Run the backend** (in the background):
+
+   ```bash
+   mkdir -p /tmp/www
+   DATABASE_URL=postgres://tendabike@localhost/tendabike_dev \
+   STATIC_WWW=/tmp/www \
+   STRAVA_CLIENT_ID=dummy STRAVA_CLIENT_SECRET=dummy \
+   ICU_CLIENT_ID=dummy ICU_CLIENT_SECRET=dummy \
+   ./target/debug/tendabike
+   ```
+
+   Both provider credential sets are required at startup — the binary panics
+   if either is missing. Dummies are enough for UI checks: the provider cards
+   still render. `STATIC_WWW` may be any existing directory; Vite serves the
+   frontend. Done when: `curl -s localhost:8000/api/providers` returns 200.
+
+5. **Run the dev server** (in the background). From the repo root:
+   `npm run dev`. Vite proxies `/api`, `/strava`, `/icu`, and `/source` to
+   `:8000`. Its log floods with paraglide HMR reload lines — grep for
+   `ready` and `error` rather than reading it. Done when:
+   `curl -s localhost:5173/about` returns 200.
+
+6. **Drive it with Playwright.** Playwright is installed globally
+   (`/usr/lib/node_modules`), which ESM scripts outside the repo cannot
+   resolve. Symlink it next to the script, then run the script with
+   `import { chromium } from "playwright"`:
+
+   ```bash
+   ln -s /usr/lib/node_modules ./node_modules
+   node script.mjs
+   ```
+
+   Check `page.on("console")` / `page.on("pageerror")` for the condition
+   under test. Anonymous sessions log expected 401s (the app probes
+   `/api/user` to detect them) — judge new errors, not their count.
+
+## Teardown
+
+Kill the backend with `pkill -f target/debug/tendabike`. The Vite server's
+process line does not contain "vite dev" — kill the pid listening on `:5173`
+(`ss -ltnp | grep 5173`). Done when: both ports refuse connections.
