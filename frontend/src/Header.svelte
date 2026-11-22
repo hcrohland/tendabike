@@ -151,6 +151,7 @@
         <DropdownItem href="/api/user/export" download="tendabike.json">
           {m.header_export()}
         </DropdownItem>
+        <DropdownItem href="/about">{m.header_help()}</DropdownItem>
         <DropdownItem href="/strava/logout">{m.header_logout()}</DropdownItem>
         <DropdownItem>
           <!-- Language switcher -->
@@ -191,7 +192,6 @@
         <NavLi href="/activities">{m.nav_activities()}</NavLi>
         <NavLi href="/stats">{m.nav_statistics()}</NavLi>
       {/if}
-      <NavLi href="/about">{m.nav_help()}</NavLi>
     </NavUl>
   {:else}
     <!-- The connect cards are the /about landing content for anonymous
