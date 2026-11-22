@@ -706,7 +706,7 @@ async fn token_login_failure_500s() {
 async fn logout_redirects_to_root() {
     let (store, mock, provider) = mock_ctx();
     let app = build_app(&store, mock, provider);
-    let (status, headers, _body) = run(app, Method::GET, "/strava/logout", None).await;
+    let (status, headers, _body) = run(app, Method::GET, "/logout", None).await;
     assert_eq!(status, StatusCode::SEE_OTHER);
     assert_eq!(headers["location"], "/");
 }

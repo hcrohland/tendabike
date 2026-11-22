@@ -34,7 +34,7 @@
 use std::sync::Arc;
 
 use anyhow::Context;
-use axum::Router;
+use axum::{Router, routing::get};
 use sqlx::PgPool;
 use tb_domain::TbResult;
 use tb_exec::{HEARTBEAT_INTERVAL, ServiceApi, providerservice::ProviderService};
@@ -110,6 +110,7 @@ fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> Route
     let mut router = Router::new()
         .nest("/api", domain::router())
         .nest("/source", source::router())
+        .route("/logout", get(oauth_common::logout))
         .nest(Provider::Strava.route_prefix(), strava::router())
         .nest(Provider::Icu.route_prefix(), icu::router())
         .with_state(app_state);

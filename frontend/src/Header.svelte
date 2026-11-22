@@ -152,7 +152,7 @@
           {m.header_export()}
         </DropdownItem>
         <DropdownItem href="/about">{m.header_help()}</DropdownItem>
-        <DropdownItem href="/strava/logout">{m.header_logout()}</DropdownItem>
+        <DropdownItem href="/logout">{m.header_logout()}</DropdownItem>
         <DropdownItem>
           <!-- Language switcher -->
           <Select
