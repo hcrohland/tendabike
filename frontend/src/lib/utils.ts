@@ -75,10 +75,14 @@ export function checkStatus(response: Response) {
   }
 
   if (response.status === 401) {
-    if (
-      window.location.pathname !== "/about" &&
-      window.location.pathname !== "/data-protection"
-    ) {
+    // The content pages are public: a 401 there is the expected anonymous
+    // state, not a reason to bounce the visitor (same skip-list as the
+    // layout's anonymous redirect).
+    const onContentPage =
+      window.location.pathname === "/about" ||
+      window.location.pathname.startsWith("/about/") ||
+      window.location.pathname === "/data-protection";
+    if (!onContentPage) {
       window.location.href =
         "/about?path=" +
         encodeURIComponent(window.location.pathname + window.location.search);

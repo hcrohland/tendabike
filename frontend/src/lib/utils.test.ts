@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  checkStatus,
   fmtDate,
   fmtNumber,
   fmtRange,
@@ -8,6 +9,65 @@ import {
   maxDate,
   roundTime,
 } from "./utils";
+
+/// Anonymous for the 401 tests: `checkStatus` bails after the redirect
+/// decision, so the user state never matters beyond "not logged in".
+vi.mock("./user.svelte", () => ({
+  getUser: () => undefined,
+  setUser: vi.fn(),
+}));
+
+describe("checkStatus 401", () => {
+  /// jsdom does not navigate: the `window.location.href = ...` assignment
+  /// lands on this stub instead.
+  let location: { pathname: string; search: string; href: string };
+
+  function at(pathname: string) {
+    location = {
+      pathname,
+      search: "",
+      href: `http://localhost${pathname}`,
+    };
+    Object.defineProperty(window, "location", {
+      value: location,
+      writable: true,
+    });
+  }
+
+  const unauthorized = {
+    ok: false,
+    status: 401,
+    text: () => Promise.resolve("unauthorized"),
+  } as Response;
+
+  beforeEach(() => {
+    at("/");
+  });
+
+  it("does not bounce a content page: /about", async () => {
+    at("/about");
+    await checkStatus(unauthorized);
+    expect(location.href).toBe("http://localhost/about");
+  });
+
+  it("does not bounce a guide topic: /about/[topic]", async () => {
+    at("/about/onboarding");
+    await checkStatus(unauthorized);
+    expect(location.href).toBe("http://localhost/about/onboarding");
+  });
+
+  it("does not bounce a content page: /data-protection", async () => {
+    at("/data-protection");
+    await checkStatus(unauthorized);
+    expect(location.href).toBe("http://localhost/data-protection");
+  });
+
+  it("bounces a protected page to /about", async () => {
+    at("/cat");
+    await checkStatus(unauthorized);
+    expect(location.href).toBe("/about?path=%2Fcat");
+  });
+});
 
 describe("roundTime", () => {
   it("floors minutes to the nearest 15 and zeroes seconds/ms", () => {
