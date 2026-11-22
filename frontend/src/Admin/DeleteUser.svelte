@@ -11,7 +11,7 @@
   let open = $state(false);
 
   async function onaction() {
-    myfetch("/strava/delete/" + user.id, "DELETE")
+    myfetch("/admin/delete/" + user.id, "DELETE")
       .then(refresh)
       .catch(handleError);
     open = false;

@@ -967,8 +967,8 @@ async fn activ_rescan_hidden_from_non_admin() {
 }
 
 #[tokio::test]
-async fn strava_sync_hidden_from_non_admin() {
-    expect_hidden_from_non_admin(Method::GET, "/strava/sync?time=0").await;
+async fn admin_sync_hidden_from_non_admin() {
+    expect_hidden_from_non_admin(Method::GET, "/admin/sync?time=0").await;
 }
 
 #[tokio::test]
@@ -976,7 +976,7 @@ async fn admin_sync_requires_admin() {
     let (store, mock, provider) = mock_ctx();
     let app = build_app(&store, mock, provider);
     let cookie = user_cookie(&store).await;
-    let (status, _headers, _body) = run(app, Method::GET, "/strava/sync/1", Some(&cookie)).await;
+    let (status, _headers, _body) = run(app, Method::GET, "/admin/sync/1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
@@ -2501,7 +2501,7 @@ async fn rescan_answers_204() {
     assert_eq!(status, StatusCode::NO_CONTENT);
 }
 
-/// `GET /strava/sync/{id}` (admin) is the per-user sync direct op (with the
+/// `GET /admin/sync/{id}` (admin) is the per-user sync direct op (with the
 /// route's `?time=`) and answers `204`. The op's enqueue/wake/await
 /// mechanism is the seam suite's territory.
 #[tokio::test]
@@ -2516,14 +2516,14 @@ async fn admin_sync_returns_204() {
     let (status, _headers, _body) = run(
         app,
         Method::GET,
-        "/strava/sync/1?time=1700000000",
+        "/admin/sync/1?time=1700000000",
         Some(&admin),
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
 }
 
-/// `GET /strava/sync?time=0` (admin) is the trigger-processing direct op and
+/// `GET /admin/sync?time=0` (admin) is the trigger-processing direct op and
 /// answers `200`; the `?user_id=` query narrows it.
 #[tokio::test]
 async fn admin_trigger_processing_returns_200() {
@@ -2538,19 +2538,14 @@ async fn admin_trigger_processing_returns_200() {
         .returning(|_session, _u, _t| Ok(()));
     let app = build_app(&store, mock, provider);
     let admin = admin_cookie(&store).await;
-    let (status, _headers, body) = run(
-        app.clone(),
-        Method::GET,
-        "/strava/sync?time=0",
-        Some(&admin),
-    )
-    .await;
+    let (status, _headers, body) =
+        run(app.clone(), Method::GET, "/admin/sync?time=0", Some(&admin)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(String::from_utf8_lossy(&body), "null");
     let (status, _headers, _body) = run(
         app,
         Method::GET,
-        "/strava/sync?time=0&user_id=1",
+        "/admin/sync?time=0&user_id=1",
         Some(&admin),
     )
     .await;
@@ -2828,7 +2823,7 @@ async fn redirect_gear_icu_is_a_no_op() {
     assert_eq!(headers["location"], "");
 }
 
-/// `POST /strava/disable/{id}` (admin) is the deauthorization direct op and
+/// `POST /admin/disable/{id}` (admin) is the deauthorization direct op and
 /// answers `200`.
 #[tokio::test]
 async fn deauthorize_answers_200() {
@@ -2839,12 +2834,12 @@ async fn deauthorize_answers_200() {
         .returning(|_session, _id| Ok(()));
     let app = build_app(&store, mock, provider);
     let admin = admin_cookie(&store).await;
-    let (status, _headers, body) = run(app, Method::POST, "/strava/disable/1", Some(&admin)).await;
+    let (status, _headers, body) = run(app, Method::POST, "/admin/disable/1", Some(&admin)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(String::from_utf8_lossy(&body), "null");
 }
 
-/// `DELETE /strava/delete/{id}` (admin) is the user delete direct op and
+/// `DELETE /admin/delete/{id}` (admin) is the user delete direct op and
 /// answers `200`.
 #[tokio::test]
 async fn delete_user_answers_200() {
@@ -2855,7 +2850,7 @@ async fn delete_user_answers_200() {
         .returning(|_session, _id| Ok(()));
     let app = build_app(&store, mock, provider);
     let admin = admin_cookie(&store).await;
-    let (status, _headers, body) = run(app, Method::DELETE, "/strava/delete/1", Some(&admin)).await;
+    let (status, _headers, body) = run(app, Method::DELETE, "/admin/delete/1", Some(&admin)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(String::from_utf8_lossy(&body), "null");
 }

@@ -182,6 +182,11 @@ pub struct UserStat {
     pub events: i64,
     /// Whether the user's provider integration is disabled.
     pub disabled: bool,
+    /// The user's provider, as its wire value (`"strava"` | `"icu"`). The
+    /// domain stores no provider (ADR-0014); each provider's `all_stats` op
+    /// stamps its own identity onto the rows it builds, so the merged admin
+    /// list can show it without a per-row lookup.
+    pub provider: String,
 }
 
 impl UserId {

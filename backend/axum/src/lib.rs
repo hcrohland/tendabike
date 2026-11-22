@@ -63,6 +63,8 @@ pub struct AxumConfig {
     pub icu_webhook_secret: String,
 }
 
+mod admin;
+
 mod domain;
 
 mod icu;
@@ -109,6 +111,7 @@ fn warn_if_offline() {
 fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> Router {
     let mut router = Router::new()
         .nest("/api", domain::router())
+        .nest("/admin", admin::router())
         .nest("/source", source::router())
         .route("/logout", get(oauth_common::logout))
         .nest(Provider::Strava.route_prefix(), strava::router())

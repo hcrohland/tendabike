@@ -17,7 +17,7 @@
 
   async function onaction() {
     await myfetch(
-      "/strava/sync?time=" + (date.getTime() / 1000).toFixed(0) + userParam,
+      "/admin/sync?time=" + (date.getTime() / 1000).toFixed(0) + userParam,
     ).catch(handleError);
     open = false;
     refresh();

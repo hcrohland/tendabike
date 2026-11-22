@@ -29,8 +29,6 @@
 //! - `hooks`: The main webhook endpoint that is called by the client to process incoming events.
 //! - `create_event`: An endpoint that is called by Strava to inform about a new event.
 //! - `validate_subscription`: An endpoint that is called by Strava to validate the webhook subscription.
-//! - `sync_api`: An endpoint that triggers a manual sync of Strava data for all users.
-//! - `sync`: An endpoint that triggers a manual sync of Strava data for a specific user.
 //!
 //! The `create_event` endpoint is the main entry point for incoming webhook events. The web
 //! shell keeps only the protocol (ADR-0014): it forwards the raw body opaquely to the
@@ -45,26 +43,15 @@
 //! endpoint must respond with the `hub.challenge` value that was sent in the request. The
 //! handshake stays in the web shell (ADR-0014): a protocol comparison with no provider
 //! behaviour behind it.
-//!
-//! The `sync_api` endpoint triggers a manual sync of Strava data for all users. This endpoint is
-//! only accessible to users with the `admin` role.
-//!
-//! The `sync` endpoint triggers a manual sync of Strava data for a specific user. This endpoint is
-//! only accessible to users with the `admin` role.
-//!
 
 use axum::{
     Json,
-    extract::{Path, Query, State},
+    extract::{Query, State},
 };
 use log::info;
 use serde_derive::{Deserialize, Serialize};
 
-use http::StatusCode;
-
-use crate::{
-    ApiResult, AxumAdmin, appstate::AppState, domain::user::InitialSyncQuery, error::AppError,
-};
+use crate::{ApiResult, appstate::AppState};
 use tb_domain::{Error, TbResult};
 use tb_provider::Provider;
 
@@ -111,52 +98,6 @@ pub(crate) async fn create_event(State(state): State<AppState>, body: String) ->
 pub(super) async fn validate_subscription(Query(hub): Query<Hub>) -> ApiResult<Hub> {
     info!("Received validation callback {hub:?}");
     Ok(hub.validate().map(Json)?)
-}
-
-#[derive(Deserialize)]
-pub(super) struct SyncQuery {
-    time: i64,
-    user_id: Option<i32>,
-}
-
-pub(super) async fn sync_api(
-    admin: AxumAdmin,
-    State(state): State<AppState>,
-    Query(query): Query<SyncQuery>,
-) -> ApiResult<()> {
-    let user_id: Option<tb_domain::UserId> = query.user_id.map(|u| u.into());
-    // The service API's batched admin op (ADR-0014): one transaction
-    // (`sync_users`) queuing a `Sync` event per (non-disabled) user — each on
-    // their own provider's queue — then — per queued user — spawn the
-    // executor (a no-op if already running) and wake it, so the queue drains
-    // even for offline users; `user_id` narrows the trigger to one user (the
-    // route's `?user_id=` query).
-    state
-        .api
-        .trigger_processing(Box::new(admin.session()), user_id, query.time)
-        .await?;
-    Ok(Json(()))
-}
-
-pub(super) async fn sync(
-    Path(tbid): Path<i32>,
-    admin: AxumAdmin,
-    State(state): State<AppState>,
-    Query(query): Query<InitialSyncQuery>,
-) -> Result<StatusCode, AppError> {
-    let user_id: tb_domain::UserId = tbid.into();
-    // The provider-agnostic direct op (ADR-0014): the provider layer's
-    // dispatch reads the target's real provider in-transaction and enqueues a
-    // `Sync` event on their provider queue (the Strava `strava_events` row,
-    // the icu onboarding cutover). A per-provider route acting on a user of
-    // the other provider follows the stated identity rule. The admin's acting
-    // session rides along (carried for the admin-verification
-    // `tb_provider::strava` change).
-    state
-        .provider
-        .sync(Box::new(admin.session()), user_id, query.time)
-        .await?;
-    Ok(StatusCode::NO_CONTENT)
 }
 
 #[cfg(test)]
