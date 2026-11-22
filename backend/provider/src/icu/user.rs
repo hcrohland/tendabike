@@ -64,8 +64,6 @@ pub struct IcuUser {
     pub tendabike_id: UserId,
     /// The durable access token (intervals.icu tokens never refresh).
     pub access_token: Option<String>,
-    /// Whether the user's icu integration is disabled.
-    pub disabled: bool,
 }
 
 impl IcuUser {
@@ -125,7 +123,6 @@ impl IcuUser {
             id,
             tendabike_id,
             access_token: Some(access_token.to_string()),
-            disabled: false,
         };
         info!("creating new icu user id {user:?}");
 

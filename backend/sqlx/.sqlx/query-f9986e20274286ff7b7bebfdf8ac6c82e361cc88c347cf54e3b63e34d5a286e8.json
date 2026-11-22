@@ -22,11 +22,6 @@
         "ordinal": 3,
         "name": "access_token",
         "type_info": "Text"
-      },
-      {
-        "ordinal": 4,
-        "name": "disabled",
-        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -39,8 +34,7 @@
       false,
       false,
       false,
-      true,
-      false
+      true
     ]
   },
   "hash": "f9986e20274286ff7b7bebfdf8ac6c82e361cc88c347cf54e3b63e34d5a286e8"
