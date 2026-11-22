@@ -1,7 +1,7 @@
 # Your rides
 
 Your rides — the activities you log on Strava or intervals.icu — are the
-numbers TendaBike works from. Every [service plan](service-plans.md) counts
+numbers TendaBike works from. Every [service plan](/about/service-plans) counts
 your riding against a limit, and that riding comes from your activities: the
 kilometres, the hours, the climbing. TendaBike pulls your activities in on its
 own, so this page is mostly about what to look at, and the few things you can
@@ -17,7 +17,7 @@ use you never sync by hand.
 
 The **Activities** page updates as rides come in: a ride you finish shows up a
 little while later, on its own. (Your *first* import — pulling your whole
-history — is in [Getting started](onboarding.md).)
+history — is in [Getting started](/about/onboarding).)
 
 ## The Activities page
 
@@ -66,7 +66,7 @@ it:
 - **Refresh data** — pull a fresh look at your activities now. Reach for it if
   the list looks short; it's a fix, not a habit.
 - **Import Historic Activities** — your whole riding history, offered for as
-  long as you haven't imported it. See [Getting started](onboarding.md) for
+  long as you haven't imported it. See [Getting started](/about/onboarding) for
   the first import and the **Import Activities** button in the top bar.
 - **With CSV File** — for riders who track with a Garmin device. Strava doesn't
   record descent, so the descent your Garmin measured is missing from your

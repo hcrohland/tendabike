@@ -54,6 +54,14 @@ describe("resolveContent", () => {
     expect(content).toBe("English content");
   });
 
+  it("resolves namespaced content in a subfolder (the guide topics)", async () => {
+    mockFetch({
+      "about/onboarding": "Guide topic",
+    });
+    const content = await resolveContent("about/onboarding", "en");
+    expect(content).toBe("Guide topic");
+  });
+
   it("returns an empty string when no content file exists", async () => {
     mockFetch({});
     const content = await resolveContent("nonexistent", "en");

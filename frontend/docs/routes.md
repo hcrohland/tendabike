@@ -18,8 +18,16 @@ from the `ApiRead`/`ApiWrite` catalog.
 
 ## /about
 
+- `ConnectProviders.svelte` — provider hero cards for anonymous visitors, above the guide row at full page width. Reads the shared provider state (the layout's one-time `GET /api/providers`); no direct calls.
+- `GuideLayout.svelte` — the guide row: sidebar plus content column. No direct calls.
+- `Sidebar.svelte` — the guide topics in reading order plus Overview. No direct calls.
 - `ContentPage.svelte` — renders the localized `about` markdown (`/content/about.*.md`, static).
-- `ConnectProviders.svelte` — provider hero cards for anonymous visitors. Reads the shared provider state (the layout's one-time `GET /api/providers`); no direct calls.
+
+## /about/[page]
+
+- `GuideLayout.svelte` — the guide row: sidebar plus content column. No direct calls.
+- `Sidebar.svelte` — the guide topics in reading order plus Overview. No direct calls.
+- `ContentPage.svelte` — renders the localized guide-topic markdown (`/content/about/{topic}.*.md`, static).
 
 ## /activities
 

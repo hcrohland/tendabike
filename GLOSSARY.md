@@ -63,6 +63,12 @@ _Avoid_: file
 The caller's identity and context as a domain operation runs. Carried with each request; immutable for the operation's duration — the domain reads it, never mutates it. The **identity** (who the caller is) is stable for the browser; the **context** is per-request. Today the context is the active `shop` — the shop the caller is acting in, stated per request rather than held as a persisted browser-wide state, so a caller's tabs can each act in their own shop. The context is open to carrying more.
 _Avoid_: session (the connection also has a cookie session and the loop a Strava session), user id
 
+### Documentation
+
+**user guide**:
+TendaBike's end-user-facing documentation: the topics that explain the app to a rider, in a fixed reading order from onboarding to statistics. Distinct from the admin guides, which document running an instance.
+_Avoid_: help (the in-app surface that renders the user guide), admin guide
+
 ### Providers
 
 **provider**:

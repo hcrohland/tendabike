@@ -22,7 +22,8 @@ your gear. When you come back, you're in.
 If the instance has no service set up, a banner reads
 **Running offline — no activity providers configured.** and there are no cards
 to click. Ask the person who runs your instance to connect a provider; that's
-an admin task (see the [admin guide](../admin/index.md)).
+an admin task (see the
+[admin guide](https://github.com/hcrohland/tendabike/blob/main/docs/guides/admin/index.md)).
 
 ## The welcome dialog
 
