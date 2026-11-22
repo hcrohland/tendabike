@@ -34,10 +34,13 @@ is written into the repo, and no real provider credentials are needed.
    ./target/debug/tendabike
    ```
 
-   Both provider credential sets are required at startup — the binary panics
-   if either is missing. Dummies are enough for UI checks: the provider cards
-   still render. `STATIC_WWW` may be any existing directory; Vite serves the
-   frontend. Done when: `curl -s localhost:8000/api/providers` returns 200.
+   Provider credentials are optional: a provider is enabled iff its client id
+   is set. Without any, the instance runs offline — `/api/providers` returns
+   `[]` and the frontend shows the offline message instead of provider
+   cards. The dummies above enable both providers, so the connect cards
+   render for UI checks. `STATIC_WWW` may be any existing directory; Vite
+   serves the frontend. Done when:
+   `curl -s localhost:8000/api/providers` returns 200.
 
 4. **Run the dev server** (in the background). From the repo root:
    `npm run dev`. Vite proxies `/api`, `/strava`, `/icu`, and `/source` to
