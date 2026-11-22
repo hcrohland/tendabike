@@ -1,5 +1,5 @@
-/// The guide topics in reading order — the same order as the
-/// "Reading order" list on the /about front page. Labels are English
+/// The guide topics in the order a new rider works through them — the
+/// sidebar's order on /about and /about/[topic]. Labels are English
 /// for now: the topic content is English-only until it is translated.
 export const topics = [
   { slug: "onboarding", label: "Getting started" },
