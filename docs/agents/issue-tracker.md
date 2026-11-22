@@ -41,6 +41,8 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 **Review comments:** `gh pr view --json comments` returns only the review body, not the inline review comments. When replying, `-F in_reply_to=<id>` sends the id as a number — `-f` stringifies it and the API 422s.
 
+**Body gotcha:** a markdown body with backticks (or other shell-special characters) passed inline to `--body` trips the shell's command-substitution scanner. Write the body to a temp file and pass `--body-file` instead.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
