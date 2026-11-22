@@ -16,9 +16,10 @@ frontend.
 | `STATIC_WWW` | no | Directory the frontend is served from. Defaults to `frontend/build` — build the frontend first (`npm run build` from `frontend/`). |
 | `CSRF_SECRET` | no | |
 
-The provider credentials below are additional: **both providers are required
-at startup** — the binary panics if either set is missing, even if you only
-intend to use one.
+The provider credentials below are additional and optional: a provider is
+enabled iff its client id is set. An instance without any runs offline — no
+activity sync, and the frontend shows the offline message instead of the
+provider cards.
 
 ## Provider setup
 
