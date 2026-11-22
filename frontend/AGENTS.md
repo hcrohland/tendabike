@@ -13,7 +13,7 @@
 
 ## Verification
 
-- **Browser:** Playwright + Chromium is available system-wide (`npx playwright`). Use it for real-browser verification when a spec's acceptance criteria require it (e.g., confirming a page renders without console errors). Launch the dev server, drive the page, and check `page.on('console')` / `page.on('pageerror')` for the condition under test.
+- **Browser:** Playwright + Chromium is available system-wide. Use it for real-browser verification when a spec's acceptance criteria require it (e.g., confirming a page renders without console errors). The full local stack — database, backend, dev server, Playwright setup, teardown — is in [`docs/dev-stack.md`](docs/dev-stack.md).
 
 ## Architecture
 
