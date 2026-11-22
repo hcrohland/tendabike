@@ -49,14 +49,6 @@ toggle:
   **pause** (green) on top. The full bar is the total time on the bike that
   month; the green portion is the time you were paused.
 
-## A note on Garmin data
-
-If any of the rides in the selected range came from a Garmin device, a small
-note appears in the bottom-right corner of the chart: *Insights derived in part
-from Garmin device-sourced data*. It means some of the numbers — typically the
-time and elevation — were measured by your Garmin watch or head unit rather than
-by your phone, and TendaBike is using them as reported.
-
 ## Example
 
 You open **Statistics** in November. The default year is this one. The
