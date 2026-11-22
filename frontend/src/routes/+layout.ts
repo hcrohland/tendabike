@@ -9,10 +9,12 @@ export async function load({ url }) {
   await getTypes();
   // Step 2: load user + summary
   await initData();
-  // Anonymous / 401: redirect to about (skip if already on a public page)
+  // Anonymous / 401: redirect to about (skip if already on a public page —
+  // /about is the guide entrance, and its /about/[topic] pages are public too)
   if (
     !getUser() &&
     url.pathname !== "/about" &&
+    !url.pathname.startsWith("/about/") &&
     url.pathname !== "/data-protection"
   ) {
     throw redirect(302, "/about");

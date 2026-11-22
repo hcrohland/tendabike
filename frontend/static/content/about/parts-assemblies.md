@@ -105,7 +105,7 @@ each kind of thing that can be on it.
 
 - A card with a part on it shows the kind in small capitals, the part's
   name, **since** the day it went on, a badge for how close the part's
-  service is to being due (see [Planned maintenance](service-plans.md)),
+  service is to being due (see [Planned maintenance](/about/service-plans)),
   and its counters.
 - A card for an empty place shows just the kind and an **add** button:
   create a part for that place straight away.

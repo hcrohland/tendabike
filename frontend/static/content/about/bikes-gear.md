@@ -9,13 +9,13 @@ page, under the **Bikes** tab.
 This page is about the bikes themselves: how they get here, what their card
 tells you, how to change a bike's details, and what to do when you're finished
 with one. The parts on a bike are covered in
-[The components](parts-assemblies.md).
+[The components](/about/parts-assemblies).
 
 ## Your bikes are pulled from your account
 
 You don't type your bikes in by hand. They come from the service where you log
 your rides — Strava or intervals.icu — the same account you connected in
-[Getting started](onboarding.md).
+[Getting started](/about/onboarding).
 
 When you first connect, the welcome dialog shows the bikes it found on your
 account under **Your gear**. That's your first look at them. From then on, the
@@ -47,9 +47,9 @@ Clicking a card opens the bike's page, where you can see everything on it and
 manage its services. It has four tabs:
 
 - **Attached Parts** — the parts on the bike (see [The
-  components](parts-assemblies.md)).
+  components](/about/parts-assemblies)).
 - **Service Plans** and **Service Logs** — the services you schedule and the
-  ones you've done (see [Planned maintenance](service-plans.md)).
+  ones you've done (see [Planned maintenance](/about/service-plans)).
 - **Notes** — free-form notes, with an optional attached file.
 
 ## Change a bike's details

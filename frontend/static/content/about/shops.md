@@ -5,7 +5,8 @@ register your bikes and parts with it, so the people who service your gear can
 see what you ride and its history. There are two sides to it: the rider who
 subscribes, and the owner who runs the shop. Both are everyday users of
 TendaBike — *running an instance* (managing accounts and providers) is a
-separate, admin job covered in the [admin guide](../admin/index.md).
+separate, admin job covered in the
+[admin guide](https://github.com/hcrohland/tendabike/blob/main/docs/guides/admin/index.md).
 
 ## Subscribing to a shop
 

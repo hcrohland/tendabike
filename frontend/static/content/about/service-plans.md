@@ -8,7 +8,7 @@ green to amber to red, and you know its service is due.
 This page is about the badge and the numbers behind it, then how to set a plan,
 what to do when a service comes due, and how logging a service — or replacing a
 part — starts the clock over. The parts themselves are in [The
-components](parts-assemblies.md).
+components](/about/parts-assemblies).
 
 ## The due-ness badge
 

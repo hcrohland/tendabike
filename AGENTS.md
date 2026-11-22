@@ -23,6 +23,7 @@ SQLx compiles queries against the committed `backend/sqlx/.sqlx/` offline cache.
 
 ## Documentation
 
+- User guide (end-user-facing): lives in the app — the about page is the entrance (`frontend/static/content/about.md`), topics are `frontend/static/content/about/*.md`, served at `/about/[page]` via the `ContentPage` pipeline.
 - Admin/operator guides (setup and troubleshooting): [`docs/guides/admin/`](docs/guides/admin/) — general instance setup, plus the [Strava](docs/guides/admin/strava-provider.md) and [intervals.icu](docs/guides/admin/icu-provider.md) provider guides.
 
 ## Commit rules
