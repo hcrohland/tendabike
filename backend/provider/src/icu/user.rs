@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use super::client::{HTTP_CLIENT, SCOPES, icu_client};
 use super::{Error, IcuAthleteInfo, IcuDataStore, PartId, Session, TbResult, UserId, UserStat};
-use crate::EntityFacade;
+use crate::{EntityFacade, Provider};
 
 /// The icu athlete ID: a provider text id (intervals.icu ids are not
 /// integers), wrapped as an opaque newtype. The inner value is private —
@@ -64,8 +64,6 @@ pub struct IcuUser {
     pub tendabike_id: UserId,
     /// The durable access token (intervals.icu tokens never refresh).
     pub access_token: Option<String>,
-    /// Whether the user's icu integration is disabled.
-    pub disabled: bool,
 }
 
 impl IcuUser {
@@ -125,7 +123,6 @@ impl IcuUser {
             id,
             tendabike_id,
             access_token: Some(access_token.to_string()),
-            disabled: false,
         };
         info!("creating new icu user id {user:?}");
 
@@ -212,6 +209,7 @@ pub async fn get_all_stats<D: EntityFacade<S>, S: IcuDataStore>(
             stat: facade.get_stat(&u.tendabike_id, store).await?,
             events,
             disabled: u.disabled(),
+            provider: Provider::Icu.wire_value().to_string(),
         });
     }
     Ok(res)

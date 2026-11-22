@@ -3,6 +3,8 @@
   import Card from "../Widgets/Card.svelte";
   import Chip from "../Widgets/Chip.svelte";
   import Menu from "../Widgets/Menu.svelte";
+  import ProviderMark from "../Widgets/ProviderMark.svelte";
+  import { providerMeta } from "../lib/provider.svelte";
   import { handleError, myfetch } from "../lib/utils";
   import type { AdminRow, User } from "../lib/user.svelte";
   import * as m from "../../paraglide/messages";
@@ -19,7 +21,7 @@
     deleteUser: (user: User) => void;
   } = $props();
 
-  let { user, parts, activities, events, disabled } = $derived(row);
+  let { user, parts, activities, events, disabled, provider } = $derived(row);
 
   let syncing = $state(false);
 
@@ -35,13 +37,13 @@
     syncing = true;
     // the backend queues the activities onto the per-user executor; the new
     // rows arrive over the stream, so the client just awaits the write
-    await myfetch("/strava/sync/" + user.id).catch(handleError);
+    await myfetch("/admin/sync/" + user.id).catch(handleError);
     refresh();
     syncing = false;
   }
 
   async function disable() {
-    await myfetch("/strava/disable/" + user.id, "POST").catch(handleError);
+    await myfetch("/admin/disable/" + user.id, "POST").catch(handleError);
     refresh();
   }
 </script>
@@ -50,6 +52,13 @@
   <!-- Header row: name · role · menu -->
   <div class="flex items-center justify-between gap-1 sm:gap-2">
     <div class="flex items-center gap-1 sm:gap-2 p-1 sm:p-2 min-w-0">
+      <a
+        href={"/" + provider + "/users/" + user.id}
+        title={providerMeta[provider].name}
+        class="inline-flex items-center shrink-0"
+      >
+        <ProviderMark {provider} size="sm" />
+      </a>
       <span class="font-medium text-sm whitespace-nowrap">
         {user.firstname}
         {user.name}

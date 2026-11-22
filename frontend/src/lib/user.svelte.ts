@@ -62,13 +62,16 @@ export type UserState = {
 };
 
 /// The wire shape of one row of `GET /api/user/all` (admin): the user with
-/// their parts/activities/events counts and the provider's disabled flag.
+/// their parts/activities/events counts, the provider's disabled flag, and
+/// the user's provider (the wire value `"strava"` | `"icu"` — the domain
+/// stores no provider, ADR-0014; each provider's `all_stats` stamps its own).
 export type AdminRow = {
   user: User;
   parts: number;
   activities: number;
   events: number;
   disabled: boolean;
+  provider: Provider;
 };
 
 /// The wire shape of a Summary: a uniform object per collection, with

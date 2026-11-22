@@ -13,7 +13,6 @@ struct DbIcuUser {
     tbid: i32,
     icu_athlete_id: String,
     access_token: Option<String>,
-    disabled: bool,
 }
 
 impl From<IcuUser> for DbIcuUser {
@@ -22,14 +21,12 @@ impl From<IcuUser> for DbIcuUser {
             id,
             tendabike_id,
             access_token,
-            disabled,
         } = value;
         Self {
             id: 0,
             tbid: tendabike_id.into(),
             icu_athlete_id: id.into(),
             access_token,
-            disabled,
         }
     }
 }
@@ -41,13 +38,11 @@ impl From<DbIcuUser> for IcuUser {
             tbid,
             icu_athlete_id,
             access_token,
-            disabled,
         } = value;
         Self {
             id: icu_athlete_id.into(),
             tendabike_id: tbid.into(),
             access_token,
-            disabled,
         }
     }
 }
@@ -148,13 +143,12 @@ impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
         let db_user = DbIcuUser::from(user);
         sqlx::query_as!(
             DbIcuUser,
-            "INSERT INTO icu_users (tbid, icu_athlete_id, access_token, disabled)
-             VALUES ($1, $2, $3, $4)
+            "INSERT INTO icu_users (tbid, icu_athlete_id, access_token)
+             VALUES ($1, $2, $3)
              RETURNING *",
             db_user.tbid,
             db_user.icu_athlete_id,
-            db_user.access_token as _,
-            db_user.disabled
+            db_user.access_token as _
         )
         .fetch_one(&mut **self.inner())
         .await
@@ -305,7 +299,6 @@ mod tests {
             id: IcuId::from("ath-42"),
             tendabike_id: UserId::from(1),
             access_token: token.map(|t| t.to_string()),
-            disabled: false,
         }
     }
 
@@ -316,7 +309,6 @@ mod tests {
         assert_eq!(db.tbid, 1);
         assert_eq!(db.icu_athlete_id, "ath-42");
         assert_eq!(db.access_token.as_deref(), Some("durable-token"));
-        assert!(!db.disabled);
         let back = IcuUser::from(db);
         assert_eq!(back.id, IcuId::from("ath-42"));
         assert_eq!(back.tendabike_id, UserId::from(1));

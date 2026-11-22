@@ -5,8 +5,8 @@
 //! verifier) and the shared callback completion (the provider-agnostic
 //! `login` direct op, the tower-session write, and the redirect).
 
-use axum::response::Redirect;
-use log::{debug, warn};
+use axum::response::{IntoResponse, Redirect};
+use log::{debug, error, warn};
 use oauth2::CsrfToken;
 use std::sync::OnceLock;
 use tb_domain::{Error, TbResult};
@@ -141,6 +141,16 @@ pub(crate) async fn login_and_redirect(
     RequestSession::create_from_token(user_id, is_admin, session).await?;
     debug!("Redirecting to {path}");
     Ok(Redirect::to(&path))
+}
+
+/// `GET /logout`: the provider-neutral sign-out. It only tears down the
+/// tower session (the provider-agnostic part of the auth lifecycle), so it
+/// lives with the shared OAuth handling, not under any single provider.
+pub(crate) async fn logout(session: Session) -> impl IntoResponse {
+    if session.delete().await.is_err() {
+        error!("Failed to destroy session");
+    }
+    Redirect::to("/").into_response()
 }
 
 #[cfg(test)]

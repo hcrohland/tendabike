@@ -20,7 +20,7 @@ use super::session::get_strava_id;
 use super::{
     Error, PartId, Session, StravaAthleteInfo, StravaDataStore, TbResult, UserId, UserStat, gear,
 };
-use crate::EntityFacade;
+use crate::{EntityFacade, Provider};
 
 /// The Strava athlete/user id.
 #[derive(
@@ -231,6 +231,7 @@ pub async fn get_all_stats<D: EntityFacade<S>, S: StravaDataStore>(
             stat,
             events,
             disabled: u.disabled(),
+            provider: Provider::Strava.wire_value().to_string(),
         });
     }
     Ok(res)

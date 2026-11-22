@@ -11,9 +11,9 @@
 
 use axum::{
     extract::{Query, State},
-    response::{IntoResponse, Redirect},
+    response::Redirect,
 };
-use log::{error, warn};
+use log::warn;
 use serde::{Deserialize, Serialize};
 use tower_sessions::Session;
 
@@ -85,11 +85,4 @@ pub(crate) async fn login_authorized(
     // The Strava flow is a plain authorization-code exchange: no PKCE
     // verifier.
     login_and_redirect(state, session, Provider::Strava, code, scope, path, None).await
-}
-
-pub(crate) async fn logout(session: Session) -> impl IntoResponse {
-    if session.delete().await.is_err() {
-        error!("Failed to destroy session");
-    }
-    Redirect::to("/").into_response()
 }

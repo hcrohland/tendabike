@@ -104,23 +104,11 @@ Strava ──POST /strava/callback──▶ Tendabike
 5. The endpoint answers `200` immediately; processing is asynchronous.
 
 In addition to webhooks, the queue carries **sync events** that walk
-`GET /activities?after=<cursor>` from a point in time — these are what the
-admin sync endpoints below enqueue.
+`GET /activities?after=<cursor>` from a point in time — the backfill an admin
+triggers to recover missed events (downtime, rate-limit pauses). An
+interrupted sync resumes from its last good activity.
 
-## 5. Admin sync endpoints
-
-For recovering missed events (downtime, rate-limit pauses) or backfilling:
-
-| Endpoint | Auth | Effect |
-|---|---|---|
-| `GET /strava/sync?time=<unix>` | admin | Queues a sync from `time` for **all** non-disabled users and wakes their executors. `?user_id=<id>` narrows it to one user. |
-| `GET /strava/sync/{id}?time=<unix>` | admin | Queues a sync from `time` for one user. |
-
-`time` must not be in the future. The sync walks forward in pages of 25,
-keeping a cursor at the last good activity, so an interrupted sync resumes
-where it stopped.
-
-## 6. Troubleshooting
+## 5. Troubleshooting
 
 | Symptom | Cause / action |
 |---|---|

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { flushSync } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { User } from "../lib/user.svelte";
+import type { AdminRow, User } from "../lib/user.svelte";
 import { resp } from "../test/helpers";
 import AdminCard from "./AdminCard.svelte";
 
@@ -19,12 +19,13 @@ function renderCard(overrides: Record<string, any> = {}) {
   const createSync = vi.fn();
   const deleteUser = vi.fn();
   const refresh = vi.fn();
-  const row = {
+  const row: AdminRow = {
     user,
     parts: 2,
     activities: 7,
     events: 11,
     disabled: false,
+    provider: "strava",
     ...overrides,
   };
   const utils = render(AdminCard, {
@@ -136,7 +137,7 @@ describe("AdminCard", () => {
       fireEvent.click(screen.getByText("Disable user"));
       await settle();
       expect(fetchMock).toHaveBeenCalledWith(
-        "/strava/disable/3",
+        "/admin/disable/3",
         expect.objectContaining({ method: "POST" }),
       );
       expect(refresh).toHaveBeenCalled();
@@ -147,14 +148,14 @@ describe("AdminCard", () => {
       await openMenu(utils.container);
       fireEvent.click(screen.getByText("Process Event Queue"));
       await settle();
-      expect(fetchMock).toHaveBeenCalledWith("/strava/sync/3", undefined);
+      expect(fetchMock).toHaveBeenCalledWith("/admin/sync/3", undefined);
       expect(refresh).toHaveBeenCalled();
     });
 
     it("shows a spinner in the card header while the queue is processing", async () => {
       let resolveSync: () => void;
       fetchMock.mockImplementation((url: string) => {
-        if (url.includes("/strava/sync/")) {
+        if (url.includes("/admin/sync/")) {
           return new Promise((resolve) => {
             resolveSync = () => resolve(resp(null, 204, true, ""));
           });

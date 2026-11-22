@@ -10,6 +10,7 @@ const list = [
     activities: 2,
     events: 3,
     disabled: false,
+    provider: "strava",
   },
   {
     user: { id: 2, firstname: "Erin", name: "Brooks" },
@@ -17,6 +18,7 @@ const list = [
     activities: 0,
     events: 0,
     disabled: true,
+    provider: "icu",
   },
 ];
 
