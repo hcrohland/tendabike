@@ -13,7 +13,7 @@
 
 ## Verification
 
-- **Browser:** Playwright + Chromium is available system-wide. Use it for real-browser verification when a spec's acceptance criteria require it (e.g., confirming a page renders without console errors). The full local stack — database, backend, dev server, Playwright setup, teardown — is in [`docs/dev-stack.md`](docs/dev-stack.md).
+- **Browser:** Playwright + Chromium is available system-wide. Use it for real-browser verification when a spec's acceptance criteria require it (e.g., confirming a page renders without console errors), or when a change alters what the user sees (color, contrast, layout) — a rendered result is not inferable from theme tokens, so render and look. The full local stack — database, backend, dev server, Playwright setup, teardown — is in [`docs/dev-stack.md`](docs/dev-stack.md).
 - **jsdom's blind spot:** jsdom does not model flowbite's async popper wiring. For changes to `Menu`/Dropdown open-close behaviour — or any shared widget's interaction — a passing jsdom test is not sufficient: verify open, close, and keyboard reachability in a real browser before shipping.
 
 ## Architecture
@@ -31,6 +31,7 @@
 
 - **Runes mode**: `<script lang="ts">` blocks with runes (`$state`, `$derived`, `$effect`, `$props()`); module scope via the `<script module>` attribute (never the deprecated `context="module"` form).
 - **Widget wrappers**: use the shared `src/Widgets/` wrappers over raw flowbite components. The load-bearing three: `Card` (entity container), `Menu` (per-entity action dropdown of `DropdownItem`s), `Chip` (label + value metric).
+- **Button color**: a button's background is the surface tone opposite its container — the same flip as `Chip`'s `light` prop. On a card (`bg-surface-2`): `color="light"` (white / gray-800). On the page base: `color="light" class="bg-surface-2!"` (gray-300 / gray-600). `color="light"` carries the right text color in both modes; a bare `<Button>` (default indigo) breaks the scheme.
 - **Entity list pages**: one `Card` per entity in a card-list container, per-entity actions in a `Menu` in the card header. Reference: [`src/Activity/ActList.svelte`](src/Activity/ActList.svelte) + [`src/Activity/ActCard.svelte`](src/Activity/ActCard.svelte).
 - **UI open/close state**: component-local — a lib state module never carries it; a child that must close the UI takes a `close` callback prop.
 
