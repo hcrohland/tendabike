@@ -26,7 +26,7 @@
   import ProviderMark from "../Widgets/ProviderMark.svelte";
   import { DropdownItem } from "flowbite-svelte";
   import { changeActivity } from "./ChangeActivity.svelte";
-  import { fmtNumber, fmtSeconds } from "../lib/utils";
+  import { fmtDateTime, fmtNumber, fmtSeconds } from "../lib/utils";
   import { providerOfActivityId, providerMeta } from "../lib/provider.svelte";
   import * as m from "../../paraglide/messages";
 
@@ -49,10 +49,10 @@
     <!-- Columns 1-3: Date + Time + Activity Name -->
     <div class="col-span-3 min-w-0">
       <div class="flex items-center gap-x-0.5 sm:gap-x-1">
-        <!-- Date + Time -->
+        <!-- Date + Time (fmtDateTime is the single format source; the search
+             filter in ActList matches against the same string) -->
         <span class="text-sm text-text-1 shrink-0">
-          {activity.start.toLocaleDateString()}
-          {activity.start.toLocaleTimeString()}
+          {fmtDateTime(activity.start)}
         </span>
         <!-- Gap between Start and Title (em-dash on desktop, thin space on mobile) -->
         <span class="hidden sm:inline text-text-1"> — </span>

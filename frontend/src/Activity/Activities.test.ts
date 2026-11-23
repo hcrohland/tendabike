@@ -1,4 +1,4 @@
-import { render } from "@testing-library/svelte";
+import { fireEvent, render } from "@testing-library/svelte";
 import { tick } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Activities from "./Activities.svelte";
@@ -50,12 +50,25 @@ function actData(overrides: Record<string, unknown> = {}): any {
   };
 }
 
-/// Seed the reactive world the way the app does after login: drive the real
-/// `getTypes()` (which populates the `types` map and sets the active category)
-/// with a mocked fetch, then load one gear (bike, id 5) and a mixed bag of
-/// activities — some on the bike, several with no gear at all. The no-gear
-/// rides are the reporter's real condition.
-async function seedWorld() {
+// jsdom has no ResizeObserver; the RangeSlider installs one in onMount.
+// A no-op stub is enough — the reactivity under test is pure.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+beforeEach(() => {
+  vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+  activities.setMap([]);
+  parts.setMap([]);
+  setCategory(undefined);
+});
+
+/// Stub the type endpoints with a mocked fetch, drive the real `getTypes()`
+/// (which populates the `types` map and sets the active category), and load
+/// one gear (bike, id 5) — the shared prefix of every seeded world.
+async function seedTypes() {
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string) => {
@@ -73,6 +86,14 @@ async function seedWorld() {
   await getTypes();
 
   parts.setMap([partData()]);
+}
+
+/// Seed the reactive world the way the app does after login: types plus one
+/// gear (bike, id 5) and a mixed bag of activities — some on the bike,
+/// several with no gear at all. The no-gear rides are the reporter's real
+/// condition.
+async function seedWorld() {
+  await seedTypes();
 
   // A mix: two rides on the bike, two with no gear assigned (the reporter's
   // real condition).
@@ -94,6 +115,51 @@ async function seedWorld() {
   ]);
 }
 
+/// Seed activities whose localized start dates differ in year, day, and
+/// time of day, so each search disjunct (name, device, date) can be
+/// exercised independently. In the runtime locale (en-US) and timezone
+/// (Europe/Berlin) these render as:
+///   Ride A -> 6/15/2023 10:00:00 AM, device "Garmin Edge 1040"
+///   Ride B -> 5/1/2024  10:00:00 AM
+///   Ride C -> 5/2/2024  8:00:00 PM
+async function seedSearchWorld() {
+  await seedTypes();
+
+  activities.setMap([
+    actData({
+      id: "icu:200",
+      name: "Ride A",
+      start: "2023-06-15T08:00:00Z",
+      device_name: "Garmin Edge 1040",
+    }),
+    actData({ id: "icu:201", name: "Ride B", start: "2024-05-01T08:00:00Z" }),
+    actData({ id: "icu:202", name: "Ride C", start: "2024-05-02T18:00:00Z" }),
+  ]);
+}
+
+/// Let Svelte's effect scheduler flush after a render or state change: a
+/// few `tick()` rounds plus a short real-timer wait for debounced work.
+async function settle() {
+  for (let i = 0; i < 5; i++) await tick();
+  await new Promise((resolve) => setTimeout(resolve, 25));
+}
+
+/// Mount the page, let the effect scheduler flush, type `query` into the
+/// search box, and return the settled page text.
+async function mountAndSearch(query: string): Promise<string> {
+  await seedSearchWorld();
+  const { container } = render(Activities, { params: { part: 0 } });
+  await settle();
+
+  const input = container.querySelector(
+    'input[type="text"][placeholder="Search..."]',
+  ) as HTMLInputElement;
+  // Svelte 5's `bind:value` listens to `input`, not `change`.
+  fireEvent.input(input, { target: { value: query } });
+  await settle();
+  return container.textContent ?? "";
+}
+
 /// Mount the page and let Svelte's effect scheduler flush. A reactivity loop
 /// throws `effect_update_depth_exceeded` mid-flush (dev mode); in jsdom that
 /// surfaces on the window `error` event and/or via `console.error`. We collect
@@ -111,8 +177,7 @@ async function mountAndCollectErrors(params: {
   window.addEventListener("error", onWindowError);
   try {
     const { container } = render(Activities, { params });
-    for (let i = 0; i < 5; i++) await tick();
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await settle();
     return { text: container.textContent ?? "", errors };
   } finally {
     window.removeEventListener("error", onWindowError);
@@ -125,20 +190,6 @@ function depthErrors(errors: string[]) {
 }
 
 describe("Activities page reactivity (effect_update_depth_exceeded)", () => {
-  beforeEach(() => {
-    // jsdom has no ResizeObserver; the RangeSlider installs one in onMount.
-    // A no-op stub is enough — the reactivity under test is pure.
-    class ResizeObserverStub {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    }
-    vi.stubGlobal("ResizeObserver", ResizeObserverStub);
-    activities.setMap([]);
-    parts.setMap([]);
-    setCategory(undefined);
-  });
-
   it("bike view renders without exceeding the effect update depth", async () => {
     await seedWorld();
     const { text, errors } = await mountAndCollectErrors({ part: 5 });
@@ -160,8 +211,7 @@ describe("Activities page reactivity (effect_update_depth_exceeded)", () => {
   it("moving the date slider filters the list through the one-way on:change wiring", async () => {
     await seedWorld();
     const { container } = render(Activities, { params: { part: 0 } });
-    for (let i = 0; i < 5; i++) await tick();
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await settle();
 
     // All four rides start within the initial range, so all are listed.
     expect(container.textContent).toContain("Ride A");
@@ -175,10 +225,66 @@ describe("Activities page reactivity (effect_update_depth_exceeded)", () => {
     handle.dispatchEvent(
       new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
     );
-    for (let i = 0; i < 5; i++) await tick();
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await settle();
 
     expect(container.textContent).not.toContain("Ride A");
     expect(container.textContent).toContain("Ride B");
+  });
+});
+
+describe("Activities page search", () => {
+  it("a substring of the localized start date+time matches", async () => {
+    const text = await mountAndSearch("5/1/2024");
+    expect(text).toContain("Ride B");
+    expect(text).not.toContain("Ride A");
+    expect(text).not.toContain("Ride C");
+  });
+
+  it("a partial date fragment (year) matches", async () => {
+    const text = await mountAndSearch("2023");
+    expect(text).toContain("Ride A");
+    expect(text).not.toContain("Ride B");
+    expect(text).not.toContain("Ride C");
+  });
+
+  it("a partial date fragment (month/day) matches", async () => {
+    // The runtime locale renders the month numerically ("5/1/2024"), so the
+    // month fragment is the month/day prefix of the displayed date.
+    const text = await mountAndSearch("5/1");
+    expect(text).toContain("Ride B");
+    expect(text).not.toContain("Ride A");
+    expect(text).not.toContain("Ride C");
+  });
+
+  it("a time-of-day fragment matches", async () => {
+    // 18:00Z renders as a PM time only in timezones where it lands in the
+    // afternoon; pin the timezone the seed data was chosen for so the
+    // fragment is stable everywhere.
+    vi.stubEnv("TZ", "Europe/Berlin");
+    const text = await mountAndSearch("PM");
+    expect(text).toContain("Ride C");
+    expect(text).not.toContain("Ride A");
+    expect(text).not.toContain("Ride B");
+  });
+
+  it("name search matches a name substring, as before", async () => {
+    const text = await mountAndSearch("Ride B");
+    expect(text).toContain("Ride B");
+    expect(text).not.toContain("Ride A");
+    expect(text).not.toContain("Ride C");
+  });
+
+  it("device search matches a device name, as before", async () => {
+    const text = await mountAndSearch("Garmin");
+    expect(text).toContain("Ride A");
+    expect(text).not.toContain("Ride B");
+    expect(text).not.toContain("Ride C");
+  });
+
+  it("an empty search shows all activities", async () => {
+    const text = await mountAndSearch("");
+    expect(text).toContain("Ride A");
+    expect(text).toContain("Ride B");
+    expect(text).toContain("Ride C");
   });
 });

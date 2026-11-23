@@ -84,6 +84,7 @@ if (!Element.prototype.animate) {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
 

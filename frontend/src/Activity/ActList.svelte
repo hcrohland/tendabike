@@ -23,7 +23,7 @@
   import ActCard from "./ActCard.svelte";
   import TotalsCard from "./TotalsCard.svelte";
   import { Alert } from "flowbite-svelte";
-  import { DAY } from "../lib/utils";
+  import { DAY, fmtDateTime } from "../lib/utils";
   import { by } from "../lib/mapable.svelte";
   import { parts } from "../lib/part";
   import * as m from "../../paraglide/messages";
@@ -75,14 +75,16 @@
     filteredByDate.filter((a) => !gearFilter || a.gear === gearFilter),
   );
 
-  // Search filter: filter by name and device_name
+  // Search filter: filter by name, device_name, and the localized start
+  // date+time (the same text ActCard displays)
   let filteredBySearch = $derived(
     filteredByGear.filter((a) => {
       if (!searchText) return true;
       let search = searchText.toLowerCase();
       return (
         a.name.toLowerCase().includes(search) ||
-        (a.device_name && a.device_name.toLowerCase().includes(search))
+        (a.device_name && a.device_name.toLowerCase().includes(search)) ||
+        fmtDateTime(a.start).toLowerCase().includes(search)
       );
     }),
   );
