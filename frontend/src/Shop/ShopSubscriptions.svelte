@@ -86,7 +86,7 @@
           {m.shop_pending_requests()}
         </h3>
 
-        <Button size="sm" color="alternative" onclick={loadSubscriptions}>
+        <Button size="sm" color="light" onclick={loadSubscriptions}>
           {m.header_refresh()}
         </Button>
       </div>
