@@ -50,7 +50,7 @@
               {m.shop_none_owned()}
             </p>
 
-            <Button onclick={() => createShop()}>
+            <Button color="gray" onclick={() => createShop()}>
               {m.shop_create_first()}
             </Button>
           </div>
@@ -63,7 +63,7 @@
             </ShopList>
           </div>
 
-          <Button onclick={() => createShop()}>
+          <Button color="gray" onclick={() => createShop()}>
             {m.shop_create()}
           </Button>
         {/if}
