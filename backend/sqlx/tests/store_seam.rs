@@ -1267,3 +1267,102 @@ async fn icu_event_set_time_advances_cursor() -> tb_domain::TbResult<()> {
     })
     .await
 }
+
+/// The dedup read (spec #996): `icu_event_get_later` returns exactly the
+/// queued rows for the given `(activity_id, icu_athlete_id)` in `event_time`
+/// ASC order — another activity's rows and the `SYNC` sentinel row are
+/// excluded (the guard: no cross-collapsing).
+#[tokio::test]
+#[ignore]
+async fn icu_event_get_later_groups_by_activity() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let icu_id = IcuId::from("seam-athlete");
+        // Two rows for `act-1` (out of order, to check the ASC sort), one
+        // for `act-2`, and the `SYNC` sentinel row.
+        store
+            .icu_event_create(IcuEvent::new(
+                icu_id.clone(),
+                "act-1",
+                1_700_000_001,
+                "ACTIVITY_UPDATED",
+            ))
+            .await?;
+        store
+            .icu_event_create(IcuEvent::new(
+                icu_id.clone(),
+                "act-1",
+                1_700_000_000,
+                "ACTIVITY_UPLOADED",
+            ))
+            .await?;
+        store
+            .icu_event_create(IcuEvent::new(
+                icu_id.clone(),
+                "act-2",
+                1_600_000_000,
+                "ACTIVITY_UPLOADED",
+            ))
+            .await?;
+        store
+            .icu_event_create(IcuEvent::new_sync(icu_id.clone(), 0))
+            .await?;
+
+        let later = store.icu_event_get_later("act-1", &icu_id).await?;
+        assert_eq!(
+            later.len(),
+            2,
+            "only act-1's rows (the other activity and the SYNC sentinel are excluded)"
+        );
+        assert_eq!(later[0].event_time, 1_700_000_000, "event_time ASC");
+        assert_eq!(later[1].event_time, 1_700_000_001, "event_time ASC");
+        assert!(
+            later.iter().all(|e| e.activity_id == "act-1"),
+            "every row is the requested activity"
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+/// The dedup drop (spec #996): `icu_events_delete_batch` deletes exactly the
+/// named rows — the other activity's row survives.
+#[tokio::test]
+#[ignore]
+async fn icu_events_delete_batch_deletes_named_rows() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let icu_id = IcuId::from("seam-athlete");
+        store
+            .icu_event_create(IcuEvent::new(
+                icu_id.clone(),
+                "act-1",
+                1_700_000_000,
+                "ACTIVITY_UPLOADED",
+            ))
+            .await?;
+        store
+            .icu_event_create(IcuEvent::new(
+                icu_id.clone(),
+                "act-2",
+                1_700_000_001,
+                "ACTIVITY_UPLOADED",
+            ))
+            .await?;
+
+        let drop = store.icu_event_get_later("act-1", &icu_id).await?;
+        let keep = store.icu_event_get_later("act-2", &icu_id).await?;
+        store.icu_events_delete_batch(vec![drop[0].id]).await?;
+
+        let count = store.icu_events_get_count_for_user(&icu_id).await?;
+        assert_eq!(count, 1, "only the named row is deleted");
+        let remaining = store.icu_event_get_later("act-2", &icu_id).await?;
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(
+            remaining[0].id, keep[0].id,
+            "the other activity's row survives"
+        );
+
+        Ok(())
+    })
+    .await
+}

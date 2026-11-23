@@ -59,6 +59,20 @@ pub trait IcuDataStore: Send + Sync {
     /// The oldest queued icu event for `user` (the icu athlete id), if any.
     async fn icu_event_get_next_for_user(&mut self, user: IcuId) -> TbResult<Option<IcuEvent>>;
 
+    /// All queued icu events for the given activity (the
+    /// `(activity_id, icu_athlete_id)` dedup key), oldest first (the queue's
+    /// read-side dedup: only the latest per activity is interesting, spec
+    /// #996).
+    async fn icu_event_get_later(
+        &mut self,
+        activity_id: &str,
+        icu_athlete_id: &IcuId,
+    ) -> TbResult<Vec<IcuEvent>>;
+
+    /// Delete the queued icu events whose ids are in `values` (the dedup's
+    /// older-duplicate drop, spec #996).
+    async fn icu_events_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()>;
+
     /// The number of queued icu events for `user` (the icu athlete id).
     async fn icu_events_get_count_for_user(&mut self, user: &IcuId) -> TbResult<i64>;
 
