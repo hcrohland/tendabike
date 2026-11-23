@@ -41,6 +41,25 @@
   let sortBy = $state("start");
   let sortDir = $state(-1);
 
+  // Debounced search value the filter pipeline reads. A keystroke flips
+  // membership by hundreds of cards and DOM reconciliation is the dominant
+  // cost, so the pipeline re-runs ~200ms after typing pauses, not on every
+  // keystroke. Clearing the box applies immediately. The input stays bound
+  // to the raw `searchText`, so the box shows what's typed instantly.
+  const SEARCH_DEBOUNCE_MS = 200;
+  let debouncedSearch = $state("");
+  $effect(() => {
+    let raw = searchText;
+    if (raw === "") {
+      debouncedSearch = "";
+      return;
+    }
+    let t = setTimeout(() => {
+      debouncedSearch = raw;
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  });
+
   // Compute the day range into locals before writing `min`/`max`/`dateValues`,
   // so the effect reads only `acts`.
   $effect(() => {
@@ -75,11 +94,11 @@
     filteredByDate.filter((a) => !gearFilter || a.gear === gearFilter),
   );
 
-  // Search filter: filter by name and device_name
+  // Search filter: filter by name and device_name (reads the debounced value)
   let filteredBySearch = $derived(
     filteredByGear.filter((a) => {
-      if (!searchText) return true;
-      let search = searchText.toLowerCase();
+      if (!debouncedSearch) return true;
+      let search = debouncedSearch.toLowerCase();
       return (
         a.name.toLowerCase().includes(search) ||
         (a.device_name && a.device_name.toLowerCase().includes(search))

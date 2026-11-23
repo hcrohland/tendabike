@@ -1,6 +1,6 @@
 import { render } from "@testing-library/svelte";
 import { tick } from "svelte";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Activities from "./Activities.svelte";
 import { activities } from "../lib/activity";
 import { parts } from "../lib/part";
@@ -180,5 +180,110 @@ describe("Activities page reactivity (effect_update_depth_exceeded)", () => {
 
     expect(container.textContent).not.toContain("Ride A");
     expect(container.textContent).toContain("Ride B");
+  });
+});
+
+describe("Activities page search debounce + deferred card menu", () => {
+  beforeEach(() => {
+    // jsdom has no ResizeObserver; the RangeSlider installs one in onMount.
+    class ResizeObserverStub {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+    // The search debounce (setTimeout) and the flowbite Dropdown's open/close
+    // (rAF-debounced, started from performance.now()) are driven by fake
+    // timers; the Web-Animations stub in setup.ts runs on setTimeout too.
+    vi.useFakeTimers({
+      toFake: [
+        "setTimeout",
+        "clearTimeout",
+        "setInterval",
+        "clearInterval",
+        "requestAnimationFrame",
+        "cancelAnimationFrame",
+        "performance",
+      ],
+    });
+    activities.setMap([]);
+    parts.setMap([]);
+    setCategory(undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function mountPage() {
+    const { container } = render(Activities, { params: { part: 0 } });
+    for (let i = 0; i < 5; i++) await tick();
+    return container;
+  }
+
+  function searchInput(container: HTMLElement): HTMLInputElement {
+    return container.querySelector("input[type='text']") as HTMLInputElement;
+  }
+
+  function typeSearch(container: HTMLElement, value: string) {
+    const input = searchInput(container);
+    input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  it("does not re-filter on every keystroke; the filter runs ~200ms after typing pauses", async () => {
+    await seedWorld();
+    const container = await mountPage();
+    expect(container.textContent).toContain("Ride B");
+
+    typeSearch(container, "Ride A");
+    await tick();
+
+    // Immediately after the keystroke the list is unchanged: the filter
+    // pipeline has not re-run.
+    expect(container.textContent).toContain("Ride B");
+
+    // ~200ms after typing pauses, the filter runs.
+    await vi.advanceTimersByTimeAsync(200);
+    await tick();
+
+    expect(container.textContent).toContain("Ride A");
+    expect(container.textContent).not.toContain("Ride B");
+  });
+
+  it("clearing the search box updates the list immediately, with no debounce delay", async () => {
+    await seedWorld();
+    const container = await mountPage();
+
+    typeSearch(container, "Ride A");
+    await vi.advanceTimersByTimeAsync(200);
+    await tick();
+    expect(container.textContent).not.toContain("Ride B");
+
+    typeSearch(container, "");
+    await tick(); // no timer advance
+
+    expect(container.textContent).toContain("Ride B");
+  });
+
+  it("does not mount the card menu dropdown until first interaction with the trigger", async () => {
+    await seedWorld();
+    const container = await mountPage();
+
+    const trigger = container.querySelector("svg.cursor-pointer") as SVGElement;
+    const wrapper = trigger.parentElement as HTMLElement;
+
+    // The menu trigger icon is visible, but the Dropdown (and its popper)
+    // is not mounted: no popper trigger-host in the DOM, no trigger wiring.
+    expect(wrapper.querySelector("div[hidden]")).toBeNull();
+    expect(trigger.getAttribute("tabindex")).toBeNull();
+
+    trigger.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(300);
+    await tick();
+
+    // First interaction mounted the Dropdown and opened it.
+    expect(wrapper.querySelector("div[hidden]")).not.toBeNull();
+    expect(container.textContent).toContain("Change");
   });
 });
