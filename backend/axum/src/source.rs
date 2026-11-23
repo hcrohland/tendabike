@@ -8,9 +8,8 @@
 //!
 //! `/source/gear/{id}` redirects to the part's provider URL, and
 //! `/source/users/{id}` to the user's provider profile URL. In both the
-//! provider is the target's own, derived in the op from the target's data
-//! (the part's owner, the target's tbid — the `provider_of` lookup,
-//! ADR-0014): the routes stay provider-ignorant.
+//! provider is the target's own, derived in the op (ADR-0014): the routes
+//! stay provider-ignorant.
 
 use axum::{
     Router,
@@ -55,8 +54,7 @@ async fn redirect_act(
 }
 
 /// The gear redirect direct op (ADR-0014): the neutral `provider` handle's
-/// `gear_url` op — the provider is the part's own, derived in the op from
-/// the part's owner (the part read is the ownership check). A present URL
+/// `gear_url` op (the part read is the ownership check). A present URL
 /// permanent-redirects, the typed absence (no provider page — icu gear, a
 /// manual part) is a no-op redirect to the current page (the empty relative
 /// reference), and a failed op goes home (`/`).
@@ -77,9 +75,8 @@ async fn redirect_gear(
 }
 
 /// The user redirect direct op (ADR-0014): the neutral `provider` handle's
-/// `user_url` op — the provider is the target's own, derived in the op from
-/// the target's data (no session: the route has no user context to gate on).
-/// A present URL permanent-redirects; a failed op goes home (`/`).
+/// `user_url` op (no session: the route has no user context to gate on). A
+/// present URL permanent-redirects; a failed op goes home (`/`).
 async fn redirect_user(
     Path(id): Path<i32>,
     State(state): State<AppState>,

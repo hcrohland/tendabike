@@ -26,20 +26,15 @@
 //!
 //! The in-transaction ops. The target-keyed ops (`sync`, `deauthorize`,
 //! `delete_user`, `gear_url`, `user_url`) dispatch on the target's real
-//! provider, derived in-transaction from the provider-internal data (the
-//! provider layer's `provider_of` lookup — `gear_url` from the part's owner,
-//! the rest from the user's tbid — the domain stores no provider) — not on
-//! the route, so a per-provider route acting on a target of the other
-//! provider follows the stated identity rule. The route-keyed ops (`login`,
-//! `accept_event`) take the typed [`Provider`] as a parameter (the route
-//! knows it from the URL) plus opaque string input (the authorization code,
-//! scope, and PKCE code verifier, the raw webhook body) — no driver wire
-//! type crosses the seam.
+//! provider, derived in-transaction (ADR-0014), not on the route. The
+//! route-keyed ops (`login`, `accept_event`) take the typed [`Provider`] as a
+//! parameter (the route knows it from the URL) plus opaque string input (the
+//! authorization code, scope, and PKCE code verifier, the raw webhook body) —
+//! no driver wire type crosses the seam.
 //! The redirect-URL ops: `activity_url` is keyed by the provider parsed from
 //! the activity id's prefix; `user_url` (total, `TbResult<String>`) and
 //! `gear_url` (the one non-total op, `TbResult<Option<String>>` — icu gear
-//! has no public page) derive the target's real provider in the op's own
-//! transaction.
+//! has no public page) are target-keyed.
 //!
 //! `#[async_trait]`; object-safe for `Arc<dyn ProviderService>`, which keeps
 //! a presentation layer's state non-generic.
@@ -123,19 +118,15 @@ pub trait ProviderService: Send + Sync {
 
     /// The gear redirect URL (ADR-0014): one transaction — the provider
     /// layer's `gear_url` op for `id` (gated on the acting session's
-    /// ownership — the part read is the check). The provider is the part's
-    /// own: derived in-transaction from the part's owner (the same identity
-    /// rule as `deauthorize` / `delete_user`). The one non-total op: icu
+    /// ownership — the part read is the check). The one non-total op: icu
     /// gear has no public page, so the icu arm is the typed absence
     /// (`None`) — the route maps it to a no-op.
     async fn gear_url(&self, session: Box<dyn Session>, id: PartId) -> TbResult<Option<String>>;
 
     /// The user redirect URL (ADR-0014): one transaction — the provider
     /// layer's `user_url` op for the target's tbid (no session: the route has
-    /// no user context to gate on). The provider is the target's own:
-    /// derived in-transaction from the target's data (the same identity rule
-    /// as `deauthorize` / `delete_user`). The icu arm builds the public
-    /// athlete profile page.
+    /// no user context to gate on). The icu arm builds the public athlete
+    /// profile page.
     async fn user_url(&self, id: UserId) -> TbResult<String>;
 
     /// The user's provider identity (ADR-0014): one transaction — the

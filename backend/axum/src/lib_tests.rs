@@ -2668,8 +2668,7 @@ async fn icu_webhook_ingest_failure_500s() {
 }
 
 /// `GET /source/gear/{id}` is the gear redirect direct op (ADR-0014): the
-/// handler drives the neutral `provider` handle — the provider is the
-/// part's own, derived in the op from the part's owner. A present URL
+/// handler drives the neutral `provider` handle. A present URL
 /// permanent-redirects, the typed absence (no provider page) is a no-op
 /// redirect to the current page (the empty relative reference), and a failed
 /// op goes home (`/`).
@@ -2763,8 +2762,7 @@ async fn redirect_activity_icu_prefix_routes_to_icu() {
 
 /// `GET /source/users/{id}` is the user redirect direct op (ADR-0014, no
 /// user context — the route is public): the handler drives the neutral
-/// `provider` handle — the provider is the target's own, derived in the op
-/// from the target's data; the Strava URL permanent-redirects.
+/// `provider` handle; the Strava URL permanent-redirects.
 #[tokio::test]
 async fn redirect_user_permains_to_strava_url() {
     let (store, mock, mut provider) = mock_ctx();
@@ -2781,9 +2779,8 @@ async fn redirect_user_permains_to_strava_url() {
 
 /// `GET /source/users/{id}` for an icu target permanent-redirects to the
 /// public athlete profile URL (ADR-0014, no user context — the route is
-/// public): the provider is the target's own, derived in the op from the
-/// target's data (the icu arm builds the profile page from the athlete id in
-/// the icu user row).
+/// public): the icu arm builds the profile page from the athlete id in the
+/// icu user row.
 #[tokio::test]
 async fn redirect_user_permains_to_icu_profile() {
     let (store, mock, mut provider) = mock_ctx();
@@ -2803,8 +2800,8 @@ async fn redirect_user_permains_to_icu_profile() {
 
 /// `GET /source/gear/{id}` for a part whose owner is an icu user is the
 /// typed absence (ADR-0014): icu gear is a private settings item with no
-/// public page (the op derives it from the part's owner), so the route is a
-/// no-op redirect to the current page (the empty relative reference).
+/// public page, so the route is a no-op redirect to the current page (the
+/// empty relative reference).
 #[tokio::test]
 async fn redirect_gear_icu_is_a_no_op() {
     let (store, mock, mut provider) = mock_ctx();

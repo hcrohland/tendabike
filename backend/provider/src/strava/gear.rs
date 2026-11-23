@@ -28,7 +28,7 @@ struct StravaGear {
 /// op (ADR-0014): a part with no provider source (a manual part) is the
 /// typed absence (`None`) — the route maps it to a no-op; an unrecognized
 /// source prefix is a `NotFound`.
-pub fn strava_url(part: &Part) -> TbResult<Option<String>> {
+pub(crate) fn strava_url(part: &Part) -> TbResult<Option<String>> {
     let Some(g) = &part.source else {
         return Ok(None);
     };
