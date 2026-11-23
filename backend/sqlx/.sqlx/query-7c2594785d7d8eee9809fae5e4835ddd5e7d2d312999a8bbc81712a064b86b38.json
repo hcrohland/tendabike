@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, icu_athlete_id, activity_id as \"activity_id!\", event_time, object_type as \"object_type!\", event_type as \"event_type!\", oldest FROM icu_events\n              WHERE activity_id = $1 AND icu_athlete_id = $2\n              ORDER BY event_time ASC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "icu_athlete_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "activity_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "event_time",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "object_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "event_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "oldest",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "7c2594785d7d8eee9809fae5e4835ddd5e7d2d312999a8bbc81712a064b86b38"
+}

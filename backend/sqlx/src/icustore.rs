@@ -240,6 +240,33 @@ impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
         .map(option_into)
     }
 
+    async fn icu_event_get_later(
+        &mut self,
+        activity_id: &str,
+        icu_athlete_id: &IcuId,
+    ) -> TbResult<Vec<IcuEvent>> {
+        sqlx::query_as!(
+            DbIcuEvent,
+            r#"SELECT id, icu_athlete_id, activity_id as "activity_id!", event_time, object_type as "object_type!", event_type as "event_type!", oldest FROM icu_events
+              WHERE activity_id = $1 AND icu_athlete_id = $2
+              ORDER BY event_time ASC"#,
+            activity_id,
+            icu_athlete_id.to_string()
+        )
+        .fetch_all(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(vec_into)
+    }
+
+    async fn icu_events_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
+        sqlx::query!("DELETE FROM icu_events WHERE id = ANY($1)", values as _)
+            .execute(&mut **self.inner())
+            .await
+            .map_err(into_domain)?;
+        Ok(())
+    }
+
     async fn icu_events_get_count_for_user(&mut self, user: &IcuId) -> TbResult<i64> {
         let count = sqlx::query_scalar!(
             "SELECT COUNT(*) FROM icu_events WHERE icu_athlete_id = $1",
