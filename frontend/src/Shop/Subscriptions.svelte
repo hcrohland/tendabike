@@ -116,7 +116,12 @@
         {m.shop_my_subscriptions()}
       </h3>
 
-      <Button size="sm" color="light" onclick={loadSubscriptions}>
+      <Button
+        size="sm"
+        color="light"
+        class="bg-surface-2!"
+        onclick={loadSubscriptions}
+      >
         {m.header_refresh()}
       </Button>
     </div>
