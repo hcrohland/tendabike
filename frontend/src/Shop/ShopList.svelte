@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Button } from "flowbite-svelte";
   import type { Snippet } from "svelte";
   import * as m from "../../paraglide/messages";
 
@@ -35,12 +36,9 @@
       {#if isOwner}
         <ShopOwnerMenu {shop} />
       {:else}
-        <button
-          onclick={() => request(shop)}
-          class="shrink-0 cursor-pointer rounded-lg border border-border-subtle bg-surface-1 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary sm:px-3 sm:py-1.5"
-        >
+        <Button color="light" onclick={() => request(shop)}>
           {m.shop_request_subscription()}
-        </button>
+        </Button>
       {/if}
     </ShopCard>
   {/each}
