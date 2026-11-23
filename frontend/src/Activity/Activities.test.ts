@@ -1,4 +1,4 @@
-import { render } from "@testing-library/svelte";
+import { fireEvent, render } from "@testing-library/svelte";
 import { tick } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Activities from "./Activities.svelte";
@@ -50,50 +50,6 @@ function actData(overrides: Record<string, unknown> = {}): any {
   };
 }
 
-/// Seed the reactive world the way the app does after login: drive the real
-/// `getTypes()` (which populates the `types` map and sets the active category)
-/// with a mocked fetch, then load one gear (bike, id 5) and a mixed bag of
-/// activities — some on the bike, several with no gear at all. The no-gear
-/// rides are the reporter's real condition.
-async function seedWorld() {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn((url: string) => {
-      if (url === "/api/types/part")
-        return Promise.resolve(
-          json200([{ id: 1, name: "Bike", main: 1, hooks: [], order: 1 }]),
-        );
-      if (url === "/api/types/activity")
-        return Promise.resolve(
-          json200([{ id: 301, name: "Ride", gear_type: 1 }]),
-        );
-      return Promise.resolve(json200([]));
-    }),
-  );
-  await getTypes();
-
-  parts.setMap([partData()]);
-
-  // A mix: two rides on the bike, two with no gear assigned (the reporter's
-  // real condition).
-  activities.setMap([
-    actData({ id: "icu:100", name: "Ride A", start: "2024-05-01T08:00:00Z" }),
-    actData({ id: "icu:101", name: "Ride B", start: "2024-05-03T08:00:00Z" }),
-    actData({
-      id: "icu:102",
-      name: "Ride C",
-      start: "2024-05-05T08:00:00Z",
-      gear: null,
-    }),
-    actData({
-      id: "icu:103",
-      name: "Ride D",
-      start: "2024-05-07T08:00:00Z",
-      gear: null,
-    }),
-  ]);
-}
-
 /// Reset the reactive world to a clean slate and stub the browser APIs jsdom
 /// lacks. Shared by every describe block: jsdom has no ResizeObserver and the
 /// RangeSlider installs one in onMount, so a no-op stub is enough (the
@@ -117,6 +73,101 @@ async function mountPage(params: { part: number }): Promise<HTMLElement> {
   const { container } = render(Activities, { params });
   for (let i = 0; i < 5; i++) await tick();
   return container;
+}
+
+/// Stub the type endpoints with a mocked fetch, drive the real `getTypes()`
+/// (which populates the `types` map and sets the active category), and load
+/// one gear (bike, id 5) — the shared prefix of every seeded world.
+async function seedTypes() {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/api/types/part")
+        return Promise.resolve(
+          json200([{ id: 1, name: "Bike", main: 1, hooks: [], order: 1 }]),
+        );
+      if (url === "/api/types/activity")
+        return Promise.resolve(
+          json200([{ id: 301, name: "Ride", gear_type: 1 }]),
+        );
+      return Promise.resolve(json200([]));
+    }),
+  );
+  await getTypes();
+
+  parts.setMap([partData()]);
+}
+
+/// Seed the reactive world the way the app does after login: types plus one
+/// gear (bike, id 5) and a mixed bag of activities — some on the bike,
+/// several with no gear at all. The no-gear rides are the reporter's real
+/// condition.
+async function seedWorld() {
+  await seedTypes();
+
+  // A mix: two rides on the bike, two with no gear assigned (the reporter's
+  // real condition).
+  activities.setMap([
+    actData({ id: "icu:100", name: "Ride A", start: "2024-05-01T08:00:00Z" }),
+    actData({ id: "icu:101", name: "Ride B", start: "2024-05-03T08:00:00Z" }),
+    actData({
+      id: "icu:102",
+      name: "Ride C",
+      start: "2024-05-05T08:00:00Z",
+      gear: null,
+    }),
+    actData({
+      id: "icu:103",
+      name: "Ride D",
+      start: "2024-05-07T08:00:00Z",
+      gear: null,
+    }),
+  ]);
+}
+
+/// Seed activities whose localized start dates differ in year, day, and
+/// time of day, so each search disjunct (name, device, date) can be
+/// exercised independently. In the runtime locale (en-US) and timezone
+/// (Europe/Berlin) these render as:
+///   Ride A -> 6/15/2023 10:00:00 AM, device "Garmin Edge 1040"
+///   Ride B -> 5/1/2024  10:00:00 AM
+///   Ride C -> 5/2/2024  8:00:00 PM
+async function seedSearchWorld() {
+  await seedTypes();
+
+  activities.setMap([
+    actData({
+      id: "icu:200",
+      name: "Ride A",
+      start: "2023-06-15T08:00:00Z",
+      device_name: "Garmin Edge 1040",
+    }),
+    actData({ id: "icu:201", name: "Ride B", start: "2024-05-01T08:00:00Z" }),
+    actData({ id: "icu:202", name: "Ride C", start: "2024-05-02T18:00:00Z" }),
+  ]);
+}
+
+/// Let the effect scheduler flush after a render or state change. The search
+/// pipeline reads a debounced value, so a keystroke's filter only lands ~200ms
+/// after typing pauses; wait past that, then settle the effect queue.
+async function settle() {
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  for (let i = 0; i < 5; i++) await tick();
+}
+
+/// Mount the page (see `mountPage`), type `query` into the search box, and
+/// return the settled page text.
+async function mountAndSearch(query: string): Promise<string> {
+  await seedSearchWorld();
+  const container = await mountPage({ part: 0 });
+
+  const input = container.querySelector(
+    'input[type="text"][placeholder="Search..."]',
+  ) as HTMLInputElement;
+  // Svelte 5's `bind:value` listens to `input`, not `change`.
+  fireEvent.input(input, { target: { value: query } });
+  await settle();
+  return container.textContent ?? "";
 }
 
 /// Mount the page (see `mountPage`) and collect any reactivity-loop errors. A
@@ -189,8 +240,7 @@ describe("Activities page reactivity (effect_update_depth_exceeded)", () => {
     handle.dispatchEvent(
       new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
     );
-    for (let i = 0; i < 5; i++) await tick();
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await settle();
 
     expect(container.textContent).not.toContain("Ride A");
     expect(container.textContent).toContain("Ride B");
@@ -262,5 +312,66 @@ describe("Activities page search debounce", () => {
     await tick(); // no timer advance
 
     expect(container.textContent).toContain("Ride B");
+  });
+});
+
+describe("Activities page search", () => {
+  beforeEach(() => {
+    resetWorld();
+  });
+
+  it("a substring of the localized start date+time matches", async () => {
+    const text = await mountAndSearch("5/1/2024");
+    expect(text).toContain("Ride B");
+    expect(text).not.toContain("Ride A");
+    expect(text).not.toContain("Ride C");
+  });
+
+  it("a partial date fragment (year) matches", async () => {
+    const text = await mountAndSearch("2023");
+    expect(text).toContain("Ride A");
+    expect(text).not.toContain("Ride B");
+    expect(text).not.toContain("Ride C");
+  });
+
+  it("a partial date fragment (month/day) matches", async () => {
+    // The runtime locale renders the month numerically ("5/1/2024"), so the
+    // month fragment is the month/day prefix of the displayed date.
+    const text = await mountAndSearch("5/1");
+    expect(text).toContain("Ride B");
+    expect(text).not.toContain("Ride A");
+    expect(text).not.toContain("Ride C");
+  });
+
+  it("a time-of-day fragment matches", async () => {
+    // 18:00Z renders as a PM time only in timezones where it lands in the
+    // afternoon; pin the timezone the seed data was chosen for so the
+    // fragment is stable everywhere.
+    vi.stubEnv("TZ", "Europe/Berlin");
+    const text = await mountAndSearch("PM");
+    expect(text).toContain("Ride C");
+    expect(text).not.toContain("Ride A");
+    expect(text).not.toContain("Ride B");
+  });
+
+  it("name search matches a name substring, as before", async () => {
+    const text = await mountAndSearch("Ride B");
+    expect(text).toContain("Ride B");
+    expect(text).not.toContain("Ride A");
+    expect(text).not.toContain("Ride C");
+  });
+
+  it("device search matches a device name, as before", async () => {
+    const text = await mountAndSearch("Garmin");
+    expect(text).toContain("Ride A");
+    expect(text).not.toContain("Ride B");
+    expect(text).not.toContain("Ride C");
+  });
+
+  it("an empty search shows all activities", async () => {
+    const text = await mountAndSearch("");
+    expect(text).toContain("Ride A");
+    expect(text).toContain("Ride B");
+    expect(text).toContain("Ride C");
   });
 });

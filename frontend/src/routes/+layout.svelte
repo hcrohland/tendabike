@@ -17,11 +17,6 @@
   onMount(() => {
     loadProviders();
   });
-
-  const theme = {
-    tableBodyCell: "px-2 py-3",
-    tableHeadCell: "px-2 py-3",
-  };
 </script>
 
 <div class="max-w-4xl">
@@ -29,7 +24,7 @@
   <OfflineBanner />
   <NotificationToasts />
   <InitialSyncDialog />
-  <ThemeProvider {theme}>
+  <ThemeProvider>
     <div class="m-1 md:m-8">
       <ShopFrame>
         <slot />

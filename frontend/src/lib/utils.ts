@@ -20,6 +20,10 @@ export function fmtDate(date: Date | undefined) {
   return date ? date.toLocaleDateString(navigator.language) : "never";
 }
 
+export function fmtDateTime(date: Date) {
+  return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+}
+
 export function fmtRange(start: Date, end: Date | undefined) {
   let res = fmtDate(start);
   if (end && end < maxDate) res += " - " + fmtDate(end);

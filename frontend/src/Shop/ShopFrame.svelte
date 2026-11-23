@@ -6,7 +6,11 @@
   let { children = () => {} } = $props();
 </script>
 
-<div class={getShop() != undefined ? "border border-gray p-4 rounded-xl" : ""}>
+<div
+  class={getShop() != undefined
+    ? "border border-border-subtle p-4 rounded-xl"
+    : ""}
+>
   {#if getShop()}
     <Button onclick={exitShop} color="gray" class="mb-8">
       {m.shop_exit({ name: getShop()!.name })}
