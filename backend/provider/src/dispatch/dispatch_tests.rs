@@ -126,6 +126,18 @@ impl IcuDataStore for DispatchStore {
     async fn icu_event_get_next_for_user(&mut self, user: IcuId) -> TbResult<Option<IcuEvent>> {
         self.icu.icu_event_get_next_for_user(user).await
     }
+    async fn icu_event_get_later(
+        &mut self,
+        activity_id: &str,
+        icu_athlete_id: &IcuId,
+    ) -> TbResult<Vec<IcuEvent>> {
+        self.icu
+            .icu_event_get_later(activity_id, icu_athlete_id)
+            .await
+    }
+    async fn icu_events_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
+        self.icu.icu_events_delete_batch(values).await
+    }
     async fn icu_events_get_count_for_user(&mut self, user: &IcuId) -> TbResult<i64> {
         self.icu.icu_events_get_count_for_user(user).await
     }

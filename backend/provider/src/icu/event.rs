@@ -5,8 +5,10 @@
 //! the executor drains. `IcuEvent::accept` is the webhook acceptance (map the
 //! athlete to a TendaBike user and queue the row); [`get_event`] is the
 //! queue's read-side rule (the rate-limit gate, then the oldest queued
-//! event); [`process`] drains the queue in one call, importing each activity,
-//! and carries the one stub-skip notice a batch produces.
+//! event, then the per-activity dedup — only the latest event per activity
+//! is interesting, spec #996); [`process`] drains the queue in one call,
+//! importing each activity, and carries the one stub-skip notice a batch
+//! produces.
 
 use log::{debug, error, info, trace, warn};
 use serde::{Deserialize, Serialize};
@@ -335,8 +337,8 @@ pub(crate) async fn insert_sync(
 }
 
 /// Read the queue for the user, with the queue's read-side rules (the
-/// rate-limit gate, then the oldest queued event). Crate-internal: the lane's
-/// `probe` is the only caller.
+/// rate-limit gate, then the oldest queued event, then the per-activity
+/// dedup). Crate-internal: the lane's `probe` is the only caller.
 pub(crate) async fn get_event(
     user_id: UserId,
     store: &mut impl IcuDataStore,
@@ -347,10 +349,33 @@ pub(crate) async fn get_event(
         return Ok(QueueRead::Limited { until });
     }
     let icu_id = get_icu_id(user_id, store).await?;
-    match store.icu_event_get_next_for_user(icu_id).await? {
-        Some(event) => Ok(QueueRead::Event(event)),
-        None => Ok(QueueRead::Empty),
+    let event = match store.icu_event_get_next_for_user(icu_id.clone()).await? {
+        Some(event) => event,
+        None => return Ok(QueueRead::Empty),
+    };
+
+    // Prevent unneeded calls to intervals.icu: only the latest event for an
+    // activity is interesting (a burst of webhooks on one activity collapses
+    // to its newest row; the older duplicates are dropped). The
+    // `(activity_id, icu_athlete_id)` key is the guard: a `SYNC` row's
+    // `"sync"` sentinel groups with nothing else (and its REPLACE semantics
+    // keep it to one row), so the dedup no-ops for it; `TEST` and
+    // `APP_SCOPE_CHANGED` deliveries are dropped at intake and never queued.
+    let mut list = store
+        .icu_event_get_later(&event.activity_id, &icu_id)
+        .await?;
+    let res = list.pop();
+
+    if !list.is_empty() {
+        debug!("Dropping {list:#?}");
+        let values = list.into_iter().map(|l| l.id).collect::<Vec<_>>();
+        store.icu_events_delete_batch(values).await?;
     }
+
+    Ok(match res {
+        Some(event) => QueueRead::Event(event),
+        None => QueueRead::Empty,
+    })
 }
 
 /// Dispatches one queued event to its domain op: an
