@@ -53,15 +53,19 @@
 </script>
 
 <Card>
-  <!-- Header: name + per-entity action menu -->
+  <!-- Header: name + per-entity action (owner menu, non-owner request button) -->
   <div class="flex items-center justify-between gap-1 sm:gap-2">
     <span class="font-bold text-base sm:text-lg wrap-break-word min-w-0">
       {shop.name}
     </span>
     {#if children}
-      <Menu>
+      {#if isOwner}
+        <Menu>
+          {@render children?.()}
+        </Menu>
+      {:else}
         {@render children?.()}
-      </Menu>
+      {/if}
     {/if}
   </div>
 

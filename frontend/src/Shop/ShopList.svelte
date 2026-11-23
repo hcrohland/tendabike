@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { DropdownItem } from "flowbite-svelte";
+  import { Button } from "flowbite-svelte";
   import type { Snippet } from "svelte";
   import * as m from "../../paraglide/messages";
 
@@ -36,9 +36,9 @@
       {#if isOwner}
         <ShopOwnerMenu {shop} />
       {:else}
-        <DropdownItem onclick={() => request(shop)}>
+        <Button onclick={() => request(shop)}>
           {m.shop_request_subscription()}
-        </DropdownItem>
+        </Button>
       {/if}
     </ShopCard>
   {/each}
