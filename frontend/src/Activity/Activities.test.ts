@@ -1,6 +1,6 @@
 import { fireEvent, render } from "@testing-library/svelte";
 import { tick } from "svelte";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Activities from "./Activities.svelte";
 import { activities } from "../lib/activity";
 import { parts } from "../lib/part";
@@ -50,20 +50,30 @@ function actData(overrides: Record<string, unknown> = {}): any {
   };
 }
 
-// jsdom has no ResizeObserver; the RangeSlider installs one in onMount.
-// A no-op stub is enough — the reactivity under test is pure.
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
-
-beforeEach(() => {
+/// Reset the reactive world to a clean slate and stub the browser APIs jsdom
+/// lacks. Shared by every describe block: jsdom has no ResizeObserver and the
+/// RangeSlider installs one in onMount, so a no-op stub is enough (the
+/// reactivity under test is pure); the collections and the active category are
+/// cleared so each test starts from an empty world.
+function resetWorld() {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
   vi.stubGlobal("ResizeObserver", ResizeObserverStub);
   activities.setMap([]);
   parts.setMap([]);
   setCategory(undefined);
-});
+}
+
+/// Mount the page and let Svelte's effect scheduler flush (five `tick()`
+/// rounds settle the effect queue).
+async function mountPage(params: { part: number }): Promise<HTMLElement> {
+  const { container } = render(Activities, { params });
+  for (let i = 0; i < 5; i++) await tick();
+  return container;
+}
 
 /// Stub the type endpoints with a mocked fetch, drive the real `getTypes()`
 /// (which populates the `types` map and sets the active category), and load
@@ -137,19 +147,19 @@ async function seedSearchWorld() {
   ]);
 }
 
-/// Let Svelte's effect scheduler flush after a render or state change: a
-/// few `tick()` rounds plus a short real-timer wait for debounced work.
+/// Let the effect scheduler flush after a render or state change. The search
+/// pipeline reads a debounced value, so a keystroke's filter only lands ~200ms
+/// after typing pauses; wait past that, then settle the effect queue.
 async function settle() {
+  await new Promise((resolve) => setTimeout(resolve, 300));
   for (let i = 0; i < 5; i++) await tick();
-  await new Promise((resolve) => setTimeout(resolve, 25));
 }
 
-/// Mount the page, let the effect scheduler flush, type `query` into the
-/// search box, and return the settled page text.
+/// Mount the page (see `mountPage`), type `query` into the search box, and
+/// return the settled page text.
 async function mountAndSearch(query: string): Promise<string> {
   await seedSearchWorld();
-  const { container } = render(Activities, { params: { part: 0 } });
-  await settle();
+  const container = await mountPage({ part: 0 });
 
   const input = container.querySelector(
     'input[type="text"][placeholder="Search..."]',
@@ -160,10 +170,11 @@ async function mountAndSearch(query: string): Promise<string> {
   return container.textContent ?? "";
 }
 
-/// Mount the page and let Svelte's effect scheduler flush. A reactivity loop
-/// throws `effect_update_depth_exceeded` mid-flush (dev mode); in jsdom that
-/// surfaces on the window `error` event and/or via `console.error`. We collect
-/// both so the assertion is robust to which path Svelte takes.
+/// Mount the page (see `mountPage`) and collect any reactivity-loop errors. A
+/// reactivity loop throws `effect_update_depth_exceeded` mid-flush (dev mode);
+/// in jsdom that surfaces on the window `error` event and/or via
+/// `console.error`. We collect both so the assertion is robust to which path
+/// Svelte takes.
 async function mountAndCollectErrors(params: {
   part: number;
 }): Promise<{ text: string; errors: string[] }> {
@@ -176,8 +187,8 @@ async function mountAndCollectErrors(params: {
     );
   window.addEventListener("error", onWindowError);
   try {
-    const { container } = render(Activities, { params });
-    await settle();
+    const container = await mountPage(params);
+    await new Promise((resolve) => setTimeout(resolve, 25));
     return { text: container.textContent ?? "", errors };
   } finally {
     window.removeEventListener("error", onWindowError);
@@ -190,6 +201,10 @@ function depthErrors(errors: string[]) {
 }
 
 describe("Activities page reactivity (effect_update_depth_exceeded)", () => {
+  beforeEach(() => {
+    resetWorld();
+  });
+
   it("bike view renders without exceeding the effect update depth", async () => {
     await seedWorld();
     const { text, errors } = await mountAndCollectErrors({ part: 5 });
@@ -210,8 +225,8 @@ describe("Activities page reactivity (effect_update_depth_exceeded)", () => {
 
   it("moving the date slider filters the list through the one-way on:change wiring", async () => {
     await seedWorld();
-    const { container } = render(Activities, { params: { part: 0 } });
-    await settle();
+    const container = await mountPage({ part: 0 });
+    await new Promise((resolve) => setTimeout(resolve, 25));
 
     // All four rides start within the initial range, so all are listed.
     expect(container.textContent).toContain("Ride A");
@@ -232,7 +247,79 @@ describe("Activities page reactivity (effect_update_depth_exceeded)", () => {
   });
 });
 
+describe("Activities page search debounce", () => {
+  beforeEach(() => {
+    resetWorld();
+    // The search debounce (setTimeout) and the Web-Animations stub in
+    // setup.ts (which also runs on setTimeout) are driven by fake timers.
+    vi.useFakeTimers({
+      toFake: [
+        "setTimeout",
+        "clearTimeout",
+        "setInterval",
+        "clearInterval",
+        "requestAnimationFrame",
+        "cancelAnimationFrame",
+        "performance",
+      ],
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function searchInput(container: HTMLElement): HTMLInputElement {
+    return container.querySelector("input[type='text']") as HTMLInputElement;
+  }
+
+  function typeSearch(container: HTMLElement, value: string) {
+    const input = searchInput(container);
+    input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  it("does not re-filter on every keystroke; the filter runs ~200ms after typing pauses", async () => {
+    await seedWorld();
+    const container = await mountPage({ part: 0 });
+    expect(container.textContent).toContain("Ride B");
+
+    typeSearch(container, "Ride A");
+    await tick();
+
+    // Immediately after the keystroke the list is unchanged: the filter
+    // pipeline has not re-run.
+    expect(container.textContent).toContain("Ride B");
+
+    // ~200ms after typing pauses, the filter runs.
+    await vi.advanceTimersByTimeAsync(200);
+    await tick();
+
+    expect(container.textContent).toContain("Ride A");
+    expect(container.textContent).not.toContain("Ride B");
+  });
+
+  it("clearing the search box updates the list immediately, with no debounce delay", async () => {
+    await seedWorld();
+    const container = await mountPage({ part: 0 });
+
+    typeSearch(container, "Ride A");
+    await vi.advanceTimersByTimeAsync(200);
+    await tick();
+    expect(container.textContent).not.toContain("Ride B");
+
+    typeSearch(container, "");
+    await tick(); // no timer advance
+
+    expect(container.textContent).toContain("Ride B");
+  });
+});
+
 describe("Activities page search", () => {
+  beforeEach(() => {
+    resetWorld();
+  });
+
   it("a substring of the localized start date+time matches", async () => {
     const text = await mountAndSearch("5/1/2024");
     expect(text).toContain("Ride B");
