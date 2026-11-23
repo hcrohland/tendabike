@@ -52,6 +52,10 @@
   <!-- Header row: name · role · menu -->
   <div class="flex items-center justify-between gap-1 sm:gap-2">
     <div class="flex items-center gap-1 sm:gap-2 p-1 sm:p-2 min-w-0">
+      <span class="font-medium text-sm whitespace-nowrap">
+        {user.firstname}
+        {user.name}
+      </span>
       <a
         href={"/source/users/" + user.id}
         title={providerMeta[provider].name}
@@ -60,10 +64,6 @@
       >
         <ProviderMark {provider} size="sm" />
       </a>
-      <span class="font-medium text-sm whitespace-nowrap">
-        {user.firstname}
-        {user.name}
-      </span>
       <span class="text-xs text-text-1 shrink-0">{role}</span>
     </div>
     <div class="flex items-center gap-1 sm:gap-2 shrink-0">
