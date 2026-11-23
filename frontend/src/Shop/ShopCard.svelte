@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { Card, Badge } from "flowbite-svelte";
+  import Card from "../Widgets/Card.svelte";
+  import Chip from "../Widgets/Chip.svelte";
+  import Menu from "../Widgets/Menu.svelte";
   import type { Snippet } from "svelte";
   import * as m from "../../paraglide/messages";
 
@@ -50,56 +52,51 @@
   });
 </script>
 
-<Card size="xl" class="relative col-auto p-4">
-  {#if children}
-    <div class="absolute top-4 right-4">
-      {@render children?.()}
+<Card>
+  <!-- Header: name + per-entity action menu -->
+  <div class="flex items-center justify-between gap-1 sm:gap-2">
+    <span class="font-bold text-base sm:text-lg wrap-break-word min-w-0">
+      {shop.name}
+    </span>
+    {#if children}
+      <Menu>
+        {@render children?.()}
+      </Menu>
+    {/if}
+  </div>
+
+  {#if !isOwner && owner.firstname && owner.name}
+    <div class="mt-1 text-sm text-text-1">
+      {m.shop_by()}
+      {owner.firstname}
+      {owner.name}
     </div>
   {/if}
 
-  <div class="space-y-3">
-    <div>
-      <h5
-        class="text-xl font-bold tracking-tight text-gray-900 dark:text-white"
-      >
-        {shop.name}
-      </h5>
-
-      {#if !isOwner && owner.firstname && owner.name}
-        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          {m.shop_by()}
-          {owner.firstname}
-          {owner.name}
-        </p>
-      {/if}
-
-      {#if shop.description}
-        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-          {shop.description}
-        </p>
-      {/if}
+  {#if shop.description}
+    <div class="mt-1 text-sm text-text-1">
+      {shop.description}
     </div>
+  {/if}
 
-    <div class="flex items-center gap-2">
-      {#if isOwner}
-        <Badge color="blue">
-          {partsCount}
-          {partsCount === 1 ? m.shop_part() : m.shop_parts()}
-        </Badge>
-
-        <Badge color="green">
-          {m.shop_owner()}
-        </Badge>
-      {/if}
+  {#if isOwner}
+    <div class="mt-2 flex items-center gap-1 sm:gap-2">
+      <Chip
+        value={String(partsCount)}
+        label={partsCount === 1 ? m.shop_part() : m.shop_parts()}
+      />
+      <Chip value={m.shop_owner()} label="" />
     </div>
+  {/if}
 
-    <div class="text-xs text-text-1">
-      {m.shop_created()}
-      {new Date(shop.created_at).toLocaleDateString()}
-    </div>
-
-    {#if sub}
-      {@render sub(shop)}
-    {/if}
+  <div class="mt-2 text-xs text-text-1">
+    {m.shop_created()}
+    {new Date(shop.created_at).toLocaleDateString()}
   </div>
+
+  {#if sub}
+    <div class="mt-2">
+      {@render sub(shop)}
+    </div>
+  {/if}
 </Card>

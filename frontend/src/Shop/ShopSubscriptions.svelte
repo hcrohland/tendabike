@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { Table, TableHead, TableBody, Button, Input } from "flowbite-svelte";
+  import { Button, Input } from "flowbite-svelte";
+  import { DropdownItem } from "flowbite-svelte";
   import * as m from "../../paraglide/messages";
   import { myfetch, handleError } from "../lib/utils";
   import type { ShopSubscription } from "../lib/subscription";
   import { shops } from "../lib/shop.svelte";
-  import SubscriptionRow from "./SubscriptionRow.svelte";
+  import SubscriptionCard from "./SubscriptionCard.svelte";
 
   interface Props {
     shopId: number;
@@ -81,7 +82,7 @@
   {#if !(shops[shopId].auto_approve && subscriptions.length === 0)}
     <div>
       <div class="mb-4 flex items-center justify-between">
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+        <h3 class="text-lg font-semibold text-text-2">
           {m.shop_pending_requests()}
         </h3>
 
@@ -97,69 +98,58 @@
           {m.shop_no_pending_requests()}
         </p>
       {:else}
-        <div class="overflow-x-auto">
-          <Table>
-            <TableHead>
-              <SubscriptionRow />
-            </TableHead>
-            <TableBody>
-              {#each subscriptions as subscription}
-                <SubscriptionRow {subscription}>
-                  {#if respondingTo === subscription.id}
-                    <div class="flex min-w-48 flex-col gap-2">
-                      <Input
-                        type="text"
-                        bind:value={responseMessage}
-                        placeholder={m.shop_response_placeholder()}
-                        size="sm"
-                      />
-                      <div class="flex gap-2">
-                        <Button
-                          size="xs"
-                          color="green"
-                          onclick={() =>
-                            approveSubscription(
-                              subscription.id!,
-                              responseMessage,
-                            )}
-                        >
-                          {m.action_approve()}
-                        </Button>
-                        <Button
-                          size="xs"
-                          color="red"
-                          onclick={() =>
-                            rejectSubscription(
-                              subscription.id!,
-                              responseMessage,
-                            )}
-                        >
-                          {m.action_reject()}
-                        </Button>
-                        <Button
-                          size="xs"
-                          color="alternative"
-                          onclick={cancelResponding}
-                        >
-                          {m.action_cancel()}
-                        </Button>
-                      </div>
-                    </div>
-                  {:else if subscription.status === "pending"}
-                    <div class="flex gap-2">
-                      <Button
-                        size="xs"
-                        color="alternative"
-                        onclick={() => startResponding(subscription.id!)}
-                      >
-                        {m.action_respond()}
-                      </Button>
-                    </div>
-                  {/if}
-                </SubscriptionRow>
-              {/each}
-            </TableBody>
-          </Table>
+        <div class="flex flex-col gap-1 sm:gap-2">
+          {#each subscriptions as subscription (subscription.id)}
+            {#snippet menu()}
+              {#if subscription.status === "pending"}
+                <DropdownItem onclick={() => startResponding(subscription.id!)}>
+                  {m.action_respond()}
+                </DropdownItem>
+              {/if}
+            {/snippet}
+
+            {#snippet body()}
+              <div class="flex min-w-48 flex-col gap-2">
+                <Input
+                  type="text"
+                  bind:value={responseMessage}
+                  placeholder={m.shop_response_placeholder()}
+                  size="sm"
+                />
+                <div class="flex gap-2">
+                  <Button
+                    size="xs"
+                    color="green"
+                    onclick={() =>
+                      approveSubscription(subscription.id!, responseMessage)}
+                  >
+                    {m.action_approve()}
+                  </Button>
+                  <Button
+                    size="xs"
+                    color="red"
+                    onclick={() =>
+                      rejectSubscription(subscription.id!, responseMessage)}
+                  >
+                    {m.action_reject()}
+                  </Button>
+                  <Button
+                    size="xs"
+                    color="alternative"
+                    onclick={cancelResponding}
+                  >
+                    {m.action_cancel()}
+                  </Button>
+                </div>
+              </div>
+            {/snippet}
+
+            <SubscriptionCard
+              {subscription}
+              menu={subscription.status === "pending" ? menu : undefined}
+              body={respondingTo === subscription.id ? body : undefined}
+            />
+          {/each}
         </div>
       {/if}
     </div>
