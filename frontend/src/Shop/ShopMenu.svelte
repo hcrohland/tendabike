@@ -31,7 +31,7 @@
     </Dropdown>
   {/if}
 
-  <DropdownItem href="/#/shops">
+  <DropdownItem href="/shops">
     {m.shop_manage()}
   </DropdownItem>
 {/if}
