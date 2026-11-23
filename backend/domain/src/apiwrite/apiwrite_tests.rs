@@ -10,6 +10,7 @@
 //! (`sqlx/tests/store_seam.rs`), where the Postgres behavior is the source of
 //! truth.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use super::*;
@@ -575,6 +576,7 @@ async fn serviceplan_create_and_delete_dispatch() -> TbResult<()> {
         rides: None,
         uid: None,
         energy: None,
+        snoozes: HashMap::new(),
     };
     let mut store = MockStore::new();
     let plan_created = plan.clone();
@@ -616,6 +618,55 @@ async fn serviceplan_create_and_delete_dispatch() -> TbResult<()> {
         .await?,
     );
     assert_eq!(summary.plans, only_tombstone(plan_id));
+    Ok(())
+}
+
+#[tokio::test]
+async fn serviceplan_snooze_dispatch() -> TbResult<()> {
+    let part = PartId::from(13);
+    let plan = ServicePlan {
+        id: ServicePlanId::from(uuid::Uuid::now_v7()),
+        part: Some(part),
+        what: CHAIN,
+        hook: None,
+        name: "Chain Every 1000km".to_string(),
+        days: None,
+        hours: None,
+        km: Some(1000),
+        climb: None,
+        descend: None,
+        rides: None,
+        uid: None,
+        energy: None,
+        snoozes: HashMap::new(),
+    };
+    let plan_id = plan.id;
+    let mut store = MockStore::new();
+    let plan_get = plan.clone();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(plan_get.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user())));
+    store.expect_serviceplan_update().returning(Ok);
+
+    let summary = outcome_summary(
+        exec(
+            ApiWrite::ServicePlanSnooze {
+                id: plan_id,
+                part,
+                fraction: 1.5,
+            },
+            &test_session(),
+            &mut store,
+        )
+        .await?,
+    );
+    // The dispatch reports the updated plan, carrying the snoozed fraction.
+    let snoozed = sole_live(&summary.plans);
+    assert_eq!(snoozed.id, plan_id);
+    assert_eq!(snoozed.snoozes.get(&part), Some(&1.5));
     Ok(())
 }
 

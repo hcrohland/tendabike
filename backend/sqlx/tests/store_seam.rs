@@ -66,6 +66,8 @@
 //! `database_is_reachable` is the named canary: it fails the job loudly when
 //! the scratch database cannot be prepared.
 
+use std::collections::HashMap;
+use std::str::FromStr;
 use std::time::Duration;
 
 use tb_domain::test_support::{
@@ -74,7 +76,8 @@ use tb_domain::test_support::{
 };
 use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, Attachment, AttachmentStore, MAX_TIME,
-    NotificationStore, Part, PartId, PartStore, PartTypeId, UsageId, UsageStore, UserId, UserStore,
+    NotificationStore, Part, PartId, PartStore, PartTypeId, ServicePlan, ServicePlanId,
+    ServicePlanStore, UsageId, UsageStore, UserId, UserStore,
 };
 use tb_provider::icu::{IcuDataStore, IcuEvent, IcuId, IcuObjectType};
 use tb_sqlx::{SNAPSHOT_JSON, StoreSnapshot};
@@ -1362,6 +1365,51 @@ async fn icu_events_delete_batch_deletes_named_rows() -> tb_domain::TbResult<()>
             "the other activity's row survives"
         );
 
+        Ok(())
+    })
+    .await
+}
+
+// ---------------------------------------------------------------------------
+// ServicePlan: store-path rules
+// ---------------------------------------------------------------------------
+
+/// A plan's snooze map round-trips through the `snoozes` jsonb column
+/// (issue #971): a plan created with an empty map picks up its accumulated
+/// fractions on update and reads them back unchanged.
+#[tokio::test]
+#[ignore]
+async fn serviceplan_snoozes_roundtrip() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let part = PartId::from(1);
+        let mut plan = ServicePlan {
+            id: ServicePlanId::from(
+                Uuid::from_str("1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed").unwrap(),
+            ),
+            part: Some(part),
+            what: PartTypeId::from(2),
+            hook: None,
+            name: "Snooze Plan".to_string(),
+            days: Some(30),
+            hours: None,
+            km: None,
+            climb: None,
+            descend: None,
+            rides: None,
+            uid: None,
+            energy: None,
+            snoozes: HashMap::new(),
+        };
+        let created = store.serviceplan_create(plan.clone()).await?;
+        assert!(created.snoozes.is_empty());
+        plan.snoozes.insert(part, 1.5);
+        let updated = store.serviceplan_update(plan).await?;
+        let read = store.serviceplan_get(updated.id).await?;
+        assert_eq!(
+            read.snoozes.get(&part),
+            Some(&1.5),
+            "the accumulated fraction survives the roundtrip"
+        );
         Ok(())
     })
     .await

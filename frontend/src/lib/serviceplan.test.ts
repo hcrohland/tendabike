@@ -181,6 +181,16 @@ describe("localizeLimitKey", () => {
   });
 });
 
+describe("ServicePlan.snoozes", () => {
+  it("parses the accumulated fractions per part", () => {
+    expect(plan({ snoozes: { 5: 0.5 } }).snoozes).toEqual({ 5: 0.5 });
+  });
+
+  it("defaults to an empty map when the field is missing", () => {
+    expect(plan({}).snoozes).toEqual({});
+  });
+});
+
 describe("ServicePlan CRUD", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -248,6 +258,18 @@ describe("ServicePlan CRUD", () => {
     expect(url).toBe("/api/plan");
     expect(options.method).toBe("PUT");
     expect(plans["P1"].name).toBe("Old");
+  });
+
+  it("ServicePlan.snooze POSTs to /api/plan/{id}/snooze; the merge arrives via the stream frame", async () => {
+    plans.updateMap([plan({ id: "P1" })]);
+    fetchMock.mockResolvedValueOnce(resp(null, 204, true, "No Content"));
+    await plan({ id: "P1" }).snooze(5, 0.5);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/plan/P1/snooze");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual({ part: 5, fraction: 0.5 });
+    expect(plans["P1"].snoozes).toEqual({});
   });
 
   it("ServicePlan.delete DELETEs /api/plan/{id}; the tombstone arrives via the stream frame", async () => {

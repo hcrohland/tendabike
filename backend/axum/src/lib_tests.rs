@@ -19,6 +19,7 @@
 //! keeps the executor alive; a stream survives the executor's reap; a wake
 //! never spawns) live there too.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Once};
 use std::time::Duration;
 
@@ -447,6 +448,7 @@ fn summary_with_plan() -> Summary {
         rides: Some(30),
         uid: None,
         energy: None,
+        snoozes: HashMap::new(),
     });
     summary
 }
@@ -2220,7 +2222,7 @@ async fn create_plan_returns_201_and_entity() {
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"id":"00000000-0000-0000-0000-000000000000","part":1,"what":1,"hook":null,"name":"Drainage","days":null,"hours":null,"km":5000,"climb":null,"descend":null,"rides":30,"uid":null,"kJ":null}"#
+        r#"{"id":"00000000-0000-0000-0000-000000000000","part":1,"what":1,"hook":null,"name":"Drainage","days":null,"hours":null,"km":5000,"climb":null,"descend":null,"rides":30,"uid":null,"kJ":null,"snoozes":{}}"#
     );
 }
 
@@ -2240,6 +2242,27 @@ async fn update_plan_returns_204() {
         "/api/plan",
         Some(&cookie),
         r#"{"id":"00000000-0000-0000-0000-000000000000","part":1,"what":1,"hook":null,"name":"Drainage","days":null,"hours":null,"km":5000,"climb":null,"descend":null,"rides":30,"uid":null,"kJ":null}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+/// `POST /api/plan/{id}/snooze` enqueues the `ServicePlanSnooze` write and
+/// answers `204`.
+#[tokio::test]
+async fn snooze_plan_returns_204() {
+    let (store, mut mock, provider) = mock_ctx();
+    mock.expect_write()
+        .times(1)
+        .returning(|_session, _write| Ok(WriteOutcome::Summary(Summary::default())));
+    let app = build_app(&store, mock, provider);
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, _body) = run_json(
+        app,
+        Method::POST,
+        &format!("/api/plan/{NIL}/snooze"),
+        Some(&cookie),
+        r#"{"part":1,"fraction":0.5}"#,
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT);

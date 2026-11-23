@@ -27,14 +27,16 @@ use axum::{
 };
 use http::StatusCode;
 use log::trace;
+use serde::Deserialize;
 
 use crate::{RequestSession, appstate::AppState, domain::created_entity, error::AppError};
-use tb_domain::{ApiWrite, ServicePlan, ServicePlanId};
+use tb_domain::{ApiWrite, PartId, ServicePlan, ServicePlanId};
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route("/", post(create).put(update))
         .route("/{id}", delete(delete_plan))
+        .route("/{id}/snooze", post(snooze))
 }
 
 async fn create(
@@ -71,6 +73,35 @@ async fn delete_plan(
     state
         .api
         .write(Box::new(user), ApiWrite::ServicePlanDelete { id })
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// The parsed body of `POST /api/plan/{id}/snooze`: the part to snooze and
+/// the fraction to add to its accumulated snooze (issue #971).
+#[derive(Deserialize)]
+struct SnoozeBody {
+    part: PartId,
+    fraction: f64,
+}
+
+async fn snooze(
+    user: RequestSession,
+    State(state): State<AppState>,
+    Path(id): Path<ServicePlanId>,
+    Json(body): Json<SnoozeBody>,
+) -> Result<StatusCode, AppError> {
+    trace!("ServicePlan::snooze");
+    state
+        .api
+        .write(
+            Box::new(user),
+            ApiWrite::ServicePlanSnooze {
+                id,
+                part: body.part,
+                fraction: body.fraction,
+            },
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

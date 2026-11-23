@@ -20,6 +20,8 @@ struct DbServicePlan {
     pub rides: Option<i32>,
     pub uid: Option<i32>,
     pub energy: Option<i32>,
+    /// The plan's accumulated snooze fractions: part id → fraction (issue #971).
+    pub snoozes: serde_json::Value,
 }
 
 impl From<ServicePlan> for DbServicePlan {
@@ -38,6 +40,7 @@ impl From<ServicePlan> for DbServicePlan {
             rides,
             uid,
             energy,
+            snoozes,
         } = value;
         Self {
             id: id.into(),
@@ -53,6 +56,8 @@ impl From<ServicePlan> for DbServicePlan {
             rides,
             uid: uid.map(Into::into),
             energy,
+            // The fractions are finite: the domain rejects non-finite input.
+            snoozes: serde_json::to_value(snoozes).expect("snooze fractions are finite"),
         }
     }
 }
@@ -73,6 +78,7 @@ impl From<DbServicePlan> for ServicePlan {
             rides,
             uid,
             energy,
+            snoozes,
         } = value;
         Self {
             id: id.into(),
@@ -88,6 +94,8 @@ impl From<DbServicePlan> for ServicePlan {
             rides,
             uid: uid.map(Into::into),
             energy,
+            // The store only writes valid snooze maps.
+            snoozes: serde_json::from_value(snoozes).expect("valid snooze map"),
         }
     }
 }
@@ -98,8 +106,8 @@ impl<'c> tb_domain::ServicePlanStore for SqlxConn<'c> {
         let plan = DbServicePlan::from(plan);
         sqlx::query_as!(
             DbServicePlan,
-            "INSERT INTO service_plans (id, part, what, hook, name, days, hours, km, climb, descend, rides, uid, energy)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            "INSERT INTO service_plans (id, part, what, hook, name, days, hours, km, climb, descend, rides, uid, energy, snoozes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
              RETURNING *",
             plan.id,
             plan.part,
@@ -113,7 +121,8 @@ impl<'c> tb_domain::ServicePlanStore for SqlxConn<'c> {
             plan.descend,
             plan.rides,
             plan.uid,
-            plan.energy
+            plan.energy,
+            plan.snoozes
         )
         .fetch_one(&mut **self.inner())
         .await
@@ -139,7 +148,8 @@ impl<'c> tb_domain::ServicePlanStore for SqlxConn<'c> {
             DbServicePlan,
             "UPDATE service_plans
              SET part = $2, what = $3, hook = $4, name = $5, days = $6, hours = $7,
-                 km = $8, climb = $9, descend = $10, rides = $11, uid = $12, energy = $13
+                 km = $8, climb = $9, descend = $10, rides = $11, uid = $12, energy = $13,
+                 snoozes = $14
              WHERE id = $1
              RETURNING *",
             plan.id,
@@ -154,7 +164,8 @@ impl<'c> tb_domain::ServicePlanStore for SqlxConn<'c> {
             plan.descend,
             plan.rides,
             plan.uid,
-            plan.energy
+            plan.energy,
+            plan.snoozes
         )
         .fetch_one(&mut **self.inner())
         .await
@@ -210,6 +221,7 @@ impl<'c> tb_domain::ServicePlanStore for SqlxConn<'c> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
     use std::str::FromStr;
     use tb_domain::PartTypeId;
 
@@ -236,6 +248,7 @@ mod tests {
             rides: Some(20),
             energy: Some(30000000),
             uid,
+            snoozes: HashMap::new(),
         }
     }
 
@@ -251,10 +264,19 @@ mod tests {
         assert_eq!(db.part, Some(3));
         assert_eq!(db.hook, Some(7));
         assert_eq!(db.uid, Some(1));
+        assert_eq!(db.snoozes, serde_json::json!({}));
         let db = DbServicePlan::from(serviceplan(None, None, None));
         assert_eq!(db.part, None);
         assert_eq!(db.hook, None);
         assert_eq!(db.uid, None);
+    }
+
+    #[test]
+    fn serviceplan_into_db_maps_snoozes_to_part_ids() {
+        let mut plan = serviceplan(Some(PartId::from(3)), None, None);
+        plan.snoozes.insert(PartId::from(3), 1.5);
+        let db = DbServicePlan::from(plan);
+        assert_eq!(db.snoozes, serde_json::json!({ "3": 1.5 }));
     }
 
     #[test]
@@ -264,6 +286,14 @@ mod tests {
             Some(PartTypeId::from(7)),
             Some(UserId::from(1)),
         );
+        assert_eq!(ServicePlan::from(DbServicePlan::from(plan.clone())), plan);
+    }
+
+    #[test]
+    fn serviceplan_db_roundtrip_preserves_snoozes() {
+        let mut plan = serviceplan(Some(PartId::from(3)), None, None);
+        plan.snoozes.insert(PartId::from(3), 1.5);
+        plan.snoozes.insert(PartId::from(4), 0.25);
         assert_eq!(ServicePlan::from(DbServicePlan::from(plan.clone())), plan);
     }
 }

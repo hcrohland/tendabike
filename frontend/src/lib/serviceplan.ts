@@ -85,6 +85,11 @@ export class ServicePlan extends Limits {
   /// where it is attached
   hook: number | null;
   name: string;
+  /// The accumulated snooze fraction per part (issue #971): snoozing a
+  /// (part, plan) extends the plan's effective limits for that part by
+  /// this fraction. The plan owns the state; editing the plan's limits
+  /// resets it to empty.
+  snoozes: Record<number, number>;
   constructor(data: any) {
     super(data);
     this.id = data.id || "00000000-0000-0000-0000-000000000000";
@@ -93,6 +98,7 @@ export class ServicePlan extends Limits {
     this.hook = data.hook || null;
 
     this.name = data.name || "";
+    this.snoozes = data.snoozes || {};
   }
 
   /// The writes answer 204 (201 for creates): the change rides the stream
@@ -107,6 +113,16 @@ export class ServicePlan extends Limits {
 
   async delete() {
     await myfetch("/api/plan/" + this.id, "DELETE").catch(handleError);
+  }
+
+  /// Snooze this plan for a part by a fraction (issue #971): the fraction
+  /// stacks onto the part's accumulated snooze. The write answers 204; the
+  /// updated plan rides the stream frame.
+  async snooze(part: number, fraction: number) {
+    return await myfetch("/api/plan/" + this.id + "/snooze", "POST", {
+      part,
+      fraction,
+    }).catch(handleError);
   }
 
   valid() {

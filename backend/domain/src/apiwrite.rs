@@ -187,6 +187,13 @@ pub enum ApiWrite {
     ServicePlanUpdate { plan: ServicePlan },
     /// `DELETE /api/plan/{id}`
     ServicePlanDelete { id: ServicePlanId },
+    /// `POST /api/plan/{id}/snooze` — snooze the plan for `part` by
+    /// `fraction` (issue #971).
+    ServicePlanSnooze {
+        id: ServicePlanId,
+        part: PartId,
+        fraction: f64,
+    },
 
     // --- shop (`/api/shop`) ---
     /// `POST /api/shop`
@@ -510,6 +517,9 @@ pub async fn exec(
             summary.plans.tombstone(id);
             Ok(WriteOutcome::Summary(summary))
         }
+        ApiWrite::ServicePlanSnooze { id, part, fraction } => Ok(WriteOutcome::Summary(
+            id.snooze(part, fraction, session, store).await?,
+        )),
 
         // --- shop ---
         ApiWrite::ShopCreate {

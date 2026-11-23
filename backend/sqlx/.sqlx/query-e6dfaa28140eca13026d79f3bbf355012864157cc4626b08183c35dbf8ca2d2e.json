@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE service_plans\n             SET part = $2, what = $3, hook = $4, name = $5, days = $6, hours = $7,\n                 km = $8, climb = $9, descend = $10, rides = $11, uid = $12, energy = $13\n             WHERE id = $1\n             RETURNING *",
+  "query": "INSERT INTO service_plans (id, part, what, hook, name, days, hours, km, climb, descend, rides, uid, energy, snoozes)\n             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)\n             RETURNING *",
   "describe": {
     "columns": [
       {
@@ -67,6 +67,11 @@
         "ordinal": 12,
         "name": "energy",
         "type_info": "Int4"
+      },
+      {
+        "ordinal": 13,
+        "name": "snoozes",
+        "type_info": "Jsonb"
       }
     ],
     "parameters": {
@@ -83,7 +88,8 @@
         "Int4",
         "Int4",
         "Int4",
-        "Int4"
+        "Int4",
+        "Jsonb"
       ]
     },
     "nullable": [
@@ -99,8 +105,9 @@
       true,
       true,
       true,
-      true
+      true,
+      false
     ]
   },
-  "hash": "05a8dc3ae3f87486e83707bca8f3f106079aa6fa0c5c741ba56c2afe757ddc97"
+  "hash": "e6dfaa28140eca13026d79f3bbf355012864157cc4626b08183c35dbf8ca2d2e"
 }

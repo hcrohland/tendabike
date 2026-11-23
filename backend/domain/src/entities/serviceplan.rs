@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use crate::{
-    IdKeyed, PartId, PartStore, PartTypeId, Service, ServicePlanStore, ServiceStore, Session,
-    ShopStore, TbResult, UserId,
+    Error, IdKeyed, PartId, PartStore, PartTypeId, Service, ServicePlanStore, ServiceStore,
+    Session, ShopStore, Summary, TbResult, UserId,
 };
 #[cfg(test)]
 use crate::{Part, ServiceId, Shop, ShopId, UsageId};
@@ -41,6 +43,39 @@ impl ServicePlanId {
         ServicePlanStore::serviceplan_delete(store, self).await?;
         Ok(res)
     }
+
+    /// Snoozes this plan for `part` by `fraction` (issue #971): the
+    /// fraction is added to the plan's accumulated snooze fraction for
+    /// the part, so snoozes stack and the fraction is unbounded above.
+    /// The floor is 0; a fraction of 0 is a no-op (no write, an empty
+    /// `Summary`). Snoozing records no work: no service is created or
+    /// modified. Returns the `Summary` carrying the updated plan.
+    pub(crate) async fn snooze(
+        self,
+        part: PartId,
+        fraction: f64,
+        user: &dyn Session,
+        store: &mut (impl PartStore + ServicePlanStore + ShopStore),
+    ) -> TbResult<Summary> {
+        // Non-finite fractions (NaN, ±inf) are rejected as well: the
+        // store cannot serialize them.
+        if !fraction.is_finite() || fraction < 0.0 {
+            return Err(Error::BadRequest(format!(
+                "snooze fraction must be a finite non-negative number, got {fraction}"
+            )));
+        }
+        let mut plan = self.get(store).await?;
+        plan.checkuser(user, store).await?;
+        if fraction == 0.0 {
+            return Ok(Summary::default());
+        }
+        let accumulated = plan.snoozes.get(&part).copied().unwrap_or(0.0) + fraction;
+        plan.snoozes.insert(part, accumulated);
+        let plan = store.serviceplan_update(plan).await?;
+        let mut summary = Summary::default();
+        summary.plans.upsert(plan);
+        Ok(summary)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -74,6 +109,13 @@ pub struct ServicePlan {
     /// Energy expended
     #[serde(rename = "kJ")]
     pub energy: Option<i32>,
+    /// The accumulated snooze fraction per part (issue #971): snoozing a
+    /// (part, plan) adds the snoozed fraction to that part's entry,
+    /// extending the plan's effective limits for it. The plan owns the
+    /// state; a part holds none of it. Editing the plan's limits resets
+    /// this map to empty.
+    #[serde(default)]
+    pub snoozes: HashMap<PartId, f64>,
 }
 
 impl IdKeyed for ServicePlan {
@@ -120,6 +162,9 @@ impl ServicePlan {
             Some(_) => None,
             None => Some(user.user_id()),
         };
+        // snoozes are server state: a fresh plan has none, whatever the
+        // client sent.
+        self.snoozes = HashMap::new();
         store.serviceplan_create(self).await
     }
 
@@ -135,6 +180,8 @@ impl ServicePlan {
         self.what = plan.what;
         self.hook = plan.hook;
         self.uid = plan.uid;
+        // editing the plan's limits resets all of its snoozes (issue #971)
+        self.snoozes = HashMap::new();
         store.serviceplan_update(self).await
     }
 
