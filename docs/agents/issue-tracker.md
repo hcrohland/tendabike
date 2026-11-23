@@ -39,7 +39,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 **Check PR:** verify a PR on a current branch, in order:
 1. **Sync** to current `main` (see the **Sync** convention) — `git fetch origin`; only if behind (`git rev-list --count HEAD..origin/main` > 0), `git merge origin/main`, resolve any conflict (see the `resolving-merge-conflicts` skill), then `git push`.
 2. **CI:** `gh pr checks <n> --watch --interval 30 --fail-fast` — see **Check gotcha** (a run must exist for the head SHA).
-3. **Mergeable:** `gh pr view <n> --json mergeable` reports `MERGEABLE`.
+3. **Mergeable:** `gh pr view <n> --json mergeStateStatus` reports `CLEAN` — not `BEHIND`, `DIRTY`, or `BLOCKED`. `mergeable: MERGEABLE` alone is not enough: it can read `MERGEABLE` while the branch is `BEHIND` or `BLOCKED`.
 
 **Check gotcha:** `gh pr checks --watch` exits as soon as the checks that are *registered* pass — before the main CI jobs start, only CodeQL is listed, so it can report green early. Use it to block, then confirm a run exists for the head SHA before acting on the result: `gh run list --branch <head-branch> --limit 1`. Applies both when waiting between commits and before merging.
 
