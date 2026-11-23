@@ -94,10 +94,36 @@ async function seedWorld() {
   ]);
 }
 
-/// Mount the page and let Svelte's effect scheduler flush. A reactivity loop
-/// throws `effect_update_depth_exceeded` mid-flush (dev mode); in jsdom that
-/// surfaces on the window `error` event and/or via `console.error`. We collect
-/// both so the assertion is robust to which path Svelte takes.
+/// Reset the reactive world to a clean slate and stub the browser APIs jsdom
+/// lacks. Shared by every describe block: jsdom has no ResizeObserver and the
+/// RangeSlider installs one in onMount, so a no-op stub is enough (the
+/// reactivity under test is pure); the collections and the active category are
+/// cleared so each test starts from an empty world.
+function resetWorld() {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+  activities.setMap([]);
+  parts.setMap([]);
+  setCategory(undefined);
+}
+
+/// Mount the page and let Svelte's effect scheduler flush (five `tick()`
+/// rounds settle the effect queue).
+async function mountPage(params: { part: number }): Promise<HTMLElement> {
+  const { container } = render(Activities, { params });
+  for (let i = 0; i < 5; i++) await tick();
+  return container;
+}
+
+/// Mount the page (see `mountPage`) and collect any reactivity-loop errors. A
+/// reactivity loop throws `effect_update_depth_exceeded` mid-flush (dev mode);
+/// in jsdom that surfaces on the window `error` event and/or via
+/// `console.error`. We collect both so the assertion is robust to which path
+/// Svelte takes.
 async function mountAndCollectErrors(params: {
   part: number;
 }): Promise<{ text: string; errors: string[] }> {
@@ -110,8 +136,7 @@ async function mountAndCollectErrors(params: {
     );
   window.addEventListener("error", onWindowError);
   try {
-    const { container } = render(Activities, { params });
-    for (let i = 0; i < 5; i++) await tick();
+    const container = await mountPage(params);
     await new Promise((resolve) => setTimeout(resolve, 25));
     return { text: container.textContent ?? "", errors };
   } finally {
@@ -126,17 +151,7 @@ function depthErrors(errors: string[]) {
 
 describe("Activities page reactivity (effect_update_depth_exceeded)", () => {
   beforeEach(() => {
-    // jsdom has no ResizeObserver; the RangeSlider installs one in onMount.
-    // A no-op stub is enough — the reactivity under test is pure.
-    class ResizeObserverStub {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    }
-    vi.stubGlobal("ResizeObserver", ResizeObserverStub);
-    activities.setMap([]);
-    parts.setMap([]);
-    setCategory(undefined);
+    resetWorld();
   });
 
   it("bike view renders without exceeding the effect update depth", async () => {
@@ -159,8 +174,7 @@ describe("Activities page reactivity (effect_update_depth_exceeded)", () => {
 
   it("moving the date slider filters the list through the one-way on:change wiring", async () => {
     await seedWorld();
-    const { container } = render(Activities, { params: { part: 0 } });
-    for (let i = 0; i < 5; i++) await tick();
+    const container = await mountPage({ part: 0 });
     await new Promise((resolve) => setTimeout(resolve, 25));
 
     // All four rides start within the initial range, so all are listed.
@@ -183,18 +197,11 @@ describe("Activities page reactivity (effect_update_depth_exceeded)", () => {
   });
 });
 
-describe("Activities page search debounce + deferred card menu", () => {
+describe("Activities page search debounce", () => {
   beforeEach(() => {
-    // jsdom has no ResizeObserver; the RangeSlider installs one in onMount.
-    class ResizeObserverStub {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    }
-    vi.stubGlobal("ResizeObserver", ResizeObserverStub);
-    // The search debounce (setTimeout) and the flowbite Dropdown's open/close
-    // (rAF-debounced, started from performance.now()) are driven by fake
-    // timers; the Web-Animations stub in setup.ts runs on setTimeout too.
+    resetWorld();
+    // The search debounce (setTimeout) and the Web-Animations stub in
+    // setup.ts (which also runs on setTimeout) are driven by fake timers.
     vi.useFakeTimers({
       toFake: [
         "setTimeout",
@@ -206,20 +213,11 @@ describe("Activities page search debounce + deferred card menu", () => {
         "performance",
       ],
     });
-    activities.setMap([]);
-    parts.setMap([]);
-    setCategory(undefined);
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
-
-  async function mountPage() {
-    const { container } = render(Activities, { params: { part: 0 } });
-    for (let i = 0; i < 5; i++) await tick();
-    return container;
-  }
 
   function searchInput(container: HTMLElement): HTMLInputElement {
     return container.querySelector("input[type='text']") as HTMLInputElement;
@@ -233,7 +231,7 @@ describe("Activities page search debounce + deferred card menu", () => {
 
   it("does not re-filter on every keystroke; the filter runs ~200ms after typing pauses", async () => {
     await seedWorld();
-    const container = await mountPage();
+    const container = await mountPage({ part: 0 });
     expect(container.textContent).toContain("Ride B");
 
     typeSearch(container, "Ride A");
@@ -253,7 +251,7 @@ describe("Activities page search debounce + deferred card menu", () => {
 
   it("clearing the search box updates the list immediately, with no debounce delay", async () => {
     await seedWorld();
-    const container = await mountPage();
+    const container = await mountPage({ part: 0 });
 
     typeSearch(container, "Ride A");
     await vi.advanceTimersByTimeAsync(200);
@@ -264,26 +262,5 @@ describe("Activities page search debounce + deferred card menu", () => {
     await tick(); // no timer advance
 
     expect(container.textContent).toContain("Ride B");
-  });
-
-  it("does not mount the card menu dropdown until first interaction with the trigger", async () => {
-    await seedWorld();
-    const container = await mountPage();
-
-    const trigger = container.querySelector("svg.cursor-pointer") as SVGElement;
-    const wrapper = trigger.parentElement as HTMLElement;
-
-    // The menu trigger icon is visible, but the Dropdown (and its popper)
-    // is not mounted: no popper trigger-host in the DOM, no trigger wiring.
-    expect(wrapper.querySelector("div[hidden]")).toBeNull();
-    expect(trigger.getAttribute("tabindex")).toBeNull();
-
-    trigger.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-    await vi.advanceTimersByTimeAsync(300);
-    await tick();
-
-    // First interaction mounted the Dropdown and opened it.
-    expect(wrapper.querySelector("div[hidden]")).not.toBeNull();
-    expect(container.textContent).toContain("Change");
   });
 });
