@@ -4,7 +4,10 @@
   import Menu from "../Widgets/Menu.svelte";
   import type { Snippet } from "svelte";
   import * as m from "../../paraglide/messages";
-  import type { ShopSubscription } from "../lib/subscription";
+  import type {
+    ShopSubscription,
+    SubscriptionStatus,
+  } from "../lib/subscription";
   import { shops } from "../lib/shop.svelte";
 
   interface Props {
@@ -19,7 +22,7 @@
     subscription.shop ? subscription.shop.name : shops[subscription.id!].name,
   );
 
-  function statusLabel(status: string): string {
+  function statusLabel(status: SubscriptionStatus): string {
     switch (status) {
       case "active":
         return m.subscription_status_active();
@@ -29,8 +32,10 @@
         return m.subscription_status_pending();
       case "cancelled":
         return m.subscription_status_cancelled();
-      default:
-        return status;
+      default: {
+        const _exhaustive: never = status;
+        return _exhaustive;
+      }
     }
   }
 </script>
