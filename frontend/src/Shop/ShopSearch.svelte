@@ -57,10 +57,10 @@
   }
 </script>
 
-<hr class="my-4 border-gray-200 dark:border-gray-700" />
+<hr class="my-4 border-border-subtle" />
 
 <div>
-  <h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+  <h3 class="mb-4 text-lg font-semibold text-text-2">
     {m.shop_search_header()}
   </h3>
 
