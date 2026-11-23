@@ -1,4 +1,4 @@
-import { render } from "@testing-library/svelte";
+import { fireEvent, render } from "@testing-library/svelte";
 import { tick } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Activities from "./Activities.svelte";
@@ -94,6 +94,62 @@ async function seedWorld() {
   ]);
 }
 
+/// Seed activities whose localized start dates differ in year, day, and
+/// time of day, so each search disjunct (name, device, date) can be
+/// exercised independently. In the runtime locale (en-US) and timezone
+/// (Europe/Berlin) these render as:
+///   Ride A -> 6/15/2023 10:00:00 AM, device "Garmin Edge 1040"
+///   Ride B -> 5/1/2024  10:00:00 AM
+///   Ride C -> 5/2/2024  8:00:00 PM
+async function seedSearchWorld() {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/api/types/part")
+        return Promise.resolve(
+          json200([{ id: 1, name: "Bike", main: 1, hooks: [], order: 1 }]),
+        );
+      if (url === "/api/types/activity")
+        return Promise.resolve(
+          json200([{ id: 301, name: "Ride", gear_type: 1 }]),
+        );
+      return Promise.resolve(json200([]));
+    }),
+  );
+  await getTypes();
+
+  parts.setMap([partData()]);
+
+  activities.setMap([
+    actData({
+      id: "icu:200",
+      name: "Ride A",
+      start: "2023-06-15T08:00:00Z",
+      device_name: "Garmin Edge 1040",
+    }),
+    actData({ id: "icu:201", name: "Ride B", start: "2024-05-01T08:00:00Z" }),
+    actData({ id: "icu:202", name: "Ride C", start: "2024-05-02T18:00:00Z" }),
+  ]);
+}
+
+/// Mount the page, let the effect scheduler flush, type `query` into the
+/// search box, and return the settled page text.
+async function mountAndSearch(query: string): Promise<string> {
+  await seedSearchWorld();
+  const { container } = render(Activities, { params: { part: 0 } });
+  for (let i = 0; i < 5; i++) await tick();
+  await new Promise((resolve) => setTimeout(resolve, 25));
+
+  const input = container.querySelector(
+    'input[type="text"][placeholder="Search..."]',
+  ) as HTMLInputElement;
+  // Svelte 5's `bind:value` listens to `input`, not `change`.
+  fireEvent.input(input, { target: { value: query } });
+  for (let i = 0; i < 5; i++) await tick();
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  return container.textContent ?? "";
+}
+
 /// Mount the page and let Svelte's effect scheduler flush. A reactivity loop
 /// throws `effect_update_depth_exceeded` mid-flush (dev mode); in jsdom that
 /// surfaces on the window `error` event and/or via `console.error`. We collect
@@ -180,5 +236,71 @@ describe("Activities page reactivity (effect_update_depth_exceeded)", () => {
 
     expect(container.textContent).not.toContain("Ride A");
     expect(container.textContent).toContain("Ride B");
+  });
+});
+
+describe("Activities page search", () => {
+  beforeEach(() => {
+    // jsdom has no ResizeObserver; the RangeSlider installs one in onMount.
+    class ResizeObserverStub {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+    activities.setMap([]);
+    parts.setMap([]);
+    setCategory(undefined);
+  });
+
+  it("a substring of the localized start date+time matches", async () => {
+    const text = await mountAndSearch("5/1/2024");
+    expect(text).toContain("Ride B");
+    expect(text).not.toContain("Ride A");
+    expect(text).not.toContain("Ride C");
+  });
+
+  it("a partial date fragment (year) matches", async () => {
+    const text = await mountAndSearch("2023");
+    expect(text).toContain("Ride A");
+    expect(text).not.toContain("Ride B");
+    expect(text).not.toContain("Ride C");
+  });
+
+  it("a partial date fragment (month/day) matches", async () => {
+    // The runtime locale renders the month numerically ("5/1/2024"), so the
+    // month fragment is the month/day prefix of the displayed date.
+    const text = await mountAndSearch("5/1");
+    expect(text).toContain("Ride B");
+    expect(text).not.toContain("Ride A");
+    expect(text).not.toContain("Ride C");
+  });
+
+  it("a time-of-day fragment matches", async () => {
+    const text = await mountAndSearch("PM");
+    expect(text).toContain("Ride C");
+    expect(text).not.toContain("Ride A");
+    expect(text).not.toContain("Ride B");
+  });
+
+  it("name search matches a name substring, as before", async () => {
+    const text = await mountAndSearch("Ride B");
+    expect(text).toContain("Ride B");
+    expect(text).not.toContain("Ride A");
+    expect(text).not.toContain("Ride C");
+  });
+
+  it("device search matches a device name, as before", async () => {
+    const text = await mountAndSearch("Garmin");
+    expect(text).toContain("Ride A");
+    expect(text).not.toContain("Ride B");
+    expect(text).not.toContain("Ride C");
+  });
+
+  it("an empty search shows all activities", async () => {
+    const text = await mountAndSearch("");
+    expect(text).toContain("Ride A");
+    expect(text).toContain("Ride B");
+    expect(text).toContain("Ride C");
   });
 });

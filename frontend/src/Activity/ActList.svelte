@@ -75,14 +75,18 @@
     filteredByDate.filter((a) => !gearFilter || a.gear === gearFilter),
   );
 
-  // Search filter: filter by name and device_name
+  // Search filter: filter by name, device_name, and the localized start
+  // date+time (the same text ActCard displays)
   let filteredBySearch = $derived(
     filteredByGear.filter((a) => {
       if (!searchText) return true;
       let search = searchText.toLowerCase();
       return (
         a.name.toLowerCase().includes(search) ||
-        (a.device_name && a.device_name.toLowerCase().includes(search))
+        (a.device_name && a.device_name.toLowerCase().includes(search)) ||
+        `${a.start.toLocaleDateString()} ${a.start.toLocaleTimeString()}`
+          .toLowerCase()
+          .includes(search)
       );
     }),
   );
