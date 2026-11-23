@@ -28,12 +28,11 @@
 //! these, and commits; no `match provider` and no driver name appear in
 //! `tb_exec`.
 //!
-//! The user-keyed ops (`sync`, `deauthorize`, `delete_user`) dispatch on the
-//! user's real provider, derived in-transaction from the provider-internal
-//! user data (the [`provider_of`](crate::provider_of) lookup — the same
-//! identity rule the unified lane uses), not on the route: a
-//! per-provider route acting on a user of the other provider follows the
-//! stated identity rule instead of failing on a missing lookup.
+//! The target-keyed ops (`sync`, `deauthorize`, `delete_user`, `gear_url`,
+//! `user_url`) dispatch on the target's real provider, derived in-transaction
+//! (the [`provider_of`](crate::provider_of) lookup, ADR-0014), not on the
+//! route: a per-provider route acting on a target of the other provider
+//! follows the stated identity rule instead of failing on a missing lookup.
 //!
 //! The store is the local data store for both providers
 //! (`StravaDataStore + IcuDataStore`): each arm bounds on its own driver's
@@ -339,11 +338,12 @@ where
 }
 
 /// The provider-agnostic `gear_url` dispatch (ADR-0014): the provider's gear
-/// page for the part `id`, gated on the acting session's ownership. The one
-/// non-total op: icu gear is a private settings item with no public page, so
-/// the icu arm is the typed absence (`None`) — the route maps it to a no-op.
+/// page for the part `id`, gated on the acting session's ownership. The
+/// provider is the part's real one, derived in-transaction (the
+/// [`provider_of`](crate::provider_of) lookup). The one non-total op: icu
+/// gear is a private settings item with no public page, so the icu arm is the
+/// typed absence (`None`) — the route maps it to a no-op.
 pub async fn gear_url<S, D: EntityFacade<S>>(
-    provider: Provider,
     session: Box<dyn Session>,
     id: PartId,
     facade: &D,
@@ -352,23 +352,28 @@ pub async fn gear_url<S, D: EntityFacade<S>>(
 where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
+    // The part read is the ownership check; the provider is the part
+    // owner's real one (the domain stores no provider).
+    let part = facade.part(id, session, store).await?;
+    let provider = crate::provider_of(store, part.owner).await?;
     match provider {
-        Provider::Strava => {
-            crate::strava::gear::strava_url(i32::from(id), session, facade, store).await
-        }
-        Provider::Icu => crate::icu::gear::gear_url(id, session, store).await,
+        Provider::Strava => crate::strava::gear::strava_url(&part),
+        Provider::Icu => Ok(None),
     }
 }
 
 /// The provider-agnostic `user_url` dispatch (ADR-0014): the provider's
 /// public athlete profile URL for the target `tbid` (no session: the route
-/// has no user context to gate on). The icu arm builds the public athlete
-/// profile page from the icu user row's athlete id. A pure data-store read:
-/// it drives no domain work, so it takes no facade.
-pub async fn user_url<S>(provider: Provider, id: UserId, store: &mut S) -> TbResult<String>
+/// has no user context to gate on). The provider is the target's real one,
+/// derived in-transaction (the [`provider_of`](crate::provider_of) lookup).
+/// The icu arm builds the public athlete profile page from the icu user
+/// row's athlete id. A pure data-store read: it drives no domain work, so it
+/// takes no facade.
+pub async fn user_url<S>(id: UserId, store: &mut S) -> TbResult<String>
 where
     S: crate::strava::StravaDataStore + crate::icu::IcuDataStore,
 {
+    let provider = crate::provider_of(store, id).await?;
     match provider {
         Provider::Strava => crate::strava::strava_url(id, store).await,
         Provider::Icu => crate::icu::user::user_url(id, store).await,

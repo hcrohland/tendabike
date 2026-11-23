@@ -13,17 +13,21 @@
 use std::sync::{Arc, Mutex};
 
 use crate::Provider;
-use crate::facade::{Error, TbResult, UserId, mock_session_admin};
-use crate::icu::test_support::{MockIcuDataStore, gear_json};
+use crate::facade::{
+    Error, PartId, PartTypeId, TbResult, UserId, mock_session, mock_session_admin,
+};
+use crate::icu::test_support::{MockIcuDataStore, gear_json, icu_user, part};
 use crate::icu::{IcuDataStore, IcuEvent, IcuId, IcuObjectType, IcuUser};
 use crate::strava::event::Event;
-use crate::strava::test_support::MockStravaDataStore;
+use crate::strava::test_support::{MockStravaDataStore, strava_user};
 use crate::strava::{StravaDataStore, StravaId, StravaUser};
 use crate::test_support::{
     MockEntityFacade, begin_test, icu_webhook_secret, init_test_config_once, queue,
 };
 
-use super::{accept_event, deauthorize, delete_user, login, queue_sync_user, sync_users};
+use super::{
+    accept_event, deauthorize, delete_user, gear_url, login, queue_sync_user, sync_users, user_url,
+};
 
 // ─── The composite store double ─────────────────────────────────────────────
 //
@@ -195,7 +199,7 @@ fn icu_event_json_no_activity(athlete: &str, typ: &str, timestamp: &str) -> Stri
 async fn accept_event_strava_queues_an_activity_event() -> TbResult<()> {
     init_test_config_once();
     let mut store = DispatchStore::default();
-    let user = crate::strava::test_support::strava_user(UserId::from(7), 42, true);
+    let user = strava_user(UserId::from(7), 42, true);
     store
         .strava
         .expect_stravauser_get_by_stravaid()
@@ -230,7 +234,7 @@ async fn accept_event_strava_queues_an_activity_event() -> TbResult<()> {
 async fn accept_event_strava_athlete_deauth_disables_the_user() -> TbResult<()> {
     init_test_config_once();
     let mut store = DispatchStore::default();
-    let user = crate::strava::test_support::strava_user(UserId::from(7), 42, true);
+    let user = strava_user(UserId::from(7), 42, true);
     let lookup = user.clone();
     store
         .strava
@@ -295,7 +299,7 @@ async fn accept_event_strava_malformed_body_is_rejected() -> TbResult<()> {
 async fn accept_event_icu_queues_subscribed_events_only() -> TbResult<()> {
     let secret = icu_webhook_secret();
     let mut store = DispatchStore::default();
-    let user = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    let user = icu_user(UserId::from(9), "a1", true);
     store
         .icu
         .expect_icuser_get_by_icuid()
@@ -424,7 +428,7 @@ async fn accept_event_icu_test_delivery_is_accepted_and_queues_nothing() -> TbRe
 async fn accept_event_icu_queues_a_deleted_event() -> TbResult<()> {
     let secret = icu_webhook_secret();
     let mut store = DispatchStore::default();
-    let user = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    let user = icu_user(UserId::from(9), "a1", true);
     store
         .icu
         .expect_icuser_get_by_icuid()
@@ -500,7 +504,7 @@ async fn deauthorize_icu_disables_the_user() -> TbResult<()> {
         .strava
         .expect_stravauser_get_by_tbid()
         .returning(|_| Err(Error::NotFound("no strava user".into())));
-    let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    let icu = icu_user(UserId::from(9), "a1", true);
     let icu_read = icu.clone();
     store
         .icu
@@ -538,7 +542,7 @@ async fn delete_user_icu_deletes_the_user() -> TbResult<()> {
         .strava
         .expect_stravauser_get_by_tbid()
         .returning(|_| Err(Error::NotFound("no strava user".into())));
-    let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    let icu = icu_user(UserId::from(9), "a1", true);
     let icu_read = icu.clone();
     store
         .icu
@@ -626,7 +630,7 @@ async fn login_icu_rejects_a_missing_code_verifier() -> TbResult<()> {
 #[tokio::test]
 async fn provider_of_strava_when_a_strava_row_exists() -> TbResult<()> {
     let mut store = DispatchStore::default();
-    let strava = crate::strava::test_support::strava_user(UserId::from(7), 42, true);
+    let strava = strava_user(UserId::from(7), 42, true);
     store
         .strava
         .expect_stravauser_get_by_tbid()
@@ -645,7 +649,7 @@ async fn provider_of_icu_when_only_an_icu_row_exists() -> TbResult<()> {
         .strava
         .expect_stravauser_get_by_tbid()
         .returning(|_| Err(Error::NotFound("no strava user".into())));
-    let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    let icu = icu_user(UserId::from(9), "a1", true);
     store
         .icu
         .expect_icuser_get_by_tbid()
@@ -673,6 +677,163 @@ async fn provider_of_not_found_when_no_row_exists() -> TbResult<()> {
         .await
         .expect_err("no row in either table is a NotFound");
     assert!(matches!(err, Error::NotFound(_)));
+    Ok(())
+}
+
+// ─── gear_url: the provider-neutral gear redirect URL ──────────────────────
+//
+// The op derives the part's real provider in-transaction from the part's
+// owner (the `provider_of` lookup — the same identity rule as
+// `deauthorize` / `delete_user`), not on the route: the part read is the
+// ownership check, and the provider arm is picked from the derived provider.
+
+/// A part owned by a Strava user takes the Strava arm — the part's source
+/// builds the Strava gear URL.
+#[tokio::test]
+async fn gear_url_strava_owner_builds_the_strava_url() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let mut facade = MockEntityFacade::new();
+    // The part read (the ownership check) returns the sourced part; the
+    // owner's provider lookup finds the Strava row.
+    let part = part(
+        PartId::from(7),
+        UserId::from(7),
+        PartTypeId::from(1),
+        Some("b42".to_string()),
+    );
+    let part_read = part.clone();
+    facade
+        .expect_part()
+        .times(1)
+        .returning(move |_id, _user, _store| Ok(part_read.clone()));
+    let strava = strava_user(UserId::from(7), 42, true);
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .times(1)
+        .returning(move |_| Ok(strava.clone()));
+
+    let url = gear_url(
+        Box::new(mock_session(UserId::from(7))),
+        PartId::from(7),
+        &facade,
+        &mut store,
+    )
+    .await?;
+    assert_eq!(url, Some("https://strava.com/bikes/42".to_string()));
+    Ok(())
+}
+
+/// A part owned by an icu user takes the icu arm — the typed absence
+/// (`None`): icu gear is a private settings item with no public page.
+#[tokio::test]
+async fn gear_url_icu_owner_is_the_typed_absence() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let mut facade = MockEntityFacade::new();
+    let part = part(
+        PartId::from(7),
+        UserId::from(9),
+        PartTypeId::from(1),
+        Some("icu:g1".to_string()),
+    );
+    let part_read = part.clone();
+    facade
+        .expect_part()
+        .times(1)
+        .returning(move |_id, _user, _store| Ok(part_read.clone()));
+    // The owner's provider lookup: no Strava row, an icu row → icu.
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .times(1)
+        .returning(|_| Err(Error::NotFound("no strava user".into())));
+    let icu = icu_user(UserId::from(9), "a1", true);
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .times(1)
+        .returning(move |_| Ok(icu.clone()));
+
+    let url = gear_url(
+        Box::new(mock_session(UserId::from(9))),
+        PartId::from(7),
+        &facade,
+        &mut store,
+    )
+    .await?;
+    assert_eq!(url, None);
+    Ok(())
+}
+
+/// A failed part read (the ownership check's `Forbidden`) propagates — the
+/// route maps a failed op to home (`/`).
+#[tokio::test]
+async fn gear_url_propagates_a_failed_part_read() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let mut facade = MockEntityFacade::new();
+    facade
+        .expect_part()
+        .times(1)
+        .returning(|_id, _user, _store| Err(Error::Forbidden("not your part".to_string())));
+
+    let res = gear_url(
+        Box::new(mock_session(UserId::from(2))),
+        PartId::from(7),
+        &facade,
+        &mut store,
+    )
+    .await;
+    assert!(matches!(res, Err(Error::Forbidden(_))));
+    Ok(())
+}
+
+// ─── user_url: the provider-neutral user redirect URL ──────────────────────
+//
+// The op derives the target's real provider in-transaction from the target's
+// tbid (the `provider_of` lookup — the same identity rule as
+// `deauthorize` / `delete_user`), not on the route. A pure data-store read:
+// no facade.
+
+/// A Strava target takes the Strava arm — the public athlete profile URL.
+#[tokio::test]
+async fn user_url_strava_target_builds_the_strava_url() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let strava = strava_user(UserId::from(3), 42, true);
+    // The user row is read twice: the `provider_of` lookup, then the driver's
+    // `strava_url` (the athlete id for the public profile URL).
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .times(2)
+        .returning(move |_| Ok(strava.clone()));
+
+    let url = user_url(UserId::from(3), &mut store).await?;
+    assert_eq!(url, "https://strava.com/athletes/42");
+    Ok(())
+}
+
+/// An icu target takes the icu arm — the public athlete profile URL built
+/// from the athlete id in the icu user row.
+#[tokio::test]
+async fn user_url_icu_target_builds_the_icu_url() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    // The target's provider lookup: no Strava row, an icu row → icu.
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .times(1)
+        .returning(|_| Err(Error::NotFound("no strava user".into())));
+    let icu = icu_user(UserId::from(3), "a1", true);
+    // The icu row is read twice: the `provider_of` lookup, then the driver's
+    // `user_url` (the athlete id for the public profile URL).
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .times(2)
+        .returning(move |_| Ok(icu.clone()));
+
+    let url = user_url(UserId::from(3), &mut store).await?;
+    assert_eq!(url, "https://intervals.icu/athletes/a1");
     Ok(())
 }
 
@@ -707,7 +868,7 @@ async fn sync_users_queues_icu_users() -> TbResult<()> {
         .returning(|_| Err(Error::NotFound("no strava user".into())));
     // The provider lookup, the lane read, and the `insert_sync`'s
     // `get_icu_id` all resolve the icu user.
-    let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    let icu = icu_user(UserId::from(9), "a1", true);
     let icu_read = icu.clone();
     store
         .icu
@@ -771,7 +932,7 @@ async fn queue_sync_user_queues_icu_sync_with_event_time() -> TbResult<()> {
         .returning(|_| Err(Error::NotFound("no strava user".into())));
     // The provider lookup and the `insert_sync`'s `get_icu_id` resolve the
     // icu user.
-    let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    let icu = icu_user(UserId::from(9), "a1", true);
     let icu_read = icu.clone();
     store
         .icu
@@ -815,19 +976,16 @@ async fn sync_users_queues_strava_users() -> TbResult<()> {
     init_test_config_once();
     let mut store = DispatchStore::default();
     // The all-users Strava read; no icu users.
-    store.strava.expect_stravauser_get_all().returning(|| {
-        Ok(vec![crate::strava::test_support::strava_user(
-            UserId::from(7),
-            42,
-            true,
-        )])
-    });
+    store
+        .strava
+        .expect_stravauser_get_all()
+        .returning(|| Ok(vec![strava_user(UserId::from(7), 42, true)]));
     store
         .icu
         .expect_icuser_get_all()
         .returning(|| Ok(Vec::new()));
     // The `insert_sync`'s `get_strava_id` read + the queue insert.
-    let strava = crate::strava::test_support::strava_user(UserId::from(7), 42, true);
+    let strava = strava_user(UserId::from(7), 42, true);
     store
         .strava
         .expect_stravauser_get_by_tbid()
@@ -859,20 +1017,14 @@ async fn sync_users_skips_disabled() -> TbResult<()> {
     init_test_config_once();
     let mut store = DispatchStore::default();
     // A disabled Strava user and a disabled icu user.
-    store.strava.expect_stravauser_get_all().returning(|| {
-        Ok(vec![crate::strava::test_support::strava_user(
-            UserId::from(7),
-            42,
-            false,
-        )])
-    });
-    store.icu.expect_icuser_get_all().returning(|| {
-        Ok(vec![crate::icu::test_support::icu_user(
-            UserId::from(9),
-            "a1",
-            false,
-        )])
-    });
+    store
+        .strava
+        .expect_stravauser_get_all()
+        .returning(|| Ok(vec![strava_user(UserId::from(7), 42, false)]));
+    store
+        .icu
+        .expect_icuser_get_all()
+        .returning(|| Ok(vec![icu_user(UserId::from(9), "a1", false)]));
 
     let mut session = mock_session_admin(UserId::from(1));
     let queued = sync_users(&mut session, None, 1_700_000_000, &mut store).await?;
@@ -889,7 +1041,7 @@ async fn sync_users_single_strava() -> TbResult<()> {
     let mut store = DispatchStore::default();
     // The provider lookup, the lane read, and the `insert_sync`'s read all
     // resolve the Strava user.
-    let strava = crate::strava::test_support::strava_user(UserId::from(7), 42, true);
+    let strava = strava_user(UserId::from(7), 42, true);
     store
         .strava
         .expect_stravauser_get_by_tbid()

@@ -88,6 +88,32 @@ describe("GearCard", () => {
     unmount();
   });
 
+  it("links the provider mark to the neutral gear redirect route", () => {
+    users.setMap([
+      { id: 5, firstname: "Max", name: "Mustermann", avatar: undefined },
+    ]);
+    const sourced = new Part({
+      id: 8,
+      owner: 5,
+      what: 1,
+      name: "My Bike",
+      last_used: new Date("2024-01-01"),
+      source: "icu:123",
+    });
+    const { container } = render(GearCard, { part: sourced });
+    // The "view on provider" link is the provider-neutral redirect route —
+    // the provider is the part's own, derived server-side.
+    expect(container.querySelector("a[href='/source/gear/8']")).toBeTruthy();
+  });
+
+  it("shows no provider link for a part without a source", () => {
+    users.setMap([
+      { id: 5, firstname: "Max", name: "Mustermann", avatar: undefined },
+    ]);
+    const { container } = render(GearCard, { part });
+    expect(container.querySelector("a[href^='/source/gear/']")).toBeNull();
+  });
+
   it("centers the provider mark in the meta line (no baseline hang)", () => {
     users.setMap([
       { id: 5, firstname: "Max", name: "Mustermann", avatar: undefined },

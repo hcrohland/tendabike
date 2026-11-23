@@ -8,10 +8,9 @@ use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
 use super::http::request_json;
-use super::{Error, OnBehalf, PartId, PartTypeId, Session, StravaDataStore, TbResult, UserId};
-#[cfg(test)]
-use super::{MockStravaDataStore, Part};
+use super::{Error, OnBehalf, PartId, PartTypeId, StravaDataStore, TbResult, UserId};
 use crate::EntityFacade;
+use crate::facade::Part;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct StravaGear {
@@ -24,19 +23,13 @@ struct StravaGear {
     frame_type: Option<i32>,
 }
 
-/// The Strava gear page for the part `gear`, gated on the acting session's
-/// ownership (the `part` read is the ownership check). The one non-total
-/// URL op (ADR-0014): a part with no provider source (a manual part) is the
+/// The Strava gear page for the part (the dispatch's part read — the
+/// ownership check — is done before this is called). The one non-total URL
+/// op (ADR-0014): a part with no provider source (a manual part) is the
 /// typed absence (`None`) — the route maps it to a no-op; an unrecognized
 /// source prefix is a `NotFound`.
-pub async fn strava_url<D: EntityFacade<S>, S: StravaDataStore>(
-    gear: i32,
-    user: Box<dyn Session>,
-    facade: &D,
-    store: &mut S,
-) -> TbResult<Option<String>> {
-    let part = facade.part(PartId::from(gear), user, store).await?;
-    let Some(g) = part.source else {
+pub(crate) fn strava_url(part: &Part) -> TbResult<Option<String>> {
+    let Some(g) = &part.source else {
         return Ok(None);
     };
     match &g[0..1] {
