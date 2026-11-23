@@ -1,3 +1,4 @@
+use super::super::IcuId;
 use super::super::test_support::{activity_json, icu_user, setup, stub_activity_json};
 use super::*;
 use crate::facade::{
@@ -25,6 +26,13 @@ fn event(id: i32, activity: &str) -> IcuEvent {
 fn deleted_event(id: i32, activity: &str) -> IcuEvent {
     let mut e = event(id, activity);
     e.event_type = "ACTIVITY_DELETED".into();
+    e
+}
+
+/// A queued event with an explicit `event_time` (the dedup's ordering key).
+fn event_at(id: i32, activity: &str, event_time: i64) -> IcuEvent {
+    let mut e = event(id, activity);
+    e.event_time = event_time;
     e
 }
 
@@ -77,8 +85,85 @@ async fn get_event_returns_queued_event() {
     store
         .expect_icu_event_get_next_for_user()
         .returning(|_id| Ok(Some(event(1, "10"))));
+    // The event is the only queued row for its activity: the dedup no-ops.
+    store
+        .expect_icu_event_get_later()
+        .returning(|_activity, _icu| Ok(vec![event(1, "10")]));
     let read = get_event(UserId::from(1), &mut store).await.unwrap();
     assert!(matches!(read, QueueRead::Event(_)));
+}
+
+/// The queue's read-side dedup (spec #996): for a burst of events on one
+/// activity, only the latest row is returned — the older duplicates are
+/// batch-deleted (one API call per activity, not per event).
+#[tokio::test]
+async fn get_event_returns_latest_and_drops_older() {
+    let (mut store, _facade) = setup();
+    super::super::ratelimit::test_set_not_limited();
+    store
+        .expect_icuser_get_by_tbid()
+        .times(..)
+        .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
+    // Two events for the same activity: the read returns the latest (id 2)
+    // and drops the older (id 1).
+    store
+        .expect_icu_event_get_next_for_user()
+        .returning(|_id| Ok(Some(event_at(1, "10", 1000))));
+    store
+        .expect_icu_event_get_later()
+        .returning(|_activity, _icu| Ok(vec![event_at(1, "10", 1000), event_at(2, "10", 2000)]));
+    let dropped: std::sync::Arc<std::sync::Mutex<Vec<Option<i32>>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let rec = dropped.clone();
+    store
+        .expect_icu_events_delete_batch()
+        .returning(move |values| {
+            rec.lock().unwrap().extend(values);
+            Ok(())
+        });
+    let read = get_event(UserId::from(1), &mut store).await.unwrap();
+    match read {
+        QueueRead::Event(e) => {
+            assert_eq!(e.id, Some(2), "the latest event is returned")
+        }
+        other => panic!("the latest event is returned, got {other:?}"),
+    }
+    assert_eq!(
+        dropped.lock().unwrap().as_slice(),
+        [Some(1)],
+        "the older event is dropped"
+    );
+}
+
+/// The dedup guard (spec #996): a `SYNC` row is keyed on the `"sync"`
+/// sentinel, so the dedup query is keyed on the row's own `activity_id` and
+/// returns only the row itself (REPLACE semantics: at most one `SYNC` per
+/// user) — no batch delete fires, and a `SYNC` row is never cross-collapsed
+/// with an activity row.
+#[tokio::test]
+async fn get_event_sync_row_is_not_cross_collapsed() {
+    let (mut store, _facade) = setup();
+    super::super::ratelimit::test_set_not_limited();
+    store
+        .expect_icuser_get_by_tbid()
+        .times(..)
+        .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
+    store
+        .expect_icu_event_get_next_for_user()
+        .returning(|_id| Ok(Some(sync_event(1, 0, 1000))));
+    store
+        .expect_icu_event_get_later()
+        .returning(|activity, icu| {
+            assert_eq!(activity, "sync", "keyed on the row's own activity_id");
+            assert_eq!(icu, &IcuId::from("a1"), "keyed on the row's own athlete");
+            Ok(vec![sync_event(1, 0, 1000)])
+        });
+    store.expect_icu_events_delete_batch().times(0);
+    let read = get_event(UserId::from(1), &mut store).await.unwrap();
+    assert!(
+        matches!(read, QueueRead::Event(e) if e.object_type == IcuObjectType::Sync),
+        "the SYNC row is returned as-is"
+    );
 }
 
 #[tokio::test]

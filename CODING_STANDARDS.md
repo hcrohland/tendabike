@@ -38,6 +38,10 @@ Every item has the narrowest visibility that compiles: `pub` only if a different
 
 The test: drop the modifier. If it still compiles, the item was over-exposed. A public item no consumer names is case-specific weight exported past the seam (see [Generality](#generality)).
 
+## Removed names
+
+A removed Rust item is gated by the compiler — a dead call stops compiling. A consumer that references the removal as a string is not: a route path, an endpoint, a message key compiles clean and fails at runtime. When a diff removes a name the repo references as a string, sweep the working tree for surviving references (grep the pattern) in the same change. A spec's "nothing links to it" is a claim, not a sweep.
+
 ## Glob imports
 
 No glob imports (`use x::*`) — name the items. The one exception is `pub use <module>::*;`, which collects a module's exports for public consumption (the `lib.rs`/aggregator re-exports). Two narrower allowances: `use super::*;` inside a test module (`*_tests.rs` or an inline `#[cfg(test)] mod tests`), and an enum-variant glob (`use SomeEnum::*;`) inside a `match` arm.

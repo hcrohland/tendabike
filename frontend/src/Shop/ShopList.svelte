@@ -29,14 +29,14 @@
   }
 </script>
 
-<div class="grid gap-4 grid-cols-1">
+<div class="flex flex-col gap-2 sm:gap-3">
   {#each shops as shop}
     {@const isOwner = shop.owner === getUser()?.id}
     <ShopCard {shop} {isOwner} {users} {sub}>
       {#if isOwner}
         <ShopOwnerMenu {shop} />
       {:else}
-        <Button onclick={() => request(shop)}>
+        <Button color="light" onclick={() => request(shop)}>
           {m.shop_request_subscription()}
         </Button>
       {/if}

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/svelte";
 import { describe, expect, it } from "vitest";
 import { ShopSubscription } from "../lib/subscription";
-import SubscriptionRow from "./SubscriptionRow.svelte";
+import SubscriptionCard from "./SubscriptionCard.svelte";
 
 function shopData(overrides: Partial<any> = {}): any {
   return {
@@ -31,25 +31,20 @@ function subscriptionData(overrides: Partial<any> = {}): any {
   };
 }
 
-describe("SubscriptionRow (de-messaged)", () => {
-  it("drops the request/response message columns from the header", () => {
-    render(SubscriptionRow);
-    expect(screen.getByText("Shop")).toBeTruthy();
-    expect(screen.getByText("Status")).toBeTruthy();
-    expect(screen.getByText("Date")).toBeTruthy();
-    expect(screen.getByText("Actions")).toBeTruthy();
-    expect(screen.queryByText("Request Message")).toBeNull();
-    expect(screen.queryByText("Response")).toBeNull();
+describe("SubscriptionCard", () => {
+  it("shows the shop name, status, and date", () => {
+    render(SubscriptionCard, {
+      subscription: new ShopSubscription(subscriptionData()),
+    });
+    expect(screen.getByText("Velo Shop")).toBeTruthy();
+    expect(screen.getByText("Pending")).toBeTruthy();
   });
 
-  it("drops the request/response message from a row", () => {
-    render(SubscriptionRow, {
+  it("drops the request/response message", () => {
+    render(SubscriptionCard, {
       subscription: new ShopSubscription(subscriptionData()),
     });
     expect(screen.queryByText("Please let me subscribe!")).toBeNull();
     expect(screen.queryByText("Sure, approved.")).toBeNull();
-    // The remaining columns — shop, status, date — are still present.
-    expect(screen.getByText("Velo Shop")).toBeTruthy();
-    expect(screen.getByText("Pending")).toBeTruthy();
   });
 });

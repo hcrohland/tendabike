@@ -1,22 +1,13 @@
 <script lang="ts">
-  import {
-    Table,
-    TableHead,
-    TableBody,
-    Button,
-    ButtonGroup,
-    Dropdown,
-    Checkbox,
-    Li,
-    Tooltip,
-  } from "flowbite-svelte";
+  import { Button, ButtonGroup, Dropdown, Checkbox, Li } from "flowbite-svelte";
+  import { DropdownItem } from "flowbite-svelte";
   import * as m from "../../paraglide/messages";
   import { myfetch, handleError } from "../lib/utils";
   import { Shop, shops } from "../lib/shop.svelte";
   import ShopSearch from "./ShopSearch.svelte";
   import type { ShopSubscription } from "../lib/subscription";
   import { subscriptions as subscriptionsMap } from "../lib/subscription";
-  import SubscriptionRow from "./SubscriptionRow.svelte";
+  import SubscriptionCard from "./SubscriptionCard.svelte";
   import { requestSubscription } from "./SubscriptionRequestModal.svelte";
   import { allGear, Part, parts } from "../lib/part";
   import { stateValues } from "../lib/mapable.svelte";
@@ -121,11 +112,16 @@
 <div class="space-y-6">
   <div>
     <div class="mb-4 flex items-center justify-between">
-      <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+      <h3 class="text-lg font-semibold text-text-2">
         {m.shop_my_subscriptions()}
       </h3>
 
-      <Button size="sm" onclick={loadSubscriptions}>
+      <Button
+        size="sm"
+        color="light"
+        class="bg-surface-2!"
+        onclick={loadSubscriptions}
+      >
         {m.header_refresh()}
       </Button>
     </div>
@@ -137,121 +133,94 @@
         {m.shop_no_subscriptions()}
       </p>
     {:else}
-      <div class="overflow-x-auto">
-        <Table>
-          <TableHead>
-            <SubscriptionRow />
-          </TableHead>
+      <div class="flex flex-col gap-1 sm:gap-2">
+        {#each subscriptions as subscription (subscription.id)}
+          {@const hasParts = stateValues(parts).some(
+            (p) => p.shop == subscription.shop_id,
+          )}
+          {#snippet menu()}
+            {#if subscription.status === "pending"}
+              <DropdownItem onclick={() => cancelSubscription(subscription)}>
+                {m.action_cancel()}
+              </DropdownItem>
+            {:else if subscription.status === "active"}
+              <DropdownItem>
+                {m.shop_register_gear({ category: getCategory()!.name })}
+              </DropdownItem>
 
-          <TableBody>
-            {#each subscriptions as subscription}
-              <SubscriptionRow {subscription}>
-                {#if confirmingAction?.id === subscription.id}
-                  <div class="flex flex-col gap-2 min-w-48">
-                    <p class="text-sm text-gray-700 dark:text-gray-300">
-                      {confirmingAction!.action === "unsubscribe"
-                        ? m.shop_confirm_unsubscribe()
-                        : m.shop_confirm_delete_request()}
-                    </p>
-
-                    <div class="flex gap-2">
-                      <Button
-                        size="xs"
-                        color="red"
-                        onclick={() => cancelSubscription(subscription)}
-                      >
-                        {m.action_confirm()}
-                      </Button>
-
-                      <Button
-                        size="xs"
-                        color="alternative"
-                        onclick={cancelConfirmation}
-                      >
-                        {m.action_cancel()}
-                      </Button>
-                    </div>
-                  </div>
-                {:else}
-                  <div class="flex gap-2">
-                    {#if subscription.status === "pending"}
-                      <Button
-                        size="xs"
-                        color="alternative"
-                        onclick={() => cancelSubscription(subscription)}
-                      >
-                        {m.action_cancel()}
-                      </Button>
-                    {:else if subscription.status === "active"}
-                      <ButtonGroup>
-                        <Button size="xs" color="alternative">
-                          {m.shop_register_gear({
-                            category: getCategory()!.name,
-                          })}
-                        </Button>
-
-                        <Dropdown simple>
-                          {#each mygear as gear}
-                            <Li class="m-3">
-                              <Checkbox
-                                checked={gear.shop == subscription.shop_id}
-                                onchange={(e: any) =>
-                                  registerGear(
-                                    gear,
-                                    subscription.shop_id,
-                                    e.target.checked,
-                                  )}
-                              >
-                                {gear.name}
-                              </Checkbox>
-                            </Li>
-                          {/each}
-                        </Dropdown>
-
-                        {@const hasParts = stateValues(parts).some(
-                          (p) => p.shop == subscription.shop_id,
+              <Dropdown simple>
+                {#each mygear as gear}
+                  <Li class="m-3">
+                    <Checkbox
+                      checked={gear.shop == subscription.shop_id}
+                      onchange={(e: any) =>
+                        registerGear(
+                          gear,
+                          subscription.shop_id,
+                          e.target.checked,
                         )}
-                        <span
-                          id="unsubscribe-btn-{subscription.id}"
-                          class="inline-block"
-                        >
-                          <Button
-                            size="xs"
-                            color="alternative"
-                            onclick={() =>
-                              startConfirmation(
-                                subscription.id!,
-                                "unsubscribe",
-                              )}
-                            disabled={hasParts}
-                          >
-                            {m.shop_unsubscribe()}
-                          </Button>
-                        </span>
-                        {#if hasParts}
-                          <Tooltip
-                            triggeredBy="#unsubscribe-btn-{subscription.id}"
-                          >
-                            {m.shop_unsubscribe_disabled()}
-                          </Tooltip>
-                        {/if}
-                      </ButtonGroup>
-                    {:else if subscription.status === "rejected"}
-                      <Button
-                        size="xs"
-                        color="red"
-                        onclick={() =>
-                          startConfirmation(subscription.id!, "delete")}
-                      >
-                        {m.action_delete()}
-                      </Button>
-                    {/if}
-                  </div>
-                {/if}
-              </SubscriptionRow>
-            {/each}
-          </TableBody>
-        </Table>
+                    >
+                      {gear.name}
+                    </Checkbox>
+                  </Li>
+                {/each}
+              </Dropdown>
+
+              <DropdownItem
+                disabled={hasParts}
+                title={hasParts ? m.shop_unsubscribe_disabled() : undefined}
+                onclick={() =>
+                  startConfirmation(subscription.id!, "unsubscribe")}
+              >
+                {m.shop_unsubscribe()}
+              </DropdownItem>
+            {:else if subscription.status === "rejected"}
+              <DropdownItem
+                onclick={() => startConfirmation(subscription.id!, "delete")}
+              >
+                {m.action_delete()}
+              </DropdownItem>
+            {/if}
+          {/snippet}
+
+          {#snippet body()}
+            <div class="flex flex-col gap-2 min-w-48">
+              <p class="text-sm text-text-1">
+                {confirmingAction!.action === "unsubscribe"
+                  ? m.shop_confirm_unsubscribe()
+                  : m.shop_confirm_delete_request()}
+              </p>
+
+              <div class="flex gap-2">
+                <Button
+                  size="xs"
+                  color="red"
+                  onclick={() => cancelSubscription(subscription)}
+                >
+                  {m.action_confirm()}
+                </Button>
+
+                <Button
+                  size="xs"
+                  color="alternative"
+                  onclick={cancelConfirmation}
+                >
+                  {m.action_cancel()}
+                </Button>
+              </div>
+            </div>
+          {/snippet}
+
+          <SubscriptionCard
+            {subscription}
+            menu={subscription.status === "pending" ||
+            subscription.status === "active" ||
+            subscription.status === "rejected"
+              ? menu
+              : undefined}
+            body={confirmingAction?.id === subscription.id ? body : undefined}
+          />
+        {/each}
       </div>
     {/if}
   </div>

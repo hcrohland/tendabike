@@ -1,16 +1,9 @@
 <script lang="ts">
-  import {
-    Input,
-    ButtonGroup,
-    Table,
-    Button,
-    TableBodyRow,
-    TableHeadCell,
-    TableBodyCell,
-  } from "flowbite-svelte";
+  import { Input, ButtonGroup, Button } from "flowbite-svelte";
   import { types, Type, localizeGroupName } from "../lib/types.svelte";
   import { Attachment } from "../lib/attachment";
   import { type Map, filterValues } from "../lib/mapable.svelte";
+  import Card from "../Widgets/Card.svelte";
   import Switch from "../Widgets/Switch.svelte";
   import { Part } from "../lib/part";
   import { m } from "../../paraglide/messages";
@@ -118,19 +111,17 @@
         {m.wizard_add_more_groups()}
       </Button>
     {:else}
-      <Table>
-        <tbody>
-          <TableBodyRow>
-            <TableHeadCell colspan={80}>{m.wizard_add_groups()}</TableHeadCell>
-          </TableBodyRow>
-          {#each groups as g}
-            <TableBodyRow>
-              <TableHeadCell>
-                <Switch bind:checked={g.enabled}>
-                  {localizeGroupName(g.group)}:
-                </Switch>
-              </TableHeadCell>
-              <TableBodyCell>
+      <p class="mb-2 text-sm font-semibold text-text-2">
+        {m.wizard_add_groups()}
+      </p>
+      <div class="flex flex-col gap-1 sm:gap-2">
+        {#each groups as g}
+          <Card>
+            <div class="flex items-center gap-2 p-1 sm:p-2">
+              <Switch bind:checked={g.enabled}>
+                {localizeGroupName(g.group)}:
+              </Switch>
+              <div class="flex-1">
                 <ButtonGroup>
                   <Input
                     type="text"
@@ -145,12 +136,12 @@
                     disabled={!g.enabled}
                   />
                 </ButtonGroup>
-              </TableBodyCell>
-            </TableBodyRow>
-          {/each}
-        </tbody>
-      </Table>
-      <Button {disabled} onclick={save}>{m.action_set()}</Button>
+              </div>
+            </div>
+          </Card>
+        {/each}
+      </div>
+      <Button {disabled} class="mt-2" onclick={save}>{m.action_set()}</Button>
     {/if}
   </div>
 {/if}

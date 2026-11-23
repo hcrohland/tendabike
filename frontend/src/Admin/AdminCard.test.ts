@@ -61,6 +61,16 @@ describe("AdminCard", () => {
     expect(screen.getByText("Admin")).toBeTruthy();
   });
 
+  it("links the provider mark to the neutral user redirect route in a new tab", () => {
+    const { utils } = renderCard();
+    // The link is the provider-neutral redirect route — the provider is the
+    // user's own, derived server-side. It opens in a new tab so the admin
+    // page is not left.
+    const link = utils.container.querySelector("a[href='/source/users/3']");
+    expect(link).toBeTruthy();
+    expect(link?.getAttribute("target")).toBe("_blank");
+  });
+
   describe("action menu", () => {
     beforeEach(() => {
       vi.useFakeTimers({
