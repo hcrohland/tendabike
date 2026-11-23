@@ -14,6 +14,7 @@
 ## Verification
 
 - **Browser:** Playwright + Chromium is available system-wide. Use it for real-browser verification when a spec's acceptance criteria require it (e.g., confirming a page renders without console errors). The full local stack — database, backend, dev server, Playwright setup, teardown — is in [`docs/dev-stack.md`](docs/dev-stack.md).
+- **jsdom's blind spot:** jsdom does not model flowbite's async popper wiring. For changes to `Menu`/Dropdown open-close behaviour — or any shared widget's interaction — a passing jsdom test is not sufficient: verify open, close, and keyboard reachability in a real browser before shipping.
 
 ## Architecture
 
@@ -39,4 +40,5 @@
 - Collection updates must use `updateMap()` / `setMap()` / `deleteItem()` on the entity's exported collection (e.g. `parts.updateMap([data])`).
 - Paraglide messages are imported from `paraglide/messages` (relative depth varies by component); translation keys follow the `m.action_name()` pattern.
 - `src/test/setup.ts` restores all mocks in `afterEach` — `vi.stubGlobal` stubs created in `beforeAll` are gone after the first test; create stubs in `beforeEach`.
+- Svelte 5 `bind:value` on a raw `<input type="text">` listens to `input`, not `change` — drive it with `fireEvent.input`. `DateTime.test.ts`'s `fireEvent.change` works only because it targets a flowbite `Input`.
 - **flowbite-svelte Popper/Dropdown in tests**: the trigger fires on `mousedown` (not `click`); open/close is `requestAnimationFrame`-debounced, so fake timers must also fake `rAF` + `performance`; Svelte 5 transitions complete via the Web Animations API (`element.animate` → `onfinish`), which is why `setup.ts` stubs `animate`/`showPopover`. Drive these tests with `vi.advanceTimersByTimeAsync` + `flushSync` in an `async` body.

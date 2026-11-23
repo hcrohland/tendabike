@@ -344,10 +344,8 @@ describe("Activities page search", () => {
   });
 
   it("a time-of-day fragment matches", async () => {
-    // 18:00Z renders as a PM time only in timezones where it lands in the
-    // afternoon; pin the timezone the seed data was chosen for so the
-    // fragment is stable everywhere.
-    vi.stubEnv("TZ", "Europe/Berlin");
+    // 18:00Z renders as a PM time in the pinned test timezone
+    // (Europe/Berlin, set in vite.config.ts).
     const text = await mountAndSearch("PM");
     expect(text).toContain("Ride C");
     expect(text).not.toContain("Ride A");
