@@ -536,16 +536,10 @@ where
     /// The gear redirect URL (ADR-0014): one transaction — the provider
     /// layer's `gear_url` op (which checks the part's ownership). The one
     /// non-total op: the icu arm is the typed absence (`None`).
-    async fn gear_url(
-        &self,
-        provider: Provider,
-        session: Box<dyn Session>,
-        id: PartId,
-    ) -> TbResult<Option<String>> {
+    async fn gear_url(&self, session: Box<dyn Session>, id: PartId) -> TbResult<Option<String>> {
         let mut store = self.source.begin().await?;
         let uri =
-            tb_provider::dispatch::gear_url(provider, session, id, self.lane.facade(), &mut store)
-                .await?;
+            tb_provider::dispatch::gear_url(session, id, self.lane.facade(), &mut store).await?;
         store.commit().await?;
         Ok(uri)
     }
@@ -553,9 +547,9 @@ where
     /// The user redirect URL (ADR-0014): one transaction — the provider
     /// layer's `user_url` op for the target's tbid (no session). The icu arm
     /// builds the public athlete profile page.
-    async fn user_url(&self, provider: Provider, id: UserId) -> TbResult<String> {
+    async fn user_url(&self, id: UserId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let uri = tb_provider::dispatch::user_url(provider, id, &mut store).await?;
+        let uri = tb_provider::dispatch::user_url(id, &mut store).await?;
         store.commit().await?;
         Ok(uri)
     }

@@ -7,11 +7,7 @@
   import { getUser, users } from "../lib/user.svelte";
   import UsageChips from "../Usage/UsageChips.svelte";
   import ProviderMark from "../Widgets/ProviderMark.svelte";
-  import {
-    providerOfActivityId,
-    providerMeta,
-    gearSourceUrl,
-  } from "../lib/provider.svelte";
+  import { providerOfActivityId, providerMeta } from "../lib/provider.svelte";
   import * as m from "../../paraglide/messages";
 
   interface Props {
@@ -26,10 +22,10 @@
   let gearProvider = $derived(
     part.source ? providerOfActivityId(part.source) : undefined,
   );
-  // Known gap: no provider-neutral `/source/gear/` redirect route exists in
-  // the backend yet, so the gear "view on" link uses the hard-coded provider
-  // URLs from `gearSourceUrl` instead of the redirect route.
-  let gearUrl = $derived(part.source ? gearSourceUrl(part.source) : undefined);
+  // The provider-neutral gear redirect route: the provider is the part's
+  // own, derived server-side (the typed absence — icu gear, a manual part —
+  // is a no-op redirect to the current page).
+  let gearUrl = $derived(part.source ? "/source/gear/" + part.id : undefined);
 
   function model(part: Part) {
     if (part.model == "" && part.vendor == "") {

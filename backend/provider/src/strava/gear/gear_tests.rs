@@ -1,8 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use super::super::test_support::{gear_json, part, setup, strava_session};
+use super::super::test_support::{gear_json, part, setup};
 use super::*;
-use crate::MockEntityFacade;
 use crate::test_support::{queue, queue_error, requests};
 
 #[tokio::test]
@@ -129,57 +128,22 @@ async fn into_partid_propagates_error() {
     assert!(matches!(res, Err(Error::AnyFailure(_))));
 }
 
-async fn seed_part(
-    store: &mut MockStravaDataStore,
-    facade: &mut MockEntityFacade<MockStravaDataStore>,
-    source: &str,
-) -> TbResult<PartId> {
-    // A part carrying `source` is created: no existing part for the source,
-    // the Strava gear fetch, then the create.
-    queue(&format!("/gear/{source}"), &gear_json(source, Some(0)));
-    facade
-        .expect_part_by_source()
-        .returning(|_s, _store| Ok(None));
-    let src = source.to_string();
-    facade.expect_create_part().returning(
-        move |_name, _vendor, _model, _what, _source, _purchase, _user, _store| {
-            Ok(part(
-                PartId::from(1),
-                UserId::from(1),
-                1.into(),
-                Some(src.clone()),
-            ))
-        },
-    );
-    into_partid(source.to_string(), UserId::from(1), facade, store).await
-}
-
-/// A part carrying `source`, owned by `owner` — the `part` read
-/// `strava_url` drives (the source's first letter picks the URL shape).
+/// A part carrying `source`, owned by `owner` — the source's first letter
+/// picks the URL shape.
 fn sourced_part(source: &str, owner: UserId) -> Part {
     part(PartId::from(1), owner, 1.into(), Some(source.to_string()))
 }
 
-#[tokio::test]
-async fn gear_strava_url_bike() -> TbResult<()> {
-    let (mut store, mut facade, session) = setup();
-    let part_id = seed_part(&mut store, &mut facade, "b42").await?;
-    facade
-        .expect_part()
-        .returning(move |_pid, _user, _store| Ok(sourced_part("b42", UserId::from(1))));
-    let url = strava_url(i32::from(part_id), Box::new(session), &facade, &mut store).await?;
+#[test]
+fn gear_strava_url_bike() -> TbResult<()> {
+    let url = strava_url(&sourced_part("b42", UserId::from(1)))?;
     assert_eq!(url, Some("https://strava.com/bikes/42".to_string()));
     Ok(())
 }
 
-#[tokio::test]
-async fn gear_strava_url_shoes() -> TbResult<()> {
-    let (mut store, mut facade, session) = setup();
-    let part_id = seed_part(&mut store, &mut facade, "g1").await?;
-    facade
-        .expect_part()
-        .returning(move |_pid, _user, _store| Ok(sourced_part("g1", UserId::from(1))));
-    let url = strava_url(i32::from(part_id), Box::new(session), &facade, &mut store).await?;
+#[test]
+fn gear_strava_url_shoes() -> TbResult<()> {
+    let url = strava_url(&sourced_part("g1", UserId::from(1)))?;
     assert_eq!(
         url,
         Some("https://www.strava.com/settings/gear".to_string())
@@ -187,42 +151,18 @@ async fn gear_strava_url_shoes() -> TbResult<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn gear_strava_url_unknown_source() -> TbResult<()> {
-    let (mut store, mut facade, session) = setup();
-    let part_id = seed_part(&mut store, &mut facade, "x9").await?;
-    facade
-        .expect_part()
-        .returning(move |_pid, _user, _store| Ok(sourced_part("x9", UserId::from(1))));
-    let res = strava_url(i32::from(part_id), Box::new(session), &facade, &mut store).await;
+#[test]
+fn gear_strava_url_unknown_source() -> TbResult<()> {
+    let res = strava_url(&sourced_part("x9", UserId::from(1)));
     assert!(matches!(res, Err(Error::NotFound(_))));
     Ok(())
 }
 
-#[tokio::test]
-async fn gear_strava_url_missing_source() -> TbResult<()> {
-    let (mut store, mut facade, session) = setup();
+#[test]
+fn gear_strava_url_missing_source() -> TbResult<()> {
     // A locally created part (no Strava source): `strava_url` is the typed
     // absence (`None`) — the route maps it to a no-op (ADR-0014).
-    facade.expect_part().returning(move |_pid, _user, _store| {
-        Ok(part(PartId::from(1), UserId::from(1), 1.into(), None))
-    });
-    let res = strava_url(1, Box::new(session), &facade, &mut store).await?;
+    let res = strava_url(&part(PartId::from(1), UserId::from(1), 1.into(), None))?;
     assert_eq!(res, None);
-    Ok(())
-}
-
-#[tokio::test]
-async fn gear_strava_url_forbidden_other_user() -> TbResult<()> {
-    let (mut store, mut facade, _session) = setup();
-    let part_id = seed_part(&mut store, &mut facade, "b42").await?;
-    // The part is owned by user 1; a request from user 2 (no shop) is
-    // `Forbidden` by the ownership check.
-    facade
-        .expect_part()
-        .returning(move |_pid, _user, _store| Err(Error::Forbidden("not your part".to_string())));
-    let other = strava_session(UserId::from(2), 43.into());
-    let res = strava_url(i32::from(part_id), Box::new(other), &facade, &mut store).await;
-    assert!(matches!(res, Err(Error::Forbidden(_))));
     Ok(())
 }
