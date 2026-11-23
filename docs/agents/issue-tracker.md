@@ -27,13 +27,19 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 | Comment | `gh issue comment <n> --body "…"` |
 | Close | `gh issue close <n> --reason completed` |
 | Create PR | `gh pr create --head <branch> --title "…" --body "…"` |
-| Merge PR | `gh pr checks <n> --watch --interval 30 --fail-fast >/dev/null 2>&1 && gh pr merge <n> --squash` |
+| Check PR | sync to current `main`, then verify CI + mergeability — see **Check PR** below |
+| Merge PR | **Check PR** (above), then `gh pr merge <n> --squash` |
 | View PR inline review comments | `gh api repos/<owner>/<repo>/pulls/<n>/comments` |
 | Reply to a review comment | `gh api repos/<owner>/<repo>/pulls/<n>/comments -F in_reply_to=<id> -f body="…"` |
 | Add sub-issue | `gh issue edit <parent> --add-sub-issue <child1>,<child2>` |
 | Add blocked-by | `gh issue edit <n> --add-blocked-by <blocker1>,<blocker2>` |
 | Add blocking | `gh issue edit <n> --add-blocking <n1>,<n2>` |
 | Check blockers | `gh issue view <n> --json blockedBy` |
+
+**Check PR:** verify a PR on a current branch, in order:
+1. **Sync** to current `main` (see the **Sync** convention) — `git fetch origin`; only if behind (`git rev-list --count HEAD..origin/main` > 0), `git merge origin/main`, resolve any conflict (see the `resolving-merge-conflicts` skill), then `git push`.
+2. **CI:** `gh pr checks <n> --watch --interval 30 --fail-fast` — see **Check gotcha** (a run must exist for the head SHA).
+3. **Mergeable:** `gh pr view <n> --json mergeStateStatus` reports `CLEAN` — not `BEHIND`, `DIRTY`, or `BLOCKED`. `mergeable: MERGEABLE` alone is not enough: it can read `MERGEABLE` while the branch is `BEHIND` or `BLOCKED`.
 
 **Check gotcha:** `gh pr checks --watch` exits as soon as the checks that are *registered* pass — before the main CI jobs start, only CodeQL is listed, so it can report green early. Use it to block, then confirm a run exists for the head SHA before acting on the result: `gh run list --branch <head-branch> --limit 1`. Applies both when waiting between commits and before merging.
 
