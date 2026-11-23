@@ -27,6 +27,9 @@ export default defineConfig({
   test: {
     fsModuleCache: true,
     environment: "jsdom",
+    // Pin the timezone the seed data is authored for; the host's TZ must not
+    // decide how a Date renders in a test.
+    env: { TZ: "Europe/Berlin" },
     include: ["src/**/*.test.{ts,js}"],
     setupFiles: ["./src/test/setup.ts"],
     coverage: {
