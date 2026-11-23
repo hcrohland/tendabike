@@ -23,7 +23,7 @@
   import ActCard from "./ActCard.svelte";
   import TotalsCard from "./TotalsCard.svelte";
   import { Alert } from "flowbite-svelte";
-  import { DAY } from "../lib/utils";
+  import { DAY, fmtDateTime } from "../lib/utils";
   import { by } from "../lib/mapable.svelte";
   import { parts } from "../lib/part";
   import * as m from "../../paraglide/messages";
@@ -84,9 +84,7 @@
       return (
         a.name.toLowerCase().includes(search) ||
         (a.device_name && a.device_name.toLowerCase().includes(search)) ||
-        `${a.start.toLocaleDateString()} ${a.start.toLocaleTimeString()}`
-          .toLowerCase()
-          .includes(search)
+        fmtDateTime(a.start).toLowerCase().includes(search)
       );
     }),
   );

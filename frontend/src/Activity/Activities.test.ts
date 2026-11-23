@@ -50,12 +50,25 @@ function actData(overrides: Record<string, unknown> = {}): any {
   };
 }
 
-/// Seed the reactive world the way the app does after login: drive the real
-/// `getTypes()` (which populates the `types` map and sets the active category)
-/// with a mocked fetch, then load one gear (bike, id 5) and a mixed bag of
-/// activities — some on the bike, several with no gear at all. The no-gear
-/// rides are the reporter's real condition.
-async function seedWorld() {
+// jsdom has no ResizeObserver; the RangeSlider installs one in onMount.
+// A no-op stub is enough — the reactivity under test is pure.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+beforeEach(() => {
+  vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+  activities.setMap([]);
+  parts.setMap([]);
+  setCategory(undefined);
+});
+
+/// Stub the type endpoints with a mocked fetch, drive the real `getTypes()`
+/// (which populates the `types` map and sets the active category), and load
+/// one gear (bike, id 5) — the shared prefix of every seeded world.
+async function seedTypes() {
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string) => {
@@ -73,6 +86,14 @@ async function seedWorld() {
   await getTypes();
 
   parts.setMap([partData()]);
+}
+
+/// Seed the reactive world the way the app does after login: types plus one
+/// gear (bike, id 5) and a mixed bag of activities — some on the bike,
+/// several with no gear at all. The no-gear rides are the reporter's real
+/// condition.
+async function seedWorld() {
+  await seedTypes();
 
   // A mix: two rides on the bike, two with no gear assigned (the reporter's
   // real condition).
@@ -102,23 +123,7 @@ async function seedWorld() {
 ///   Ride B -> 5/1/2024  10:00:00 AM
 ///   Ride C -> 5/2/2024  8:00:00 PM
 async function seedSearchWorld() {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn((url: string) => {
-      if (url === "/api/types/part")
-        return Promise.resolve(
-          json200([{ id: 1, name: "Bike", main: 1, hooks: [], order: 1 }]),
-        );
-      if (url === "/api/types/activity")
-        return Promise.resolve(
-          json200([{ id: 301, name: "Ride", gear_type: 1 }]),
-        );
-      return Promise.resolve(json200([]));
-    }),
-  );
-  await getTypes();
-
-  parts.setMap([partData()]);
+  await seedTypes();
 
   activities.setMap([
     actData({
@@ -132,21 +137,26 @@ async function seedSearchWorld() {
   ]);
 }
 
+/// Let Svelte's effect scheduler flush after a render or state change: a
+/// few `tick()` rounds plus a short real-timer wait for debounced work.
+async function settle() {
+  for (let i = 0; i < 5; i++) await tick();
+  await new Promise((resolve) => setTimeout(resolve, 25));
+}
+
 /// Mount the page, let the effect scheduler flush, type `query` into the
 /// search box, and return the settled page text.
 async function mountAndSearch(query: string): Promise<string> {
   await seedSearchWorld();
   const { container } = render(Activities, { params: { part: 0 } });
-  for (let i = 0; i < 5; i++) await tick();
-  await new Promise((resolve) => setTimeout(resolve, 25));
+  await settle();
 
   const input = container.querySelector(
     'input[type="text"][placeholder="Search..."]',
   ) as HTMLInputElement;
   // Svelte 5's `bind:value` listens to `input`, not `change`.
   fireEvent.input(input, { target: { value: query } });
-  for (let i = 0; i < 5; i++) await tick();
-  await new Promise((resolve) => setTimeout(resolve, 25));
+  await settle();
   return container.textContent ?? "";
 }
 
@@ -167,8 +177,7 @@ async function mountAndCollectErrors(params: {
   window.addEventListener("error", onWindowError);
   try {
     const { container } = render(Activities, { params });
-    for (let i = 0; i < 5; i++) await tick();
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await settle();
     return { text: container.textContent ?? "", errors };
   } finally {
     window.removeEventListener("error", onWindowError);
@@ -181,20 +190,6 @@ function depthErrors(errors: string[]) {
 }
 
 describe("Activities page reactivity (effect_update_depth_exceeded)", () => {
-  beforeEach(() => {
-    // jsdom has no ResizeObserver; the RangeSlider installs one in onMount.
-    // A no-op stub is enough — the reactivity under test is pure.
-    class ResizeObserverStub {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    }
-    vi.stubGlobal("ResizeObserver", ResizeObserverStub);
-    activities.setMap([]);
-    parts.setMap([]);
-    setCategory(undefined);
-  });
-
   it("bike view renders without exceeding the effect update depth", async () => {
     await seedWorld();
     const { text, errors } = await mountAndCollectErrors({ part: 5 });
@@ -216,8 +211,7 @@ describe("Activities page reactivity (effect_update_depth_exceeded)", () => {
   it("moving the date slider filters the list through the one-way on:change wiring", async () => {
     await seedWorld();
     const { container } = render(Activities, { params: { part: 0 } });
-    for (let i = 0; i < 5; i++) await tick();
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await settle();
 
     // All four rides start within the initial range, so all are listed.
     expect(container.textContent).toContain("Ride A");
@@ -231,8 +225,7 @@ describe("Activities page reactivity (effect_update_depth_exceeded)", () => {
     handle.dispatchEvent(
       new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
     );
-    for (let i = 0; i < 5; i++) await tick();
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await settle();
 
     expect(container.textContent).not.toContain("Ride A");
     expect(container.textContent).toContain("Ride B");
@@ -240,19 +233,6 @@ describe("Activities page reactivity (effect_update_depth_exceeded)", () => {
 });
 
 describe("Activities page search", () => {
-  beforeEach(() => {
-    // jsdom has no ResizeObserver; the RangeSlider installs one in onMount.
-    class ResizeObserverStub {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    }
-    vi.stubGlobal("ResizeObserver", ResizeObserverStub);
-    activities.setMap([]);
-    parts.setMap([]);
-    setCategory(undefined);
-  });
-
   it("a substring of the localized start date+time matches", async () => {
     const text = await mountAndSearch("5/1/2024");
     expect(text).toContain("Ride B");
@@ -277,6 +257,10 @@ describe("Activities page search", () => {
   });
 
   it("a time-of-day fragment matches", async () => {
+    // 18:00Z renders as a PM time only in timezones where it lands in the
+    // afternoon; pin the timezone the seed data was chosen for so the
+    // fragment is stable everywhere.
+    vi.stubEnv("TZ", "Europe/Berlin");
     const text = await mountAndSearch("PM");
     expect(text).toContain("Ride C");
     expect(text).not.toContain("Ride A");
