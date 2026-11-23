@@ -13,7 +13,9 @@
 use std::sync::{Arc, Mutex};
 
 use crate::Provider;
-use crate::facade::{Error, TbResult, UserId, mock_session_admin};
+use crate::facade::{
+    Error, PartId, PartTypeId, TbResult, UserId, mock_session, mock_session_admin,
+};
 use crate::icu::test_support::{MockIcuDataStore, gear_json};
 use crate::icu::{IcuDataStore, IcuEvent, IcuId, IcuObjectType, IcuUser};
 use crate::strava::event::Event;
@@ -23,7 +25,9 @@ use crate::test_support::{
     MockEntityFacade, begin_test, icu_webhook_secret, init_test_config_once, queue,
 };
 
-use super::{accept_event, deauthorize, delete_user, login, queue_sync_user, sync_users};
+use super::{
+    accept_event, deauthorize, delete_user, gear_url, login, queue_sync_user, sync_users, user_url,
+};
 
 // ─── The composite store double ─────────────────────────────────────────────
 //
@@ -661,6 +665,150 @@ async fn provider_of_not_found_when_no_row_exists() -> TbResult<()> {
         .await
         .expect_err("no row in either table is a NotFound");
     assert!(matches!(err, Error::NotFound(_)));
+    Ok(())
+}
+
+// ─── gear_url: the provider-neutral gear redirect URL ──────────────────────
+//
+// The op derives the part's real provider in-transaction from the part's
+// owner (the `provider_of` lookup — the same identity rule as
+// `deauthorize` / `delete_user`), not on the route: the part read is the
+// ownership check, and the provider arm is picked from the derived provider.
+
+/// A part owned by a Strava user takes the Strava arm — the part's source
+/// builds the Strava gear URL.
+#[tokio::test]
+async fn gear_url_strava_owner_builds_the_strava_url() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let mut facade = MockEntityFacade::new();
+    // The part read (the ownership check) returns the sourced part; the
+    // owner's provider lookup finds the Strava row.
+    let part = crate::icu::test_support::part(
+        PartId::from(7),
+        UserId::from(7),
+        PartTypeId::from(1),
+        Some("b42".to_string()),
+    );
+    let part_read = part.clone();
+    facade
+        .expect_part()
+        .returning(move |_id, _user, _store| Ok(part_read.clone()));
+    let strava = crate::strava::test_support::strava_user(UserId::from(7), 42, true);
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(move |_| Ok(strava.clone()));
+
+    let url = gear_url(
+        Box::new(mock_session(UserId::from(7))),
+        PartId::from(7),
+        &facade,
+        &mut store,
+    )
+    .await?;
+    assert_eq!(url, Some("https://strava.com/bikes/42".to_string()));
+    Ok(())
+}
+
+/// A part owned by an icu user takes the icu arm — the typed absence
+/// (`None`): icu gear is a private settings item with no public page.
+#[tokio::test]
+async fn gear_url_icu_owner_is_the_typed_absence() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let mut facade = MockEntityFacade::new();
+    let part = crate::icu::test_support::part(
+        PartId::from(7),
+        UserId::from(9),
+        PartTypeId::from(1),
+        Some("icu:g1".to_string()),
+    );
+    let part_read = part.clone();
+    facade
+        .expect_part()
+        .returning(move |_id, _user, _store| Ok(part_read.clone()));
+    // The owner's provider lookup: no Strava row, an icu row → icu.
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(|_| Err(Error::NotFound("no strava user".into())));
+    let icu = crate::icu::test_support::icu_user(UserId::from(9), "a1", true);
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .returning(move |_| Ok(icu.clone()));
+
+    let url = gear_url(
+        Box::new(mock_session(UserId::from(9))),
+        PartId::from(7),
+        &facade,
+        &mut store,
+    )
+    .await?;
+    assert_eq!(url, None);
+    Ok(())
+}
+
+/// A failed part read (the ownership check's `Forbidden`) propagates — the
+/// route maps a failed op to home (`/`).
+#[tokio::test]
+async fn gear_url_propagates_a_failed_part_read() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let mut facade = MockEntityFacade::new();
+    facade
+        .expect_part()
+        .returning(|_id, _user, _store| Err(Error::Forbidden("not your part".to_string())));
+
+    let res = gear_url(
+        Box::new(mock_session(UserId::from(2))),
+        PartId::from(7),
+        &facade,
+        &mut store,
+    )
+    .await;
+    assert!(matches!(res, Err(Error::Forbidden(_))));
+    Ok(())
+}
+
+// ─── user_url: the provider-neutral user redirect URL ──────────────────────
+//
+// The op derives the target's real provider in-transaction from the target's
+// tbid (the `provider_of` lookup — the same identity rule as
+// `deauthorize` / `delete_user`), not on the route. A pure data-store read:
+// no facade.
+
+/// A Strava target takes the Strava arm — the public athlete profile URL.
+#[tokio::test]
+async fn user_url_strava_target_builds_the_strava_url() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    let strava = crate::strava::test_support::strava_user(UserId::from(3), 42, true);
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(move |_| Ok(strava.clone()));
+
+    let url = user_url(UserId::from(3), &mut store).await?;
+    assert_eq!(url, "https://strava.com/athletes/42");
+    Ok(())
+}
+
+/// An icu target takes the icu arm — the public athlete profile URL built
+/// from the athlete id in the icu user row.
+#[tokio::test]
+async fn user_url_icu_target_builds_the_icu_url() -> TbResult<()> {
+    let mut store = DispatchStore::default();
+    // The target's provider lookup: no Strava row, an icu row → icu.
+    store
+        .strava
+        .expect_stravauser_get_by_tbid()
+        .returning(|_| Err(Error::NotFound("no strava user".into())));
+    let icu = crate::icu::test_support::icu_user(UserId::from(3), "a1", true);
+    store
+        .icu
+        .expect_icuser_get_by_tbid()
+        .returning(move |_| Ok(icu.clone()));
+
+    let url = user_url(UserId::from(3), &mut store).await?;
+    assert_eq!(url, "https://intervals.icu/athletes/a1");
     Ok(())
 }
 

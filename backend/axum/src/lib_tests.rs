@@ -2667,44 +2667,41 @@ async fn icu_webhook_ingest_failure_500s() {
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
 }
 
-/// `GET /strava/bikes/{id}` is the gear redirect direct op (ADR-0014): the
-/// handler drives the neutral `provider` handle with the route's provider.
-/// A present URL permanent-redirects, the typed absence (no provider page)
-/// is a no-op redirect to the current page (the empty relative reference),
-/// and a failed op goes home (`/`).
+/// `GET /source/gear/{id}` is the gear redirect direct op (ADR-0014): the
+/// handler drives the neutral `provider` handle — the provider is the
+/// part's own, derived in the op from the part's owner. A present URL
+/// permanent-redirects, the typed absence (no provider page) is a no-op
+/// redirect to the current page (the empty relative reference), and a failed
+/// op goes home (`/`).
 #[tokio::test]
 async fn redirect_gear_permains_to_strava_url() {
     let (store, mock, mut provider) = mock_ctx();
     provider
         .expect_gear_url()
         .times(1)
-        .withf(|provider, _session, id| *provider == Provider::Strava && *id == PartId::from(7))
-        .returning(|_provider, _session, _id| {
-            Ok(Some("https://www.strava.com/bikes/7".to_string()))
-        });
+        .withf(|_session, id| *id == PartId::from(7))
+        .returning(|_session, _id| Ok(Some("https://www.strava.com/bikes/7".to_string())));
     provider
         .expect_gear_url()
         .times(1)
-        .withf(|provider, _session, id| *provider == Provider::Strava && *id == PartId::from(9))
-        .returning(|_provider, _session, _id| {
-            Err(tb_domain::Error::NotFound("part 9".to_string()))
-        });
+        .withf(|_session, id| *id == PartId::from(9))
+        .returning(|_session, _id| Err(tb_domain::Error::NotFound("part 9".to_string())));
     provider
         .expect_gear_url()
         .times(1)
-        .withf(|provider, _session, id| *provider == Provider::Strava && *id == PartId::from(10))
-        .returning(|_provider, _session, _id| Ok(None));
+        .withf(|_session, id| *id == PartId::from(10))
+        .returning(|_session, _id| Ok(None));
     let app = build_app(&store, mock, provider);
     let cookie = user_cookie(&store).await;
     let (status, headers, _body) =
-        run(app.clone(), Method::GET, "/strava/bikes/7", Some(&cookie)).await;
+        run(app.clone(), Method::GET, "/source/gear/7", Some(&cookie)).await;
     assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
     assert_eq!(headers["location"], "https://www.strava.com/bikes/7");
     let (status, headers, _body) =
-        run(app.clone(), Method::GET, "/strava/bikes/9", Some(&cookie)).await;
+        run(app.clone(), Method::GET, "/source/gear/9", Some(&cookie)).await;
     assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
     assert_eq!(headers["location"], "/");
-    let (status, headers, _body) = run(app, Method::GET, "/strava/bikes/10", Some(&cookie)).await;
+    let (status, headers, _body) = run(app, Method::GET, "/source/gear/10", Some(&cookie)).await;
     assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
     assert_eq!(headers["location"], "");
 }
@@ -2764,39 +2761,39 @@ async fn redirect_activity_icu_prefix_routes_to_icu() {
     );
 }
 
-/// `GET /strava/users/{id}` is the user redirect direct op (ADR-0014, no
+/// `GET /source/users/{id}` is the user redirect direct op (ADR-0014, no
 /// user context — the route is public): the handler drives the neutral
-/// `provider` handle with the route's provider; the Strava URL
-/// permanent-redirects.
+/// `provider` handle — the provider is the target's own, derived in the op
+/// from the target's data; the Strava URL permanent-redirects.
 #[tokio::test]
 async fn redirect_user_permains_to_strava_url() {
     let (store, mock, mut provider) = mock_ctx();
     provider
         .expect_user_url()
         .times(1)
-        .withf(|provider, id| *provider == Provider::Strava && *id == UserId::from(3))
-        .returning(|_provider, _id| Ok("https://www.strava.com/athletes/3".to_string()));
+        .withf(|id| *id == UserId::from(3))
+        .returning(|_id| Ok("https://www.strava.com/athletes/3".to_string()));
     let app = build_app(&store, mock, provider);
-    let (status, headers, _body) = run(app, Method::GET, "/strava/users/3", None).await;
+    let (status, headers, _body) = run(app, Method::GET, "/source/users/3", None).await;
     assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
     assert_eq!(headers["location"], "https://www.strava.com/athletes/3");
 }
 
-/// `GET /icu/users/{id}` is the icu user redirect direct op (ADR-0014, no
-/// user context — the route is public): the handler drives the neutral
-/// `provider` handle with the icu provider; the public athlete profile URL
-/// permanent-redirects (a new capability — the icu arm builds it from the
-/// athlete id in the icu user row).
+/// `GET /source/users/{id}` for an icu target permanent-redirects to the
+/// public athlete profile URL (ADR-0014, no user context — the route is
+/// public): the provider is the target's own, derived in the op from the
+/// target's data (the icu arm builds the profile page from the athlete id in
+/// the icu user row).
 #[tokio::test]
 async fn redirect_user_permains_to_icu_profile() {
     let (store, mock, mut provider) = mock_ctx();
     provider
         .expect_user_url()
         .times(1)
-        .withf(|provider, id| *provider == Provider::Icu && *id == UserId::from(3))
-        .returning(|_provider, _id| Ok("https://intervals.icu/athletes/i55751783".to_string()));
+        .withf(|id| *id == UserId::from(3))
+        .returning(|_id| Ok("https://intervals.icu/athletes/i55751783".to_string()));
     let app = build_app(&store, mock, provider);
-    let (status, headers, _body) = run(app, Method::GET, "/icu/users/3", None).await;
+    let (status, headers, _body) = run(app, Method::GET, "/source/users/3", None).await;
     assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
     assert_eq!(
         headers["location"],
@@ -2804,21 +2801,21 @@ async fn redirect_user_permains_to_icu_profile() {
     );
 }
 
-/// `GET /icu/bikes/{id}` is the icu gear redirect direct op (ADR-0014): icu
-/// gear is a private settings item with no public page, so the op is the
-/// typed absence and the route is a no-op redirect to the current page (the
-/// empty relative reference).
+/// `GET /source/gear/{id}` for a part whose owner is an icu user is the
+/// typed absence (ADR-0014): icu gear is a private settings item with no
+/// public page (the op derives it from the part's owner), so the route is a
+/// no-op redirect to the current page (the empty relative reference).
 #[tokio::test]
 async fn redirect_gear_icu_is_a_no_op() {
     let (store, mock, mut provider) = mock_ctx();
     provider
         .expect_gear_url()
         .times(1)
-        .withf(|provider, _session, id| *provider == Provider::Icu && *id == PartId::from(7))
-        .returning(|_provider, _session, _id| Ok(None));
+        .withf(|_session, id| *id == PartId::from(7))
+        .returning(|_session, _id| Ok(None));
     let app = build_app(&store, mock, provider);
     let cookie = user_cookie(&store).await;
-    let (status, headers, _body) = run(app, Method::GET, "/icu/bikes/7", Some(&cookie)).await;
+    let (status, headers, _body) = run(app, Method::GET, "/source/gear/7", Some(&cookie)).await;
     assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
     assert_eq!(headers["location"], "");
 }
