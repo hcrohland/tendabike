@@ -8,7 +8,7 @@
 - The boundary holds at the package level too: a package's public API is its complete interface, even with a single consumer or implementor. Confirm the API; the implementation behind it is out of scope.
 - Keep batch size one: draft a unit, write it, confirm it landed, then draft the next — one ticket per create, one file or function per edit. Each unit's content is written after the previous one lands, not drafted in a batch up front.
 - Formatting is done by external formatters, never by hand: write the code, then run cargo fmt (Rust) or npm run format from the project root.
-- The local test gate is the full suite of each stack your change touches; CI is the cross-stack gate. A frontend-only change never runs `cargo test`.
+- The local test gate is the full suite of each stack your change touches; CI is the cross-stack gate. A frontend-only change never runs `cargo test`. The gate runs after formatting and is the last verification step before commit.
 - Save test output to a file and slice from the file (`cargo test > /tmp/t.log 2>&1`, then grep it), not pipes — one run, unlimited re-reads.
 
 ## Backend layout
