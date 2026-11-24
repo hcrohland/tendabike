@@ -55,7 +55,7 @@
       step="any"
       required
       autofocus
-      class="w-20"
+      class="w-20!"
       bind:value={modal.fraction}
       placeholder={m.snoozeplan_percent()}
     />
