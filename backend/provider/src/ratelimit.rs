@@ -286,7 +286,7 @@ pub(crate) fn limited_until(
 /// The test-seam hook: set the per-thread `override_key` limiter to a fresh
 /// limiter in the shape of the process-wide one (the given label and specs),
 /// populated from the given `"header", "value"` pairs — the logic a driver's
-/// `test_set_limited` / `test_set_not_limited` thin wrappers drive.
+/// `test_set_not_limited` thin wrapper drives.
 #[cfg(test)]
 pub(crate) fn set_override(
     override_key: &'static LocalKey<RefCell<Option<RateLimiter>>>,

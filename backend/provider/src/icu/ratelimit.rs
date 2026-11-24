@@ -46,12 +46,12 @@ fn icu_specs() -> Vec<WindowSpec> {
 static RATE_LIMITER: std::sync::LazyLock<RateLimitShim> =
     std::sync::LazyLock::new(|| RateLimitShim::new("icu", icu_specs()));
 
-// A per-thread override limiter, set by the test hooks
-// (`test_set_limited` / `test_set_not_limited`). When `Some`, `limited_until`
-// reports from this limiter instead of the process-global `RATE_LIMITER`, so
-// parallel rate-limiter tests can't observe each other's state (each test runs
-// on its own thread). `None` in production and on any thread a test hook
-// hasn't touched.
+// A per-thread override limiter, set by the test hook
+// (`test_set_not_limited`). When `Some`, `limited_until` reports from this
+// limiter instead of the process-global `RATE_LIMITER`, so parallel
+// rate-limiter tests can't observe each other's state (each test runs on its
+// own thread). `None` in production and on any thread a test hook hasn't
+// touched.
 thread_local! {
     static TEST_OVERRIDE: RefCell<Option<RateLimiter>> = const { RefCell::new(None) };
 }
@@ -62,8 +62,10 @@ thread_local! {
 /// Emits a WARN log on transition into or out of the rate-limited state.
 /// The test-override-aware gate logic lives in the kit
 /// ([`crate::ratelimit::limited_until`]); this thin wrapper drives it with
-/// intervals.icu's named static and thread-local.
-pub(crate) fn limited_until() -> Option<i64> {
+/// intervals.icu's named static and thread-local. `pub` (not `pub(crate)`)
+/// so the `EventQueue` impl over the data store can consult the gate (the
+/// queue's read-side rate-limit check, spec #1023).
+pub fn limited_until() -> Option<i64> {
     crate::ratelimit::limited_until(&RATE_LIMITER, &TEST_OVERRIDE)
 }
 
@@ -73,22 +75,6 @@ pub(crate) fn limited_until() -> Option<i64> {
 /// values for those fields).
 pub(crate) fn update_from_headers(headers: &HeaderMap) {
     RATE_LIMITER.update_from_headers(headers);
-}
-
-#[cfg(test)]
-/// Sets this thread's rate-limiter override to "at limit" (15-min exhausted:
-/// 0 remaining), so [`limited_until`] reports a boundary. The override-set
-/// logic lives in the kit ([`crate::ratelimit::set_override`]).
-pub(crate) fn test_set_limited() {
-    crate::ratelimit::set_override(
-        &TEST_OVERRIDE,
-        "icu",
-        &icu_specs(),
-        &[
-            ("X-RateLimit-Limit", "100,1000"),
-            ("X-RateLimit-Remaining", "0,500"),
-        ],
-    );
 }
 
 #[cfg(test)]

@@ -1,11 +1,9 @@
-use super::super::IcuId;
 use super::super::test_support::{activity_json, icu_user, setup, stub_activity_json};
 use super::*;
 use crate::facade::{
     ActivityId, Notification, NotificationKind, NotificationLifecycle, NotificationState,
     NotificationSubject, Summary,
 };
-use crate::lane::QueueRead;
 use crate::test_support::icu_webhook_secret;
 use crate::test_support::{queue, queue_error};
 use time::OffsetDateTime;
@@ -29,13 +27,6 @@ fn deleted_event(id: i32, activity: &str) -> IcuEvent {
     e
 }
 
-/// A queued event with an explicit `event_time` (the dedup's ordering key).
-fn event_at(id: i32, activity: &str, event_time: i64) -> IcuEvent {
-    let mut e = event(id, activity);
-    e.event_time = event_time;
-    e
-}
-
 fn notification() -> Notification {
     Notification {
         id: uuid::Uuid::now_v7().into(),
@@ -43,7 +34,7 @@ fn notification() -> Notification {
         lifecycle: NotificationLifecycle::Transient,
         kind: NotificationKind::StubsSkipped,
         subject: NotificationSubject::StubsSkipped,
-        message: Some("2".to_string()),
+        message: Some("1".to_string()),
         state: NotificationState::New,
         created_at: OffsetDateTime::UNIX_EPOCH,
     }
@@ -72,185 +63,67 @@ async fn accept_unknown_athlete_is_bad_request() {
     assert!(matches!(res, Err(Error::BadRequest(_))));
 }
 
-// ─── get_event (probe read) ─────────────────────────────────────────────────
+// ─── process (one event per call) ───────────────────────────────────────────
 
-#[tokio::test]
-async fn get_event_returns_queued_event() {
-    let (mut store, _facade) = setup();
-    super::super::ratelimit::test_set_not_limited();
-    store
-        .expect_icuser_get_by_tbid()
-        .times(..)
-        .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
+/// Canned the `get_event` read of a single queued event: the event is both the
+/// "next" event and the only "later" event for its activity (the dedup no-ops).
+fn queue_event(store: &mut MockIcuDataStore, event: IcuEvent) {
+    let next = event.clone();
+    let later = event.clone();
     store
         .expect_icu_event_get_next_for_user()
-        .returning(|_id| Ok(Some(event(1, "10"))));
-    // The event is the only queued row for its activity: the dedup no-ops.
+        .returning(move |_id| Ok(Some(next.clone())));
     store
         .expect_icu_event_get_later()
-        .returning(|_activity, _icu| Ok(vec![event(1, "10")]));
-    let read = get_event(UserId::from(1), &mut store).await.unwrap();
-    assert!(matches!(read, QueueRead::Event(_)));
-}
-
-/// The queue's read-side dedup (spec #996): for a burst of events on one
-/// activity, only the latest row is returned — the older duplicates are
-/// batch-deleted (one API call per activity, not per event).
-#[tokio::test]
-async fn get_event_returns_latest_and_drops_older() {
-    let (mut store, _facade) = setup();
-    super::super::ratelimit::test_set_not_limited();
-    store
-        .expect_icuser_get_by_tbid()
-        .times(..)
-        .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
-    // Two events for the same activity: the read returns the latest (id 2)
-    // and drops the older (id 1).
-    store
-        .expect_icu_event_get_next_for_user()
-        .returning(|_id| Ok(Some(event_at(1, "10", 1000))));
-    store
-        .expect_icu_event_get_later()
-        .returning(|_activity, _icu| Ok(vec![event_at(1, "10", 1000), event_at(2, "10", 2000)]));
-    let dropped: std::sync::Arc<std::sync::Mutex<Vec<Option<i32>>>> =
-        std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-    let rec = dropped.clone();
-    store
-        .expect_icu_events_delete_batch()
-        .returning(move |values| {
-            rec.lock().unwrap().extend(values);
-            Ok(())
-        });
-    let read = get_event(UserId::from(1), &mut store).await.unwrap();
-    match read {
-        QueueRead::Event(e) => {
-            assert_eq!(e.id, Some(2), "the latest event is returned")
-        }
-        other => panic!("the latest event is returned, got {other:?}"),
-    }
-    assert_eq!(
-        dropped.lock().unwrap().as_slice(),
-        [Some(1)],
-        "the older event is dropped"
-    );
-}
-
-/// The dedup guard (spec #996): a `SYNC` row is keyed on the `"sync"`
-/// sentinel, so the dedup query is keyed on the row's own `activity_id` and
-/// returns only the row itself (REPLACE semantics: at most one `SYNC` per
-/// user) — no batch delete fires, and a `SYNC` row is never cross-collapsed
-/// with an activity row.
-#[tokio::test]
-async fn get_event_sync_row_is_not_cross_collapsed() {
-    let (mut store, _facade) = setup();
-    super::super::ratelimit::test_set_not_limited();
-    store
-        .expect_icuser_get_by_tbid()
-        .times(..)
-        .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
-    store
-        .expect_icu_event_get_next_for_user()
-        .returning(|_id| Ok(Some(sync_event(1, 0, 1000))));
-    store
-        .expect_icu_event_get_later()
-        .returning(|activity, icu| {
-            assert_eq!(activity, "sync", "keyed on the row's own activity_id");
-            assert_eq!(icu, &IcuId::from("a1"), "keyed on the row's own athlete");
-            Ok(vec![sync_event(1, 0, 1000)])
-        });
-    store.expect_icu_events_delete_batch().times(0);
-    let read = get_event(UserId::from(1), &mut store).await.unwrap();
-    assert!(
-        matches!(read, QueueRead::Event(e) if e.object_type == IcuObjectType::Sync),
-        "the SYNC row is returned as-is"
-    );
+        .returning(move |_activity, _icu| Ok(vec![later.clone()]));
 }
 
 #[tokio::test]
-async fn get_event_empty_when_no_events() {
-    let (mut store, _facade) = setup();
-    super::super::ratelimit::test_set_not_limited();
-    store
-        .expect_icuser_get_by_tbid()
-        .times(..)
-        .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
-    store
-        .expect_icu_event_get_next_for_user()
-        .returning(|_id| Ok(None));
-    let read = get_event(UserId::from(1), &mut store).await.unwrap();
-    assert!(matches!(read, QueueRead::Empty));
-}
-
-#[tokio::test]
-async fn get_event_limited_when_rate_limited() {
-    let (mut store, _facade) = setup();
-    super::super::ratelimit::test_set_limited();
-    // The rate-limit gate fires before any store read.
-    let read = get_event(UserId::from(1), &mut store).await.unwrap();
-    assert!(matches!(read, QueueRead::Limited { .. }));
-}
-
-// ─── process (batch drain) ──────────────────────────────────────────────────
-
-#[tokio::test]
-async fn process_drains_queue_and_imports() {
+async fn process_imports_activity() {
     let (mut store, mut facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     store
         .expect_icuser_get_by_tbid()
         .times(..)
         .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
-    // Two events, then empty.
-    store.expect_icu_event_get_next_for_user().returning(|_id| {
-        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        Ok(match n {
-            0 => Some(event(1, "10")),
-            1 => Some(event(2, "11")),
-            _ => None,
-        })
-    });
+    // One event: the kit's `get_event` reads it (the dedup no-ops).
+    queue_event(&mut store, event(1, "10"));
     store.expect_icu_event_delete().returning(|_id| Ok(()));
     queue("/activity/10", &activity_json("10", "Ride", None));
-    queue("/activity/11", &activity_json("11", "Ride", None));
     facade
         .expect_upsert_activity()
-        .times(2)
         .returning(move |act, _user, _store| {
             let mut summary = Summary::default();
             summary.activities.upsert(act);
             Ok(summary)
         });
     let summary = process(UserId::from(1), &facade, &mut store).await.unwrap();
-    assert_eq!(summary.activities.len(), 2);
+    assert_eq!(summary.activities.len(), 1);
     assert!(summary.notifications.is_empty());
 }
 
+/// A stub activity (both `distance` and `moving_time` null) is skipped with
+/// one transient notice per event (spec #764; spec #1023 makes it per-event).
 #[tokio::test]
-async fn process_stub_batch_emits_one_notice() {
+async fn process_stub_emits_one_notice() {
     let (mut store, mut facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     store
         .expect_icuser_get_by_tbid()
         .times(..)
         .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
-    store.expect_icu_event_get_next_for_user().returning(|_id| {
-        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        Ok(match n {
-            0 => Some(event(1, "10")),
-            1 => Some(event(2, "11")),
-            _ => None,
-        })
-    });
+    queue_event(&mut store, event(1, "10"));
     store.expect_icu_event_delete().returning(|_id| Ok(()));
     queue("/activity/10", &stub_activity_json("10", "Ride"));
-    queue("/activity/11", &stub_activity_json("11", "Ride"));
-    // The one batch notice: the facade's create_notification returns it.
+    // The one per-event notice: the facade's create_notification returns it.
     facade
         .expect_create_notification()
         .returning(|_r, _l, _k, _s, message, _store| {
-            assert_eq!(message.as_deref(), Some("2"), "the skip count is 2");
+            assert_eq!(
+                message.as_deref(),
+                Some("1"),
+                "the skip count is 1 (per event)"
+            );
             Ok(notification())
         });
     let summary = process(UserId::from(1), &facade, &mut store).await.unwrap();
@@ -266,9 +139,7 @@ async fn process_401_disables_user() {
         .expect_icuser_get_by_tbid()
         .times(..)
         .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
-    store
-        .expect_icu_event_get_next_for_user()
-        .returning(|_id| Ok(Some(event(1, "10"))));
+    queue_event(&mut store, event(1, "10"));
     // The 401 disables the user: the events are dropped and the token cleared.
     store
         .expect_icu_events_delete_for_user()
@@ -282,17 +153,16 @@ async fn process_401_disables_user() {
 }
 
 #[tokio::test]
-async fn process_429_stops_and_keeps_event_queued() {
+async fn process_429_keeps_event_queued() {
     let (mut store, _facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     store
         .expect_icuser_get_by_tbid()
         .times(..)
         .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
-    store
-        .expect_icu_event_get_next_for_user()
-        .returning(|_id| Ok(Some(event(1, "10"))));
-    // The 429 stops the batch: the event is NOT deleted (it stays queued).
+    queue_event(&mut store, event(1, "10"));
+    // The 429 keeps the event queued: it is NOT deleted (it stays queued).
+    store.expect_icu_event_delete().times(0);
     queue_error("/activity/10", Error::TryAgain("rate limited"));
     let summary = process(UserId::from(1), &_facade, &mut store)
         .await
@@ -300,37 +170,36 @@ async fn process_429_stops_and_keeps_event_queued() {
     assert!(summary.is_empty());
 }
 
+/// A permanently bad event (a 404) is dropped from the queue — the delete is
+/// the kit's `fail_event`'s, in exactly one place (no second delete on the
+/// caller's fall-through, spec #1023).
 #[tokio::test]
-async fn process_permanent_error_drops_event_and_continues() {
-    let (mut store, mut facade) = setup();
+async fn process_permanent_error_drops_event() {
+    let (mut store, _facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     store
         .expect_icuser_get_by_tbid()
         .times(..)
         .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
-    // Event 1 is poison (404), event 2 is good.
-    store.expect_icu_event_get_next_for_user().returning(|_id| {
-        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        Ok(match n {
-            0 => Some(event(1, "10")),
-            1 => Some(event(2, "11")),
-            _ => None,
-        })
+    queue_event(&mut store, event(1, "10"));
+    // The poison event is deleted (in exactly one place).
+    let deleted: std::sync::Arc<std::sync::Mutex<Option<Option<i32>>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(None));
+    let rec = deleted.clone();
+    store.expect_icu_event_delete().returning(move |id| {
+        rec.lock().unwrap().replace(id);
+        Ok(())
     });
-    store.expect_icu_event_delete().returning(|_id| Ok(()));
     queue_error("/activity/10", Error::NotFound("gone".to_string()));
-    queue("/activity/11", &activity_json("11", "Ride", None));
-    facade
-        .expect_upsert_activity()
-        .returning(move |act, _user, _store| {
-            let mut summary = Summary::default();
-            summary.activities.upsert(act);
-            Ok(summary)
-        });
-    let summary = process(UserId::from(1), &facade, &mut store).await.unwrap();
-    // Only the good activity (event 2) is imported.
-    assert_eq!(summary.activities.len(), 1);
+    let summary = process(UserId::from(1), &_facade, &mut store)
+        .await
+        .unwrap();
+    assert!(summary.is_empty());
+    assert_eq!(
+        deleted.lock().unwrap().as_ref(),
+        Some(&Some(1)),
+        "the poison event is deleted"
+    );
 }
 
 // ─── process: ACTIVITY_DELETED ──────────────────────────────────────────────
@@ -343,15 +212,8 @@ async fn process_deletes_activity_on_deleted_event() {
         .expect_icuser_get_by_tbid()
         .times(..)
         .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
-    // One ACTIVITY_DELETED event, then empty.
-    store.expect_icu_event_get_next_for_user().returning(|_id| {
-        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        Ok(match n {
-            0 => Some(deleted_event(1, "10")),
-            _ => None,
-        })
-    });
+    // One ACTIVITY_DELETED event: the kit's `get_event` reads it.
+    queue_event(&mut store, deleted_event(1, "10"));
     store.expect_icu_event_delete().returning(|_id| Ok(()));
     // The delete returns the domain's summary (the activity tombstone).
     facade
@@ -371,91 +233,19 @@ async fn process_deletes_activity_on_deleted_event() {
     );
 }
 
+/// `process` on a resolved `SYNC` row runs its walk (not the import path,
+/// which would 404 and drop the durable cursor row).
 #[tokio::test]
-async fn process_mixed_batch_imports_and_deletes() {
-    let (mut store, mut facade) = setup();
-    super::super::ratelimit::test_set_not_limited();
-    store
-        .expect_icuser_get_by_tbid()
-        .times(..)
-        .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
-    // An upload (import) followed by a delete.
-    store.expect_icu_event_get_next_for_user().returning(|_id| {
-        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        Ok(match n {
-            0 => Some(event(1, "10")),
-            1 => Some(deleted_event(2, "11")),
-            _ => None,
-        })
-    });
-    store.expect_icu_event_delete().returning(|_id| Ok(()));
-    queue("/activity/10", &activity_json("10", "Ride", None));
-    facade
-        .expect_upsert_activity()
-        .returning(move |act, _user, _store| {
-            let mut summary = Summary::default();
-            summary.activities.upsert(act);
-            Ok(summary)
-        });
-    facade
-        .expect_delete_activity()
-        .returning(|id, _user, _store| {
-            let mut summary = Summary::default();
-            summary.activities.tombstone(id);
-            Ok(summary)
-        });
-    let summary = process(UserId::from(1), &facade, &mut store).await.unwrap();
-    // The uploaded activity is live; the deleted one is a tombstone.
-    assert_eq!(summary.activities.len(), 2);
-    assert!(
-        summary
-            .activities
-            .get(&ActivityId::from("icu:10"))
-            .is_some()
-    );
-    assert!(
-        summary
-            .activities
-            .is_tombstoned(&ActivityId::from("icu:11"))
-    );
-}
-
-/// `process` with a resolved `SYNC` row queued *behind* an `ACTIVITY` row
-/// (the `SYNC`'s `event_time` is now, the `ACTIVITY`'s is earlier): the
-/// drain branches on `object_type` for every row it pulls — the `ACTIVITY`
-/// is imported and the `SYNC` row runs its walk (not the import path, which
-/// would 404 and drop the durable cursor row).
-#[tokio::test]
-async fn process_drain_routes_sync_row_to_its_walk() {
+async fn process_routes_sync_row_to_its_walk() {
     let (mut store, mut facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     sync_user_fixture(&mut store);
-    // The `ACTIVITY` row (event_time 1000) sorts before the resolved `SYNC`
-    // row (event_time = now).
     let now = now_ts();
-    store
-        .expect_icu_event_get_next_for_user()
-        .returning(move |_id| {
-            static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-            let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            Ok(match n {
-                0 => Some(event(1, "10")),
-                1 => Some(sync_event(2, 0, now)),
-                _ => None,
-            })
-        });
-    // Both rows are deleted: the `ACTIVITY` by its import, the `SYNC` by its
-    // walk's completion.
-    let deletes: std::sync::Arc<std::sync::Mutex<Vec<Option<i32>>>> =
-        std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-    let rec = deletes.clone();
-    store.expect_icu_event_delete().returning(move |id| {
-        rec.lock().unwrap().push(id);
-        Ok(())
-    });
-    // The `ACTIVITY` row's import.
-    queue("/activity/10", &activity_json("10", "Ride", None));
+    // A resolved `SYNC` row (event_time = now): the dedup no-ops (the `"sync"`
+    // sentinel key groups with nothing else).
+    queue_event(&mut store, sync_event(1, 0, now));
+    // The walk's completion deletes the row.
+    store.expect_icu_event_delete().returning(|_id| Ok(()));
     // The `SYNC` walk's batch (< 100 → end of history → the row is deleted).
     queue(
         &sync_uri(0, now),
@@ -463,7 +253,6 @@ async fn process_drain_routes_sync_row_to_its_walk() {
     );
     facade
         .expect_upsert_activity()
-        .times(2)
         .returning(|act, _user, _store| {
             let mut summary = Summary::default();
             summary.activities.upsert(act);
@@ -476,28 +265,14 @@ async fn process_drain_routes_sync_row_to_its_walk() {
 
     assert_eq!(
         summary.activities.len(),
-        2,
-        "the ACTIVITY and the walk's activity ride the returned Summary"
-    );
-    assert!(
-        summary
-            .activities
-            .get(&ActivityId::from("icu:10"))
-            .is_some()
+        1,
+        "the walk's activity rides the returned Summary"
     );
     assert!(
         summary
             .activities
             .get(&ActivityId::from("icu:30"))
             .is_some()
-    );
-    // Both rows were deleted (the `SYNC` by its walk's completion, not the
-    // import-and-drop path).
-    let deletes = deletes.lock().unwrap().clone();
-    assert!(deletes.contains(&Some(1)), "the ACTIVITY row was deleted");
-    assert!(
-        deletes.contains(&Some(2)),
-        "the SYNC row was deleted by its walk"
     );
     // The walk fetched the list URI (not an import of the `"sync"` sentinel).
     let reqs = crate::test_support::requests();
@@ -618,26 +393,16 @@ fn now_ts() -> i64 {
     OffsetDateTime::now_utc().unix_timestamp()
 }
 
-/// `process` on a `SYNC` event resolves the `0` sentinel to now, walks
-/// `[oldest, newest]`, and on a `< 100` batch deletes the row and returns the
-/// union `Summary`.
+/// `process` on a `SYNC` event resolves the `0` sentinel to now, fetches one
+/// batch over `[oldest, newest]`, and on a `< 100` batch deletes the row and
+/// returns the batch's `Summary`.
 #[tokio::test]
-async fn process_sync_walks_and_deletes_on_completion() {
+async fn process_sync_short_batch_deletes_row() {
     let (mut store, mut facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     sync_user_fixture(&mut store);
-    // The queue holds one `SYNC` row (the `0` sentinel, full history); the
-    // walk's completion deletes it, so the drain's re-pull finds nothing.
-    store.expect_icu_event_get_next_for_user().returning(|_id| {
-        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        Ok(
-            if N.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
-                Some(sync_event(1, 0, 0))
-            } else {
-                None
-            },
-        )
-    });
+    // The queue holds one `SYNC` row (the `0` sentinel, full history).
+    queue_event(&mut store, sync_event(1, 0, 0));
     // The zero-sentinel resolution persists `now`; the completion deletes the
     // row.
     store
@@ -669,24 +434,22 @@ async fn process_sync_walks_and_deletes_on_completion() {
     assert_eq!(
         summary.activities.len(),
         2,
-        "the walk's imported activities ride the returned Summary"
+        "the batch's imported activities ride the returned Summary"
     );
 }
 
-/// `process` on a `SYNC` event that 429s mid-walk: the cursor is *not*
-/// advanced past the 429 and the row is *not* deleted (a later `process`
-/// resumes from the stored cursor).
+/// `process` on a `SYNC` event whose fetch 429s: the cursor is *not* advanced
+/// past the 429 and the row is *not* deleted (a later `process` resumes from
+/// the stored cursor).
 #[tokio::test]
 async fn process_sync_429_keeps_cursor_and_row() {
     let (mut store, mut facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     sync_user_fixture(&mut store);
-    store
-        .expect_icu_event_get_next_for_user()
-        .returning(|_id| Ok(Some(sync_event(1, 0, 0))));
+    queue_event(&mut store, sync_event(1, 0, 0));
     // The zero-sentinel resolution persists `now` (the cursor is set before
-    // the first fetch). No `icu_event_delete` is expected: the 429 stops the
-    // walk before completion, so the row stays queued.
+    // the fetch). No `icu_event_delete` is expected: the 429 keeps the row
+    // queued.
     store
         .expect_icu_event_set_time()
         .returning(|_id, _t| Ok(()));
@@ -700,25 +463,23 @@ async fn process_sync_429_keeps_cursor_and_row() {
 
     assert!(
         summary.is_empty(),
-        "a 429 mid-walk imports nothing and leaves the row queued"
+        "a 429 imports nothing and leaves the row queued"
     );
 }
 
-/// `process` on a `SYNC` event where the first batch succeeds (the cursor
-/// advances) and the second fetch 429s: the persisted cursor equals the first
-/// batch's oldest activity (not advanced further) and the `SYNC` row remains.
+/// `process` on a `SYNC` event with a full (100) batch: the persisted `newest`
+/// cursor advances to the batch's oldest activity and the row stays queued for
+/// the next `process` (one batch per call — no second fetch).
 #[tokio::test]
-async fn process_sync_429_after_first_batch_keeps_advanced_cursor_and_row() {
+async fn process_sync_full_batch_advances_cursor_and_keeps_row() {
     let (mut store, mut facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     sync_user_fixture(&mut store);
     // The queue holds one `SYNC` row (the `0` sentinel, full history).
-    store
-        .expect_icu_event_get_next_for_user()
-        .returning(|_id| Ok(Some(sync_event(1, 0, 0))));
-    // The zero-sentinel resolution + the first batch's cursor advance are
-    // persisted. No `icu_event_delete` is expected: the 429 on the second
-    // fetch stops the walk before completion, so the row stays queued.
+    queue_event(&mut store, sync_event(1, 0, 0));
+    // The zero-sentinel resolution + the batch's cursor advance are
+    // persisted. No `icu_event_delete` is expected: a full batch leaves the
+    // row queued.
     let set_times: std::sync::Arc<std::sync::Mutex<Vec<i64>>> =
         std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let rec = set_times.clone();
@@ -726,19 +487,18 @@ async fn process_sync_429_after_first_batch_keeps_advanced_cursor_and_row() {
         rec.lock().unwrap().push(t);
         Ok(())
     });
+    store.expect_icu_event_delete().times(0);
     // A full batch (100) → the cursor advances to the oldest activity.
     let acts: Vec<String> = (0..100)
         .map(|i| activity_json(&format!("100{}", i), "Ride", None))
         .collect();
     queue(&sync_uri(0, now_ts()), &format!("[{}]", acts.join(",")));
-    // The oldest activity in the first batch (all share `activity_json`'s
-    // start date, 2026-01-02T10:00:00Z).
+    // The oldest activity in the batch (all share `activity_json`'s start
+    // date, 2026-01-02T10:00:00Z).
     use time::format_description::well_known::Rfc3339;
     let oldest_ts = OffsetDateTime::parse("2026-01-02T10:00:00Z", &Rfc3339)
         .unwrap()
         .unix_timestamp();
-    // The second fetch (bounded by the day of the oldest activity) 429s.
-    queue_error(&sync_uri(0, oldest_ts), Error::TryAgain("rate limited"));
 
     facade
         .expect_upsert_activity()
@@ -756,21 +516,19 @@ async fn process_sync_429_after_first_batch_keeps_advanced_cursor_and_row() {
     assert_eq!(
         summary.activities.len(),
         100,
-        "the first batch's activities are imported"
+        "the batch's activities are imported"
     );
     let times = set_times.lock().unwrap().clone();
     // The first `set_time` is the zero-sentinel resolution (now); the second
-    // is the cursor advance to the oldest activity in the first batch. The
-    // 429 on the second fetch stops the walk, so the cursor is not advanced
-    // further.
+    // is the cursor advance to the oldest activity in the full batch.
     assert_eq!(
         times.len(),
         2,
-        "the sentinel resolution and the one cursor advance (no further advance on the 429)"
+        "the sentinel resolution and the one cursor advance"
     );
     assert_eq!(
         times[1], oldest_ts,
-        "the persisted cursor equals the first batch's oldest activity"
+        "the persisted cursor equals the batch's oldest activity"
     );
 }
 
@@ -783,28 +541,15 @@ async fn process_sync_resumes_from_stored_cursor() {
     super::super::ratelimit::test_set_not_limited();
     sync_user_fixture(&mut store);
     // A `SYNC` row whose `newest` cursor is a stored (non-zero) time: the
-    // resume point of a prior, interrupted walk. The walk's completion
-    // deletes the row, so the drain's re-pull finds nothing.
+    // resume point of a prior, interrupted walk.
     let cursor = now_ts() - 86400; // one day before now
-    store
-        .expect_icu_event_get_next_for_user()
-        .returning(move |_id| {
-            static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-            Ok(
-                if N.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
-                    Some(sync_event(1, 0, cursor))
-                } else {
-                    None
-                },
-            )
-        });
-    // The stored cursor is non-zero: the sentinel is NOT re-resolved, so
-    // `icu_event_set_time` is only called for the (later) cursor advance.
-    store
-        .expect_icu_event_set_time()
-        .returning(|_id, _t| Ok(()));
+    queue_event(&mut store, sync_event(1, 0, cursor));
+    // The stored cursor is non-zero: the sentinel is NOT re-resolved, so no
+    // `icu_event_set_time` at all (the short batch completes and deletes the
+    // row).
+    store.expect_icu_event_set_time().times(0);
     store.expect_icu_event_delete().returning(|_id| Ok(()));
-    // The first batch is bounded by the stored cursor (not now).
+    // The batch is bounded by the stored cursor (not now).
     queue(
         &sync_uri(0, cursor),
         &format!("[{}]", activity_json("20", "Ride", None)),
@@ -825,101 +570,21 @@ async fn process_sync_resumes_from_stored_cursor() {
     assert_eq!(
         summary.activities.len(),
         1,
-        "the walk resumes from the stored cursor"
+        "the batch resumes from the stored cursor"
     );
-    // The first fetch used the stored cursor (one day before now), not now.
+    // The fetch used the stored cursor (one day before now), not now.
     let reqs = crate::test_support::requests();
     assert_eq!(reqs.len(), 1, "exactly one batch is fetched");
     assert!(
         reqs[0].contains(&format!("newest={}", super::date_str(cursor))),
-        "the first fetch is bounded by the stored cursor"
-    );
-}
-
-/// `process` on a `SYNC` event advances the persisted `newest` cursor to the
-/// oldest activity in a full (100) batch, then continues from that activity's
-/// day (the same day — the remaining same-day activities get fetched).
-#[tokio::test]
-async fn process_sync_advances_cursor_per_batch() {
-    let (mut store, mut facade) = setup();
-    super::super::ratelimit::test_set_not_limited();
-    sync_user_fixture(&mut store);
-    // The queue holds one `SYNC` row (the `0` sentinel, full history); the
-    // walk's completion deletes it, so the drain's re-pull finds nothing.
-    store.expect_icu_event_get_next_for_user().returning(|_id| {
-        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        Ok(
-            if N.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
-                Some(sync_event(1, 0, 0))
-            } else {
-                None
-            },
-        )
-    });
-    // The zero-sentinel resolution + the per-batch cursor advance.
-    let set_times: std::sync::Arc<std::sync::Mutex<Vec<i64>>> =
-        std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-    let rec = set_times.clone();
-    store.expect_icu_event_set_time().returning(move |_id, t| {
-        rec.lock().unwrap().push(t);
-        Ok(())
-    });
-    store.expect_icu_event_delete().returning(|_id| Ok(()));
-
-    // A full batch (100) → the cursor advances to the oldest activity.
-    let acts: Vec<String> = (0..100)
-        .map(|i| activity_json(&format!("100{}", i), "Ride", None))
-        .collect();
-    queue(&sync_uri(0, now_ts()), &format!("[{}]", acts.join(",")));
-    // The oldest activity in the batch (all share `activity_json`'s start
-    // date, 2026-01-02T10:00:00Z).
-    use time::format_description::well_known::Rfc3339;
-    let oldest_ts = OffsetDateTime::parse("2026-01-02T10:00:00Z", &Rfc3339)
-        .unwrap()
-        .unix_timestamp();
-    // The next batch is bounded by the day of the batch's oldest activity
-    // (the same day — the remaining same-day activities get fetched;
-    // < 100 → end of history).
-    queue(&sync_uri(0, oldest_ts), "[]");
-
-    facade
-        .expect_upsert_activity()
-        .times(100)
-        .returning(|act, _user, _store| {
-            let mut summary = Summary::default();
-            summary.activities.upsert(act);
-            Ok(summary)
-        });
-
-    let summary = super::process(UserId::from(1), &facade, &mut store)
-        .await
-        .unwrap();
-
-    assert_eq!(summary.activities.len(), 100);
-    let times = set_times.lock().unwrap().clone();
-    // The first `set_time` is the zero-sentinel resolution (now); the second
-    // is the cursor advance to the oldest activity in the full batch.
-    assert!(
-        times.len() >= 2,
-        "the sentinel resolution and the cursor advance"
-    );
-    assert_eq!(
-        times[1], oldest_ts,
-        "the persisted cursor equals the oldest activity in the full batch"
-    );
-    // The second fetch is bounded by the oldest activity's day (the same day,
-    // not the day before): remaining same-day activities get fetched.
-    let reqs = crate::test_support::requests();
-    assert_eq!(reqs.len(), 2, "two batches are fetched");
-    assert!(
-        reqs[1].contains(&format!("newest={}", super::date_str(oldest_ts))),
-        "the next batch starts at the batch's oldest activity's day"
+        "the fetch is bounded by the stored cursor"
     );
 }
 
 /// `process` on a `SYNC` event where a full (100) batch does not clear the
-/// start day (the batch's oldest activity is still on it): the next fetch
-/// starts at the start day minus one (re-querying the same day would loop).
+/// start day (the batch's oldest activity is still on it): the persisted
+/// cursor steps to the start day minus one (re-querying the same day would
+/// loop) and the row stays queued.
 #[tokio::test]
 async fn process_sync_full_batch_on_start_day_steps_back_a_day() {
     let (mut store, mut facade) = setup();
@@ -931,20 +596,9 @@ async fn process_sync_full_batch_on_start_day_steps_back_a_day() {
     let cursor = OffsetDateTime::parse("2026-01-02T23:00:00Z", &Rfc3339)
         .unwrap()
         .unix_timestamp();
-    store
-        .expect_icu_event_get_next_for_user()
-        .returning(move |_id| {
-            static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-            Ok(
-                if N.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
-                    Some(sync_event(1, 0, cursor))
-                } else {
-                    None
-                },
-            )
-        });
+    queue_event(&mut store, sync_event(1, 0, cursor));
     // The cursor is non-zero (no sentinel resolution); the one `set_time` is
-    // the cursor advance to the batch's oldest activity.
+    // the cursor step back to the day before the start day.
     let set_times: std::sync::Arc<std::sync::Mutex<Vec<i64>>> =
         std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let rec = set_times.clone();
@@ -952,20 +606,15 @@ async fn process_sync_full_batch_on_start_day_steps_back_a_day() {
         rec.lock().unwrap().push(t);
         Ok(())
     });
-    store.expect_icu_event_delete().returning(|_id| Ok(()));
+    // The row stays queued (the next `process` resumes from the stepped-back
+    // cursor).
+    store.expect_icu_event_delete().times(0);
 
     // A full batch (100), all on the start day (2026-01-02).
     let acts: Vec<String> = (0..100)
         .map(|i| activity_json(&format!("100{}", i), "Ride", None))
         .collect();
     queue(&sync_uri(0, cursor), &format!("[{}]", acts.join(",")));
-    // The batch's oldest activity (all share `activity_json`'s start date,
-    // 2026-01-02T10:00:00Z) is on the start day → the next fetch steps back
-    // to 2026-01-01 (< 100 → end of history).
-    let oldest_ts = OffsetDateTime::parse("2026-01-02T10:00:00Z", &Rfc3339)
-        .unwrap()
-        .unix_timestamp();
-    queue(&sync_uri(0, cursor - 86400), "[]");
 
     facade
         .expect_upsert_activity()
@@ -984,16 +633,8 @@ async fn process_sync_full_batch_on_start_day_steps_back_a_day() {
     let times = set_times.lock().unwrap().clone();
     assert_eq!(
         times,
-        vec![oldest_ts],
-        "the persisted cursor is the batch's oldest activity (no sentinel resolution)"
-    );
-    // The second fetch is bounded by the start day minus one (not the same
-    // day, which would loop).
-    let reqs = crate::test_support::requests();
-    assert_eq!(reqs.len(), 2, "two batches are fetched");
-    assert!(
-        reqs[1].contains(&format!("newest={}", super::date_str(cursor - 86400))),
-        "the next batch starts at the start day minus one"
+        vec![cursor - 86400],
+        "the persisted cursor steps to the start day minus one (no sentinel resolution)"
     );
 }
 

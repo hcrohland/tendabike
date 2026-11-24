@@ -30,7 +30,7 @@ pub use traits::*;
 pub mod client;
 pub use client::*;
 
-mod session;
+pub(crate) mod session;
 
 mod http;
 
@@ -38,6 +38,9 @@ pub mod activity;
 pub mod event;
 pub mod gear;
 mod ratelimit;
+// The queue's read-side rate-limit gate, re-exported so the `EventQueue` impl
+// over the data store (the sqlx crate) can consult it (spec #1023).
+pub use ratelimit::limited_until;
 
 mod user;
 pub use user::*;

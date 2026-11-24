@@ -49,7 +49,7 @@ impl StravaId {
     }
 
     /// disable a user
-    pub(crate) async fn disable(self, store: &mut impl StravaDataStore) -> TbResult<()> {
+    pub async fn disable(self, store: &mut impl StravaDataStore) -> TbResult<()> {
         info!("disabling user {self}");
 
         let events = store.strava_events_delete_for_user(&self).await?;

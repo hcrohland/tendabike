@@ -44,7 +44,7 @@ impl IcuId {
     /// Disable the user (a 401 on a live request, spec #764): drop their
     /// queued events and clear their (durable) access token. The cleared
     /// token is the disable signal — [`IcuUser::disabled`] reports it.
-    pub(crate) async fn disable(&self, store: &mut impl IcuDataStore) -> TbResult<()> {
+    pub async fn disable(&self, store: &mut impl IcuDataStore) -> TbResult<()> {
         info!("disabling icu user {self}");
         let events = store.icu_events_delete_for_user(self).await?;
         if events > 0 {

@@ -48,7 +48,7 @@ use crate::EntityFacade;
 use crate::Provider;
 use crate::icu::{IcuDataStore, event::IcuEvent};
 use crate::strava::{StravaDataStore, event::Event as StravaEvent};
-use crate::{Lane, Probe, ProviderLane};
+use crate::{EventQueue, Lane, Probe, ProviderLane};
 
 /// The unified provider event the per-user lane reports: the two providers'
 /// event rows under one type, so the loop's `P::Event` is provider-agnostic
@@ -92,7 +92,12 @@ pub type UnifiedLane<S> = Lane<S, LaneEvent, crate::EntityFacadeImpl>;
 #[async_trait::async_trait]
 impl<S, F> ProviderLane for Lane<S, LaneEvent, F>
 where
-    S: StravaDataStore + IcuDataStore + Send + 'static,
+    S: StravaDataStore
+        + IcuDataStore
+        + EventQueue<StravaEvent>
+        + EventQueue<IcuEvent>
+        + Send
+        + 'static,
     F: EntityFacade<S> + Clone + Send + Sync + 'static,
 {
     type Event = LaneEvent;
@@ -105,8 +110,11 @@ where
 
     /// Probe the user's provider event queue (one transaction's
     /// housekeeping): derive the user's provider from the provider-internal
-    /// user data, then read that provider's queue. The returned event is
-    /// wrapped in [`LaneEvent`].
+    /// user data, resolve the user's provider id (the queue's partition key),
+    /// then read that provider's queue with the kit's [`get_event`](
+    /// crate::queue::get_event) — the queue's read-side rules are
+    /// provider-agnostic (ADR-0014, amended). The returned event is wrapped
+    /// in [`LaneEvent`].
     async fn probe(&self, user_id: UserId, store: &mut S) -> Probe<LaneEvent> {
         let provider = match crate::provider_of(store, user_id).await {
             Ok(provider) => provider,
@@ -114,14 +122,26 @@ where
             Err(_) => return Probe::Error,
         };
         match provider {
-            Provider::Icu => match crate::icu::event::get_event(user_id, store).await {
-                Ok(read) => read.into_probe(LaneEvent::Icu),
-                Err(_) => Probe::Error,
-            },
-            Provider::Strava => match crate::strava::event::get_event(user_id, store).await {
-                Ok(read) => read.into_probe(LaneEvent::Strava),
-                Err(_) => Probe::Error,
-            },
+            Provider::Icu => {
+                let icu_id = match crate::icu::event::get_icu_id(user_id, store).await {
+                    Ok(id) => id,
+                    Err(_) => return Probe::Error,
+                };
+                match crate::queue::get_event(icu_id, store).await {
+                    Ok(read) => read.into_probe(LaneEvent::Icu),
+                    Err(_) => Probe::Error,
+                }
+            }
+            Provider::Strava => {
+                let strava_id = match crate::strava::session::get_strava_id(user_id, store).await {
+                    Ok(id) => id,
+                    Err(_) => return Probe::Error,
+                };
+                match crate::queue::get_event(strava_id, store).await {
+                    Ok(read) => read.into_probe(LaneEvent::Strava),
+                    Err(_) => Probe::Error,
+                }
+            }
         }
     }
 

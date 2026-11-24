@@ -2,7 +2,7 @@ use sqlx::FromRow;
 
 use crate::{SqlxConn, into_domain, option_into, vec_into};
 use tb_domain::{TbResult, UserId};
-use tb_provider::icu::{IcuEvent, IcuId, IcuUser};
+use tb_provider::icu::{IcuDataStore, IcuEvent, IcuId, IcuUser};
 
 #[derive(Clone, Debug, Default, FromRow)]
 struct DbIcuUser {
@@ -315,6 +315,35 @@ impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
 }
 
 impl<'c> tb_provider::icu::IcuStore for SqlxConn<'c> {}
+
+/// The kit's event queue over the unified store (spec #1023): a thin forward
+/// onto the [`IcuDataStore`] queue ops; `disable_user` and `limited_until`
+/// drive the driver's own policy (the `IcuId` disable, the process-wide
+/// limiter).
+#[async_trait::async_trait]
+impl<'c> tb_provider::EventQueue<IcuEvent> for SqlxConn<'c> {
+    fn provider_id(&self) -> tb_provider::Provider {
+        tb_provider::Provider::Icu
+    }
+    async fn get_next_for_user(&mut self, user: IcuId) -> TbResult<Option<IcuEvent>> {
+        self.icu_event_get_next_for_user(user).await
+    }
+    async fn get_later(&mut self, key: String, owner: IcuId) -> TbResult<Vec<IcuEvent>> {
+        self.icu_event_get_later(&key, &owner).await
+    }
+    async fn delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
+        self.icu_events_delete_batch(values).await
+    }
+    async fn delete_event(&mut self, event_id: Option<i32>) -> TbResult<()> {
+        self.icu_event_delete(event_id).await
+    }
+    async fn disable_user(&mut self, user: IcuId) -> TbResult<()> {
+        user.disable(self).await
+    }
+    fn limited_until(&self) -> Option<i64> {
+        tb_provider::icu::limited_until()
+    }
+}
 
 #[cfg(test)]
 mod tests {
