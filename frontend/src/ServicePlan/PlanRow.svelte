@@ -2,6 +2,7 @@
   import ServiceRow from "../Service/ServiceRow.svelte";
   import { Part } from "../lib/part";
   import {
+    alertForPlan,
     partForPlanGear,
     duesForPlans,
     ServicePlan,
@@ -9,8 +10,9 @@
   import ShowMore from "../Widgets/ShowMore.svelte";
   import * as m from "../../paraglide/messages";
   import Menu from "../Widgets/Menu.svelte";
-  import { DropdownItem } from "flowbite-svelte";
+  import { Badge, DropdownItem } from "flowbite-svelte";
   import { newService } from "../Service/ServiceActions.svelte";
+  import { snoozePlan } from "./SnoozePlan.svelte";
   import { replacePart } from "../Attachment/ReplacePart.svelte";
   import { installPart } from "../Attachment/InstallPart.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
@@ -27,6 +29,11 @@
   let part = $derived(partForPlanGear(plan, gear?.id)) as Part;
   let [ActiveService, ...serviceList] = $derived(plan.services(part));
   let due_list = $derived(duesForPlans(part, [plan]));
+  // The (part, plan) is snoozed when the plan carries an accumulated
+  // fraction for it; the action is offered only while it is in the warn band
+  // or overdue, never when it is ok (no pre-snooze).
+  let snoozed = $derived(part.id != null && (plan.snoozes[part.id] ?? 0) > 0);
+  let severity = $derived(alertForPlan(plan, part, ActiveService));
 </script>
 
 {#if part}
@@ -41,6 +48,12 @@
           {@html part.partLink()}
         </span>
 
+        {#if snoozed}
+          <Badge color="violet" class="shrink-0">
+            {m.planrow_snoozed()}
+          </Badge>
+        {/if}
+
         {#if serviceList.length > 0}
           <ShowMore bind:show_more title={m.planrow_service_history()} />
         {/if}
@@ -50,6 +63,11 @@
           <DropdownItem onclick={() => newService(part, plan)}>
             {m.planmenu_new_service()}
           </DropdownItem>
+          {#if severity == "warn" || severity == "alert"}
+            <DropdownItem onclick={() => snoozePlan(plan, part)}>
+              {m.planmenu_snooze()}
+            </DropdownItem>
+          {/if}
           {#if plan.part != part.id}
             {@const att = part.attachments().at(0)}
             {#if att}

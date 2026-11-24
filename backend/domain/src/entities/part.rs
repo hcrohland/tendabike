@@ -37,8 +37,8 @@ use time::format_description::well_known::Rfc3339;
 
 use crate::{
     Attachment, AttachmentStore, Error, IdKeyed, PartStore, PartTypeId, Service, ServicePlan,
-    ServicePlanStore, ServiceStore, Session, ShopId, ShopStore, TbResult, UsageId, UsageStore,
-    UserId, round_time,
+    ServicePlanStore, ServiceStore, Session, ShopId, ShopStore, Summary, TbResult, UsageId,
+    UsageStore, UserId, round_time,
 };
 
 /// The database's representation of a part.
@@ -109,7 +109,7 @@ impl PartId {
                  + ShopStore
                  + UsageStore
              ),
-    ) -> TbResult<PartId> {
+    ) -> TbResult<Summary> {
         self.checkuser(user, store).await?;
 
         let (attachments, _) = Attachment::for_part_with_usage(self, store).await?;
@@ -125,7 +125,20 @@ impl PartId {
         if !plans.is_empty() {
             return Err(Error::Conflict("Part has active serviceplan".into()));
         }
-        store.part_delete(self).await
+
+        let mut summary = Summary::default();
+
+        // A generic plan a deleted part snoozed on keeps no entry for it: the
+        // part's snooze state is cleaned up alongside the part. A part with a
+        // specific plan cannot be deleted while the plan is active (the check
+        // above), so only generic plans carry an entry here.
+        for plan in ServicePlan::clear_snoozes_for_part(self, store).await? {
+            summary.plans.upsert(plan);
+        }
+
+        store.part_delete(self).await?;
+        summary.parts.tombstone(self);
+        Ok(summary)
     }
 
     pub(crate) async fn read(self, store: &mut impl PartStore) -> TbResult<Part> {

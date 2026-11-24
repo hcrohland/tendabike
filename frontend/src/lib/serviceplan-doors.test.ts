@@ -4,6 +4,7 @@ import {
   duesForPlans,
   gearsForPlan,
   alertCounts,
+  alertForPlan,
   plans,
   plansForPart,
   plansForAssembly,
@@ -260,6 +261,47 @@ describe("duesForPlans", () => {
     usages.setMap([u_prev, u_now]);
     expect(duesForPlans(null, [plan({ km: "100" })])).toEqual({});
   });
+
+  // A snoozed (part, plan) shows its limits extended by the part's
+  // accumulated fraction; the severity scan consumes the extended due values,
+  // so a snoozed overdue part drops out of alert.
+  const snoozedKm = (distance: number, f: number) => {
+    usages.setMap([usage("u_now", { distance })]);
+    return duesForPlans(p, [plan({ what: 10, km: "100", snoozes: { 5: f } })])
+      .km!;
+  };
+
+  it("extends the due value of every active limit by the snooze fraction", () => {
+    // limit 100 × (1 + 0.5) = 150; 40 km used → 110 remain
+    expect(snoozedKm(40000, 0.5)).toEqual({
+      due: 110,
+      plan: 150,
+      severity: "ok",
+    });
+  });
+
+  it("drops a snoozed overdue part out of alert", () => {
+    // 110 km used on a km-100 limit: no snooze → -10 (alert); 0.5 → 40 (ok)
+    expect(snoozedKm(110000, 0)).toEqual({
+      due: -10,
+      plan: 100,
+      severity: "alert",
+    });
+    expect(snoozedKm(110000, 0.5)).toEqual({
+      due: 40,
+      plan: 150,
+      severity: "ok",
+    });
+  });
+
+  it("computes exactly as before when the part has no snooze", () => {
+    // a snooze for a different part leaves this part untouched
+    usages.setMap([usage("u_now", { distance: 110000 })]);
+    expect(
+      duesForPlans(p, [plan({ what: 10, km: "100", snoozes: { 99: 0.5 } })])
+        .km!,
+    ).toEqual({ due: -10, plan: 100, severity: "alert" });
+  });
 });
 
 describe("gearsForPlan", () => {
@@ -324,7 +366,7 @@ describe("alertCounts", () => {
   const p = part({ id: 5, what: 10, usage: "u_now" });
 
   // Seed the module state objects with the same world the arguments model:
-  // partForPlanGear, gearsForPlan, plan.services and alert_for read them in
+  // partForPlanGear, gearsForPlan, plan.services and alertForPlan read them in
   // their bodies (issues #371/#372/#374).
   beforeEach(() => {
     parts.setMap([p]);
@@ -389,6 +431,64 @@ describe("alertCounts", () => {
     attachments.setMap([a]);
     plans.setMap([G, P7]);
     expect(alertCounts([G, P7])).toEqual({ warn: 1, alert: 1 });
+  });
+
+  it("a snoozed overdue part drops out of alert", () => {
+    // 110 km used on a km-100 limit: alert without snooze, ok with a 0.5 snooze
+    usages.setMap([usage("u_now", { distance: 110000 })]);
+    expect(alertCounts([plan({ part: 5, what: 10, km: "100" })])).toEqual({
+      warn: 0,
+      alert: 1,
+    });
+    expect(
+      alertCounts([
+        plan({ part: 5, what: 10, km: "100", snoozes: { 5: 0.5 } }),
+      ]),
+    ).toEqual({ warn: 0, alert: 0 });
+  });
+});
+
+describe("alertForPlan", () => {
+  // The severity of one (part, plan) pair: the same rule alertCounts folds
+  // over many, exposed for the callers that render a single pair (the
+  // plan row's action gating).
+  const p = part({ id: 5, what: 10, usage: "u_now" });
+
+  beforeEach(() => {
+    services.setMap([]);
+    usages.setMap([]);
+  });
+
+  const km = (distance: number, overrides: Partial<any> = {}) => {
+    usages.setMap([usage("u_now", { distance })]);
+    return alertForPlan(
+      plan({ part: 5, what: 10, km: "100", ...overrides }),
+      p,
+      undefined,
+    );
+  };
+
+  it("is 'alert' when the due value is negative", () => {
+    expect(km(110000)).toBe("alert");
+  });
+
+  it("is 'warn' when the due value is within the band", () => {
+    expect(km(98000)).toBe("warn");
+  });
+
+  it("is '' when the due value is above the band", () => {
+    expect(km(50000)).toBe("");
+  });
+
+  it("is '' when the part has no active limit", () => {
+    usages.setMap([usage("u_now", { distance: 50000 })]);
+    expect(alertForPlan(plan({ part: 5, what: 10 }), p, undefined)).toBe("");
+  });
+
+  it("reports the severity of the snoozed due values", () => {
+    // 110 km used on a km-100 limit: alert without snooze, ok with 0.5
+    expect(km(110000)).toBe("alert");
+    expect(km(110000, { snoozes: { 5: 0.5 } })).toBe("");
   });
 });
 

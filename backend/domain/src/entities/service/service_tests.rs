@@ -13,9 +13,12 @@
 //! over multiple writes and read it back live in that suite; the
 //! read-after-write pass-throughs and the subsumed cases are dropped.
 
+use std::collections::HashMap;
+
 use super::*;
-use crate::test_support::{
-    MockStore, fixtures, mock_session, only_tombstone, part_type_ids, sole_live,
+use crate::{
+    ServicePlan,
+    test_support::{MockStore, fixtures, mock_session, only_tombstone, part_type_ids, sole_live},
 };
 
 use fixtures::{sample_purchase_date, test_session, test_user};
@@ -117,6 +120,34 @@ fn service_row(
     }
 }
 
+/// A canned `ServicePlan` row with no accumulated snoozes.
+fn plan_row(id: ServicePlanId, part: PartId) -> ServicePlan {
+    ServicePlan {
+        id,
+        part: Some(part),
+        what: CHAIN,
+        hook: None,
+        name: "Plan".to_string(),
+        days: None,
+        hours: None,
+        km: Some(1000),
+        climb: None,
+        descend: None,
+        rides: None,
+        uid: None,
+        energy: None,
+        snoozes: HashMap::new(),
+    }
+}
+
+/// A canned `ServicePlan` row carrying an accumulated snooze for `part`: the
+/// state a fulfilling service must clear.
+fn plan_row_with_snooze(id: ServicePlanId, part: PartId, fraction: f64) -> ServicePlan {
+    let mut plan = plan_row(id, part);
+    plan.snoozes.insert(part, fraction);
+    plan
+}
+
 // === Suite 1: Service — value logic ===
 
 /// S-01: ServiceId::new() produces a UUID (format check). No store.
@@ -166,6 +197,145 @@ async fn service_create_with_valid_data() -> TbResult<()> {
     assert_eq!(svc.notes, "Old chain");
     assert!(svc.successor.is_none());
     assert!(svc.plans.is_empty());
+    Ok(())
+}
+
+/// S-24: Logging a service clears the part's snooze on every plan it fulfils:
+/// the plan's accumulated snooze for the part is removed, and the cleared plan
+/// rides the Summary so due-ness returns to limit − used.
+#[tokio::test]
+async fn service_create_clears_part_snooze_on_fulfilled_plans() -> TbResult<()> {
+    let part = PartId::from(1);
+    let t = sample_time();
+    let plan_id = ServicePlanId::new();
+    let plan = plan_row_with_snooze(plan_id, part, 0.5);
+
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user(), CHAIN)));
+    store
+        .expect_attachments_all_by_part()
+        .returning(|_| Ok(vec![]));
+    store.expect_usages_update().returning(|_| Ok(1));
+    store.expect_service_create().returning(Ok);
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(plan.clone()));
+    store.expect_serviceplan_update().returning(move |p| {
+        // the part's snooze is cleared
+        assert!(!p.snoozes.contains_key(&part));
+        Ok(p)
+    });
+
+    let summary = Service::create(
+        part,
+        t,
+        "Chain Replacement".to_string(),
+        "Old chain".to_string(),
+        None,
+        vec![plan_id],
+        &test_session(),
+        &mut store,
+    )
+    .await?;
+
+    // the cleared plan rides the Summary
+    let plan = sole_live(&summary.plans);
+    assert_eq!(plan.id, plan_id);
+    assert!(!plan.snoozes.contains_key(&part));
+    Ok(())
+}
+
+/// S-25: A redo logs a real service too, so it clears the part's snooze on
+/// every plan it fulfils — the same clearing as a fresh create, through the
+/// shared creation path.
+#[tokio::test]
+async fn service_redo_clears_part_snooze_on_fulfilled_plans() -> TbResult<()> {
+    let part = PartId::from(1);
+    let t = sample_time();
+    let plan_id = ServicePlanId::new();
+    let s1 = service_row(ServiceId::new(), part, t, vec![plan_id]);
+    let s1_get = s1.clone();
+    let plan = plan_row_with_snooze(plan_id, part, 0.5);
+
+    let mut store = MockStore::new();
+    store
+        .expect_service_get()
+        .returning(move |_| Ok(s1_get.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user(), CHAIN)));
+    store
+        .expect_attachments_all_by_part()
+        .returning(|_| Ok(vec![]));
+    store.expect_usages_update().returning(|_| Ok(1));
+    store.expect_service_create().returning(Ok);
+    store.expect_service_update().returning(Ok);
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(plan.clone()));
+    store.expect_serviceplan_update().returning(move |p| {
+        // the part's snooze is cleared
+        assert!(!p.snoozes.contains_key(&part));
+        Ok(p)
+    });
+
+    let summary = s1.redo(&test_session(), &mut store).await?;
+
+    // the redo reports the new service (no successor) and the cleared plan
+    let new_svc = summary
+        .services
+        .live()
+        .into_iter()
+        .find(|s| s.successor.is_none())
+        .expect("the redo reports the new service");
+    assert_eq!(new_svc.plans, vec![plan_id]);
+    let plan = sole_live(&summary.plans);
+    assert_eq!(plan.id, plan_id);
+    assert!(!plan.snoozes.contains_key(&part));
+    Ok(())
+}
+
+/// S-26: A fulfilled plan with no accumulated snooze for the part is left
+/// alone: no write, and the plan is not reported in the Summary — mirroring
+/// the snooze op's no-op rule.
+#[tokio::test]
+async fn service_create_plan_without_snooze_is_not_reported() -> TbResult<()> {
+    let part = PartId::from(1);
+    let t = sample_time();
+    let plan_id = ServicePlanId::new();
+
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user(), CHAIN)));
+    store
+        .expect_attachments_all_by_part()
+        .returning(|_| Ok(vec![]));
+    store.expect_usages_update().returning(|_| Ok(1));
+    store.expect_service_create().returning(Ok);
+    // the plan is read to check for a snooze, but has none for the part,
+    // so it is neither written nor reported
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(plan_row(plan_id, part)));
+    store.expect_serviceplan_update().times(0).returning(Ok);
+
+    let summary = Service::create(
+        part,
+        t,
+        "Chain Replacement".to_string(),
+        "Old chain".to_string(),
+        None,
+        vec![plan_id],
+        &test_session(),
+        &mut store,
+    )
+    .await?;
+
+    // the untouched plan is not in the Summary
+    assert!(summary.plans.is_empty());
     Ok(())
 }
 
@@ -518,7 +688,11 @@ async fn redo_preserves_plans_from_original() -> TbResult<()> {
     let s1_get = s1.clone();
 
     let mut store = MockStore::new();
-    store.expect_serviceplan_create().returning(Ok);
+    // The fulfilled plan carries no snooze for the part, so the redo reads
+    // it but leaves it untouched (no update).
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(plan_row(plan_id, part)));
     store
         .expect_service_get()
         .returning(move |_| Ok(s1_get.clone()));

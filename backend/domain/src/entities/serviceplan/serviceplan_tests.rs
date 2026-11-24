@@ -1,5 +1,7 @@
+use std::collections::HashMap;
+
 use super::*;
-use crate::test_support::{MockStore, fixtures, mock_session, mock_session_with_shop};
+use crate::test_support::{MockStore, fixtures, mock_session, mock_session_with_shop, sole_live};
 
 use fixtures::{sample_purchase_date, test_session, test_user};
 
@@ -18,6 +20,7 @@ fn sample_plan(part: Option<PartId>, name: &str, uid: Option<UserId>) -> Service
         rides: None,
         uid,
         energy: None,
+        snoozes: HashMap::new(),
     }
 }
 
@@ -89,6 +92,7 @@ async fn service_plan_create_specific_part() -> TbResult<()> {
         rides: None,
         uid: None,
         energy: None,
+        snoozes: HashMap::new(),
     };
     store.expect_serviceplan_create().returning(Ok);
 
@@ -120,6 +124,7 @@ async fn service_plan_create_generic_plan() -> TbResult<()> {
         rides: None,
         uid: None,
         energy: None,
+        snoozes: HashMap::new(),
     };
     store.expect_serviceplan_create().returning(Ok);
 
@@ -151,6 +156,7 @@ async fn service_plan_create_sets_what_to_part_type() -> TbResult<()> {
         rides: None,
         uid: None,
         energy: None,
+        snoozes: HashMap::new(),
     };
     store.expect_serviceplan_create().returning(Ok);
 
@@ -178,6 +184,7 @@ async fn service_plan_update_preserves_immutable_fields() -> TbResult<()> {
         rides: None,
         uid: Some(test_user()),
         energy: None,
+        snoozes: HashMap::new(),
     };
 
     let mut store = MockStore::new();
@@ -201,6 +208,7 @@ async fn service_plan_update_preserves_immutable_fields() -> TbResult<()> {
         rides: None,
         uid: Some(UserId::from(99)),
         energy: None,
+        snoozes: HashMap::new(),
     };
     let result = update.update(&test_session(), &mut store).await?;
 
@@ -231,6 +239,7 @@ async fn service_plan_update_requires_ownership_specific() -> TbResult<()> {
         rides: None,
         uid: None,
         energy: None,
+        snoozes: HashMap::new(),
     };
 
     let mut store = MockStore::new();
@@ -257,6 +266,7 @@ async fn service_plan_update_requires_ownership_specific() -> TbResult<()> {
         rides: None,
         uid: None,
         energy: None,
+        snoozes: HashMap::new(),
     };
     let result = update.update(&other_user, &mut store).await;
     assert!(result.is_err());
@@ -282,6 +292,7 @@ async fn service_plan_update_requires_ownership_generic() -> TbResult<()> {
         rides: None,
         uid: Some(test_user()),
         energy: None,
+        snoozes: HashMap::new(),
     };
 
     let mut store = MockStore::new();
@@ -304,6 +315,7 @@ async fn service_plan_update_requires_ownership_generic() -> TbResult<()> {
         rides: None,
         uid: Some(UserId::from(99)),
         energy: None,
+        snoozes: HashMap::new(),
     };
     let result = update.update(&other_user, &mut store).await;
     assert!(result.is_err());
@@ -375,6 +387,273 @@ async fn service_plan_delete_unlink_scoped_to_owner() -> TbResult<()> {
     assert_eq!(res.len(), 1);
     assert_eq!(res[0].id, my_service_id);
     assert!(res[0].plans.is_empty());
+    Ok(())
+}
+
+// === ServicePlan — snooze ===
+
+/// SP-20: snoozing a (part, plan) by a fraction records it in the plan's
+/// snooze map for that part, and the Summary carries the updated plan.
+#[tokio::test]
+async fn service_plan_snooze_records_fraction() -> TbResult<()> {
+    let part = PartId::from(1);
+    let stored = sample_plan(Some(part), "Snooze Plan", None);
+    let plan_id = stored.id;
+
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(stored.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user())));
+    store.expect_serviceplan_update().returning(Ok);
+
+    let summary = plan_id
+        .snooze(part, 0.5, &test_session(), &mut store)
+        .await?;
+
+    let plan = sole_live(&summary.plans);
+    assert_eq!(plan.snoozes.get(&part), Some(&0.5));
+    Ok(())
+}
+
+/// SP-21: snoozes stack: each snooze adds its fraction to the part's
+/// accumulated fraction (f1 + f2), and the fraction may exceed 1.0.
+#[tokio::test]
+async fn service_plan_snooze_accumulates() -> TbResult<()> {
+    let part = PartId::from(1);
+    let mut stored = sample_plan(Some(part), "Stacking Plan", None);
+    stored.snoozes.insert(part, 0.75);
+    let plan_id = stored.id;
+
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(stored.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user())));
+    store.expect_serviceplan_update().returning(Ok);
+
+    let summary = plan_id
+        .snooze(part, 0.75, &test_session(), &mut store)
+        .await?;
+
+    let plan = sole_live(&summary.plans);
+    assert_eq!(plan.snoozes.get(&part), Some(&1.5));
+    Ok(())
+}
+
+/// SP-22: a fraction of 0 is a no-op: no update is written, and the
+/// Summary is empty.
+#[tokio::test]
+async fn service_plan_snooze_zero_is_noop() -> TbResult<()> {
+    let part = PartId::from(1);
+    let stored = sample_plan(Some(part), "Noop Plan", None);
+    let plan_id = stored.id;
+
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(stored.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user())));
+    store.expect_serviceplan_update().times(0).returning(Ok);
+
+    let summary = plan_id
+        .snooze(part, 0.0, &test_session(), &mut store)
+        .await?;
+
+    assert!(summary.is_empty());
+    Ok(())
+}
+
+/// SP-23a: a non-finite fraction (NaN, ±inf) is rejected.
+#[tokio::test]
+async fn service_plan_snooze_non_finite_fraction_rejected() -> TbResult<()> {
+    let part = PartId::from(1);
+    let stored = sample_plan(Some(part), "Nonfinite Plan", None);
+    let plan_id = stored.id;
+
+    for fraction in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let stored_clone = stored.clone();
+        let mut store = MockStore::new();
+        store
+            .expect_serviceplan_get()
+            .returning(move |_| Ok(stored_clone.clone()));
+        store
+            .expect_partid_get_part()
+            .returning(move |_| Ok(part_row(part, test_user())));
+
+        let result = plan_id
+            .snooze(part, fraction, &test_session(), &mut store)
+            .await;
+        assert!(result.is_err(), "fraction {fraction} must be rejected");
+    }
+    Ok(())
+}
+
+/// SP-23: a negative fraction is rejected.
+#[tokio::test]
+async fn service_plan_snooze_negative_fraction_rejected() -> TbResult<()> {
+    let part = PartId::from(1);
+    let stored = sample_plan(Some(part), "Negative Plan", None);
+    let plan_id = stored.id;
+
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(stored.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user())));
+
+    let result = plan_id
+        .snooze(part, -0.5, &test_session(), &mut store)
+        .await;
+    assert!(result.is_err());
+    Ok(())
+}
+
+/// SP-24: snoozing requires ownership, the same guard as the update.
+#[tokio::test]
+async fn service_plan_snooze_requires_ownership() -> TbResult<()> {
+    let part = PartId::from(1);
+    let stored = sample_plan(Some(part), "Owned Plan", None);
+    let plan_id = stored.id;
+
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(stored.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user())));
+
+    let other_user = mock_session(UserId::from(99));
+    let result = plan_id.snooze(part, 0.5, &other_user, &mut store).await;
+    assert!(result.is_err());
+    Ok(())
+}
+
+/// SP-25: editing a plan's limits resets all of that plan's snoozes.
+#[tokio::test]
+async fn service_plan_update_resets_snoozes() -> TbResult<()> {
+    let part = PartId::from(1);
+    let mut stored = sample_plan(Some(part), "Reset Plan", None);
+    stored.snoozes.insert(part, 2.5);
+    let id = stored.id;
+
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(stored.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user())));
+    store.expect_serviceplan_update().returning(Ok);
+
+    let mut update = sample_plan(Some(part), "Reset Plan", None);
+    update.id = id;
+    let result = update.update(&test_session(), &mut store).await?;
+
+    assert!(result.snoozes.is_empty());
+    Ok(())
+}
+
+/// SP-26: creating a plan ignores any client-supplied snoozes.
+#[tokio::test]
+async fn service_plan_create_ignores_snoozes() -> TbResult<()> {
+    let part = PartId::from(1);
+    let mut plan = sample_plan(Some(part), "Fresh Plan", None);
+    plan.snoozes.insert(part, 9.0);
+
+    let mut store = MockStore::new();
+    store.expect_serviceplan_create().returning(Ok);
+
+    let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
+
+    assert!(created.snoozes.is_empty());
+    Ok(())
+}
+
+/// SP-27: snoozing a generic plan by a part of its type is coherent and
+/// records the fraction — the generic counterpart of the specific case.
+#[tokio::test]
+async fn service_plan_snooze_generic_coherent_part() -> TbResult<()> {
+    let part = PartId::from(1);
+    let mut stored = sample_plan(None, "Generic Coherent", Some(test_user()));
+    // the plan's type matches the part's type, so the pair coheres
+    stored.what = PartTypeId::from(4);
+    let plan_id = stored.id;
+
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(stored.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user())));
+    store.expect_serviceplan_update().returning(Ok);
+
+    let summary = plan_id
+        .snooze(part, 0.5, &test_session(), &mut store)
+        .await?;
+
+    let plan = sole_live(&summary.plans);
+    assert_eq!(plan.snoozes.get(&part), Some(&0.5));
+    Ok(())
+}
+
+/// SP-28: snoozing a specific plan by a part that is not its own is rejected:
+/// the (part, plan) pair must cohere, so an incoherent specific pair stores
+/// no inert entry.
+#[tokio::test]
+async fn service_plan_snooze_specific_incoherent_part_rejected() -> TbResult<()> {
+    let plan_part = PartId::from(1);
+    let other_part = PartId::from(2);
+    let stored = sample_plan(Some(plan_part), "Specific Plan", None);
+    let plan_id = stored.id;
+
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(stored.clone()));
+    // the ownership check reads the plan's own part before the coherence
+    // guard rejects the incoherent snoozed part
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(plan_part, test_user())));
+
+    let result = plan_id
+        .snooze(other_part, 0.5, &test_session(), &mut store)
+        .await;
+    assert!(matches!(result, Err(Error::BadRequest(_))));
+    Ok(())
+}
+
+/// SP-29: snoozing a generic plan by a part of a different type is rejected:
+/// the generic pair coheres only on a matching type.
+#[tokio::test]
+async fn service_plan_snooze_generic_incoherent_part_rejected() -> TbResult<()> {
+    let part = PartId::from(1);
+    let stored = sample_plan(None, "Generic Plan", Some(test_user()));
+    // the plan's type (1) differs from the part's type (4), so the pair is
+    // incoherent
+    let plan_id = stored.id;
+
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(stored.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user())));
+
+    let result = plan_id.snooze(part, 0.5, &test_session(), &mut store).await;
+    assert!(matches!(result, Err(Error::BadRequest(_))));
     Ok(())
 }
 

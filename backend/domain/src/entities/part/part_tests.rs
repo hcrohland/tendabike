@@ -11,12 +11,15 @@
 //! of truth.
 
 use super::*;
+use crate::ServicePlanId;
 use crate::test_support::{
     MockStore,
     fixtures::{sample_purchase_date, test_session, test_user},
-    mock_session,
+    mock_session, only_tombstone,
     part_type_ids::{BIKE, CHAIN, FRONT_WHEEL},
+    sole_live,
 };
+use std::collections::HashMap;
 use time::OffsetDateTime;
 
 fn later_time() -> OffsetDateTime {
@@ -460,5 +463,123 @@ async fn part_delete_rejects_non_owner() -> TbResult<()> {
     let other_session = mock_session(UserId::from(98));
     let result = PartId::from(1).delete(&other_session, &mut store).await;
     assert!(matches!(result, Err(Error::Forbidden(_))));
+    Ok(())
+}
+
+// === PartId: delete (snooze cleanup) ===
+
+/// A canned generic `ServicePlan` (no specific part) carrying a snooze map —
+/// the shape a deleted part's entry sits in on a generic plan.
+fn generic_snoozed_plan(snoozes: HashMap<PartId, f64>) -> ServicePlan {
+    ServicePlan {
+        id: ServicePlanId::new(),
+        part: None,
+        what: CHAIN,
+        hook: Some(CHAIN),
+        name: "Lube chain".to_string(),
+        days: Some(30),
+        hours: None,
+        km: None,
+        climb: None,
+        descend: None,
+        rides: None,
+        uid: Some(test_user()),
+        energy: None,
+        snoozes,
+    }
+}
+
+/// `PartId::delete` removes the part's entry from every plan's snooze map: the
+/// generic plans a deleted part snoozed on are updated and carried in the
+/// Summary alongside the part's tombstone.
+#[tokio::test]
+async fn part_delete_clears_snooze_entries() -> TbResult<()> {
+    let part = PartId::from(1);
+    let mut snoozes = HashMap::new();
+    snoozes.insert(part, 0.5);
+    let plan = generic_snoozed_plan(snoozes);
+    let plan_id = plan.id;
+
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user(), CHAIN)));
+    store
+        .expect_attachments_all_by_part()
+        .returning(|_| Ok(vec![]));
+    store.expect_services_by_part().returning(|_| Ok(vec![]));
+    store.expect_by_part().returning(|_| Ok(vec![]));
+    store
+        .expect_plans_snoozing()
+        .returning(move |_| Ok(vec![plan.clone()]));
+    store.expect_serviceplan_update().returning(Ok);
+    store.expect_part_delete().returning(Ok);
+
+    let summary = part.delete(&test_session(), &mut store).await?;
+
+    assert!(summary.parts.is_tombstoned(&part));
+    let updated = sole_live(&summary.plans);
+    assert_eq!(updated.id, plan_id);
+    assert!(!updated.snoozes.contains_key(&part));
+    Ok(())
+}
+
+/// `PartId::delete` leaves other parts' snooze entries on the same plans
+/// intact: only the deleted part's entry is removed.
+#[tokio::test]
+async fn part_delete_keeps_other_parts_snoozes() -> TbResult<()> {
+    let part = PartId::from(1);
+    let other = PartId::from(2);
+    let mut snoozes = HashMap::new();
+    snoozes.insert(part, 0.5);
+    snoozes.insert(other, 0.75);
+    let plan = generic_snoozed_plan(snoozes);
+
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user(), CHAIN)));
+    store
+        .expect_attachments_all_by_part()
+        .returning(|_| Ok(vec![]));
+    store.expect_services_by_part().returning(|_| Ok(vec![]));
+    store.expect_by_part().returning(|_| Ok(vec![]));
+    store
+        .expect_plans_snoozing()
+        .returning(move |_| Ok(vec![plan.clone()]));
+    store.expect_serviceplan_update().returning(Ok);
+    store.expect_part_delete().returning(Ok);
+
+    let summary = part.delete(&test_session(), &mut store).await?;
+
+    let updated = sole_live(&summary.plans);
+    assert!(!updated.snoozes.contains_key(&part));
+    assert_eq!(updated.snoozes.get(&other), Some(&0.75));
+    Ok(())
+}
+
+/// `PartId::delete` with no snoozed plans: just the part tombstone, no plan
+/// updates are written.
+#[tokio::test]
+async fn part_delete_no_snoozed_plans() -> TbResult<()> {
+    let part = PartId::from(1);
+
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user(), CHAIN)));
+    store
+        .expect_attachments_all_by_part()
+        .returning(|_| Ok(vec![]));
+    store.expect_services_by_part().returning(|_| Ok(vec![]));
+    store.expect_by_part().returning(|_| Ok(vec![]));
+    store.expect_plans_snoozing().returning(|_| Ok(vec![]));
+    store.expect_serviceplan_update().times(0).returning(Ok);
+    store.expect_part_delete().returning(Ok);
+
+    let summary = part.delete(&test_session(), &mut store).await?;
+
+    assert_eq!(summary.parts, only_tombstone(part));
+    assert!(summary.plans.is_empty());
     Ok(())
 }
