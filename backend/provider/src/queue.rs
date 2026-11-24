@@ -10,9 +10,7 @@
 //!
 //! The two generic ops: [`get_event`] (the read-side rules — the rate-limit
 //! gate, then the latest-per-key dedup, ADR-0005 / spec #446 §4.3) and
-//! [`fail_event`] (the four-arm failure policy, spec #446 §4.6). Both were a
-//! clean duplicate across the two drivers; they now live here, so a driver's
-//! `event` module keeps only its wire shape plus the two trait impls.
+//! [`fail_event`] (the four-arm failure policy, spec #446 §4.6).
 
 use std::fmt::{Debug, Display};
 
@@ -38,9 +36,7 @@ pub trait QueuedEvent: Clone + Debug + Send + Sync + 'static {
 
     /// The row id (`None` until the row is stored).
     fn id(&self) -> Option<i32>;
-    /// The owner (the provider's user id).
     fn owner(&self) -> &Self::Owner;
-    /// The dedup key.
     fn key(&self) -> &Self::Key;
 }
 

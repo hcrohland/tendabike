@@ -417,7 +417,7 @@ pub(crate) async fn process<D: EntityFacade<S>, S: IcuDataStore + EventQueue<Icu
                 // A stub (both `distance` and `moving_time` null-or-zero):
                 // skipped (the gear reference is dropped, no upsert), with one
                 // transient notice per event (spec #764; spec #1023 makes it
-                // per-event, not per-batch).
+                // per-event).
                 Ok(None) => {
                     let notice = super::activity::stub_notice(user_id, 1, facade, store).await?;
                     store.delete_event(event.id()).await?;
