@@ -217,6 +217,23 @@ impl ServicePlan {
     ) -> TbResult<Vec<Self>> {
         store.by_user(*uid).await
     }
+
+    /// Removes `part`'s entry from the snooze map of every plan that carries
+    /// it (issue #1013): the part-deletion cascade. A part with a specific
+    /// plan cannot be deleted while the plan is active, so only generic plans
+    /// carry an entry. Returns the updated plans (none when no plan carried an
+    /// entry — no writes).
+    pub(crate) async fn clear_snoozes_for_part(
+        part: PartId,
+        store: &mut impl ServicePlanStore,
+    ) -> TbResult<Vec<Self>> {
+        let mut updated = Vec::new();
+        for mut plan in store.plans_snoozing(part).await? {
+            plan.snoozes.remove(&part);
+            updated.push(store.serviceplan_update(plan).await?);
+        }
+        Ok(updated)
+    }
 }
 
 #[cfg(test)]

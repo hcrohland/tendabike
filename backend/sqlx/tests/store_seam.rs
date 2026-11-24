@@ -1414,3 +1414,76 @@ async fn serviceplan_snoozes_roundtrip() -> tb_domain::TbResult<()> {
     })
     .await
 }
+
+/// `plans_snoozing` returns exactly the plans whose `snoozes` jsonb carries the
+/// part's key (issue #1013): the jsonb key-existence query, which only the
+/// database adapter can exercise.
+#[tokio::test]
+#[ignore]
+async fn serviceplan_plans_snoozing_matches_part_key() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let part_a = PartId::from(1);
+        let part_b = PartId::from(2);
+
+        let mut plan_a = ServicePlan {
+            id: ServicePlanId::from(
+                Uuid::from_str("1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4c01").unwrap(),
+            ),
+            part: None,
+            what: PartTypeId::from(2),
+            hook: Some(PartTypeId::from(2)),
+            name: "Snoozed A".to_string(),
+            days: Some(30),
+            hours: None,
+            km: None,
+            climb: None,
+            descend: None,
+            rides: None,
+            uid: None,
+            energy: None,
+            snoozes: HashMap::new(),
+        };
+        plan_a.snoozes.insert(part_a, 1.5);
+
+        let mut plan_b = ServicePlan {
+            id: ServicePlanId::from(
+                Uuid::from_str("1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4c02").unwrap(),
+            ),
+            part: None,
+            what: PartTypeId::from(2),
+            hook: Some(PartTypeId::from(2)),
+            name: "Snoozed B".to_string(),
+            days: Some(30),
+            hours: None,
+            km: None,
+            climb: None,
+            descend: None,
+            rides: None,
+            uid: None,
+            energy: None,
+            snoozes: HashMap::new(),
+        };
+        plan_b.snoozes.insert(part_b, 0.25);
+
+        let a = store.serviceplan_create(plan_a).await?;
+        let b = store.serviceplan_create(plan_b).await?;
+
+        let snoozing_a = store.plans_snoozing(part_a).await?;
+        assert_eq!(
+            snoozing_a.len(),
+            1,
+            "only the plan carrying part_a's key matches"
+        );
+        assert_eq!(snoozing_a[0].id, a.id);
+
+        let snoozing_b = store.plans_snoozing(part_b).await?;
+        assert_eq!(
+            snoozing_b.len(),
+            1,
+            "only the plan carrying part_b's key matches"
+        );
+        assert_eq!(snoozing_b[0].id, b.id);
+        Ok(())
+    })
+    .await
+}

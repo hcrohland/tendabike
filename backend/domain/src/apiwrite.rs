@@ -414,13 +414,10 @@ pub async fn exec(
             Ok(WriteOutcome::Summary(one_part(part)))
         }
         ApiWrite::PartDelete { id } => {
-            // The op returns the id; the part itself is reported as a
-            // tombstone so the stream merge drops it (the write contract:
-            // everything touched).
-            id.delete(session, store).await?;
-            let mut summary = Summary::default();
-            summary.parts.tombstone(id);
-            Ok(WriteOutcome::Summary(summary))
+            // The op returns the Summary of everything it touched: the part's
+            // tombstone (the stream merge drops it) plus any generic plan it
+            // snoozed on, cleaned up (issue #1013).
+            Ok(WriteOutcome::Summary(id.delete(session, store).await?))
         }
 
         // --- partnote ---

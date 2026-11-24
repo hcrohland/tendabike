@@ -280,6 +280,7 @@ mockall::mock! {
         async fn serviceplans_delete(&mut self, serviceplans: &[ServicePlan]) -> TbResult<usize>;
         async fn by_part(&mut self, part: PartId) -> TbResult<Vec<ServicePlan>>;
         async fn by_user(&mut self, uid: UserId) -> TbResult<Vec<ServicePlan>>;
+        async fn plans_snoozing(&mut self, part: PartId) -> TbResult<Vec<ServicePlan>>;
     }
 
     #[async_trait::async_trait]

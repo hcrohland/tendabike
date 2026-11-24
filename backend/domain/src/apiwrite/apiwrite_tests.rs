@@ -236,6 +236,7 @@ async fn part_delete_reports_tombstone() -> TbResult<()> {
         .returning(|_| Ok(vec![]));
     store.expect_services_by_part().returning(|_| Ok(vec![]));
     store.expect_by_part().returning(|_| Ok(vec![]));
+    store.expect_plans_snoozing().returning(|_| Ok(vec![]));
     store.expect_part_delete().returning(move |_| Ok(id));
 
     let summary =

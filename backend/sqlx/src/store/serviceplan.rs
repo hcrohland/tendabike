@@ -206,6 +206,21 @@ impl<'c> tb_domain::ServicePlanStore for SqlxConn<'c> {
         .map(vec_into)
     }
 
+    async fn plans_snoozing(&mut self, part: PartId) -> TbResult<Vec<ServicePlan>> {
+        // The snooze map is a flat jsonb object keyed by the part id's string
+        // form; `?` is the jsonb key-existence operator.
+        let key = i32::from(part).to_string();
+        sqlx::query_as!(
+            DbServicePlan,
+            "SELECT * FROM service_plans WHERE snoozes ? $1",
+            key
+        )
+        .fetch_all(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(vec_into)
+    }
+
     async fn serviceplans_delete(&mut self, plans: &[ServicePlan]) -> TbResult<usize> {
         let plans: Vec<_> = plans.iter().map(|s| Uuid::from(s.id)).collect();
 
