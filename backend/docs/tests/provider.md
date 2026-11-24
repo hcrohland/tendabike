@@ -8,8 +8,9 @@ Shared conventions (the seam model, writing conventions, the mockall `.times` go
 |--------|---------------|
 | `dispatch.rs` | Provider-agnostic dispatch: `sync_user` (per-user onboarding), `sync_users` (admin re-trigger), `import_gear_user`, `queue_sync_user` (two-step split) |
 | `facade.rs` | `EntityFacade` trait — the entity-op door (gear CRUD, user ops); `MockEntityFacade` via `#[automock]` |
-| `strava/` | Strava driver: `user` (onboard, gear, stats), `event` (sync enqueue, processing), `gear`, `activity`, `session` (token cache) |
-| `icu/` | intervals.icu driver: `user` (onboard, gear, stats), `event` (sync enqueue, processing), `gear`, `activity`, `http` |
+| `queue.rs` | Provider-agnostic event queue (spec #1023): `QueuedEvent` + `EventQueue` traits, `get_event` (the read-side rules — rate-limit gate, latest-per-key dedup), `fail_event` (the four-arm failure policy) — written once, generic over the event type; the unified store implements `EventQueue` per provider's event type, the drivers implement `QueuedEvent` |
+| `strava/` | Strava driver: `user` (onboard, gear, stats), `event` (sync enqueue, processing — one event per `process` call), `gear`, `activity`, `session` (token cache) |
+| `icu/` | intervals.icu driver: `user` (onboard, gear, stats), `event` (sync enqueue, processing — one event per `process` call, one `SYNC` batch per call), `gear`, `activity`, `http` |
 | `test_support.rs` | Shared provider kit: canned-response kit (`queue`, `queue_error`, `requests`, `begin_test`) |
 
 ## Shared pattern
@@ -65,8 +66,9 @@ async fn my_test() -> TbResult<()> {
 
 | File | Covers |
 |------|--------|
+| `queue/queue_tests.rs` | The kit's event queue (spec #1023): `get_event` (the read-side rules — the rate-limit gate, the latest-per-key dedup, the drop-of-older) and `fail_event` (the four-arm failure policy), driven by a `MockEventQueue` |
 | `activity/activity_tests.rs` | Activity import: JSON → `Activity` mapping, type mapping, stub detection, gear reference |
 | `gear/gear_tests.rs` | Gear import: JSON → `Part` mapping, `into_partid` upsert |
-| `event/event_tests.rs` | Event queue: `get_event`, `process`, `insert_sync`, `process_sync`, `accept` |
+| `event/event_tests.rs` | Event queue: `process` (one event per call), `insert_sync`, `process_sync` (one batch per call), `accept` |
 | `user/user_tests.rs` | User ops: `upsert`, `get_all_stats`, `onboard`, token management |
 | `http/http_tests.rs` | HTTP seam: `request_json` against canned responses |

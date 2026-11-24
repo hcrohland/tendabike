@@ -3,17 +3,10 @@ use std::sync::{Arc, Mutex};
 use super::super::test_support::{activity_json, setup, strava_user};
 use super::*;
 use super::{AspectType, Event, ObjectType};
-use crate::lane::QueueRead;
 use crate::test_support::{queue, queue_error};
 
-/// Sets this thread's rate-limiter override to "at limit" (read 15-min
-/// exhausted), so `get_event` reports `Limited`.
-fn set_rate_limited() {
-    super::super::ratelimit::test_set_limited();
-}
-
 /// Sets this thread's rate-limiter override to "no data" (allows all
-/// requests), so `get_event` dequeues normally.
+/// requests), so the queue read dequeues normally.
 fn reset_rate_limiter() {
     super::super::ratelimit::test_set_not_limited();
 }
@@ -255,83 +248,6 @@ async fn insert_sync_rejects_future() {
     // A future event time is a `BadRequest` (no store write fires).
     let res = insert_sync(UserId::from(1), get_time() + 1000, &mut store).await;
     assert!(matches!(res, Err(Error::BadRequest(_))));
-}
-
-#[tokio::test]
-async fn get_event_returns_latest_and_drops_older() -> TbResult<()> {
-    let (mut store, _facade, session) = setup();
-    // Two events for the same object: the read returns the latest (Create)
-    // and drops the older (Update).
-    let first = event_with_id(1, ObjectType::Activity, 10, AspectType::Update, 50);
-    let second = event_with_id(2, ObjectType::Activity, 10, AspectType::Create, 100);
-    let next = first.clone();
-    let later_first = first.clone();
-    let later_second = second.clone();
-    store
-        .expect_strava_event_get_next_for_user()
-        .returning(move |_user| Ok(Some(next.clone())));
-    store
-        .expect_strava_event_get_later()
-        .returning(move |_obj_id, _oid| Ok(vec![later_first.clone(), later_second.clone()]));
-    let dropped = Arc::new(Mutex::new(Vec::new()));
-    let dropped_rec = dropped.clone();
-    store
-        .expect_strava_events_delete_batch()
-        .returning(move |values| {
-            dropped_rec.lock().unwrap().extend(values);
-            Ok(())
-        });
-    let event = match get_event(session.user_id(), &mut store).await? {
-        QueueRead::Event(event) => event,
-        other => panic!("the latest event is returned, got {other:?}"),
-    };
-    assert_eq!(event.aspect_type, AspectType::Create);
-    assert_eq!(
-        dropped.lock().unwrap().as_slice(),
-        [Some(1)],
-        "the older event is dropped"
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn get_event_ignores_other_owners() -> TbResult<()> {
-    let (mut store, _facade, session) = setup();
-    // The queue has no event for this user's strava id: the read is `Empty`.
-    store
-        .expect_strava_event_get_next_for_user()
-        .returning(|_user| Ok(None));
-    assert_eq!(
-        get_event(session.user_id(), &mut store).await?,
-        QueueRead::Empty
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn get_event_rate_limited_returns_limited() -> TbResult<()> {
-    // When the rate limiter reports no budget, get_event returns Limited
-    // without dequeuing: the event stays queued for when the window resets.
-    set_rate_limited();
-    let (mut _store, _facade, session) = setup();
-    let res = get_event(session.user_id(), &mut _store).await?;
-    assert!(matches!(res, QueueRead::Limited { .. }));
-    reset_rate_limiter();
-    Ok(())
-}
-
-#[tokio::test]
-async fn get_event_not_rate_limited_returns_event() -> TbResult<()> {
-    // When the rate limiter has budget, get_event dequeues normally.
-    reset_rate_limiter();
-    let (mut store, _facade, session) = setup();
-    queue_event(
-        &mut store,
-        event_with_id(1, ObjectType::Activity, 10, AspectType::Create, 100),
-    );
-    let res = get_event(session.user_id(), &mut store).await?;
-    assert!(matches!(res, QueueRead::Event(ref e) if e.object_id == 10));
-    Ok(())
 }
 
 #[tokio::test]

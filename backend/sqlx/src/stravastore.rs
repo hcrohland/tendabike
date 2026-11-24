@@ -6,7 +6,7 @@ use sqlx::FromRow;
 
 use crate::{SqlxConn, into_domain, option_into, vec_into};
 use tb_domain::{TbResult, UserId};
-use tb_provider::strava::{StravaId, StravaUser, event::Event};
+use tb_provider::strava::{StravaDataStore, StravaId, StravaUser, event::Event};
 
 #[derive(Clone, Debug, Default, FromRow)]
 struct DbStravaUser {
@@ -308,6 +308,35 @@ impl<'c> tb_provider::strava::StravaDataStore for SqlxConn<'c> {
 }
 
 impl<'c> tb_provider::strava::StravaStore for SqlxConn<'c> {}
+
+/// The kit's event queue over the unified store (spec #1023): a thin forward
+/// onto the [`StravaDataStore`] queue ops; `disable_user` and `limited_until`
+/// drive the driver's own policy (the `StravaId` disable, the process-wide
+/// limiter).
+#[async_trait::async_trait]
+impl<'c> tb_provider::EventQueue<Event> for SqlxConn<'c> {
+    fn provider_id(&self) -> tb_provider::Provider {
+        tb_provider::Provider::Strava
+    }
+    async fn get_next_for_user(&mut self, user: StravaId) -> TbResult<Option<Event>> {
+        self.strava_event_get_next_for_user(user).await
+    }
+    async fn get_later(&mut self, key: i64, owner: StravaId) -> TbResult<Vec<Event>> {
+        self.strava_event_get_later(key, owner).await
+    }
+    async fn delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
+        self.strava_events_delete_batch(values).await
+    }
+    async fn delete_event(&mut self, event_id: Option<i32>) -> TbResult<()> {
+        self.strava_event_delete(event_id).await
+    }
+    async fn disable_user(&mut self, user: StravaId) -> TbResult<()> {
+        user.disable(self).await
+    }
+    fn limited_until(&self) -> Option<i64> {
+        tb_provider::strava::limited_until()
+    }
+}
 
 #[cfg(test)]
 mod tests {

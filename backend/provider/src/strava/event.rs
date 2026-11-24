@@ -6,10 +6,12 @@ use super::activity::StravaActivity;
 use super::http::request_json;
 use super::session::get_strava_id;
 #[cfg(test)]
-use super::{ActivityId, MockStravaDataStore, Session};
+use super::{ActivityId, MockStravaDataStore};
 use super::{Error, StravaDataStore, StravaId, Summary, TbResult, UserId, activity, get_time};
 use crate::EntityFacade;
+use crate::EventQueue;
 use crate::lane::QueueRead;
+use crate::queue::QueuedEvent;
 
 #[derive(Debug, Serialize, Deserialize)]
 /// A struct representing an incoming Strava event.
@@ -209,6 +211,23 @@ impl std::fmt::Display for Event {
     }
 }
 
+/// The queue's identity for a Strava event row (spec #1023): the owner is the
+/// `strava_id` (the queue's partition key), and the dedup key is the
+/// `object_id` (only the latest event per object is interesting).
+impl QueuedEvent for Event {
+    type Owner = StravaId;
+    type Key = i64;
+    fn id(&self) -> Option<i32> {
+        self.id
+    }
+    fn owner(&self) -> &StravaId {
+        &self.owner_id
+    }
+    fn key(&self) -> &i64 {
+        &self.object_id
+    }
+}
+
 impl Event {
     async fn delete(&self, store: &mut impl StravaDataStore) -> TbResult<()> {
         debug!("Deleting {self}");
@@ -220,7 +239,7 @@ impl Event {
         store.strava_event_set_time(self.id, self.event_time).await
     }
 
-    async fn process_activity<D: EntityFacade<S>, S: StravaDataStore>(
+    async fn process_activity<D: EntityFacade<S>, S: StravaDataStore + EventQueue<Event>>(
         &self,
         user_id: UserId,
         facade: &D,
@@ -228,7 +247,9 @@ impl Event {
     ) -> TbResult<Summary> {
         match self.process_hook(user_id, facade, store).await {
             Ok(summary) => Ok(summary),
-            Err(err) => self.fail_event(err, store).await,
+            // The kit's failure policy (spec #446 §4.6): the disable and the
+            // drop commit with the loop's transaction.
+            Err(err) => crate::queue::fail_event(self, err, store).await,
         }
     }
 
@@ -320,7 +341,7 @@ impl Event {
         Ok(summary)
     }
 
-    async fn process_sync<D: EntityFacade<S>, S: StravaDataStore>(
+    async fn process_sync<D: EntityFacade<S>, S: StravaDataStore + EventQueue<Event>>(
         mut self,
         user_id: UserId,
         facade: &D,
@@ -328,40 +349,10 @@ impl Event {
     ) -> TbResult<Summary> {
         match self.sync(user_id, facade, store).await {
             Ok(summary) => Ok(summary),
-            Err(err) => self.fail_event(err, store).await,
-        }
-    }
-
-    /// Applies the kit's failure decision ([`crate::failure`], spec #446
-    /// §4.6) to Strava's tables: the disable and the delete commit with the
-    /// loop's transaction.
-    ///
-    /// Every arm returns `Ok` except the DB failure: the queue-side effects
-    /// (the disable, the delete) are committed by the loop's transaction,
-    /// and the loop continues.
-    async fn fail_event(&self, err: Error, store: &mut impl StravaDataStore) -> TbResult<Summary> {
-        match crate::failure::classify(&err) {
-            crate::failure::FailureDecision::KeepQueued => {
-                // The rate-limit state is already updated from the 429
-                // response headers (in `get_strava`); the event stays queued
-                // and the next `get_event` probe will report `Limited`.
-                warn!("Strava rate limited ({err}); event stays queued until the window resets");
-                Ok(Summary::default())
-            }
-            crate::failure::FailureDecision::DisableUser => {
-                warn!(
-                    "Strava auth is dead ({err}); disabling user {}",
-                    self.owner_id
-                );
-                self.owner_id.disable(store).await?;
-                Ok(Summary::default())
-            }
-            crate::failure::FailureDecision::Propagate => Err(err),
-            crate::failure::FailureDecision::DropEvent => {
-                warn!("dropping poison event {self}: {err:#}");
-                self.delete(store).await?;
-                Ok(Summary::default())
-            }
+            // The kit's failure policy (spec #446 §4.6): the Stop keeps the
+            // event at the last good cursor, the disable drops the queue, the
+            // DB failure backs off in the loop.
+            Err(err) => crate::queue::fail_event(&self, err, store).await,
         }
     }
 
@@ -455,54 +446,6 @@ pub async fn sync_queued_for_user(
     Ok(syncs.iter().any(|event| event.event_time == event_time))
 }
 
-/// Read the next queued Strava event for the user, with the queue's read-side
-/// rules applied (ADR-0005, executable spec #446 §4.3):
-///
-/// - the proactive rate-limit gate is checked first: budget exhausted →
-///   [`QueueRead::Limited`] (the event stays queued);
-/// - only the latest event per object is interesting: older events for the
-///   same object are deleted and the latest is returned.
-///
-/// The read runs inside the caller's transaction (the deletions above commit
-/// or roll back with it). Crate-internal: the lane's `probe` is the only
-/// caller; reading the queue stays a Strava-side concern, so the function
-/// stays here rather than being inlined in the lane.
-pub(crate) async fn get_event(
-    user_id: UserId,
-    store: &mut impl StravaDataStore,
-) -> TbResult<QueueRead<Event>> {
-    // Proactive rate-limit gate: if the budget is exhausted, report the
-    // window boundary without dequeuing (the event stays queued).
-    if let Some(until) = super::ratelimit::limited_until() {
-        return Ok(QueueRead::Limited { until });
-    }
-
-    let strava_id = get_strava_id(user_id, store).await?;
-    let event = store.strava_event_get_next_for_user(strava_id).await?;
-    let event = match event {
-        Some(event) => event,
-        None => return Ok(QueueRead::Empty),
-    };
-
-    // Prevent unneeded calls to Strava
-    // only the latest event for an object is interesting
-    let mut list = store
-        .strava_event_get_later(event.object_id, event.owner_id)
-        .await?;
-    let res = list.pop();
-
-    if !list.is_empty() {
-        debug!("Dropping {list:#?}");
-        let values = list.into_iter().map(|l| l.id).collect::<Vec<_>>();
-        store.strava_events_delete_batch(values).await?;
-    }
-
-    Ok(match res {
-        Some(event) => QueueRead::Event(event),
-        None => QueueRead::Empty,
-    })
-}
-
 async fn next_activities(
     user_id: UserId,
     store: &mut impl StravaDataStore,
@@ -517,12 +460,17 @@ async fn next_activities(
     .await
 }
 
-pub(crate) async fn process<D: EntityFacade<S>, S: StravaDataStore>(
+/// Process the user's next queued Strava event (the lane's `process`): read
+/// the queue with the kit's read-side rules ([`crate::queue::get_event`]) and
+/// handle that one event. One event per call — the queue's read and failure
+/// policy are the kit's, generic over the event type (spec #1023).
+pub(crate) async fn process<D: EntityFacade<S>, S: StravaDataStore + EventQueue<Event>>(
     user_id: UserId,
     facade: &D,
     store: &mut S,
 ) -> TbResult<Summary> {
-    let read = get_event(user_id, store).await?;
+    let strava_id = get_strava_id(user_id, store).await?;
+    let read = crate::queue::get_event(strava_id, store).await?;
     let event = match read {
         QueueRead::Event(event) => event,
         // The queue is empty, or paused by a global rate-limit `Stop` (the

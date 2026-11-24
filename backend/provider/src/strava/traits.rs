@@ -11,7 +11,11 @@ the same "local traits plus an umbrella" shape as `Store` itself.
 */
 
 use super::{StravaId, StravaUser, event::Event};
+#[cfg(any(test, feature = "test-support"))]
+use crate::Provider;
 use crate::facade::{Store, TbResult, UserId};
+#[cfg(any(test, feature = "test-support"))]
+use crate::queue::EventQueue;
 
 /// The Strava-side data store: the `strava_users` and `strava_events` tables.
 ///
@@ -220,3 +224,34 @@ pub trait StravaDataStore: Send + Sync {
 /// carries no methods of its own — the same shape as `Store`,
 /// which is the umbrella over the domain's per-entity sub-traits.
 pub trait StravaStore: Store + StravaDataStore {}
+
+/// The kit's event queue over the Strava data-store mock (spec #1023): a thin
+/// forward so the driver's `process` (generic over [`EventQueue`]) runs on the
+/// mock in the DB-free suites. The queue ops map one-to-one onto the
+/// `StravaDataStore` expectations; `disable_user` and `limited_until` drive the
+/// driver's own policy (the `StravaId` disable, the process-wide limiter).
+#[cfg(any(test, feature = "test-support"))]
+#[async_trait::async_trait]
+impl EventQueue<Event> for MockStravaDataStore {
+    fn provider_id(&self) -> Provider {
+        Provider::Strava
+    }
+    async fn get_next_for_user(&mut self, user: StravaId) -> TbResult<Option<Event>> {
+        self.strava_event_get_next_for_user(user).await
+    }
+    async fn get_later(&mut self, key: i64, owner: StravaId) -> TbResult<Vec<Event>> {
+        self.strava_event_get_later(key, owner).await
+    }
+    async fn delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
+        self.strava_events_delete_batch(values).await
+    }
+    async fn delete_event(&mut self, event_id: Option<i32>) -> TbResult<()> {
+        self.strava_event_delete(event_id).await
+    }
+    async fn disable_user(&mut self, user: StravaId) -> TbResult<()> {
+        user.disable(self).await
+    }
+    fn limited_until(&self) -> Option<i64> {
+        super::ratelimit::limited_until()
+    }
+}

@@ -38,6 +38,10 @@
 //! executor is generic over the lane it is given and never names a concrete
 //! provider.
 //!
+//! [`queue`] — [`QueuedEvent`] + [`EventQueue`], the provider-agnostic event
+//! queue: the queue's read-side rules and the failure policy, written once
+//! and generic over the event type (spec #1023).
+//!
 //! [`unified`] — the unified lane (ADR-0014): the [`ProviderLane`] impl,
 //! keyed by the [`LaneEvent`] the two providers' event rows share. The lane
 //! the executor loop runs in production: it selects between the two
@@ -77,6 +81,9 @@ pub(crate) use ratelimit::{Cadence, RateLimitShim, RateLimiter, UsageKind, Windo
 
 mod failure;
 pub use failure::*;
+
+mod queue;
+pub use queue::{EventQueue, QueuedEvent};
 
 mod http;
 pub use http::*;
