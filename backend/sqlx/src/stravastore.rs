@@ -309,6 +309,60 @@ impl<'c> tb_provider::strava::StravaDataStore for SqlxConn<'c> {
 
 impl<'c> tb_provider::strava::StravaStore for SqlxConn<'c> {}
 
+/// The provider-agnostic store over the unified store (spec #1029, ticket
+/// #1030): a thin forward onto the [`StravaDataStore`] user-row and event-row
+/// ops; `user_disable` and `limited_until` drive the driver's own policy (the
+/// `StravaId` disable, the process-wide limiter).
+#[async_trait::async_trait]
+impl<'c> tb_provider::Store<tb_provider::strava::StravaSpec> for SqlxConn<'c> {
+    async fn user_get_all(&mut self) -> TbResult<Vec<StravaUser>> {
+        self.stravauser_get_all().await
+    }
+    async fn user_get_by_tbid(&mut self, id: UserId) -> TbResult<StravaUser> {
+        self.stravauser_get_by_tbid(id).await
+    }
+    async fn user_get_by_provider_id(&mut self, id: &StravaId) -> TbResult<Option<StravaUser>> {
+        self.stravauser_get_by_stravaid(id).await
+    }
+    async fn user_create(&mut self, user: StravaUser) -> TbResult<StravaUser> {
+        self.stravauser_create(user).await
+    }
+    async fn user_update_token(
+        &mut self,
+        owner: StravaId,
+        token: Option<String>,
+    ) -> TbResult<StravaUser> {
+        self.stravauser_update_token(owner, token).await
+    }
+    async fn user_delete(&mut self, user: UserId) -> TbResult<usize> {
+        self.stravauser_delete(user).await
+    }
+    async fn user_disable(&mut self, owner: StravaId) -> TbResult<()> {
+        owner.disable(self).await
+    }
+    async fn user_event_count(&mut self, owner: &StravaId) -> TbResult<i64> {
+        self.strava_events_get_count_for_user(owner).await
+    }
+    async fn event_get_next(&mut self, owner: StravaId) -> TbResult<Option<Event>> {
+        self.strava_event_get_next_for_user(owner).await
+    }
+    async fn event_get_later(&mut self, key: i64, owner: StravaId) -> TbResult<Vec<Event>> {
+        self.strava_event_get_later(key, owner).await
+    }
+    async fn event_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
+        self.strava_events_delete_batch(values).await
+    }
+    async fn event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {
+        self.strava_event_delete(event_id).await
+    }
+    async fn event_create(&mut self, e: Event) -> TbResult<()> {
+        self.strava_event_create(e).await
+    }
+    fn limited_until(&self) -> Option<i64> {
+        tb_provider::strava::limited_until()
+    }
+}
+
 /// The kit's event queue over the unified store (spec #1023): a thin forward
 /// onto the [`StravaDataStore`] queue ops; `disable_user` and `limited_until`
 /// drive the driver's own policy (the `StravaId` disable, the process-wide

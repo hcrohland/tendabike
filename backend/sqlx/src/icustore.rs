@@ -316,6 +316,60 @@ impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
 
 impl<'c> tb_provider::icu::IcuStore for SqlxConn<'c> {}
 
+/// The provider-agnostic store over the unified store (spec #1029, ticket
+/// #1030): a thin forward onto the [`IcuDataStore`] user-row and event-row
+/// ops; `user_disable` and `limited_until` drive the driver's own policy (the
+/// `IcuId` disable, the process-wide limiter).
+#[async_trait::async_trait]
+impl<'c> tb_provider::Store<tb_provider::icu::IcuSpec> for SqlxConn<'c> {
+    async fn user_get_all(&mut self) -> TbResult<Vec<IcuUser>> {
+        self.icuser_get_all().await
+    }
+    async fn user_get_by_tbid(&mut self, id: UserId) -> TbResult<IcuUser> {
+        self.icuser_get_by_tbid(id).await
+    }
+    async fn user_get_by_provider_id(&mut self, id: &IcuId) -> TbResult<Option<IcuUser>> {
+        self.icuser_get_by_icuid(id).await
+    }
+    async fn user_create(&mut self, user: IcuUser) -> TbResult<IcuUser> {
+        self.icuser_create(user).await
+    }
+    async fn user_update_token(
+        &mut self,
+        owner: IcuId,
+        token: Option<String>,
+    ) -> TbResult<IcuUser> {
+        self.icuser_update_token(owner, token).await
+    }
+    async fn user_delete(&mut self, user: UserId) -> TbResult<usize> {
+        self.icuser_delete(user).await
+    }
+    async fn user_disable(&mut self, owner: IcuId) -> TbResult<()> {
+        owner.disable(self).await
+    }
+    async fn user_event_count(&mut self, owner: &IcuId) -> TbResult<i64> {
+        self.icu_events_get_count_for_user(owner).await
+    }
+    async fn event_get_next(&mut self, owner: IcuId) -> TbResult<Option<IcuEvent>> {
+        self.icu_event_get_next_for_user(owner).await
+    }
+    async fn event_get_later(&mut self, key: String, owner: IcuId) -> TbResult<Vec<IcuEvent>> {
+        self.icu_event_get_later(&key, &owner).await
+    }
+    async fn event_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
+        self.icu_events_delete_batch(values).await
+    }
+    async fn event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {
+        self.icu_event_delete(event_id).await
+    }
+    async fn event_create(&mut self, e: IcuEvent) -> TbResult<()> {
+        self.icu_event_create(e).await
+    }
+    fn limited_until(&self) -> Option<i64> {
+        tb_provider::icu::limited_until()
+    }
+}
+
 /// The kit's event queue over the unified store (spec #1023): a thin forward
 /// onto the [`IcuDataStore`] queue ops; `disable_user` and `limited_until`
 /// drive the driver's own policy (the `IcuId` disable, the process-wide

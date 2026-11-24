@@ -11,8 +11,8 @@ same "local traits plus an umbrella" shape as `Store` itself.
 */
 
 use super::{IcuEvent, IcuId, IcuUser};
-#[cfg(any(test, feature = "test-support"))]
 use crate::Provider;
+use crate::ProviderSpec;
 use crate::facade::{Store, TbResult, UserId};
 #[cfg(any(test, feature = "test-support"))]
 use crate::queue::EventQueue;
@@ -100,6 +100,31 @@ pub trait IcuDataStore: Send + Sync {
 /// which is the umbrella over the domain's per-entity sub-traits.
 pub trait IcuStore: Store + IcuDataStore {}
 
+/// The icu provider marker (spec #1029): the type carrier for icu's wire
+/// shapes — the [`IcuUser`] row, the [`IcuEvent`] row, the [`IcuId`] owner,
+/// the `String` dedup key (the `activity_id`).
+pub struct IcuSpec;
+
+impl ProviderSpec for IcuSpec {
+    const PROVIDER: Provider = Provider::Icu;
+    type User = IcuUser;
+    type Event = IcuEvent;
+    type Owner = IcuId;
+    type Key = String;
+    fn make_sync(owner: IcuId, time: i64) -> IcuEvent {
+        IcuEvent::new_sync(owner, time)
+    }
+    fn event_id(e: &IcuEvent) -> Option<i32> {
+        e.id
+    }
+    fn event_owner(e: &IcuEvent) -> &IcuId {
+        &e.icu_athlete_id
+    }
+    fn event_key(e: &IcuEvent) -> &String {
+        &e.activity_id
+    }
+}
+
 /// The kit's event queue over the icu data-store mock (spec #1023): a thin
 /// forward so the driver's `process` (generic over [`EventQueue`]) runs on the
 /// mock in the DB-free suites. The queue ops map one-to-one onto the
@@ -128,5 +153,42 @@ impl EventQueue<IcuEvent> for MockIcuDataStore {
     }
     fn limited_until(&self) -> Option<i64> {
         super::ratelimit::limited_until()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::icu::IcuObjectType;
+
+    /// The marker's `PROVIDER` constant is the enum value (the marker → enum
+    /// direction).
+    #[test]
+    fn icu_spec_provider_constant() {
+        assert_eq!(IcuSpec::PROVIDER, Provider::Icu);
+    }
+
+    /// The marker's `make_sync` builds the durable sync row: a `Sync` for the
+    /// owner with the `oldest` bound, the `"sync"` sentinel key, the `0`
+    /// `newest` sentinel, no row id yet.
+    #[test]
+    fn icu_spec_make_sync_builds_sync_row() {
+        let owner = IcuId::from("ath-42");
+        let event = IcuSpec::make_sync(owner.clone(), 1_700_000_000);
+        assert_eq!(event.object_type, IcuObjectType::Sync);
+        assert_eq!(event.icu_athlete_id, owner);
+        assert_eq!(event.activity_id, "sync");
+        assert_eq!(event.event_time, 0);
+        assert_eq!(event.oldest, Some(1_700_000_000));
+        assert_eq!(event.id, None);
+    }
+
+    /// The marker's event-identity accessors read the row's id, owner, and key.
+    #[test]
+    fn icu_spec_event_identity_accessors() {
+        let event = IcuSpec::make_sync(IcuId::from("ath-42"), 1_700_000_000);
+        assert_eq!(IcuSpec::event_id(&event), None);
+        assert_eq!(*IcuSpec::event_owner(&event), IcuId::from("ath-42"));
+        assert_eq!(*IcuSpec::event_key(&event), "sync");
     }
 }

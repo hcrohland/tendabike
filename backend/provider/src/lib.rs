@@ -42,6 +42,14 @@
 //! queue: the queue's read-side rules and the failure policy, written once
 //! and generic over the event type (spec #1023).
 //!
+//! [`spec`] — [`ProviderSpec`], the provider marker: the type-only carrier of
+//! a provider's wire shapes (the user row, the event row, the owner id, the
+//! event key, the sync-event constructor, and the event-identity accessors).
+//!
+//! [`store`] — [`Store`], the provider-agnostic store: the single uniform
+//! store interface, generic over the marker, carrying the user-row and the
+//! event-row operations (spec #1029).
+//!
 //! [`unified`] — the unified lane (ADR-0014): the [`ProviderLane`] impl,
 //! keyed by the [`LaneEvent`] the two providers' event rows share. The lane
 //! the executor loop runs in production: it selects between the two
@@ -84,6 +92,12 @@ pub use failure::*;
 
 mod queue;
 pub use queue::{EventQueue, QueuedEvent};
+
+mod spec;
+pub use spec::ProviderSpec;
+
+mod store;
+pub use store::Store;
 
 mod http;
 pub use http::*;
