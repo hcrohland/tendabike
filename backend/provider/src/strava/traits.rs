@@ -14,8 +14,6 @@ use super::{StravaId, StravaUser, event::Event};
 use crate::Provider;
 use crate::ProviderSpec;
 use crate::facade::{Store, TbResult, UserId};
-#[cfg(any(test, feature = "test-support"))]
-use crate::queue::EventQueue;
 
 /// The Strava-side data store: the `strava_users` and `strava_events` tables.
 ///
@@ -257,31 +255,57 @@ impl ProviderSpec for StravaSpec {
     }
 }
 
-/// The kit's event queue over the Strava data-store mock (spec #1023): a thin
-/// forward so the driver's `process` (generic over [`EventQueue`]) runs on the
-/// mock in the DB-free suites. The queue ops map one-to-one onto the
-/// `StravaDataStore` expectations; `disable_user` and `limited_until` drive the
-/// driver's own policy (the `StravaId` disable, the process-wide limiter).
+/// The provider-agnostic store over the Strava data-store mock (spec #1029,
+/// ticket #1031): a thin forward so the driver's `process` (generic over the
+/// [`Store`](crate::store::Store)) and the kit's queue ops run on the mock in
+/// the DB-free suites. The ops map one-to-one onto the `StravaDataStore`
+/// expectations; `user_disable` and `limited_until` drive the driver's own
+/// policy (the `StravaId` disable, the process-wide limiter).
 #[cfg(any(test, feature = "test-support"))]
 #[async_trait::async_trait]
-impl EventQueue<Event> for MockStravaDataStore {
-    fn provider_id(&self) -> Provider {
-        Provider::Strava
+impl crate::store::Store<StravaSpec> for MockStravaDataStore {
+    async fn user_get_all(&mut self) -> TbResult<Vec<StravaUser>> {
+        self.stravauser_get_all().await
     }
-    async fn get_next_for_user(&mut self, user: StravaId) -> TbResult<Option<Event>> {
-        self.strava_event_get_next_for_user(user).await
+    async fn user_get_by_tbid(&mut self, id: UserId) -> TbResult<StravaUser> {
+        self.stravauser_get_by_tbid(id).await
     }
-    async fn get_later(&mut self, key: i64, owner: StravaId) -> TbResult<Vec<Event>> {
+    async fn user_get_by_provider_id(&mut self, id: &StravaId) -> TbResult<Option<StravaUser>> {
+        self.stravauser_get_by_stravaid(id).await
+    }
+    async fn user_create(&mut self, user: StravaUser) -> TbResult<StravaUser> {
+        self.stravauser_create(user).await
+    }
+    async fn user_update_token(
+        &mut self,
+        owner: StravaId,
+        token: Option<String>,
+    ) -> TbResult<StravaUser> {
+        self.stravauser_update_token(owner, token).await
+    }
+    async fn user_delete(&mut self, user: UserId) -> TbResult<usize> {
+        self.stravauser_delete(user).await
+    }
+    async fn user_disable(&mut self, owner: StravaId) -> TbResult<()> {
+        owner.disable(self).await
+    }
+    async fn user_event_count(&mut self, owner: &StravaId) -> TbResult<i64> {
+        self.strava_events_get_count_for_user(owner).await
+    }
+    async fn event_get_next(&mut self, owner: StravaId) -> TbResult<Option<Event>> {
+        self.strava_event_get_next_for_user(owner).await
+    }
+    async fn event_get_later(&mut self, key: i64, owner: StravaId) -> TbResult<Vec<Event>> {
         self.strava_event_get_later(key, owner).await
     }
-    async fn delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
+    async fn event_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
         self.strava_events_delete_batch(values).await
     }
-    async fn delete_event(&mut self, event_id: Option<i32>) -> TbResult<()> {
+    async fn event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {
         self.strava_event_delete(event_id).await
     }
-    async fn disable_user(&mut self, user: StravaId) -> TbResult<()> {
-        user.disable(self).await
+    async fn event_create(&mut self, e: Event) -> TbResult<()> {
+        self.strava_event_create(e).await
     }
     fn limited_until(&self) -> Option<i64> {
         super::ratelimit::limited_until()

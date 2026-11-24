@@ -46,9 +46,10 @@ use crate::facade::{PartId, Summary, TbResult, UserId, UserStat};
 
 use crate::EntityFacade;
 use crate::Provider;
-use crate::icu::{IcuDataStore, event::IcuEvent};
-use crate::strava::{StravaDataStore, event::Event as StravaEvent};
-use crate::{EventQueue, Lane, Probe, ProviderLane};
+use crate::icu::{IcuDataStore, IcuSpec, event::IcuEvent};
+use crate::store::Store;
+use crate::strava::{StravaDataStore, StravaSpec, event::Event as StravaEvent};
+use crate::{Lane, Probe, ProviderLane};
 
 /// The unified provider event the per-user lane reports: the two providers'
 /// event rows under one type, so the loop's `P::Event` is provider-agnostic
@@ -92,12 +93,7 @@ pub type UnifiedLane<S> = Lane<S, LaneEvent, crate::EntityFacadeImpl>;
 #[async_trait::async_trait]
 impl<S, F> ProviderLane for Lane<S, LaneEvent, F>
 where
-    S: StravaDataStore
-        + IcuDataStore
-        + EventQueue<StravaEvent>
-        + EventQueue<IcuEvent>
-        + Send
-        + 'static,
+    S: StravaDataStore + IcuDataStore + Store<StravaSpec> + Store<IcuSpec> + Send + 'static,
     F: EntityFacade<S> + Clone + Send + Sync + 'static,
 {
     type Event = LaneEvent;
@@ -127,7 +123,7 @@ where
                     Ok(id) => id,
                     Err(_) => return Probe::Error,
                 };
-                match crate::queue::get_event(icu_id, store).await {
+                match crate::queue::get_event::<IcuSpec, _>(icu_id, store).await {
                     Ok(read) => read.into_probe(LaneEvent::Icu),
                     Err(_) => Probe::Error,
                 }
@@ -137,7 +133,7 @@ where
                     Ok(id) => id,
                     Err(_) => return Probe::Error,
                 };
-                match crate::queue::get_event(strava_id, store).await {
+                match crate::queue::get_event::<StravaSpec, _>(strava_id, store).await {
                     Ok(read) => read.into_probe(LaneEvent::Strava),
                     Err(_) => Probe::Error,
                 }

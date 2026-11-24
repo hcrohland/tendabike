@@ -38,8 +38,8 @@ pub mod activity;
 pub mod event;
 pub mod gear;
 mod ratelimit;
-// The queue's read-side rate-limit gate, re-exported so the `EventQueue` impl
-// over the data store (the sqlx crate) can consult it (spec #1023).
+// The queue's read-side rate-limit gate, re-exported so the `Store` impl
+// over the data store (the sqlx crate) can consult it (spec #1029).
 pub use ratelimit::limited_until;
 
 mod user;

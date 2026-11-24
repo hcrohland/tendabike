@@ -7,11 +7,12 @@ use super::http::request_json;
 use super::session::get_strava_id;
 #[cfg(test)]
 use super::{ActivityId, MockStravaDataStore};
-use super::{Error, StravaDataStore, StravaId, Summary, TbResult, UserId, activity, get_time};
+use super::{
+    Error, StravaDataStore, StravaId, StravaSpec, Summary, TbResult, UserId, activity, get_time,
+};
 use crate::EntityFacade;
-use crate::EventQueue;
 use crate::lane::QueueRead;
-use crate::queue::QueuedEvent;
+use crate::store::Store;
 
 #[derive(Debug, Serialize, Deserialize)]
 /// A struct representing an incoming Strava event.
@@ -211,23 +212,6 @@ impl std::fmt::Display for Event {
     }
 }
 
-/// The queue's identity for a Strava event row (spec #1023): the owner is the
-/// `strava_id` (the queue's partition key), and the dedup key is the
-/// `object_id` (only the latest event per object is interesting).
-impl QueuedEvent for Event {
-    type Owner = StravaId;
-    type Key = i64;
-    fn id(&self) -> Option<i32> {
-        self.id
-    }
-    fn owner(&self) -> &StravaId {
-        &self.owner_id
-    }
-    fn key(&self) -> &i64 {
-        &self.object_id
-    }
-}
-
 impl Event {
     async fn delete(&self, store: &mut impl StravaDataStore) -> TbResult<()> {
         debug!("Deleting {self}");
@@ -239,7 +223,7 @@ impl Event {
         store.strava_event_set_time(self.id, self.event_time).await
     }
 
-    async fn process_activity<D: EntityFacade<S>, S: StravaDataStore + EventQueue<Event>>(
+    async fn process_activity<D: EntityFacade<S>, S: StravaDataStore + Store<StravaSpec>>(
         &self,
         user_id: UserId,
         facade: &D,
@@ -341,7 +325,7 @@ impl Event {
         Ok(summary)
     }
 
-    async fn process_sync<D: EntityFacade<S>, S: StravaDataStore + EventQueue<Event>>(
+    async fn process_sync<D: EntityFacade<S>, S: StravaDataStore + Store<StravaSpec>>(
         mut self,
         user_id: UserId,
         facade: &D,
@@ -463,8 +447,8 @@ async fn next_activities(
 /// Process the user's next queued Strava event (the lane's `process`): read
 /// the queue with the kit's read-side rules ([`crate::queue::get_event`]) and
 /// handle that one event. One event per call — the queue's read and failure
-/// policy are the kit's, generic over the event type (spec #1023).
-pub(crate) async fn process<D: EntityFacade<S>, S: StravaDataStore + EventQueue<Event>>(
+/// policy are the kit's, generic over the marker (spec #1029).
+pub(crate) async fn process<D: EntityFacade<S>, S: StravaDataStore + Store<StravaSpec>>(
     user_id: UserId,
     facade: &D,
     store: &mut S,

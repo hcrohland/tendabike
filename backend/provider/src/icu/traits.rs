@@ -14,8 +14,6 @@ use super::{IcuEvent, IcuId, IcuUser};
 use crate::Provider;
 use crate::ProviderSpec;
 use crate::facade::{Store, TbResult, UserId};
-#[cfg(any(test, feature = "test-support"))]
-use crate::queue::EventQueue;
 
 /// The icu-side data store: the `icu_users` and `icu_events` tables.
 ///
@@ -125,31 +123,57 @@ impl ProviderSpec for IcuSpec {
     }
 }
 
-/// The kit's event queue over the icu data-store mock (spec #1023): a thin
-/// forward so the driver's `process` (generic over [`EventQueue`]) runs on the
-/// mock in the DB-free suites. The queue ops map one-to-one onto the
-/// `IcuDataStore` expectations; `disable_user` and `limited_until` drive the
-/// driver's own policy (the `IcuId` disable, the process-wide limiter).
+/// The provider-agnostic store over the icu data-store mock (spec #1029,
+/// ticket #1031): a thin forward so the driver's `process` (generic over the
+/// [`Store`](crate::store::Store)) and the kit's queue ops run on the mock in
+/// the DB-free suites. The ops map one-to-one onto the `IcuDataStore`
+/// expectations; `user_disable` and `limited_until` drive the driver's own
+/// policy (the `IcuId` disable, the process-wide limiter).
 #[cfg(any(test, feature = "test-support"))]
 #[async_trait::async_trait]
-impl EventQueue<IcuEvent> for MockIcuDataStore {
-    fn provider_id(&self) -> Provider {
-        Provider::Icu
+impl crate::store::Store<IcuSpec> for MockIcuDataStore {
+    async fn user_get_all(&mut self) -> TbResult<Vec<IcuUser>> {
+        self.icuser_get_all().await
     }
-    async fn get_next_for_user(&mut self, user: IcuId) -> TbResult<Option<IcuEvent>> {
-        self.icu_event_get_next_for_user(user).await
+    async fn user_get_by_tbid(&mut self, id: UserId) -> TbResult<IcuUser> {
+        self.icuser_get_by_tbid(id).await
     }
-    async fn get_later(&mut self, key: String, owner: IcuId) -> TbResult<Vec<IcuEvent>> {
+    async fn user_get_by_provider_id(&mut self, id: &IcuId) -> TbResult<Option<IcuUser>> {
+        self.icuser_get_by_icuid(id).await
+    }
+    async fn user_create(&mut self, user: IcuUser) -> TbResult<IcuUser> {
+        self.icuser_create(user).await
+    }
+    async fn user_update_token(
+        &mut self,
+        owner: IcuId,
+        token: Option<String>,
+    ) -> TbResult<IcuUser> {
+        self.icuser_update_token(owner, token).await
+    }
+    async fn user_delete(&mut self, user: UserId) -> TbResult<usize> {
+        self.icuser_delete(user).await
+    }
+    async fn user_disable(&mut self, owner: IcuId) -> TbResult<()> {
+        owner.disable(self).await
+    }
+    async fn user_event_count(&mut self, owner: &IcuId) -> TbResult<i64> {
+        self.icu_events_get_count_for_user(owner).await
+    }
+    async fn event_get_next(&mut self, owner: IcuId) -> TbResult<Option<IcuEvent>> {
+        self.icu_event_get_next_for_user(owner).await
+    }
+    async fn event_get_later(&mut self, key: String, owner: IcuId) -> TbResult<Vec<IcuEvent>> {
         self.icu_event_get_later(&key, &owner).await
     }
-    async fn delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
+    async fn event_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
         self.icu_events_delete_batch(values).await
     }
-    async fn delete_event(&mut self, event_id: Option<i32>) -> TbResult<()> {
+    async fn event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {
         self.icu_event_delete(event_id).await
     }
-    async fn disable_user(&mut self, user: IcuId) -> TbResult<()> {
-        user.disable(self).await
+    async fn event_create(&mut self, e: IcuEvent) -> TbResult<()> {
+        self.icu_event_create(e).await
     }
     fn limited_until(&self) -> Option<i64> {
         super::ratelimit::limited_until()

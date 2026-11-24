@@ -38,9 +38,11 @@
 //! executor is generic over the lane it is given and never names a concrete
 //! provider.
 //!
-//! [`queue`] — [`QueuedEvent`] + [`EventQueue`], the provider-agnostic event
-//! queue: the queue's read-side rules and the failure policy, written once
-//! and generic over the event type (spec #1023).
+//! [`queue`] — the provider-agnostic event-queue kernel: the queue's
+//! read-side rules (the rate-limit gate, the latest-per-key dedup) and the
+//! four-arm failure policy, written once and generic over the
+//! [`ProviderSpec`](crate::ProviderSpec) marker, driven through the
+//! [`Store`](crate::store::Store) interface (spec #1029).
 //!
 //! [`spec`] — [`ProviderSpec`], the provider marker: the type-only carrier of
 //! a provider's wire shapes (the user row, the event row, the owner id, the
@@ -91,7 +93,6 @@ mod failure;
 pub use failure::*;
 
 mod queue;
-pub use queue::{EventQueue, QueuedEvent};
 
 mod spec;
 pub use spec::ProviderSpec;
