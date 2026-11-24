@@ -192,7 +192,7 @@
   "planmenu_delete": "Delete Service Plan",
   "planrow_snoozed": "snoozed",
   "snoozeplan_header": "Snooze plan for \"{name}\"",
-  "snoozeplan_fraction": "Fraction",
+  "snoozeplan_percent": "Percent",
   "action_snooze": "Snooze",
   "newplan_header_part": "New service plan for {name}",
   "planname_for": "for",

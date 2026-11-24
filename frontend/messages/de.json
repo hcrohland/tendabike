@@ -192,7 +192,7 @@
   "planmenu_delete": "Wartungsplan löschen",
   "planrow_snoozed": "verschoben",
   "snoozeplan_header": "Plan für \"{name}\" aufschieben",
-  "snoozeplan_fraction": "Anteil",
+  "snoozeplan_percent": "Prozent",
   "action_snooze": "Aufschieben",
   "newplan_header_part": "Neuer Wartungsplan für {name}",
   "planname_for": "für",

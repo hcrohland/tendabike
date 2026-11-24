@@ -192,7 +192,7 @@
   "planmenu_delete": "Wartigsplan lösche",
   "planrow_snoozed": "verschobe",
   "snoozeplan_header": "Plan für \"{name}\" uf spötere schiebe",
-  "snoozeplan_fraction": "Anteil",
+  "snoozeplan_percent": "Prozent",
   "action_snooze": "Uf spötere schiebe",
   "newplan_header_part": "Nöie Wartigsplan für {name}",
   "planname_for": "für",

@@ -43,13 +43,53 @@ describe("SnoozePlan", () => {
     });
   });
 
-  it("sends the snooze with the chosen fraction when submit is clicked", async () => {
+  it("labels the input in percent", async () => {
+    render(SnoozePlan);
+    snoozePlan(plan, part);
+    await screen.findByPlaceholderText("Percent");
+  });
+
+  it("presets fill the input with 5, 10, 20", async () => {
     render(SnoozePlan);
     snoozePlan(plan, part);
     const input = (await screen.findByPlaceholderText(
-      "Fraction",
+      "Percent",
     )) as HTMLInputElement;
-    fireEvent.input(input, { target: { value: "0.5" } });
+
+    fireEvent.click(await screen.findByRole("button", { name: "5%" }));
+    await waitFor(() => expect(input.value).toBe("5"));
+    fireEvent.click(await screen.findByRole("button", { name: "10%" }));
+    await waitFor(() => expect(input.value).toBe("10"));
+    fireEvent.click(await screen.findByRole("button", { name: "20%" }));
+    await waitFor(() => expect(input.value).toBe("20"));
+  });
+
+  it("a preset drives the snooze fraction sent to the API", async () => {
+    render(SnoozePlan);
+    snoozePlan(plan, part);
+    fireEvent.click(await screen.findByRole("button", { name: "10%" }));
+
+    const submitBtn = await screen.findByRole("button", { name: "Snooze" });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/plan/P1/snooze",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ part: 5, fraction: 0.1 }),
+        }),
+      );
+    });
+  });
+
+  it("sends the snooze with the typed percent converted to a fraction", async () => {
+    render(SnoozePlan);
+    snoozePlan(plan, part);
+    const input = (await screen.findByPlaceholderText(
+      "Percent",
+    )) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: "50" } });
 
     const submitBtn = await screen.findByRole("button", { name: "Snooze" });
     fireEvent.click(submitBtn);
