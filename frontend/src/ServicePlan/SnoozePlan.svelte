@@ -30,10 +30,17 @@
 
   const presets = [5, 10, 20];
 
-  async function onaction() {
-    // The input is a percent; the domain API takes a fraction (percent / 100).
-    await modal.plan.snooze(modal.part.id!, parseFloat(modal.fraction) / 100);
+  // The shared submit path: run the snooze with a fraction and dismiss.
+  // Presets and the main button both go through here.
+  async function snooze(fraction: number) {
+    await modal.plan.snooze(modal.part.id!, fraction);
     modal.open = false;
+  }
+
+  // The form-submit path (main button) reads the typed percent from the input;
+  // the input is a percent, the domain API takes a fraction (percent / 100).
+  function onaction() {
+    return snooze(parseFloat(modal.fraction) / 100);
   }
 </script>
 
@@ -41,17 +48,6 @@
   {#snippet header()}
     {m.snoozeplan_header({ name: modal.part.name })}
   {/snippet}
-  <div class="flex items-center gap-2 mb-3">
-    {#each presets as p}
-      <Button
-        size="xs"
-        color="alternative"
-        onclick={() => (modal.fraction = String(p))}
-      >
-        {p}%
-      </Button>
-    {/each}
-  </div>
   <ButtonGroup class="w-full">
     <Input
       type="number"
@@ -63,6 +59,11 @@
       placeholder={m.snoozeplan_percent()}
     />
     <InputAddon>%</InputAddon>
+    {#each presets as p}
+      <Button color="alternative" onclick={() => snooze(p / 100)}>
+        {p}%
+      </Button>
+    {/each}
   </ButtonGroup>
   {#snippet footer()}
     <Buttons bind:open={modal.open} label={m.action_snooze()} />

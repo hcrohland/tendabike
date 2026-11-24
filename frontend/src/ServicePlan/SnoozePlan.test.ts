@@ -49,28 +49,12 @@ describe("SnoozePlan", () => {
     await screen.findByPlaceholderText("Percent");
   });
 
-  it("presets fill the input with 5, 10, 20", async () => {
+  it("a preset immediately snoozes with its fraction and dismisses", async () => {
     render(SnoozePlan);
     snoozePlan(plan, part);
-    const input = (await screen.findByPlaceholderText(
-      "Percent",
-    )) as HTMLInputElement;
+    await screen.findByPlaceholderText("Percent");
 
-    fireEvent.click(await screen.findByRole("button", { name: "5%" }));
-    await waitFor(() => expect(input.value).toBe("5"));
     fireEvent.click(await screen.findByRole("button", { name: "10%" }));
-    await waitFor(() => expect(input.value).toBe("10"));
-    fireEvent.click(await screen.findByRole("button", { name: "20%" }));
-    await waitFor(() => expect(input.value).toBe("20"));
-  });
-
-  it("a preset drives the snooze fraction sent to the API", async () => {
-    render(SnoozePlan);
-    snoozePlan(plan, part);
-    fireEvent.click(await screen.findByRole("button", { name: "10%" }));
-
-    const submitBtn = await screen.findByRole("button", { name: "Snooze" });
-    fireEvent.click(submitBtn);
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -78,6 +62,41 @@ describe("SnoozePlan", () => {
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({ part: 5, fraction: 0.1 }),
+        }),
+      );
+    });
+    await waitFor(() => {
+      expect(screen.queryByText(/Snooze plan for "Wheel"/)).toBeNull();
+    });
+  });
+
+  it("the 5% preset snoozes with fraction 0.05", async () => {
+    render(SnoozePlan);
+    snoozePlan(plan, part);
+    fireEvent.click(await screen.findByRole("button", { name: "5%" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/plan/P1/snooze",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ part: 5, fraction: 0.05 }),
+        }),
+      );
+    });
+  });
+
+  it("the 20% preset snoozes with fraction 0.2", async () => {
+    render(SnoozePlan);
+    snoozePlan(plan, part);
+    fireEvent.click(await screen.findByRole("button", { name: "20%" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/plan/P1/snooze",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ part: 5, fraction: 0.2 }),
         }),
       );
     });
