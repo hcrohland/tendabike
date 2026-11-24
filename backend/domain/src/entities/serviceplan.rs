@@ -76,6 +76,25 @@ impl ServicePlanId {
         summary.plans.upsert(plan);
         Ok(summary)
     }
+
+    /// Clears this plan's accumulated snooze for `part` (issue #1011): a
+    /// real service ends the postponement, so the part's due-ness returns
+    /// to the plain limit minus usage. Returns the updated plan, or `None`
+    /// when there was no accumulated snooze for the part (no write, mirroring
+    /// the snooze op's no-op rule). Snoozes stay a way to postpone due-ness
+    /// without work: only a real service (or a plan-limit edit) ends them.
+    pub(crate) async fn clear_snooze(
+        self,
+        part: PartId,
+        store: &mut impl ServicePlanStore,
+    ) -> TbResult<Option<ServicePlan>> {
+        let mut plan = self.get(store).await?;
+        if plan.snoozes.remove(&part).is_some() {
+            Ok(Some(store.serviceplan_update(plan).await?))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

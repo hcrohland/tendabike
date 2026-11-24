@@ -2,8 +2,8 @@
 use crate::{ActTypeId, ActivityId, Error, PartTypeId};
 use crate::{
     Activity, ActivityStore, Attachment, AttachmentStore, IdKeyed, MAX_TIME, MIN_TIME, Part,
-    PartId, PartStore, ServicePlanId, ServiceStore, Session, ShopStore, Summary, TbResult, Usage,
-    UsageId, UsageStore, UserId,
+    PartId, PartStore, ServicePlanId, ServicePlanStore, ServiceStore, Session, ShopStore, Summary,
+    TbResult, Usage, UsageId, UsageStore, UserId,
 };
 use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
@@ -111,8 +111,26 @@ impl Service {
         notes: String,
         successor: Option<ServiceId>,
         plans: Vec<ServicePlanId>,
-        store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
+        store: &mut (
+                 impl ActivityStore
+                 + AttachmentStore
+                 + PartStore
+                 + ServicePlanStore
+                 + ServiceStore
+                 + UsageStore
+             ),
     ) -> TbResult<Summary> {
+        // A real service ends the part's snooze on every plan it fulfils
+        // (issue #1011): the part's due-ness returns to the plain limit
+        // minus usage. A plan with no accumulated snooze for the part is
+        // left alone (no write, not reported), mirroring the snooze op's
+        // no-op rule.
+        let mut cleared_plans = Vec::new();
+        for plan_id in &plans {
+            if let Some(plan) = plan_id.clear_snooze(part_id, store).await? {
+                cleared_plans.push(plan);
+            }
+        }
         let service = Service {
             id: ServiceId::new(),
             part_id,
@@ -129,6 +147,7 @@ impl Service {
         let mut summary = Summary::default();
         summary.services.upsert(service);
         summary.usages.upsert(usage);
+        summary.plans.upsert_all(cleared_plans);
         Ok(summary)
     }
 
@@ -145,7 +164,13 @@ impl Service {
         plans: Vec<ServicePlanId>,
         user: &dyn Session,
         store: &mut (
-                 impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
+                 impl ActivityStore
+                 + AttachmentStore
+                 + PartStore
+                 + ServicePlanStore
+                 + ServiceStore
+                 + ShopStore
+                 + UsageStore
              ),
     ) -> TbResult<Summary> {
         part_id.checkuser(user, store).await?;
@@ -169,7 +194,13 @@ impl Service {
         self,
         user: &dyn Session,
         store: &mut (
-                 impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
+                 impl ActivityStore
+                 + AttachmentStore
+                 + PartStore
+                 + ServicePlanStore
+                 + ServiceStore
+                 + ShopStore
+                 + UsageStore
              ),
     ) -> TbResult<Summary> {
         let Service {
