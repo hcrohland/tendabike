@@ -260,6 +260,47 @@ describe("duesForPlans", () => {
     usages.setMap([u_prev, u_now]);
     expect(duesForPlans(null, [plan({ km: "100" })])).toEqual({});
   });
+
+  // Snooze (issue #971): a snoozed (part, plan) shows its limits extended by
+  // the part's accumulated fraction; the severity scan consumes the extended
+  // due values, so a snoozed overdue part drops out of alert.
+  const snoozedKm = (distance: number, f: number) => {
+    usages.setMap([usage("u_now", { distance })]);
+    return duesForPlans(p, [plan({ what: 10, km: "100", snoozes: { 5: f } })])
+      .km!;
+  };
+
+  it("extends the due value of every active limit by the snooze fraction", () => {
+    // limit 100 × (1 + 0.5) = 150; 40 km used → 110 remain
+    expect(snoozedKm(40000, 0.5)).toEqual({
+      due: 110,
+      plan: 150,
+      severity: "ok",
+    });
+  });
+
+  it("drops a snoozed overdue part out of alert", () => {
+    // 110 km used on a km-100 limit: no snooze → -10 (alert); 0.5 → 40 (ok)
+    expect(snoozedKm(110000, 0)).toEqual({
+      due: -10,
+      plan: 100,
+      severity: "alert",
+    });
+    expect(snoozedKm(110000, 0.5)).toEqual({
+      due: 40,
+      plan: 150,
+      severity: "ok",
+    });
+  });
+
+  it("computes exactly as before when the part has no snooze", () => {
+    // a snooze for a different part leaves this part untouched
+    usages.setMap([usage("u_now", { distance: 110000 })]);
+    expect(
+      duesForPlans(p, [plan({ what: 10, km: "100", snoozes: { 99: 0.5 } })])
+        .km!,
+    ).toEqual({ due: -10, plan: 100, severity: "alert" });
+  });
 });
 
 describe("gearsForPlan", () => {
@@ -389,6 +430,20 @@ describe("alertCounts", () => {
     attachments.setMap([a]);
     plans.setMap([G, P7]);
     expect(alertCounts([G, P7])).toEqual({ warn: 1, alert: 1 });
+  });
+
+  it("a snoozed overdue part drops out of alert", () => {
+    // 110 km used on a km-100 limit: alert without snooze, ok with a 0.5 snooze
+    usages.setMap([usage("u_now", { distance: 110000 })]);
+    expect(alertCounts([plan({ part: 5, what: 10, km: "100" })])).toEqual({
+      warn: 0,
+      alert: 1,
+    });
+    expect(
+      alertCounts([
+        plan({ part: 5, what: 10, km: "100", snoozes: { 5: 0.5 } }),
+      ]),
+    ).toEqual({ warn: 0, alert: 0 });
   });
 });
 

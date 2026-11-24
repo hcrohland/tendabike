@@ -150,9 +150,19 @@ export function planCmp(a: ServicePlan, b: ServicePlan): number {
   return a.id! < b.id! ? -1 : a.id! > b.id! ? 1 : 0;
 }
 
+/** The part's accumulated snooze fraction for a plan (issue #971): 0 when
+ * the part is not snoozed on it. It extends the plan's effective limits for
+ * that part by this fraction, so a snoozed (part, plan) shows the remaining
+ * limits stretched by `base × (1 + f)`.
+ */
+function snooze_fraction(plan: ServicePlan, part: Part | null): number {
+  return part?.id != null ? (plan.snoozes[part.id] ?? 0) : 0;
+}
+
 /** Remaining limits after the part's usage since its latest service.
  * A limit of zero or unset means the key is inactive; hours and km use
- * floor semantics; the usage delta is taken from the latest service.
+ * floor semantics; the usage delta is taken from the latest service. A
+ * snoozed part's limits are extended by its accumulated snooze fraction.
  */
 function due_for(
   plan: ServicePlan,
@@ -162,13 +172,14 @@ function due_for(
   let res = new Limits({});
   if (part == null || part.what != plan.what) return res;
   let { usage, days } = Service.period(service, part, null);
-  if (plan.days) res.days = plan.days - days;
-  if (plan.hours) res.hours = plan.hours - Math.floor(usage.time / 3600);
-  if (plan.km) res.km = plan.km - Math.floor(usage.distance / 1000);
-  if (plan.climb) res.climb = plan.climb - usage.climb;
-  if (plan.descend) res.descend = plan.descend - usage.descend;
-  if (plan.rides) res.rides = plan.rides - usage.count;
-  if (plan.kJ) res.kJ = plan.kJ - usage.energy;
+  const f = 1 + snooze_fraction(plan, part);
+  if (plan.days) res.days = plan.days * f - days;
+  if (plan.hours) res.hours = plan.hours * f - Math.floor(usage.time / 3600);
+  if (plan.km) res.km = plan.km * f - Math.floor(usage.distance / 1000);
+  if (plan.climb) res.climb = plan.climb * f - usage.climb;
+  if (plan.descend) res.descend = plan.descend * f - usage.descend;
+  if (plan.rides) res.rides = plan.rides * f - usage.count;
+  if (plan.kJ) res.kJ = plan.kJ * f - usage.energy;
   return res;
 }
 
@@ -198,9 +209,10 @@ function alert_for(
 ): severity | "" {
   let res: severity | "" = "";
   let due = due_for(plan, part, service);
+  const f = 1 + snooze_fraction(plan, part);
   for (const key of ServicePlan.keys) {
     if (!due[key]) continue;
-    let s = severity_for(due[key]!, plan[key]!);
+    let s = severity_for(due[key]!, plan[key]! * f);
     if (s == "alert") res = "alert";
     else if (s == "warn" && res == "") res = "warn";
   }
@@ -387,12 +399,14 @@ export function duesForPlans(
   for (const plan of plans) {
     const serviceList = plan.services(part);
     const due = due_for(plan, part, serviceList.at(0));
+    const f = 1 + snooze_fraction(plan, part);
     for (const key of Limits.keys) {
-      const p = plan[key] as number | null;
+      const p = (plan[key] as number | null) ?? null;
       const d = due[key] as number | null;
       if (p == null || d == null) continue;
+      const eff = p * f;
       if (result[key] == null || d < result[key]!.due) {
-        result[key] = new Due(d, p, severity_for(d, p));
+        result[key] = new Due(d, eff, severity_for(d, eff));
       }
     }
   }
