@@ -4,6 +4,7 @@ import {
   duesForPlans,
   gearsForPlan,
   alertCounts,
+  alertForPlan,
   plans,
   plansForPart,
   plansForAssembly,
@@ -444,6 +445,50 @@ describe("alertCounts", () => {
         plan({ part: 5, what: 10, km: "100", snoozes: { 5: 0.5 } }),
       ]),
     ).toEqual({ warn: 0, alert: 0 });
+  });
+});
+
+describe("alertForPlan", () => {
+  // The severity of one (part, plan) pair: the same rule alertCounts folds
+  // over many, exposed for the callers that render a single pair (the
+  // plan row's action gating).
+  const p = part({ id: 5, what: 10, usage: "u_now" });
+
+  beforeEach(() => {
+    services.setMap([]);
+    usages.setMap([]);
+  });
+
+  const km = (distance: number, overrides: Partial<any> = {}) => {
+    usages.setMap([usage("u_now", { distance })]);
+    return alertForPlan(
+      plan({ part: 5, what: 10, km: "100", ...overrides }),
+      p,
+      undefined,
+    );
+  };
+
+  it("is 'alert' when the due value is negative", () => {
+    expect(km(110000)).toBe("alert");
+  });
+
+  it("is 'warn' when the due value is within the band", () => {
+    expect(km(98000)).toBe("warn");
+  });
+
+  it("is '' when the due value is above the band", () => {
+    expect(km(50000)).toBe("");
+  });
+
+  it("is '' when the part has no active limit", () => {
+    usages.setMap([usage("u_now", { distance: 50000 })]);
+    expect(alertForPlan(plan({ part: 5, what: 10 }), p, undefined)).toBe("");
+  });
+
+  it("reports the severity of the snoozed due values", () => {
+    // 110 km used on a km-100 limit: alert without snooze, ok with 0.5
+    expect(km(110000)).toBe("alert");
+    expect(km(110000, { snoozes: { 5: 0.5 } })).toBe("");
   });
 });
 

@@ -198,11 +198,12 @@ function severity_for(due: number, plan: number): severity {
 }
 
 /** Severity of a plan for its part: "alert" when any due value is
- * negative, else "warn" when any due value is within 5% of its limit.
- * The scan runs in the fixed key order, skipping zero-remaining limits,
- * with overdue beating the band.
+ * negative, "warn" when any due value is within 5% of its limit, else
+ * "" (ok, or no active limit). The scan runs in the fixed key order,
+ * skipping zero-remaining limits, with overdue beating the band. The
+ * plan row gates its snooze action on this verdict.
  */
-function alert_for(
+export function alertForPlan(
   plan: ServicePlan,
   part: Part,
   service: Service | undefined,
@@ -345,7 +346,7 @@ export function alertCounts(plans: ServicePlan[]): {
       let part = partForPlanGear(plan, gear.id);
       if (part != null) {
         let serviceList = plan.services(part);
-        let alert = alert_for(plan, part, serviceList.at(0));
+        let alert = alertForPlan(plan, part, serviceList.at(0));
         if (alert == "warn") res.warn++;
         else if (alert == "alert") res.alert++;
       }

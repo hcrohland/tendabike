@@ -6,6 +6,7 @@
   import NewNote from "../Part/NewNote.svelte";
   import DeleteNote from "../Part/DeleteNote.svelte";
   import PlanModal from "../ServicePlan/PlanModal.svelte";
+  import SnoozePlan from "../ServicePlan/SnoozePlan.svelte";
   import ServiceActions from "../Service/ServiceActions.svelte";
   import NewPart from "../Part/NewPart.svelte";
   import RecoverPart from "../Part/RecoverPart.svelte";
@@ -29,6 +30,7 @@
 <DeletePart />
 <ServiceActions />
 <PlanModal />
+<SnoozePlan />
 <DeletePlan />
 <RecoverPart />
 <DisposePart />
