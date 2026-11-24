@@ -262,9 +262,9 @@ describe("duesForPlans", () => {
     expect(duesForPlans(null, [plan({ km: "100" })])).toEqual({});
   });
 
-  // Snooze (issue #971): a snoozed (part, plan) shows its limits extended by
-  // the part's accumulated fraction; the severity scan consumes the extended
-  // due values, so a snoozed overdue part drops out of alert.
+  // A snoozed (part, plan) shows its limits extended by the part's
+  // accumulated fraction; the severity scan consumes the extended due values,
+  // so a snoozed overdue part drops out of alert.
   const snoozedKm = (distance: number, f: number) => {
     usages.setMap([usage("u_now", { distance })]);
     return duesForPlans(p, [plan({ what: 10, km: "100", snoozes: { 5: f } })])
@@ -366,7 +366,7 @@ describe("alertCounts", () => {
   const p = part({ id: 5, what: 10, usage: "u_now" });
 
   // Seed the module state objects with the same world the arguments model:
-  // partForPlanGear, gearsForPlan, plan.services and alert_for read them in
+  // partForPlanGear, gearsForPlan, plan.services and alertForPlan read them in
   // their bodies (issues #371/#372/#374).
   beforeEach(() => {
     parts.setMap([p]);

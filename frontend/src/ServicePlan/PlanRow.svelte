@@ -29,9 +29,9 @@
   let part = $derived(partForPlanGear(plan, gear?.id)) as Part;
   let [ActiveService, ...serviceList] = $derived(plan.services(part));
   let due_list = $derived(duesForPlans(part, [plan]));
-  // Snooze (issue #971): the (part, plan) is snoozed when the plan carries an
-  // accumulated fraction for it; the action is offered only while it is in
-  // the warn band or overdue, never when it is ok (no pre-snooze).
+  // The (part, plan) is snoozed when the plan carries an accumulated
+  // fraction for it; the action is offered only while it is in the warn band
+  // or overdue, never when it is ok (no pre-snooze).
   let snoozed = $derived(part.id != null && (plan.snoozes[part.id] ?? 0) > 0);
   let severity = $derived(alertForPlan(plan, part, ActiveService));
 </script>

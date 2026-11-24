@@ -20,7 +20,7 @@ struct DbServicePlan {
     pub rides: Option<i32>,
     pub uid: Option<i32>,
     pub energy: Option<i32>,
-    /// The plan's accumulated snooze fractions: part id → fraction (issue #971).
+    /// The plan's accumulated snooze fractions: part id → fraction.
     pub snoozes: serde_json::Value,
 }
 

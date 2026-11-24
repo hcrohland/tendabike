@@ -466,7 +466,7 @@ async fn part_delete_rejects_non_owner() -> TbResult<()> {
     Ok(())
 }
 
-// === PartId: delete (snooze cleanup, issue #1013) ===
+// === PartId: delete (snooze cleanup) ===
 
 /// A canned generic `ServicePlan` (no specific part) carrying a snooze map —
 /// the shape a deleted part's entry sits in on a generic plan.
@@ -491,7 +491,7 @@ fn generic_snoozed_plan(snoozes: HashMap<PartId, f64>) -> ServicePlan {
 
 /// `PartId::delete` removes the part's entry from every plan's snooze map: the
 /// generic plans a deleted part snoozed on are updated and carried in the
-/// Summary alongside the part's tombstone (issue #1013).
+/// Summary alongside the part's tombstone.
 #[tokio::test]
 async fn part_delete_clears_snooze_entries() -> TbResult<()> {
     let part = PartId::from(1);
@@ -525,7 +525,7 @@ async fn part_delete_clears_snooze_entries() -> TbResult<()> {
 }
 
 /// `PartId::delete` leaves other parts' snooze entries on the same plans
-/// intact: only the deleted part's entry is removed (issue #1013).
+/// intact: only the deleted part's entry is removed.
 #[tokio::test]
 async fn part_delete_keeps_other_parts_snoozes() -> TbResult<()> {
     let part = PartId::from(1);
@@ -559,7 +559,7 @@ async fn part_delete_keeps_other_parts_snoozes() -> TbResult<()> {
 }
 
 /// `PartId::delete` with no snoozed plans: just the part tombstone, no plan
-/// updates are written (issue #1013).
+/// updates are written.
 #[tokio::test]
 async fn part_delete_no_snoozed_plans() -> TbResult<()> {
     let part = PartId::from(1);

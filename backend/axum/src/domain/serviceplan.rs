@@ -78,7 +78,7 @@ async fn delete_plan(
 }
 
 /// The parsed body of `POST /api/plan/{id}/snooze`: the part to snooze and
-/// the fraction to add to its accumulated snooze (issue #971).
+/// the fraction to add to its accumulated snooze.
 #[derive(Deserialize)]
 struct SnoozeBody {
     part: PartId,

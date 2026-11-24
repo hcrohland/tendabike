@@ -85,10 +85,9 @@ export class ServicePlan extends Limits {
   /// where it is attached
   hook: number | null;
   name: string;
-  /// The accumulated snooze fraction per part (issue #971): snoozing a
-  /// (part, plan) extends the plan's effective limits for that part by
-  /// this fraction. The plan owns the state; editing the plan's limits
-  /// resets it to empty.
+  /// The accumulated snooze fraction per part: snoozing a (part, plan)
+  /// extends the plan's effective limits for that part by this fraction.
+  /// The plan owns the state; any edit of the plan resets it to empty.
   snoozes: Record<number, number>;
   constructor(data: any) {
     super(data);
@@ -115,9 +114,9 @@ export class ServicePlan extends Limits {
     await myfetch("/api/plan/" + this.id, "DELETE").catch(handleError);
   }
 
-  /// Snooze this plan for a part by a fraction (issue #971): the fraction
-  /// stacks onto the part's accumulated snooze. The write answers 204; the
-  /// updated plan rides the stream frame.
+  /// Snooze this plan for a part by a fraction: the fraction stacks onto the
+  /// part's accumulated snooze. The write answers 204; the updated plan rides
+  /// the stream frame.
   async snooze(part: number, fraction: number) {
     return await myfetch("/api/plan/" + this.id + "/snooze", "POST", {
       part,
@@ -133,6 +132,14 @@ export class ServicePlan extends Limits {
     return stateValues(services)
       .filter((s) => s.part_id == part?.id && s.plans.includes(this.id!))
       .sort(by("time"));
+  }
+
+  /// The part's accumulated snooze fraction for this plan: 0 when the part is
+  /// not snoozed on it. It extends the plan's effective limits for that part
+  /// by this fraction, so a snoozed (part, plan) shows the remaining limits
+  /// stretched by `base × (1 + f)`.
+  snooze_fraction(part: Part | null): number {
+    return part?.id != null ? (this.snoozes[part.id] ?? 0) : 0;
   }
 }
 
@@ -150,13 +157,16 @@ export function planCmp(a: ServicePlan, b: ServicePlan): number {
   return a.id! < b.id! ? -1 : a.id! > b.id! ? 1 : 0;
 }
 
-/** The part's accumulated snooze fraction for a plan (issue #971): 0 when
- * the part is not snoozed on it. It extends the plan's effective limits for
- * that part by this fraction, so a snoozed (part, plan) shows the remaining
- * limits stretched by `base × (1 + f)`.
+/** The plan's effective limit for a key on a part: the base limit extended by
+ * the part's accumulated snooze fraction, `base × (1 + f)`. A snoozed
+ * (part, plan) shows its remaining limits stretched by this factor.
  */
-function snooze_fraction(plan: ServicePlan, part: Part | null): number {
-  return part?.id != null ? (plan.snoozes[part.id] ?? 0) : 0;
+function effective_limit(
+  plan: ServicePlan,
+  key: limit_keys,
+  part: Part | null,
+): number {
+  return (plan[key] as number) * (1 + plan.snooze_fraction(part));
 }
 
 /** Remaining limits after the part's usage since its latest service.
@@ -172,14 +182,20 @@ function due_for(
   let res = new Limits({});
   if (part == null || part.what != plan.what) return res;
   let { usage, days } = Service.period(service, part, null);
-  const f = 1 + snooze_fraction(plan, part);
-  if (plan.days) res.days = plan.days * f - days;
-  if (plan.hours) res.hours = plan.hours * f - Math.floor(usage.time / 3600);
-  if (plan.km) res.km = plan.km * f - Math.floor(usage.distance / 1000);
-  if (plan.climb) res.climb = plan.climb * f - usage.climb;
-  if (plan.descend) res.descend = plan.descend * f - usage.descend;
-  if (plan.rides) res.rides = plan.rides * f - usage.count;
-  if (plan.kJ) res.kJ = plan.kJ * f - usage.energy;
+  if (plan.days) res.days = effective_limit(plan, "days", part) - days;
+  if (plan.hours)
+    res.hours =
+      effective_limit(plan, "hours", part) - Math.floor(usage.time / 3600);
+  if (plan.km)
+    res.km =
+      effective_limit(plan, "km", part) - Math.floor(usage.distance / 1000);
+  if (plan.climb)
+    res.climb = effective_limit(plan, "climb", part) - usage.climb;
+  if (plan.descend)
+    res.descend = effective_limit(plan, "descend", part) - usage.descend;
+  if (plan.rides)
+    res.rides = effective_limit(plan, "rides", part) - usage.count;
+  if (plan.kJ) res.kJ = effective_limit(plan, "kJ", part) - usage.energy;
   return res;
 }
 
@@ -210,10 +226,9 @@ export function alertForPlan(
 ): severity | "" {
   let res: severity | "" = "";
   let due = due_for(plan, part, service);
-  const f = 1 + snooze_fraction(plan, part);
   for (const key of ServicePlan.keys) {
     if (!due[key]) continue;
-    let s = severity_for(due[key]!, plan[key]! * f);
+    let s = severity_for(due[key]!, effective_limit(plan, key, part));
     if (s == "alert") res = "alert";
     else if (s == "warn" && res == "") res = "warn";
   }
@@ -400,12 +415,11 @@ export function duesForPlans(
   for (const plan of plans) {
     const serviceList = plan.services(part);
     const due = due_for(plan, part, serviceList.at(0));
-    const f = 1 + snooze_fraction(plan, part);
     for (const key of Limits.keys) {
       const p = (plan[key] as number | null) ?? null;
       const d = due[key] as number | null;
       if (p == null || d == null) continue;
-      const eff = p * f;
+      const eff = effective_limit(plan, key, part);
       if (result[key] == null || d < result[key]!.due) {
         result[key] = new Due(d, eff, severity_for(d, eff));
       }

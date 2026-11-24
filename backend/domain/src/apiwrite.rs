@@ -188,7 +188,7 @@ pub enum ApiWrite {
     /// `DELETE /api/plan/{id}`
     ServicePlanDelete { id: ServicePlanId },
     /// `POST /api/plan/{id}/snooze` — snooze the plan for `part` by
-    /// `fraction` (issue #971).
+    /// `fraction`.
     ServicePlanSnooze {
         id: ServicePlanId,
         part: PartId,
@@ -416,7 +416,7 @@ pub async fn exec(
         ApiWrite::PartDelete { id } => {
             // The op returns the Summary of everything it touched: the part's
             // tombstone (the stream merge drops it) plus any generic plan it
-            // snoozed on, cleaned up (issue #1013).
+            // snoozed on, cleaned up.
             Ok(WriteOutcome::Summary(id.delete(session, store).await?))
         }
 

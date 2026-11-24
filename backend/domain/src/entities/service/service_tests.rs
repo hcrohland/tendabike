@@ -140,8 +140,8 @@ fn plan_row(id: ServicePlanId, part: PartId) -> ServicePlan {
     }
 }
 
-/// A canned `ServicePlan` row carrying an accumulated snooze for `part`
-/// (issue #1011): the state a fulfilling service must clear.
+/// A canned `ServicePlan` row carrying an accumulated snooze for `part`: the
+/// state a fulfilling service must clear.
 fn plan_row_with_snooze(id: ServicePlanId, part: PartId, fraction: f64) -> ServicePlan {
     let mut plan = plan_row(id, part);
     plan.snoozes.insert(part, fraction);
@@ -200,9 +200,9 @@ async fn service_create_with_valid_data() -> TbResult<()> {
     Ok(())
 }
 
-/// S-24: Logging a service clears the part's snooze on every plan it fulfils
-/// (issue #1011): the plan's accumulated snooze for the part is removed, and
-/// the cleared plan rides the Summary so due-ness returns to limit − used.
+/// S-24: Logging a service clears the part's snooze on every plan it fulfils:
+/// the plan's accumulated snooze for the part is removed, and the cleared plan
+/// rides the Summary so due-ness returns to limit − used.
 #[tokio::test]
 async fn service_create_clears_part_snooze_on_fulfilled_plans() -> TbResult<()> {
     let part = PartId::from(1);
@@ -248,8 +248,8 @@ async fn service_create_clears_part_snooze_on_fulfilled_plans() -> TbResult<()> 
 }
 
 /// S-25: A redo logs a real service too, so it clears the part's snooze on
-/// every plan it fulfils (issue #1011) — the same clearing as a fresh create,
-/// through the shared creation path.
+/// every plan it fulfils — the same clearing as a fresh create, through the
+/// shared creation path.
 #[tokio::test]
 async fn service_redo_clears_part_snooze_on_fulfilled_plans() -> TbResult<()> {
     let part = PartId::from(1);
@@ -298,8 +298,8 @@ async fn service_redo_clears_part_snooze_on_fulfilled_plans() -> TbResult<()> {
 }
 
 /// S-26: A fulfilled plan with no accumulated snooze for the part is left
-/// alone (issue #1011): no write, and the plan is not reported in the
-/// Summary — mirroring the snooze op's no-op rule.
+/// alone: no write, and the plan is not reported in the Summary — mirroring
+/// the snooze op's no-op rule.
 #[tokio::test]
 async fn service_create_plan_without_snooze_is_not_reported() -> TbResult<()> {
     let part = PartId::from(1);

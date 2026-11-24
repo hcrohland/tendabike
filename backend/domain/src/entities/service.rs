@@ -120,11 +120,10 @@ impl Service {
                  + UsageStore
              ),
     ) -> TbResult<Summary> {
-        // A real service ends the part's snooze on every plan it fulfils
-        // (issue #1011): the part's due-ness returns to the plain limit
-        // minus usage. A plan with no accumulated snooze for the part is
-        // left alone (no write, not reported), mirroring the snooze op's
-        // no-op rule.
+        // A real service ends the part's snooze on every plan it fulfils: the
+        // part's due-ness returns to the plain limit minus usage. A plan with
+        // no accumulated snooze for the part is left alone (no write, not
+        // reported), mirroring the snooze op's no-op rule.
         let mut cleared_plans = Vec::new();
         for plan_id in &plans {
             if let Some(plan) = plan_id.clear_snooze(part_id, store).await? {

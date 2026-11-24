@@ -22,8 +22,8 @@ pub trait ServicePlanStore {
     async fn by_part(&mut self, part: PartId) -> TbResult<Vec<ServicePlan>>;
     async fn by_user(&mut self, uid: UserId) -> TbResult<Vec<ServicePlan>>;
 
-    /// All plans whose snooze map carries an entry for `part` (issue #1013):
-    /// the generic plans a part snoozed on. A part with a specific plan cannot
-    /// be deleted while the plan is active, so only generic plans appear.
+    /// All plans whose snooze map carries an entry for `part`: the generic
+    /// plans a part snoozed on. A part with a specific plan cannot be deleted
+    /// while the plan is active, so only generic plans appear.
     async fn plans_snoozing(&mut self, part: PartId) -> TbResult<Vec<ServicePlan>>;
 }

@@ -44,12 +44,14 @@ impl ServicePlanId {
         Ok(res)
     }
 
-    /// Snoozes this plan for `part` by `fraction` (issue #971): the
-    /// fraction is added to the plan's accumulated snooze fraction for
-    /// the part, so snoozes stack and the fraction is unbounded above.
-    /// The floor is 0; a fraction of 0 is a no-op (no write, an empty
-    /// `Summary`). Snoozing records no work: no service is created or
-    /// modified. Returns the `Summary` carrying the updated plan.
+    /// Snoozes this plan for `part` by `fraction`: the fraction is added
+    /// to the plan's accumulated snooze fraction for the part, so snoozes
+    /// stack and the fraction is unbounded above. The (part, plan) pair must
+    /// cohere — a specific plan is snoozed only by its own part, a generic
+    /// plan by a part of its type — an incoherent pair is rejected. The floor
+    /// is 0; a fraction of 0 is a no-op (no write, an empty `Summary`).
+    /// Snoozing records no work: no service is created or modified. Returns
+    /// the `Summary` carrying the updated plan.
     pub(crate) async fn snooze(
         self,
         part: PartId,
@@ -66,6 +68,20 @@ impl ServicePlanId {
         }
         let mut plan = self.get(store).await?;
         plan.checkuser(user, store).await?;
+        // The (part, plan) pair must cohere: a specific plan is snoozed only
+        // by its own part, a generic plan by a part of its type. An incoherent
+        // pair would store an inert entry the plan never applies.
+        let coherent = match plan.part {
+            Some(plan_part) => part == plan_part,
+            None => part.read(store).await?.what == plan.what,
+        };
+        if !coherent {
+            return Err(Error::BadRequest(format!(
+                "part {} does not cohere with plan {}",
+                i32::from(part),
+                plan.id
+            )));
+        }
         if fraction == 0.0 {
             return Ok(Summary::default());
         }
@@ -77,12 +93,12 @@ impl ServicePlanId {
         Ok(summary)
     }
 
-    /// Clears this plan's accumulated snooze for `part` (issue #1011): a
-    /// real service ends the postponement, so the part's due-ness returns
-    /// to the plain limit minus usage. Returns the updated plan, or `None`
-    /// when there was no accumulated snooze for the part (no write, mirroring
-    /// the snooze op's no-op rule). Snoozes stay a way to postpone due-ness
-    /// without work: only a real service (or a plan-limit edit) ends them.
+    /// Clears this plan's accumulated snooze for `part`: a real service ends
+    /// the postponement, so the part's due-ness returns to the plain limit
+    /// minus usage. Returns the updated plan, or `None` when there was no
+    /// accumulated snooze for the part (no write, mirroring the snooze op's
+    /// no-op rule). Snoozes stay a way to postpone due-ness without work:
+    /// only a real service (or a plan-limit edit) ends them.
     pub(crate) async fn clear_snooze(
         self,
         part: PartId,
@@ -128,11 +144,10 @@ pub struct ServicePlan {
     /// Energy expended
     #[serde(rename = "kJ")]
     pub energy: Option<i32>,
-    /// The accumulated snooze fraction per part (issue #971): snoozing a
-    /// (part, plan) adds the snoozed fraction to that part's entry,
-    /// extending the plan's effective limits for it. The plan owns the
-    /// state; a part holds none of it. Editing the plan's limits resets
-    /// this map to empty.
+    /// The accumulated snooze fraction per part: snoozing a (part, plan)
+    /// adds the snoozed fraction to that part's entry, extending the plan's
+    /// effective limits for it. The plan owns the state; a part holds none
+    /// of it. Any edit of the plan resets this map to empty.
     #[serde(default)]
     pub snoozes: HashMap<PartId, f64>,
 }
@@ -199,7 +214,7 @@ impl ServicePlan {
         self.what = plan.what;
         self.hook = plan.hook;
         self.uid = plan.uid;
-        // editing the plan's limits resets all of its snoozes (issue #971)
+        // any edit of the plan resets all of its snoozes
         self.snoozes = HashMap::new();
         store.serviceplan_update(self).await
     }
@@ -219,10 +234,10 @@ impl ServicePlan {
     }
 
     /// Removes `part`'s entry from the snooze map of every plan that carries
-    /// it (issue #1013): the part-deletion cascade. A part with a specific
-    /// plan cannot be deleted while the plan is active, so only generic plans
-    /// carry an entry. Returns the updated plans (none when no plan carried an
-    /// entry — no writes).
+    /// it: the part-deletion cascade. A part with a specific plan cannot be
+    /// deleted while the plan is active, so only generic plans carry an entry.
+    /// Returns the updated plans (none when no plan carried an entry — no
+    /// writes).
     pub(crate) async fn clear_snoozes_for_part(
         part: PartId,
         store: &mut impl ServicePlanStore,

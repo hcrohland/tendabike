@@ -579,6 +579,84 @@ async fn service_plan_create_ignores_snoozes() -> TbResult<()> {
     Ok(())
 }
 
+/// SP-27: snoozing a generic plan by a part of its type is coherent and
+/// records the fraction — the generic counterpart of the specific case.
+#[tokio::test]
+async fn service_plan_snooze_generic_coherent_part() -> TbResult<()> {
+    let part = PartId::from(1);
+    let mut stored = sample_plan(None, "Generic Coherent", Some(test_user()));
+    // the plan's type matches the part's type, so the pair coheres
+    stored.what = PartTypeId::from(4);
+    let plan_id = stored.id;
+
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(stored.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user())));
+    store.expect_serviceplan_update().returning(Ok);
+
+    let summary = plan_id
+        .snooze(part, 0.5, &test_session(), &mut store)
+        .await?;
+
+    let plan = sole_live(&summary.plans);
+    assert_eq!(plan.snoozes.get(&part), Some(&0.5));
+    Ok(())
+}
+
+/// SP-28: snoozing a specific plan by a part that is not its own is rejected:
+/// the (part, plan) pair must cohere, so an incoherent specific pair stores
+/// no inert entry.
+#[tokio::test]
+async fn service_plan_snooze_specific_incoherent_part_rejected() -> TbResult<()> {
+    let plan_part = PartId::from(1);
+    let other_part = PartId::from(2);
+    let stored = sample_plan(Some(plan_part), "Specific Plan", None);
+    let plan_id = stored.id;
+
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(stored.clone()));
+    // the ownership check reads the plan's own part before the coherence
+    // guard rejects the incoherent snoozed part
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(plan_part, test_user())));
+
+    let result = plan_id
+        .snooze(other_part, 0.5, &test_session(), &mut store)
+        .await;
+    assert!(matches!(result, Err(Error::BadRequest(_))));
+    Ok(())
+}
+
+/// SP-29: snoozing a generic plan by a part of a different type is rejected:
+/// the generic pair coheres only on a matching type.
+#[tokio::test]
+async fn service_plan_snooze_generic_incoherent_part_rejected() -> TbResult<()> {
+    let part = PartId::from(1);
+    let stored = sample_plan(None, "Generic Plan", Some(test_user()));
+    // the plan's type (1) differs from the part's type (4), so the pair is
+    // incoherent
+    let plan_id = stored.id;
+
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(stored.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user())));
+
+    let result = plan_id.snooze(part, 0.5, &test_session(), &mut store).await;
+    assert!(matches!(result, Err(Error::BadRequest(_))));
+    Ok(())
+}
+
 /// SP-12b: a shop session deleting a specific-part plan unlinks the part owner's services
 #[tokio::test]
 async fn service_plan_delete_unlinks_part_owner_via_shop_session() -> TbResult<()> {

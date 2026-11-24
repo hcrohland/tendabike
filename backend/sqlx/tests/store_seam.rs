@@ -1374,9 +1374,9 @@ async fn icu_events_delete_batch_deletes_named_rows() -> tb_domain::TbResult<()>
 // ServicePlan: store-path rules
 // ---------------------------------------------------------------------------
 
-/// A plan's snooze map round-trips through the `snoozes` jsonb column
-/// (issue #971): a plan created with an empty map picks up its accumulated
-/// fractions on update and reads them back unchanged.
+/// A plan's snooze map round-trips through the `snoozes` jsonb column: a plan
+/// created with an empty map picks up its accumulated fractions on update and
+/// reads them back unchanged.
 #[tokio::test]
 #[ignore]
 async fn serviceplan_snoozes_roundtrip() -> tb_domain::TbResult<()> {
@@ -1416,8 +1416,8 @@ async fn serviceplan_snoozes_roundtrip() -> tb_domain::TbResult<()> {
 }
 
 /// `plans_snoozing` returns exactly the plans whose `snoozes` jsonb carries the
-/// part's key (issue #1013): the jsonb key-existence query, which only the
-/// database adapter can exercise.
+/// part's key: the jsonb key-existence query, which only the database adapter
+/// can exercise.
 #[tokio::test]
 #[ignore]
 async fn serviceplan_plans_snoozing_matches_part_key() -> tb_domain::TbResult<()> {

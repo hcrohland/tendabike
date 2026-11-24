@@ -129,9 +129,9 @@ impl PartId {
         let mut summary = Summary::default();
 
         // A generic plan a deleted part snoozed on keeps no entry for it: the
-        // part's snooze state is cleaned up alongside the part (issue #1013).
-        // A part with a specific plan cannot be deleted while the plan is
-        // active (the check above), so only generic plans carry an entry here.
+        // part's snooze state is cleaned up alongside the part. A part with a
+        // specific plan cannot be deleted while the plan is active (the check
+        // above), so only generic plans carry an entry here.
         for plan in ServicePlan::clear_snoozes_for_part(self, store).await? {
             summary.plans.upsert(plan);
         }
