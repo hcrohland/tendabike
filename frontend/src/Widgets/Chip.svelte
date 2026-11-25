@@ -21,7 +21,7 @@
 <script lang="ts">
   import { Spinner } from "flowbite-svelte";
   import type { Due } from "../lib/serviceplan";
-  import { bg, type Tone } from "./tone.js";
+  import { bg, mainText, mutedText, type Tone } from "./tone.js";
   import ServiceBadge from "./ServiceBadge.svelte";
 
   let {
@@ -55,14 +55,10 @@
 
 {#snippet chipContent()}
   <ServiceBadge {due} pos="absolute -top-3 -right-0" />
-  <span
-    class="font-semibold text-sm text-secondary-900 dark:text-secondary-100"
-  >
+  <span class="font-semibold text-sm {mainText()}">
     {value}
   </span>
-  <span
-    class="font-normal text-xs uppercase tracking-wide text-secondary-600 dark:text-secondary-300"
-  >
+  <span class="font-normal text-xs uppercase tracking-wide {mutedText()}">
     {label}
   </span>
   {#if indicator}
@@ -71,9 +67,7 @@
         <Spinner size="4" color="red" />
       </span>
     {:else}
-      <span
-        class="text-xs font-bold text-secondary-900 dark:text-secondary-100"
-      >
+      <span class="text-xs font-bold {mainText()}">
         {indicator}
       </span>
     {/if}

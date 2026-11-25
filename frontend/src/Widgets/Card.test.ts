@@ -10,7 +10,7 @@ import CardHost from "./CardHost.svelte";
 describe("Card", () => {
   it("renders the darker tone by default", () => {
     render(CardHost, { mode: "default" });
-    const card = screen.getByText("hello").closest(".bg-secondary-300");
+    const card = screen.getByText("hello").closest(".bg-secondary-100");
     expect(card).toBeTruthy();
   });
 
@@ -25,7 +25,7 @@ describe("Card", () => {
     const nested = screen.getByText("nested").closest(".bg-primary-100");
     expect(nested).toBeTruthy();
     // the nested card is the light tone, not the darker one
-    expect(nested?.classList.contains("bg-secondary-300")).toBe(false);
+    expect(nested?.classList.contains("bg-secondary-100")).toBe(false);
   });
 
   it("provides its tone to children, which contrast it", () => {

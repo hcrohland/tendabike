@@ -20,7 +20,7 @@
 
 <script lang="ts">
   import { getContext, setContext, untrack } from "svelte";
-  import { ToneContext, bg, opposite, type Tone } from "./tone.js";
+  import { ToneContext, bg, border, opposite, type Tone } from "./tone.js";
 
   let {
     light = undefined,
@@ -58,7 +58,9 @@
 </script>
 
 <div
-  class={"rounded-lg border border-secondary-400 dark:border-secondary-700 p-1 sm:p-2 " +
+  class={"rounded-lg border " +
+    border() +
+    " p-1 sm:p-2 " +
     background +
     (extraClass ? " " + extraClass : "")}
 >

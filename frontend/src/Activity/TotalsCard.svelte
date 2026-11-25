@@ -25,7 +25,7 @@
   import { DAY, fmtNumber, fmtSeconds } from "../lib/utils";
   import RangeSlider from "svelte-range-slider-pips";
   import { tick } from "svelte";
-  import { bg } from "../Widgets/tone.js";
+  import { bg, border, mainText } from "../Widgets/tone.js";
   import * as m from "../../paraglide/messages";
 
   type FilterOption = {
@@ -128,16 +128,11 @@
   }
 </script>
 
-<div
-  class={"rounded-lg border border-secondary-400 dark:border-secondary-700 p-4 " +
-    bg("secondary")}
->
+<div class={"rounded-lg border " + border() + " p-4 " + bg("secondary")}>
   <!-- Top line: title + gear filter + search -->
   <div class="mb-3">
     <div class="flex items-center justify-between gap-2 mb-2">
-      <div
-        class="text-sm font-bold uppercase text-secondary-900 dark:text-secondary-100"
-      >
+      <div class={"text-sm font-bold uppercase " + mainText()}>
         {title}
       </div>
       <div class="flex items-center gap-2">
@@ -149,7 +144,9 @@
               const v = e.currentTarget.value;
               gearFilter = v === "" ? undefined : Number(v);
             }}
-            class={"text-sm p-1 rounded border border-secondary-400 dark:border-secondary-700 " +
+            class={"text-sm p-1 rounded border " +
+              border() +
+              " " +
               bg("primary")}
           >
             <option value={undefined}>{m.filter_all()}</option>
@@ -162,7 +159,9 @@
         <input
           type="text"
           bind:value={searchText}
-          class={"text-sm p-1 rounded border border-secondary-400 dark:border-secondary-700 w-24 sm:w-48 " +
+          class={"text-sm p-1 rounded border " +
+            border() +
+            " w-24 sm:w-48 " +
             bg("primary")}
           placeholder="Search..."
         />

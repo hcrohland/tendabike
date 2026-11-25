@@ -1,7 +1,7 @@
 <script lang="ts">
   import { DropdownItem } from "flowbite-svelte";
   import Card from "../Widgets/Card.svelte";
-  import { bg, opposite } from "../Widgets/tone.js";
+  import { bg, mutedText, opposite } from "../Widgets/tone.js";
   import Menu from "../Widgets/Menu.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import UsageChips from "../Usage/UsageChips.svelte";
@@ -58,9 +58,7 @@
     <!-- Header row: type · name · menu -->
     <div class="flex items-center justify-between gap-1 sm:gap-2">
       <div class="flex items-center gap-1 sm:gap-2 p-1 sm:p-2 min-w-0">
-        <span
-          class="text-xs uppercase text-secondary-600 dark:text-secondary-300 shrink-0 truncate"
-        >
+        <span class={"text-xs uppercase " + mutedText() + " shrink-0 truncate"}>
           {type.localizedName()}
         </span>
         {#if att.isAttached()}
@@ -72,7 +70,7 @@
             {/if}
           </span>
           ·
-          <span class="text-xs text-secondary-600 dark:text-secondary-300">
+          <span class={"text-xs " + mutedText()}>
             {m.time_since()}
             {att.fmtTime()}
           </span>
@@ -128,9 +126,7 @@
                     {a.name}
                   {/if}
                 </span>
-                <span
-                  class="text-xs text-secondary-600 dark:text-secondary-300 shrink-0"
-                >
+                <span class={"text-xs " + mutedText() + " shrink-0"}>
                   {a.fmtTime()}
                 </span>
               </div>

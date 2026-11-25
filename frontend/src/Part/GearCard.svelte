@@ -7,7 +7,7 @@
   import { getUser, users } from "../lib/user.svelte";
   import UsageChips from "../Usage/UsageChips.svelte";
   import ProviderMark from "../Widgets/ProviderMark.svelte";
-  import { bg } from "../Widgets/tone.js";
+  import { bg, mutedText } from "../Widgets/tone.js";
   import { providerOfActivityId, providerMeta } from "../lib/provider.svelte";
   import * as m from "../../paraglide/messages";
 
@@ -92,7 +92,7 @@
           <ProviderMark provider={gearProvider} size="sm" />
         </a>
       {/if}
-      <span class="text-secondary-600 dark:text-secondary-300">
+      <span class={mutedText()}>
         ·
         {#if !part.disposed_at}
           {m.time_since()} {fmtDate(part.purchase)}

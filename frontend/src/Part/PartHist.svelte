@@ -5,7 +5,7 @@
   import { parts } from "../lib/part";
   import { type Attachment } from "../lib/attachment";
   import { DropdownItem } from "flowbite-svelte";
-  import { bg } from "../Widgets/tone.js";
+  import { bg, border, mutedText } from "../Widgets/tone.js";
   import Menu from "../Widgets/Menu.svelte";
   import { deleteAttachment } from "../Attachment/DeleteAttachment.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
@@ -25,31 +25,21 @@
 </script>
 
 {#snippet attCard(att: Attachment)}
-  <div
-    class={"rounded-lg border border-secondary-400 dark:border-secondary-700 " +
-      bg("secondary") +
-      " p-3"}
-  >
+  <div class={"rounded-lg border " + border() + " " + bg("secondary") + " p-3"}>
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-2 min-w-0">
         {#if parts[att.gear]}
           <span class="font-medium text-sm">
             <PartLink part={parts[att.gear]} />
           </span>
-          <span
-            class="text-xs text-secondary-600 dark:text-secondary-300 shrink-0"
-          >
+          <span class={"text-xs " + mutedText() + " shrink-0"}>
             {types[att.hook].localizedPrefix()}
           </span>
-          <span
-            class="text-xs text-secondary-600 dark:text-secondary-300 shrink-0"
-          >
+          <span class={"text-xs " + mutedText() + " shrink-0"}>
             · {att.fmtTime()}
           </span>
         {:else}
-          <span class="text-sm text-secondary-600 dark:text-secondary-300"
-            >{m.parthist_na()}</span
-          >
+          <span class={"text-sm " + mutedText()}>{m.parthist_na()}</span>
         {/if}
       </div>
       {#if parts[att.gear]}
@@ -68,14 +58,10 @@
 
 {#if atts.length > 0}
   <div
-    class={"rounded-lg border border-secondary-400 dark:border-secondary-700 " +
-      bg("primary") +
-      " p-3 m-2"}
+    class={"rounded-lg border " + border() + " " + bg("primary") + " p-3 m-2"}
   >
     <div class="flex items-center gap-2">
-      <div
-        class="text-xs uppercase tracking-wide text-secondary-600 dark:text-secondary-300"
-      >
+      <div class={"text-xs uppercase tracking-wide " + mutedText()}>
         {m.parthist_attached_to()}
       </div>
       {#if history.length > 0}

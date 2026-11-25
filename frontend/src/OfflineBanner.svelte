@@ -1,6 +1,6 @@
 <script lang="ts">
   import { isOffline } from "./lib/provider.svelte";
-  import { bg } from "./Widgets/tone.js";
+  import { bg, border, mainText } from "./Widgets/tone.js";
   import * as m from "../paraglide/messages";
 </script>
 
@@ -10,7 +10,10 @@
 {#if isOffline()}
   <p
     class={bg("secondary") +
-      " border-b border-secondary-400 dark:border-secondary-700 px-4 py-2 text-sm text-secondary-900 dark:text-secondary-100"}
+      " border-b " +
+      border() +
+      " px-4 py-2 text-sm " +
+      mainText()}
   >
     {m.offline_banner()}
   </p>

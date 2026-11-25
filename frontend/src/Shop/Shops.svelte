@@ -9,6 +9,7 @@
   import { getUser, users } from "../lib/user.svelte";
   import { stateValues } from "../lib/mapable.svelte";
   import ShopSubscriptions from "./ShopSubscriptions.svelte";
+  import { mainText } from "../Widgets/tone.js";
 
   /// The /shops page accepts a tab selector in the route (a notification can
   /// deep-link to the correct tab); it defaults to the subscriptions tab when
@@ -46,7 +47,7 @@
       <div class="py-4 space-y-8">
         {#if myShops.length === 0}
           <div class="py-12 text-center">
-            <p class="mb-4 text-gray-600 dark:text-gray-400">
+            <p class={"mb-4 " + mainText()}>
               {m.shop_none_owned()}
             </p>
 

@@ -8,7 +8,7 @@
     type Provider,
   } from "../lib/provider.svelte";
   import ProviderMark from "./ProviderMark.svelte";
-  import { bg } from "./tone.js";
+  import { bg, border, mainText } from "./tone.js";
   import * as m from "../../paraglide/messages";
 
   // The enabled providers are app-wide state: the layout
@@ -30,12 +30,12 @@
     <!-- The fetch is in flight: nothing to offer yet -->
   {:else if status === "error"}
     <!-- The fetch failed: a distinct state, not the offline message -->
-    <p class="text-secondary-900 dark:text-secondary-100">
+    <p class={mainText()}>
       {m.providers_load_failed()}
     </p>
   {:else if enabled.length === 0}
     <!-- Offline: a successful fetch that returned no providers -->
-    <p class="text-secondary-900 dark:text-secondary-100">
+    <p class={mainText()}>
       {m.offline_connect()}
     </p>
   {:else}
@@ -44,7 +44,9 @@
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
-          class={"rounded-2xl overflow-hidden border border-secondary-400 dark:border-secondary-700 shadow-sm cursor-pointer " +
+          class={"rounded-2xl overflow-hidden border " +
+            border() +
+            " shadow-sm cursor-pointer " +
             bg("primary")}
           onclick={() => (window.location.href = loginUrl(p))}
         >
@@ -60,7 +62,9 @@
           </div>
           <div class="p-4">
             <ul
-              class="text-sm text-secondary-900 dark:text-secondary-100 space-y-1 mb-4 list-disc list-inside"
+              class={"text-sm " +
+                mainText() +
+                " space-y-1 mb-4 list-disc list-inside"}
             >
               <li>{m.connect_feature_activities()}</li>
               <li>{m.connect_feature_live_sync()}</li>

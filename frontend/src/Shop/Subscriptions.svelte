@@ -12,6 +12,7 @@
   import { allGear, Part, parts } from "../lib/part";
   import { stateValues } from "../lib/mapable.svelte";
   import { getCategory } from "../lib/types.svelte";
+  import { mainText } from "../Widgets/tone.js";
 
   interface Props {
     shopid?: number;
@@ -112,7 +113,7 @@
 <div class="space-y-6">
   <div>
     <div class="mb-4 flex items-center justify-between">
-      <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-300">
+      <h3 class={"text-lg font-semibold " + mainText()}>
         {m.shop_my_subscriptions()}
       </h3>
 
@@ -127,9 +128,9 @@
     </div>
 
     {#if loading}
-      <p class="text-gray-600 dark:text-gray-400">{m.loading()}</p>
+      <p class={mainText()}>{m.loading()}</p>
     {:else if subscriptions.length === 0}
-      <p class="text-gray-600 dark:text-gray-400">
+      <p class={mainText()}>
         {m.shop_no_subscriptions()}
       </p>
     {:else}
@@ -185,7 +186,7 @@
 
           {#snippet body()}
             <div class="flex flex-col gap-2 min-w-48">
-              <p class="text-sm text-gray-600 dark:text-gray-400">
+              <p class={"text-sm " + mainText()}>
                 {confirmingAction!.action === "unsubscribe"
                   ? m.shop_confirm_unsubscribe()
                   : m.shop_confirm_delete_request()}

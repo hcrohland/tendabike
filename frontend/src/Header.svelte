@@ -32,6 +32,7 @@
   import { getLocale, setLocale, locales } from "../paraglide/runtime";
   import { onDestroy } from "svelte";
   import NotificationBell from "./Widgets/NotificationBell.svelte";
+  import { mainText } from "./Widgets/tone.js";
 
   let openGarmin = $state(false);
 
@@ -85,7 +86,7 @@
   }
 </script>
 
-<Navbar class="text-gray-600 dark:text-gray-400">
+<Navbar class={mainText()}>
   <NavBrand href="/cat">
     <img
       src="/favicon.png"

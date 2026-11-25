@@ -29,7 +29,7 @@
     type Provider,
   } from "../lib/provider.svelte";
   import ProviderMark from "./ProviderMark.svelte";
-  import { bg } from "./tone.js";
+  import { bg, border, mainText } from "./tone.js";
   import { m } from "../../paraglide/messages";
 
   /// A gear item the onboarding gear import discovered (spec #829): the
@@ -144,38 +144,27 @@
     </div>
     <div class={"p-4 sm:p-6 " + bg("primary")}>
       <div class="text-center">
-        <Heading
-          tag="h3"
-          class="mb-5 text-lg font-normal text-secondary-900 dark:text-secondary-100"
-        >
+        <Heading tag="h3" class={"mb-5 text-lg font-normal " + mainText()}>
           {m.initialsync_welcome()}
         </Heading>
         <P class="mb-4 text-left">
           {m.initialsync_question({ provider: meta.name })}
         </P>
-        <P
-          class="mb-6 text-left text-sm text-secondary-900 dark:text-secondary-100"
-        >
+        <P class={"mb-6 text-left text-sm " + mainText()}>
           {m.initialsync_desc1()}
         </P>
-        <P
-          class="mb-6 text-left text-sm text-secondary-900 dark:text-secondary-100"
-        >
+        <P class={"mb-6 text-left text-sm " + mainText()}>
           {m.initialsync_desc2()}
         </P>
         {#if provider === "strava"}
-          <P
-            class="mb-6 text-left text-sm text-secondary-900 dark:text-secondary-100"
-          >
+          <P class={"mb-6 text-left text-sm " + mainText()}>
             {m.initialsync_desc3({
               sync: m.header_sync(),
               historic: m.header_import_historic(),
             })}
           </P>
         {/if}
-        <P
-          class="mb-6 text-left text-sm text-secondary-900 dark:text-secondary-100"
-        >
+        <P class={"mb-6 text-left text-sm " + mainText()}>
           {m.initialsync_desc4()} <br />
         </P>
         {#if gear.length > 0}
@@ -183,14 +172,20 @@
                flex-wrap row, shown once the gear import's response lands. -->
           <div class="mb-6 text-left">
             <div
-              class="text-xs font-medium text-secondary-900 dark:text-secondary-100 uppercase tracking-wide mb-2"
+              class={"text-xs font-medium " +
+                mainText() +
+                " uppercase tracking-wide mb-2"}
             >
               {m.initialsync_gear()}
             </div>
             <div class="flex flex-wrap gap-2">
               {#each gear as item (item.name)}
                 <span
-                  class={"inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border border-secondary-400 dark:border-secondary-700 text-secondary-900 dark:text-secondary-100 " +
+                  class={"inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border " +
+                    border() +
+                    " " +
+                    mainText() +
+                    " " +
                     bg("secondary")}
                 >
                   <!-- The part type's flaticon (mountain-bike for a bike,
