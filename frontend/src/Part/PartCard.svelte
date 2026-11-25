@@ -1,6 +1,7 @@
 <script lang="ts">
   import { DropdownItem } from "flowbite-svelte";
   import Card from "../Widgets/Card.svelte";
+  import { bg, mutedText, opposite } from "../Widgets/tone.js";
   import Menu from "../Widgets/Menu.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import UsageChips from "../Usage/UsageChips.svelte";
@@ -36,7 +37,9 @@
     light?: boolean;
   } = $props();
 
-  let background2 = $derived(!light ? "bg-surface-1" : "bg-surface-2");
+  // The nested history cards contrast the Card's tone (the `light` prop sets
+  // the Card's tone directly).
+  let background2 = $derived(bg(opposite(light ? "primary" : "secondary")));
   let show_more = $state(false);
 
   let { list, att, part, due_list } = $derived.by(() => {
@@ -55,7 +58,7 @@
     <!-- Header row: type · name · menu -->
     <div class="flex items-center justify-between gap-1 sm:gap-2">
       <div class="flex items-center gap-1 sm:gap-2 p-1 sm:p-2 min-w-0">
-        <span class="text-xs uppercase text-text-1 shrink-0 truncate">
+        <span class={"text-xs uppercase " + mutedText() + " shrink-0 truncate"}>
           {type.localizedName()}
         </span>
         {#if att.isAttached()}
@@ -67,7 +70,7 @@
             {/if}
           </span>
           ·
-          <span class="text-xs text-text-1">
+          <span class={"text-xs " + mutedText()}>
             {m.time_since()}
             {att.fmtTime()}
           </span>
@@ -110,7 +113,7 @@
         <!-- History: compact padding on mobile -->
         {#each list as { att: a, part: p } (a.idx)}
           <div
-            class={"rounded-lg border border-border-strong opacity-70 p-1 sm:p-2 " +
+            class={"rounded-lg border border-secondary-600 dark:border-secondary-400 opacity-70 p-1 sm:p-2 " +
               background2}
           >
             <div class="flex items-center justify-between gap-1 sm:gap-2">
@@ -123,7 +126,7 @@
                     {a.name}
                   {/if}
                 </span>
-                <span class="text-xs text-text-1 shrink-0">
+                <span class={"text-xs " + mutedText() + " shrink-0"}>
                   {a.fmtTime()}
                 </span>
               </div>

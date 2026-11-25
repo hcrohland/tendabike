@@ -18,7 +18,7 @@
   >
     <BellOutline class="h-6 w-6" />
     {#if unread() > 0}
-      <Badge color="red" rounded class="absolute -top-1 -right-1">
+      <Badge color="blue" rounded class="absolute -top-1 -right-1">
         {unread()}
       </Badge>
     {/if}

@@ -2,14 +2,13 @@
   import { Button } from "flowbite-svelte";
   import * as m from "../../paraglide/messages";
   import { exitShop, getShop } from "../lib/shop.svelte";
+  import { border } from "../Widgets/tone.js";
 
   let { children = () => {} } = $props();
 </script>
 
 <div
-  class={getShop() != undefined
-    ? "border border-border-subtle p-4 rounded-xl"
-    : ""}
+  class={getShop() != undefined ? "border " + border() + " p-4 rounded-xl" : ""}
 >
   {#if getShop()}
     <Button onclick={exitShop} color="gray" class="mb-8">

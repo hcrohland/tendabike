@@ -28,6 +28,7 @@
   import { changeActivity } from "./ChangeActivity.svelte";
   import { fmtDateTime, fmtNumber, fmtSeconds } from "../lib/utils";
   import { providerOfActivityId, providerMeta } from "../lib/provider.svelte";
+  import { bg, border, mainText } from "../Widgets/tone.js";
   import * as m from "../../paraglide/messages";
 
   let { activity }: { activity: Activity } = $props();
@@ -40,7 +41,7 @@
   let provider = $derived(providerOfActivityId(activity.id));
 </script>
 
-<div class="rounded-lg border border-border-subtle bg-surface-1 p-2 sm:p-3">
+<div class={"rounded-lg border " + border() + " p-2 sm:p-3 " + bg("secondary")}>
   <!-- Header Row: 4-column grid layout (same on mobile and desktop) -->
   <!-- Col 1-3 (col-span-3): Date + Time + Activity Name (wraps freely) -->
   <!-- Col 4 (col-span-1): Device name (right-aligned) + Menu (shrink-0) -->
@@ -51,12 +52,12 @@
       <div class="flex items-center gap-x-0.5 sm:gap-x-1">
         <!-- Date + Time (fmtDateTime is the single format source; the search
              filter in ActList matches against the same string) -->
-        <span class="text-sm text-text-1 shrink-0">
+        <span class={"text-sm " + mainText() + " shrink-0"}>
           {fmtDateTime(activity.start)}
         </span>
         <!-- Gap between Start and Title (em-dash on desktop, thin space on mobile) -->
-        <span class="hidden sm:inline text-text-1"> — </span>
-        <span class="sm:hidden text-text-1">&thinsp;</span>
+        <span class={"hidden sm:inline " + mainText()}> — </span>
+        <span class={"sm:hidden " + mainText()}>&thinsp;</span>
         <!-- Title (wraps on long names) -->
         <a
           href="/source/activities/{activity.id}"
@@ -79,7 +80,7 @@
     <div class="col-span-1 flex items-center justify-end gap-1 shrink-0">
       <!-- Device name (right-aligned via sm:text-right, truncates on overflow) -->
       <span
-        class="text-xs text-text-1 truncate sm:text-right"
+        class={"text-xs " + mainText() + " truncate sm:text-right"}
         title={activity.device_name}
       >
         {activity.device_name || "-"}
@@ -96,35 +97,27 @@
   <!-- Metrics Grid: Gear | Time | Distance | Climb | Descend | Energy -->
   <div class="grid grid-cols-3 sm:grid-cols-6 gap-1 sm:gap-2">
     <!-- Gear Chip (link) -->
-    <Chip
-      value={gearPart?.name ?? "-"}
-      label=""
-      href={gearPart?.link()}
-      light
-    />
+    <Chip value={gearPart?.name ?? "-"} label="" href={gearPart?.link()} />
     <!-- Time -->
     <Chip
       value={fmtSeconds(activity.time || activity.duration || 0)}
       label="h"
-      light
     />
     <!-- Distance -->
     <Chip
       value={fmtNumber(Math.round((activity.distance || 0) / 1000))}
       label="km"
-      light
     />
     <!-- Climb -->
-    <Chip value={fmtNumber(activity.climb || 0)} label="↑m" light />
+    <Chip value={fmtNumber(activity.climb || 0)} label="↑m" />
     <!-- Descend -->
     <Chip
       value={fmtNumber(activity.descend || activity.climb || 0)}
       label="↓m"
-      light
     />
     <!-- Energy (only if > 0) -->
     {#if (activity.energy || 0) > 0}
-      <Chip value={fmtNumber(activity.energy || 0)} label="kJ" light />
+      <Chip value={fmtNumber(activity.energy || 0)} label="kJ" />
     {/if}
   </div>
 </div>

@@ -18,7 +18,7 @@
       {alerts.alert + alerts.warn}
     </Indicator>
   {:else if alerts.warn > 0}
-    <Indicator color="amber" class="text-xs text-gray-700 p-2">
+    <Indicator color="yellow" class="text-xs text-gray-700 p-2">
       {alerts.warn}
     </Indicator>
   {/if}

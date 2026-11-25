@@ -19,8 +19,11 @@
  -->
 
 <script lang="ts">
+  import { getContext, setContext, untrack } from "svelte";
+  import { ToneContext, bg, border, opposite, type Tone } from "./tone.js";
+
   let {
-    light = false,
+    light = undefined,
     class: extraClass = "",
     children,
   }: {
@@ -29,11 +32,35 @@
     children: import("svelte").Snippet;
   } = $props();
 
-  let background = $derived(light ? "bg-surface-1" : "bg-surface-2");
+  // A Card's tone. The explicit `light` prop wins and keeps its current
+  // direction (light ⇒ the light tone, dark ⇒ the darker tone); otherwise a
+  // Card flips the tone its parent Card provides, and a top-level Card
+  // defaults to the darker tone.
+  const parentTone = getContext(ToneContext) as Tone | undefined;
+  const tone: Tone = $derived(
+    light === true
+      ? "primary"
+      : light === false
+        ? "secondary"
+        : parentTone
+          ? opposite(parentTone)
+          : "secondary",
+  );
+
+  // The tone is fixed once the Card mounts (it depends only on the `light`
+  // prop and the parent's tone), so publish the resolved value, not a live ref.
+  setContext(
+    ToneContext,
+    untrack(() => tone),
+  );
+
+  const background = $derived(bg(tone));
 </script>
 
 <div
-  class={"rounded-lg border border-border-subtle p-1 sm:p-2 " +
+  class={"rounded-lg border " +
+    border() +
+    " p-1 sm:p-2 " +
     background +
     (extraClass ? " " + extraClass : "")}
 >

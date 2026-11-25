@@ -6,23 +6,45 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --color-surface-1: var(--color-gray-100);
-  --color-surface-2: var(--color-gray-300);
-  --color-surface-3: var(--color-gray-200);
-  --color-border-subtle: var(--color-gray-400);
-  --color-border-strong: var(--color-gray-600);
-  --color-text-1: var(--color-gray-600);
-  --color-text-2: var(--color-gray-900);
-}
+  /*
+   * Unified gray-first color scheme. The theme is the single source of the
+   * app's neutral color: two neutral gray tones (primary = light, secondary =
+   * darker) that form a card/content flip. Status colors use the standard
+   * (vivid) Tailwind hue scales — the theme defines no status scales of its
+   * own.
+   *
+   * Each scale is defined once (no per-mode values). flowbite's components and
+   * the app pick the step per mode — a light-mode background lives at step 100
+   * and a dark-mode background at step 900 — so the values read correctly in
+   * both modes.
+   */
 
-.dark {
-  --color-surface-1: var(--color-gray-800);
-  --color-surface-2: var(--color-gray-600);
-  --color-surface-3: var(--color-gray-500);
-  --color-border-subtle: var(--color-gray-600);
-  --color-border-strong: var(--color-gray-400);
-  --color-text-1: var(--color-gray-400);
-  --color-text-2: var(--color-gray-300);
+  /* Neutral tones — one consistent cool-gray family (Tailwind gray). primary
+     is the light tone, secondary the darker tone. Each scale interpolates
+     between its surface anchors (primary gray-100/gray-800, secondary
+     gray-300/gray-600), so every step of each scale is the same cool gray. */
+  --color-primary-50: #fafafa;
+  --color-primary-100: #f3f4f6;
+  --color-primary-200: #e5e7eb;
+  --color-primary-300: #d1d5db;
+  --color-primary-400: #9ca3af;
+  --color-primary-500: #6b7280;
+  --color-primary-600: #4b5563;
+  --color-primary-700: #374151;
+  --color-primary-800: #2b3544;
+  --color-primary-900: #1f2937;
+  --color-primary-950: #1e1e1e;
+  --color-secondary-50: #dedede;
+  --color-secondary-100: #d1d5db;
+  --color-secondary-200: #c0c5cc;
+  --color-secondary-300: #b0b5bd;
+  --color-secondary-400: #9fa5ae;
+  --color-secondary-500: #8e959f;
+  --color-secondary-600: #7d8590;
+  --color-secondary-700: #6d7581;
+  --color-secondary-800: #5c6572;
+  --color-secondary-900: #4b5563;
+  --color-secondary-950: #4f4f4f;
 }
 
 @source "../../node_modules/flowbite-svelte/dist";

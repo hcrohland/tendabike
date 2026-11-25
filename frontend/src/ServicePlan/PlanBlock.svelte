@@ -8,6 +8,7 @@
   import { updatePlan } from "./PlanModal.svelte";
   import { deletePlan } from "./DeletePlan.svelte";
   import Card from "../Widgets/Card.svelte";
+  import { mutedText } from "../Widgets/tone.js";
 
   interface Props {
     plan: ServicePlan;
@@ -40,6 +41,8 @@
       {/each}
     </div>
   {:else}
-    <p class="text-xs text-text-1">{m.planblock_no_bikes()}</p>
+    <p class={"text-xs " + mutedText()}>
+      {m.planblock_no_bikes()}
+    </p>
   {/if}
 </Card>

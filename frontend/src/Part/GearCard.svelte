@@ -7,6 +7,7 @@
   import { getUser, users } from "../lib/user.svelte";
   import UsageChips from "../Usage/UsageChips.svelte";
   import ProviderMark from "../Widgets/ProviderMark.svelte";
+  import { bg, mutedText } from "../Widgets/tone.js";
   import { providerOfActivityId, providerMeta } from "../lib/provider.svelte";
   import * as m from "../../paraglide/messages";
 
@@ -47,7 +48,9 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class={"text-xl bg-surface-2 p-2 sm:p-4" +
+    class={"text-xl " +
+      bg("secondary") +
+      " p-2 sm:p-4" +
       (summary
         ? " hover:bg-gray-300 dark:hover:bg-gray-500 cursor-pointer"
         : "")}
@@ -64,14 +67,14 @@
     {:else}
       {@const owner = users[part.owner]}
       {part.name}
-      <Badge color="green" class="relative -top-3 -right-1">
+      <Badge color="gray" class="relative -top-3 -right-1">
         {owner.firstname + " " + owner.name}
       </Badge>
     {/if}
     {@render children?.()}
   </div>
 
-  <div class="p-2 sm:p-4 bg-surface-1">
+  <div class={"p-2 sm:p-4 " + bg("primary")}>
     <!-- Meta line: model · type · date range -->
     <p class="text-sm mb-3 flex flex-wrap items-center gap-x-1.5">
       <span>
@@ -89,7 +92,7 @@
           <ProviderMark provider={gearProvider} size="sm" />
         </a>
       {/if}
-      <span class="text-text-1">
+      <span class={mutedText()}>
         ·
         {#if !part.disposed_at}
           {m.time_since()} {fmtDate(part.purchase)}
