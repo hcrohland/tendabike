@@ -87,11 +87,10 @@ pub const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 /// suite's doubles in the tests) — the seam is injected at construction and
 /// every method uses it, so the presentation layer never names it.
 #[derive(Clone)]
-pub struct Registry<S, P, Q, D>
+pub struct Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
-    Q: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     source: S,
@@ -99,15 +98,12 @@ where
     /// Owned by the registry and handed to the core's spawn (a clone per
     /// executor).
     facade: D,
-    /// The Strava provider lane (selected for `Provider::Strava` users): the
-    /// narrow seam the loop calls through to probe and process the provider's
-    /// event queue. The registry owns it and passes a clone to the core's
-    /// spawn.
-    strava_lane: P,
-    /// The icu provider lane (selected for `Provider::Icu` users): the
-    /// second lane the registry drives, so an icu user's queued events are
-    /// processed through their own (marker, driver) lane.
-    icu_lane: Q,
+    /// The unified provider lane (ADR-0014): the narrow seam the loop calls
+    /// through to probe and process the provider's event queue. The lane
+    /// resolves the user's provider and dispatches to the right driver
+    /// internally — the registry never names a concrete provider. The
+    /// registry owns it and passes a clone to the core's spawn.
+    lane: P,
     /// The lifecycle core: the per-user executor map, the per-shop
     /// frame-channel map, and the spawn/reap/wake/stop-all logic. Source-
     /// agnostic — the facade owns the [`TxnSource`] and the `Box<dyn
@@ -133,34 +129,32 @@ pub trait FramePusher: Send + Sync {
     async fn deliver(&self, context: DeliveryContext, summary: Summary);
 }
 
-impl<S, P, Q, D> Registry<S, P, Q, D>
+impl<S, P, D> Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
-    Q: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     /// The registry with an explicit idle cadence (test ergonomics: a
     /// short idle cadence makes the executor's lifecycle observable).
     /// The SSE heartbeat cadence is the crate constant
     /// [`HEARTBEAT_INTERVAL`] — the `KeepAlive` wiring uses it directly.
-    /// `strava_lane` and `icu_lane` are the two provider lanes the registry
-    /// drives: the loop for a user runs the lane of the user's real provider
-    /// (a user has exactly one), selected per demand.
-    pub fn new(source: S, facade: D, strava_lane: P, icu_lane: Q, idle_timeout: Duration) -> Self {
+    /// `lane` is the unified provider lane (ADR-0014): the loop for a user
+    /// runs the lane, which resolves the user's provider and dispatches to
+    /// the right driver internally (a user has exactly one).
+    pub fn new(source: S, facade: D, lane: P, idle_timeout: Duration) -> Self {
         Self {
             source,
             facade,
-            strava_lane,
-            icu_lane,
+            lane,
             core: Core::new(idle_timeout),
         }
     }
 
     /// The registry with the production default (the 60s idle re-probe
     /// cadence).
-    pub fn with_defaults(source: S, facade: D, strava_lane: P, icu_lane: Q) -> Self {
-        Self::new(source, facade, strava_lane, icu_lane, IDLE_TIMEOUT)
+    pub fn with_defaults(source: S, facade: D, lane: P) -> Self {
+        Self::new(source, facade, lane, IDLE_TIMEOUT)
     }
 
     /// Fire the wake signal for the user's executor (spec §4.4/§4.6): a
@@ -217,67 +211,33 @@ where
     }
 }
 
-/// The lane-selection surface (spec #1029, user story 13): `exec_field`
-/// selects the user's provider lane and `send_request` rides it — the
-/// registry's single home for "which (marker, driver) lane does this user
-/// run?". The selection reads the user's real provider in-transaction (the
-/// [`provider_of`](tb_provider::provider_of) lookup, ADR-0014), so this
-/// impl bounds on the two providers' `Store` over the connection.
-impl<S, P, Q, D> Registry<S, P, Q, D>
+/// The lane-selection surface (ADR-0014): `exec_field` hands the unified
+/// lane to the core's spawn and `send_request` rides it — the registry's
+/// single home for "which lane does this user run?". The selection (the
+/// user's real provider, the
+/// [`provider_of`](tb_provider::provider_of) lookup) lives **inside the
+/// unified lane's** `probe`/`process`, not here — the registry is
+/// provider-ignorant (no `match provider`, no per-provider `Store` bound).
+impl<S, P, D> Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: tb_provider::Store<tb_provider::strava::StravaSpec>
-        + tb_provider::Store<tb_provider::icu::IcuSpec>
-        + Send
-        + Sync,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
-    Q: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     /// Lock the core, ensure the user's executor is live (spawning it if it
     /// is absent or settled), and pull one field from it: the shared shape
-    /// of `subscribe`, `events`, and `write`. The selection reads the
-    /// user's real provider in-transaction (the
-    /// [`provider_of`](tb_provider::provider_of) lookup, ADR-0014) and
-    /// drives the core's spawn through the user's own (marker, driver)
-    /// lane — a user has exactly one provider (immutable). The facade
-    /// builds the `Box<dyn FramePusher>` (from `self.clone()`, which
+    /// of `subscribe`, `events`, and `write`. The unified lane (ADR-0014)
+    /// resolves the user's provider and dispatches to the right driver
+    /// internally — the registry never names a concrete provider. The
+    /// facade builds the `Box<dyn FramePusher>` (from `self.clone()`, which
     /// shares the core's maps) and passes it with the source to the core;
     /// the lock is dropped when this returns, before the caller's next
     /// await.
     async fn exec_field<R>(&self, user_id: UserId, f: impl FnOnce(&Executor) -> R) -> TbResult<R> {
         let pusher: Box<dyn FramePusher> = Box::new(self.clone());
-        // Select the user's provider lane: a user has exactly one provider
-        // (immutable), derived from the provider-internal user data.
-        let mut store = self.source.begin().await?;
-        let provider = tb_provider::provider_of(&mut store, user_id).await?;
-        store.commit().await?;
-        match provider {
-            Provider::Strava => {
-                self.core
-                    .exec_field(
-                        &self.source,
-                        &self.facade,
-                        &self.strava_lane,
-                        user_id,
-                        pusher,
-                        f,
-                    )
-                    .await
-            }
-            Provider::Icu => {
-                self.core
-                    .exec_field(
-                        &self.source,
-                        &self.facade,
-                        &self.icu_lane,
-                        user_id,
-                        pusher,
-                        f,
-                    )
-                    .await
-            }
-        }
+        self.core
+            .exec_field(&self.source, &self.facade, &self.lane, user_id, pusher, f)
+            .await
     }
 
     /// Enqueue a [`Request`] on the user's executor and await its oneshot
@@ -318,12 +278,11 @@ where
 /// surface with the narrow `Txn` bound (the ownership check goes through
 /// the domain facade). The [`ServiceApi`] impl delegates
 /// to this; the web layer calls it through the trait.
-impl<S, P, Q, D> Registry<S, P, Q, D>
+impl<S, P, D> Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
     S::Conn: Txn,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
-    Q: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     /// Register a shop stream for `shop_id` (spec #517): verify
@@ -359,11 +318,10 @@ where
 /// stream map, the executor map) — the two are independent, so a push never
 /// holds both locks.
 #[async_trait::async_trait]
-impl<S, P, Q, D> FramePusher for Registry<S, P, Q, D>
+impl<S, P, D> FramePusher for Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
-    Q: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     /// Delegate the routing to the core (the complete frame-routing policy).
@@ -376,7 +334,7 @@ where
 /// channel ops ride [`Self::send_request`] (spawn-or-join the executor,
 /// enqueue, await the oneshot).
 #[async_trait::async_trait]
-impl<S, P, Q, D> ServiceApi for Registry<S, P, Q, D>
+impl<S, P, D> ServiceApi for Registry<S, P, D>
 where
     // The generic channel ops (`read`/`write`/`subscribe`) ride the executor
     // and need only `Txn` (their domain work rides the facade and the lane).
@@ -391,7 +349,6 @@ where
         + tb_provider::Store<tb_provider::icu::IcuSpec>
         + Txn,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
-    Q: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     /// Enqueue one [`ApiRead`] on the user's executor and await its data
@@ -443,7 +400,7 @@ where
     /// `rescan` and `trigger_processing`).
     async fn all_stats(&self, _session: Box<dyn Session>) -> TbResult<Vec<UserStat>> {
         let mut store = self.source.begin().await?;
-        let stats = tb_provider::dispatch::all_stats(self.strava_lane.facade(), &mut store).await?;
+        let stats = tb_provider::dispatch::all_stats(self.lane.facade(), &mut store).await?;
         store.commit().await?;
         Ok(stats)
     }
@@ -516,7 +473,7 @@ where
 /// two providers' local data stores plus the provider-agnostic `Store` over
 /// each marker and takes the facade as a parameter.
 #[async_trait::async_trait]
-impl<S, P, Q, D> crate::providerservice::ProviderService for Registry<S, P, Q, D>
+impl<S, P, D> crate::providerservice::ProviderService for Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
     S::Conn: tb_provider::Store<tb_provider::strava::StravaSpec>
@@ -525,7 +482,6 @@ where
         + Sync
         + 'static,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
-    Q: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     /// The login (ADR-0014): one transaction — the provider layer's dispatch
@@ -545,7 +501,7 @@ where
             code,
             scope,
             verifier,
-            self.strava_lane.facade(),
+            self.lane.facade(),
             &mut store,
         )
         .await?;
@@ -581,8 +537,7 @@ where
         event_time: i64,
     ) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_provider::dispatch::sync(user_id, event_time, self.strava_lane.facade(), &mut store)
-            .await?;
+        tb_provider::dispatch::sync(user_id, event_time, self.lane.facade(), &mut store).await?;
         store.commit().await?;
         Ok(())
     }
@@ -602,13 +557,8 @@ where
     /// then deletes.
     async fn delete_user(&self, mut session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_provider::dispatch::delete_user(
-            &mut *session,
-            tbid,
-            self.strava_lane.facade(),
-            &mut store,
-        )
-        .await?;
+        tb_provider::dispatch::delete_user(&mut *session, tbid, self.lane.facade(), &mut store)
+            .await?;
         store.commit().await?;
         Ok(())
     }
@@ -627,7 +577,7 @@ where
             provider,
             session,
             id,
-            self.strava_lane.facade(),
+            self.lane.facade(),
             &mut store,
         )
         .await?;
@@ -641,8 +591,7 @@ where
     async fn gear_url(&self, session: Box<dyn Session>, id: PartId) -> TbResult<Option<String>> {
         let mut store = self.source.begin().await?;
         let uri =
-            tb_provider::dispatch::gear_url(session, id, self.strava_lane.facade(), &mut store)
-                .await?;
+            tb_provider::dispatch::gear_url(session, id, self.lane.facade(), &mut store).await?;
         store.commit().await?;
         Ok(uri)
     }

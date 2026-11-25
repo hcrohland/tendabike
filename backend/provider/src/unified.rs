@@ -21,11 +21,20 @@
 //! The provider lane (spec #1029, ticket #1033): the [`ProviderLane`] impl
 //! the executor loop runs in production.
 //!
-//! The lane is generic over the provider marker [`ProviderSpec`] and the
-//! [`Provider`](crate::driver::Provider) driver: it is bounded on the single
-//! [`Store`](crate::store::Store) interface and drives the `Provider` trait
-//! methods, so it is provider-agnostic. Provider selection happens at the
-//! call site (the dispatch), not in the lane.
+//! The per-provider lane is generic over the provider marker
+//! [`ProviderSpec`] and the [`Provider`](crate::driver::Provider) driver: it
+//! is bounded on the single [`Store`](crate::store::Store) interface and
+//! drives the `Provider` trait methods, so it is provider-agnostic.
+//!
+//! The **unified lane** ([`UnifiedLane`], ADR-0014) is the seam's single
+//! impl: it wraps the two per-provider lanes (one per provider marker +
+//! driver) and implements `probe`/`process`/`import_gear`/`queue_sync` by
+//! doing the [`provider_of`](crate::provider_of) lookup + a typed switch on
+//! the [`Provider`](crate::Provider) enum, delegating to the appropriate
+//! per-provider lane. Its event type is the [`UnifiedEvent`] enum (one
+//! variant per provider), consumed opaquely by the loop. A third provider
+//! costs a variant in [`UnifiedEvent`] and an arm in the unified lane's
+//! switch — `tb_exec` is untouched.
 //!
 //! The lane is generic over the store type `S` (the transaction's connection)
 //! and its entity-op facade `F` ([`EntityFacade`] — the provider's door into
@@ -33,14 +42,10 @@
 //! to `S`, and the lane's ops forward domain work through `F`. `S` must
 //! implement [`Store<P>`] for the lane's provider marker `P` — the lane
 //! bounds on no per-provider store-trait intersection.
-//!
-//! The lane's event type is `P::Event` (the provider's event row), so the
-//! loop's `Select`, the consumed-event channel, and the `run_event` dispatch
-//! are all provider-agnostic.
 
 use crate::ProviderSpec;
 use crate::driver::Provider;
-use crate::facade::{Error, PartId, Summary, TbResult, UserId};
+use crate::facade::{Error, PartId, Summary, TbResult, UserId, UserStat};
 use crate::store::Store;
 
 use crate::EntityFacade;
@@ -58,6 +63,191 @@ use crate::{Lane, Probe, ProviderLane};
 ///
 /// [`EntityFacadeImpl`]: crate::EntityFacadeImpl
 pub type ProviderLaneImpl<P, S, D> = Lane<P, S, crate::EntityFacadeImpl, D>;
+
+/// The unified event type (ADR-0014): an enum over the per-provider event
+/// types (one variant per provider). The unified lane's `type Event` — the
+/// loop consumes it opaquely (it calls `process` after a `Probe::Event` and
+/// never inspects the event's contents), so the variants' payloads do not
+/// leak into the loop.
+#[derive(Debug, Clone, PartialEq)]
+pub enum UnifiedEvent {
+    /// A Strava event.
+    Strava(crate::strava::event::Event),
+    /// An icu event.
+    Icu(crate::icu::IcuEvent),
+}
+
+/// The unified provider lane (ADR-0014): the [`ProviderLane`] impl the
+/// executor loop runs in production. It wraps the two per-provider lanes
+/// (one per provider marker + driver) and implements `probe`/`process`/
+/// `import_gear`/`queue_sync` by doing the
+/// [`provider_of`](crate::provider_of) lookup + a typed switch on the
+/// [`Provider`](crate::Provider) enum, delegating to the appropriate
+/// per-provider lane. It is the seam's single impl (ADR-0014): a third
+/// provider costs a variant in the [`UnifiedEvent`] enum and an arm in this
+/// lane's switch — `tb_exec` is untouched.
+///
+/// The lane is generic over the store type `S` (the transaction's connection)
+/// and its entity-op facade `F` ([`EntityFacade`] — the provider's door into
+/// the domain): `type Store = S`, so the loop's transaction connection ties
+/// to `S`, and the lane's ops forward domain work through `F`. `S` must
+/// implement [`Store<P>`] for both provider markers (the lane's
+/// `provider_of` lookup reads both providers' user tables).
+pub struct UnifiedLane<S, F, D1, D2> {
+    strava_lane: Lane<crate::strava::StravaSpec, S, F, D1>,
+    icu_lane: Lane<crate::icu::IcuSpec, S, F, D2>,
+}
+
+impl<S, F, D1, D2> UnifiedLane<S, F, D1, D2> {
+    /// The unified lane over the two per-provider lanes.
+    pub fn new(
+        strava_lane: Lane<crate::strava::StravaSpec, S, F, D1>,
+        icu_lane: Lane<crate::icu::IcuSpec, S, F, D2>,
+    ) -> Self {
+        Self {
+            strava_lane,
+            icu_lane,
+        }
+    }
+
+    /// The admin all-user stat read (the `ServiceApi`'s `all_stats`): every
+    /// enabled provider's users as provider-neutral [`UserStat`]s — the two
+    /// lanes are driven in one transaction and the results concatenated, in
+    /// the `Provider` enum's definition order. A disabled provider's lane is
+    /// skipped (ADR-0016: its users are frozen on this server, not listed).
+    pub async fn all_stats(&self, store: &mut S) -> TbResult<Vec<UserStat>>
+    where
+        S: Store<crate::strava::StravaSpec> + Store<crate::icu::IcuSpec> + Send + Sync + 'static,
+        F: EntityFacade<S> + Clone + Send + Sync + 'static,
+        D1: Provider<crate::strava::StravaSpec> + Send + Sync + 'static,
+        D2: Provider<crate::icu::IcuSpec> + Send + Sync + 'static,
+    {
+        let mut stats = Vec::new();
+        if crate::enabled_providers().contains(&crate::Provider::Strava) {
+            stats.extend(D1::all_stats(self.facade(), store).await?);
+        }
+        if crate::enabled_providers().contains(&crate::Provider::Icu) {
+            stats.extend(D2::all_stats(self.facade(), store).await?);
+        }
+        Ok(stats)
+    }
+}
+
+impl<S, F, D1, D2> Clone for UnifiedLane<S, F, D1, D2>
+where
+    F: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            strava_lane: self.strava_lane.clone(),
+            icu_lane: self.icu_lane.clone(),
+        }
+    }
+}
+
+impl<S, F, D1, D2> std::fmt::Debug for UnifiedLane<S, F, D1, D2> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UnifiedLane").finish()
+    }
+}
+
+#[async_trait::async_trait]
+impl<S, F, D1, D2> ProviderLane for UnifiedLane<S, F, D1, D2>
+where
+    S: Store<crate::strava::StravaSpec> + Store<crate::icu::IcuSpec> + Send + Sync + 'static,
+    F: EntityFacade<S> + Clone + Send + Sync + 'static,
+    D1: Provider<crate::strava::StravaSpec> + Send + Sync + 'static,
+    D2: Provider<crate::icu::IcuSpec> + Send + Sync + 'static,
+{
+    type Event = UnifiedEvent;
+    type Store = S;
+    type Facade = F;
+
+    fn facade(&self) -> &F {
+        &self.strava_lane.facade
+    }
+
+    /// Probe the user's provider event queue: resolve the user's provider
+    /// (the [`provider_of`](crate::provider_of) lookup) and delegate to the
+    /// user's own (marker, driver) lane, wrapping the event in the
+    /// [`UnifiedEvent`] enum. The queue's read-side rules (the rate-limit
+    /// gate, the latest-per-key dedup) are the per-provider lane's — the
+    /// unified lane only selects the lane.
+    async fn probe(&self, user_id: UserId, store: &mut S) -> Probe<UnifiedEvent> {
+        let provider = match crate::provider_of(store, user_id).await {
+            Ok(provider) => provider,
+            Err(Error::NotFound(_)) => return Probe::UserGone,
+            Err(_) => return Probe::Error,
+        };
+        match provider {
+            crate::Provider::Strava => match self.strava_lane.probe(user_id, store).await {
+                Probe::Event(e) => Probe::Event(UnifiedEvent::Strava(e)),
+                Probe::Limited(until) => Probe::Limited(until),
+                Probe::Empty => Probe::Empty,
+                Probe::UserGone => Probe::UserGone,
+                Probe::Error => Probe::Error,
+            },
+            crate::Provider::Icu => match self.icu_lane.probe(user_id, store).await {
+                Probe::Event(e) => Probe::Event(UnifiedEvent::Icu(e)),
+                Probe::Limited(until) => Probe::Limited(until),
+                Probe::Empty => Probe::Empty,
+                Probe::UserGone => Probe::UserGone,
+                Probe::Error => Probe::Error,
+            },
+        }
+    }
+
+    /// Process the user's next queued event (the work transaction): resolve
+    /// the user's provider and delegate to the user's own (marker, driver)
+    /// lane. The lane's `process` classifies the provider-side failures
+    /// (the rate-limit `Stop`, the disable, the delete) — the unified lane
+    /// only selects the lane.
+    async fn process(&self, user_id: UserId, store: &mut S) -> Option<Summary> {
+        let provider = match crate::provider_of(store, user_id).await {
+            Ok(provider) => provider,
+            Err(_) => return None,
+        };
+        match provider {
+            crate::Provider::Strava => self.strava_lane.process(user_id, store).await,
+            crate::Provider::Icu => self.icu_lane.process(user_id, store).await,
+        }
+    }
+
+    /// Import the user's gear (bikes + shoes) from the provider (the
+    /// onboarding's first step, spec #829): resolve the user's provider and
+    /// delegate to the user's own (marker, driver) lane.
+    async fn import_gear(&self, user_id: UserId, store: &mut S) -> TbResult<Vec<PartId>> {
+        let provider = crate::provider_of(store, user_id).await?;
+        match provider {
+            crate::Provider::Strava => self.strava_lane.import_gear(user_id, store).await,
+            crate::Provider::Icu => self.icu_lane.import_gear(user_id, store).await,
+        }
+    }
+
+    /// Queue the activity sync on the provider's event queue (the
+    /// onboarding's second step, spec #829): resolve the user's provider and
+    /// delegate to the user's own (marker, driver) lane.
+    async fn queue_sync(&self, user_id: UserId, time: i64, store: &mut S) -> TbResult<()> {
+        let provider = crate::provider_of(store, user_id).await?;
+        match provider {
+            crate::Provider::Strava => self.strava_lane.queue_sync(user_id, time, store).await,
+            crate::Provider::Icu => self.icu_lane.queue_sync(user_id, time, store).await,
+        }
+    }
+}
+
+/// The production alias for the unified lane: concrete over the concrete
+/// facade ([`EntityFacadeImpl`]) and the two concrete drivers
+/// ([`StravaDriver`], [`IcuDriver`]).
+///
+/// [`StravaDriver`]: crate::strava::driver::StravaDriver
+/// [`IcuDriver`]: crate::icu::driver::IcuDriver
+pub type UnifiedLaneImpl<S> = UnifiedLane<
+    S,
+    crate::EntityFacadeImpl,
+    crate::strava::driver::StravaDriver,
+    crate::icu::driver::IcuDriver,
+>;
 
 #[async_trait::async_trait]
 impl<P, S, F, D> ProviderLane for Lane<P, S, F, D>

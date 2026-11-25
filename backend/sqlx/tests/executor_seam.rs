@@ -102,7 +102,7 @@ use tb_provider::strava::{
     StravaId,
     test_support::{canned_strava, seed_token_cache},
 };
-use tb_provider::{EntityFacadeImpl, ProviderLaneImpl};
+use tb_provider::{EntityFacadeImpl, ProviderLaneImpl, UnifiedLaneImpl};
 use tb_sqlx::{DbPool, SNAPSHOT_JSON, SqlxConn};
 use time::macros::datetime;
 use tokio::sync::{MutexGuard, Notify, broadcast};
@@ -936,8 +936,10 @@ async fn sync_enqueues() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
-        ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+        UnifiedLaneImpl::<_>::new(
+            ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+        ),
         Duration::from_secs(3600),
     );
 
@@ -1002,8 +1004,10 @@ async fn trigger_processing_drains_each_queued_user() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
-        ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+        UnifiedLaneImpl::<_>::new(
+            ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+        ),
         Duration::from_secs(3600),
     );
     // Both executors running and idle-waiting (streams attached keep them
@@ -1117,20 +1121,16 @@ async fn queue_icu_event(pool: &DbPool) {
 /// One test's registry over the live pool (the direct ops' shape): the
 /// suite's short idle cadence; the ops under test never rely on the
 /// re-probe.
-#[allow(clippy::type_complexity)] // the two concrete lanes' types
 fn registry(
     pool: &DbPool,
-) -> Registry<
-    DetachedBegin<DbPool>,
-    ProviderLaneImpl<StravaSpec, SqlxConn<'static>, StravaDriver>,
-    ProviderLaneImpl<IcuSpec, SqlxConn<'static>, IcuDriver>,
-    DomainFacadeImpl,
-> {
+) -> Registry<DetachedBegin<DbPool>, UnifiedLaneImpl<SqlxConn<'static>>, DomainFacadeImpl> {
     Registry::new(
         DetachedBegin::new(pool.clone()),
         DomainFacadeImpl,
-        ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
-        ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+        UnifiedLaneImpl::<_>::new(
+            ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+        ),
         IDLE_TIMEOUT,
     )
 }
@@ -1583,8 +1583,10 @@ async fn shop_subscribe_policy() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
-        ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+        UnifiedLaneImpl::<_>::new(
+            ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+        ),
         Duration::from_secs(3600),
     );
 
@@ -1646,11 +1648,10 @@ async fn shop_subscribe_policy() {
 /// lifecycle tests' observables. The map's entry outlives a clean reap —
 /// the watchdog records `Reaped` on the fate watch, it does not remove the
 /// entry (only `stop_all` clears the map).
-async fn wait_for_status<S, P, Q, D>(reg: &Registry<S, P, Q, D>, user: UserId, want: ExecutorStatus)
+async fn wait_for_status<S, P, D>(reg: &Registry<S, P, D>, user: UserId, want: ExecutorStatus)
 where
     S: tb_exec::TxnSource + Clone,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
-    Q: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: tb_exec::DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     let deadline = tokio::time::Instant::now() + TEST_TIMEOUT;
@@ -1687,8 +1688,10 @@ async fn attached_stream_keeps_the_executor_alive() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
-        ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+        UnifiedLaneImpl::<_>::new(
+            ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+        ),
         Duration::from_millis(300),
     );
 
@@ -1741,8 +1744,10 @@ async fn stream_survives_executor_reap() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
-        ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+        UnifiedLaneImpl::<_>::new(
+            ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+        ),
         Duration::from_millis(300),
     );
 
