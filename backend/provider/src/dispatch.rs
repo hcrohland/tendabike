@@ -20,13 +20,13 @@
 
 //! The provider-agnostic direct-op dispatch (ADR-0014): the eight free
 //! functions the executor's provider-agnostic [`ProviderService`] impl
-//! forwards to. Each is a typed switch on [`Provider`] that delegates to the
-//! driver module that does the actual work — the single home for the
-//! provider knowledge on the direct-op path, a sibling of the unified lane
-//! seam (`unified`). The executor is a thin forward: it opens the
-//! transaction, hands the connection (and the entity-op facade) to one of
-//! these, and commits; no `match provider` and no driver name appear in
-//! `tb_exec`.
+//! forwards to. Each is a typed switch on [`Provider`] that drives the
+//! [`Provider`](crate::driver::Provider) driver for the selected marker —
+//! the single home for the provider knowledge on the direct-op path, a
+//! sibling of the unified lane seam (`unified`). The executor is a thin
+//! forward: it opens the transaction, hands the connection (and the
+//! entity-op facade) to one of these, and commits; no `match provider` and
+//! no driver name appear in `tb_exec`.
 //!
 //! The target-keyed ops (`sync`, `deauthorize`, `delete_user`, `gear_url`,
 //! `user_url`) dispatch on the target's real provider, derived in-transaction
@@ -34,12 +34,12 @@
 //! route: a per-provider route acting on a target of the other provider
 //! follows the stated identity rule instead of failing on a missing lookup.
 //!
-//! The store is the local data store for both providers
-//! (`StravaDataStore + IcuDataStore`) plus the provider-agnostic
-//! [`Store`](crate::store::Store) over each marker — each arm bounds on its
-//! own driver's store, and the switch is exhaustive over the enum. Domain
-//! work goes through the entity-op facade (a parameter — the registry passes
-//! the concrete one); the pure queue-intake ops (`accept_event`, `user_url`)
+//! The store is the single [`Store`](crate::store::Store) interface over each
+//! marker (`Store<StravaSpec> + Store<IcuSpec>`): each arm bounds on its own
+//! driver's `Store` marker and drives the [`Provider`](crate::driver::Provider)
+//! interface, and the switch is exhaustive over the enum. Domain work goes
+//! through the entity-op facade (a parameter — the registry passes the
+//! concrete one); the pure queue-intake ops (`accept_event`, `user_url`)
 //! need no facade.
 //!
 //! [`ProviderService`]: crate (re-exported in `tb_exec`)
@@ -50,6 +50,11 @@ use crate::facade::{ActivityId, Error, PartId, Session, TbResult, UserId};
 
 use crate::EntityFacade;
 use crate::Provider;
+use crate::ProviderSpec;
+use crate::driver::Provider as Driver;
+use crate::icu::{IcuDriver, IcuSpec};
+use crate::store::Store;
+use crate::strava::{StravaDriver, StravaSpec};
 
 /// The provider-agnostic `login` dispatch (ADR-0014): the provider's login
 /// work — the scope check, the token exchange, the athlete wire-shape
@@ -69,22 +74,14 @@ pub async fn login<S, D: EntityFacade<S>>(
     store: &mut S,
 ) -> TbResult<(UserId, bool)>
 where
-    S: crate::strava::StravaDataStore
-        + crate::icu::IcuDataStore
-        + crate::store::Store<crate::strava::StravaSpec>
-        + crate::store::Store<crate::icu::IcuSpec>,
+    S: Store<StravaSpec> + Store<IcuSpec>,
 {
     // A disabled provider is a graceful freeze (ADR-0016): no OAuth without
     // credentials — a clear "unavailable", not a token exchange.
     crate::config::require_enabled(provider)?;
     match provider {
-        Provider::Strava => crate::strava::login(code, scope, facade, store).await,
-        Provider::Icu => {
-            let verifier = verifier.ok_or_else(|| {
-                Error::BadRequest("missing code verifier for the icu login".to_string())
-            })?;
-            crate::icu::login(code, scope, verifier, facade, store).await
-        }
+        Provider::Strava => StravaDriver::login(code, scope, None, facade, store).await,
+        Provider::Icu => IcuDriver::login(code, scope, verifier, facade, store).await,
     }
 }
 
@@ -97,10 +94,7 @@ where
 /// op: it drives no domain work, so it takes no facade.
 pub async fn accept_event<S>(provider: Provider, body: &str, store: &mut S) -> TbResult<Vec<UserId>>
 where
-    S: crate::strava::StravaDataStore
-        + crate::icu::IcuDataStore
-        + crate::store::Store<crate::strava::StravaSpec>
-        + crate::store::Store<crate::icu::IcuSpec>,
+    S: Store<StravaSpec> + Store<IcuSpec>,
 {
     // A disabled provider's webhook is declined (ADR-0016): the clear
     // `Unavailable` error answers a non-2xx, so the sender retries and
@@ -108,11 +102,8 @@ where
     // provider and its syncs.
     crate::config::require_enabled(provider)?;
     match provider {
-        Provider::Strava => {
-            let queued = crate::strava::event::accept_event(body, store).await?;
-            Ok(queued.into_iter().collect())
-        }
-        Provider::Icu => crate::icu::event::accept_event(body, store).await,
+        Provider::Strava => StravaDriver::accept_event(body, store).await,
+        Provider::Icu => IcuDriver::accept_event(body, store).await,
     }
 }
 
@@ -120,11 +111,10 @@ where
 /// provider identity read plus the per-driver `onboard` arms. The provider is
 /// the user's real one, read in-transaction (a per-provider route acting on a
 /// user of the other provider follows the stated identity rule). Each driver's
-/// `onboard` primitive (the Strava [`onboard`](crate::strava::onboard), the
-/// icu [`onboard`](crate::icu::onboard)) imports the user's gear (bikes +
-/// shoes) and enqueues the activity sync, returning the created gear part ids
-/// (spec #829) — the combined gear-import-plus-queue sync op. The admin
-/// trigger delegates here (the registry's
+/// `onboard` primitive imports the user's gear (bikes + shoes) and enqueues
+/// the activity sync, returning the created gear part ids (spec #829) — the
+/// combined gear-import-plus-queue sync op. The admin trigger delegates here
+/// (the registry's
 /// [`sync`](crate::dispatch::sync)); it drops the gear ids.
 pub(crate) async fn sync_user<S, D: EntityFacade<S>>(
     user_id: UserId,
@@ -133,18 +123,15 @@ pub(crate) async fn sync_user<S, D: EntityFacade<S>>(
     store: &mut S,
 ) -> TbResult<Vec<PartId>>
 where
-    S: crate::strava::StravaDataStore
-        + crate::icu::IcuDataStore
-        + crate::store::Store<crate::strava::StravaSpec>
-        + crate::store::Store<crate::icu::IcuSpec>,
+    S: Store<StravaSpec> + Store<IcuSpec>,
 {
     let provider = crate::provider_of(store, user_id).await?;
     // A disabled provider's sync fails loudly (ADR-0016): the graceful
     // freeze is a clear "provider disabled" error, not a silent no-op.
     crate::config::require_enabled(provider)?;
     match provider {
-        Provider::Strava => crate::strava::onboard(user_id, event_time, facade, store).await,
-        Provider::Icu => crate::icu::onboard(user_id, event_time, facade, store).await,
+        Provider::Strava => StravaDriver::onboard(user_id, event_time, facade, store).await,
+        Provider::Icu => IcuDriver::onboard(user_id, event_time, facade, store).await,
     }
 }
 
@@ -159,10 +146,7 @@ pub async fn sync<S, D: EntityFacade<S>>(
     store: &mut S,
 ) -> TbResult<()>
 where
-    S: crate::strava::StravaDataStore
-        + crate::icu::IcuDataStore
-        + crate::store::Store<crate::strava::StravaSpec>
-        + crate::store::Store<crate::icu::IcuSpec>,
+    S: Store<StravaSpec> + Store<IcuSpec>,
 {
     sync_user(user_id, event_time, facade, store)
         .await
@@ -184,10 +168,7 @@ pub async fn sync_users<S>(
     store: &mut S,
 ) -> TbResult<Vec<UserId>>
 where
-    S: crate::strava::StravaDataStore
-        + crate::icu::IcuDataStore
-        + crate::store::Store<crate::strava::StravaSpec>
-        + crate::store::Store<crate::icu::IcuSpec>,
+    S: Store<StravaSpec> + Store<IcuSpec>,
 {
     if !session.is_admin() {
         return Err(Error::Forbidden(
@@ -211,17 +192,20 @@ where
         && crate::enabled_providers().contains(&Provider::Strava)
     {
         let users = match user_id {
-            Some(id) => vec![store.stravauser_get_by_tbid(id).await?],
-            None => store.stravauser_get_all().await?,
+            Some(id) => vec![Store::<StravaSpec>::user_get_by_tbid(store, id).await?],
+            None => Store::<StravaSpec>::user_get_all(store).await?,
         };
         for user in users {
-            if user.disabled() {
-                warn!("user {} disabled, skipping", user.strava_id());
+            if StravaDriver::disabled(&user) {
+                warn!("user {} disabled, skipping", StravaSpec::user_owner(&user));
                 continue;
             }
-            info!("Adding sync for {:?} at {time}", user.user_id());
-            crate::strava::event::insert_sync(user.user_id(), time, store).await?;
-            queued.push(user.user_id());
+            info!(
+                "Adding sync for {:?} at {time}",
+                StravaSpec::user_tbid(&user)
+            );
+            crate::strava::event::insert_sync(*StravaSpec::user_tbid(&user), time, store).await?;
+            queued.push(*StravaSpec::user_tbid(&user));
         }
     }
 
@@ -233,17 +217,17 @@ where
         && crate::enabled_providers().contains(&Provider::Icu)
     {
         let users = match user_id {
-            Some(id) => vec![store.icuser_get_by_tbid(id).await?],
-            None => store.icuser_get_all().await?,
+            Some(id) => vec![Store::<IcuSpec>::user_get_by_tbid(store, id).await?],
+            None => Store::<IcuSpec>::user_get_all(store).await?,
         };
         for user in users {
-            if user.disabled() {
-                warn!("user {} disabled, skipping", user.user_id());
+            if IcuDriver::disabled(&user) {
+                warn!("user {} disabled, skipping", IcuSpec::user_tbid(&user));
                 continue;
             }
-            info!("Adding sync for {:?} at {time}", user.user_id());
-            crate::icu::event::insert_sync(user.user_id(), time, store).await?;
-            queued.push(user.user_id());
+            info!("Adding sync for {:?} at {time}", IcuSpec::user_tbid(&user));
+            crate::icu::event::insert_sync(*IcuSpec::user_tbid(&user), time, store).await?;
+            queued.push(*IcuSpec::user_tbid(&user));
         }
     }
 
@@ -257,15 +241,12 @@ where
 /// data.
 pub async fn deauthorize<S>(session: &mut dyn Session, tbid: UserId, store: &mut S) -> TbResult<()>
 where
-    S: crate::strava::StravaDataStore
-        + crate::icu::IcuDataStore
-        + crate::store::Store<crate::strava::StravaSpec>
-        + crate::store::Store<crate::icu::IcuSpec>,
+    S: Store<StravaSpec> + Store<IcuSpec>,
 {
     let provider = crate::provider_of(store, tbid).await?;
     match provider {
-        Provider::Strava => crate::strava::user_deauthorize(session, tbid, store).await,
-        Provider::Icu => crate::icu::user_deauthorize(session, tbid, store).await,
+        Provider::Strava => StravaDriver::user_deauthorize(session, tbid, store).await,
+        Provider::Icu => IcuDriver::user_deauthorize(session, tbid, store).await,
     }
 }
 
@@ -279,15 +260,12 @@ pub async fn delete_user<S, D: EntityFacade<S>>(
     store: &mut S,
 ) -> TbResult<()>
 where
-    S: crate::strava::StravaDataStore
-        + crate::icu::IcuDataStore
-        + crate::store::Store<crate::strava::StravaSpec>
-        + crate::store::Store<crate::icu::IcuSpec>,
+    S: Store<StravaSpec> + Store<IcuSpec>,
 {
     let provider = crate::provider_of(store, tbid).await?;
     match provider {
-        Provider::Strava => crate::strava::user_delete(session, tbid, facade, store).await,
-        Provider::Icu => crate::icu::user_delete(session, tbid, facade, store).await,
+        Provider::Strava => StravaDriver::user_delete(session, tbid, facade, store).await,
+        Provider::Icu => IcuDriver::user_delete(session, tbid, facade, store).await,
     }
 }
 
@@ -302,14 +280,11 @@ pub async fn activity_url<S, D: EntityFacade<S>>(
     store: &mut S,
 ) -> TbResult<String>
 where
-    S: crate::strava::StravaDataStore
-        + crate::icu::IcuDataStore
-        + crate::store::Store<crate::strava::StravaSpec>
-        + crate::store::Store<crate::icu::IcuSpec>,
+    S: Store<StravaSpec> + Store<IcuSpec>,
 {
     match provider {
-        Provider::Strava => crate::strava::activity::strava_url(id, session, facade, store).await,
-        Provider::Icu => crate::icu::activity::activity_url(id, session, facade, store).await,
+        Provider::Strava => StravaDriver::activity_url(session, id, facade, store).await,
+        Provider::Icu => IcuDriver::activity_url(session, id, facade, store).await,
     }
 }
 
@@ -326,13 +301,13 @@ pub async fn gear_url<S, D: EntityFacade<S>>(
     store: &mut S,
 ) -> TbResult<Option<String>>
 where
-    S: crate::strava::StravaDataStore
-        + crate::icu::IcuDataStore
-        + crate::store::Store<crate::strava::StravaSpec>
-        + crate::store::Store<crate::icu::IcuSpec>,
+    S: Store<StravaSpec> + Store<IcuSpec>,
 {
     // The part read is the ownership check; the provider is the part
-    // owner's real one (the domain stores no provider).
+    // owner's real one (the domain stores no provider). The read is the
+    // ownership check (it consumes the acting session), so the arms build
+    // the URL from the read part: the Strava arm's source, the icu arm the
+    // typed absence (icu gear has no public page).
     let part = facade.part(id, session, store).await?;
     let provider = crate::provider_of(store, part.owner).await?;
     match provider {
@@ -350,15 +325,12 @@ where
 /// takes no facade.
 pub async fn user_url<S>(id: UserId, store: &mut S) -> TbResult<String>
 where
-    S: crate::strava::StravaDataStore
-        + crate::icu::IcuDataStore
-        + crate::store::Store<crate::strava::StravaSpec>
-        + crate::store::Store<crate::icu::IcuSpec>,
+    S: Store<StravaSpec> + Store<IcuSpec>,
 {
     let provider = crate::provider_of(store, id).await?;
     match provider {
-        Provider::Strava => crate::strava::strava_url(id, store).await,
-        Provider::Icu => crate::icu::user::user_url(id, store).await,
+        Provider::Strava => StravaDriver::user_url(id, store).await,
+        Provider::Icu => IcuDriver::user_url(id, store).await,
     }
 }
 

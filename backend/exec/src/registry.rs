@@ -430,9 +430,7 @@ where
 impl<S, P, D> crate::providerservice::ProviderService for Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: tb_provider::strava::StravaDataStore
-        + tb_provider::icu::IcuDataStore
-        + tb_provider::Store<tb_provider::strava::StravaSpec>
+    S::Conn: tb_provider::Store<tb_provider::strava::StravaSpec>
         + tb_provider::Store<tb_provider::icu::IcuSpec>
         + Send
         + Sync

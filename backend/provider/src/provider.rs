@@ -122,14 +122,20 @@ impl TryFrom<ProviderActivityId> for Provider {
 #[cfg(all(feature = "strava", feature = "icu"))]
 pub async fn provider_of<S>(store: &mut S, user_id: UserId) -> TbResult<Provider>
 where
-    S: crate::strava::StravaDataStore + crate::icu::IcuDataStore + Send + Sync,
+    S: crate::store::Store<crate::strava::StravaSpec>
+        + crate::store::Store<crate::icu::IcuSpec>
+        + Send
+        + Sync,
 {
-    match store.stravauser_get_by_tbid(user_id).await {
+    match crate::store::Store::<crate::strava::StravaSpec>::user_get_by_tbid(store, user_id).await {
         Ok(_) => Ok(Provider::Strava),
-        Err(Error::NotFound(_)) => match store.icuser_get_by_tbid(user_id).await {
-            Ok(_) => Ok(Provider::Icu),
-            Err(e) => Err(e),
-        },
+        Err(Error::NotFound(_)) => {
+            match crate::store::Store::<crate::icu::IcuSpec>::user_get_by_tbid(store, user_id).await
+            {
+                Ok(_) => Ok(Provider::Icu),
+                Err(e) => Err(e),
+            }
+        }
         Err(e) => Err(e),
     }
 }

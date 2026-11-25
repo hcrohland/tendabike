@@ -1,14 +1,15 @@
 //! The dispatch suite (ADR-0014): the `login` and `accept_event` dispatch
 //! functions and their match arms, against the store mocks.
 //!
-//! The dispatch functions are bounded on the two providers' local data
-//! stores (`StravaDataStore + IcuDataStore`), so the suite's store double
-//! composes the two providers' data-store automocks — delegating field by
-//! field. Domain work goes through the entity-op facade (a
-//! [`MockEntityFacade`]); the arms' work runs for real against the canned
-//! store outcomes. The login's token exchange is the one piece that needs
-//! the live provider API, so the login tests cover the arms' scope check
-//! (which precedes it).
+//! The dispatch functions are bounded on the single
+//! [`Store`](crate::store::Store) interface over each provider's marker
+//! (`Store<StravaSpec> + Store<IcuSpec>`), so the suite's store double
+//! composes the two providers' [`MockStore`](crate::test_support::MockStore)
+//! doubles — delegating field by field. Domain work goes through the
+//! entity-op facade (a [`MockEntityFacade`]); the arms' work runs for real
+//! against the canned store outcomes. The login's token exchange is the one
+//! piece that needs the live provider API, so the login tests cover the
+//! arms' scope check (which precedes it).
 
 use std::sync::{Arc, Mutex};
 
@@ -16,143 +17,33 @@ use crate::Provider;
 use crate::facade::{
     Error, PartId, PartTypeId, TbResult, UserId, mock_session, mock_session_admin,
 };
-use crate::icu::test_support::{MockIcuDataStore, gear_json, icu_user, part};
-use crate::icu::{IcuDataStore, IcuEvent, IcuId, IcuObjectType, IcuSpec, IcuUser};
+use crate::icu::test_support::{gear_json, icu_user, part};
+use crate::icu::{IcuEvent, IcuId, IcuObjectType, IcuSpec, IcuUser};
 use crate::store::Store;
 use crate::strava::event::Event;
-use crate::strava::test_support::{MockStravaDataStore, strava_user};
-use crate::strava::{StravaDataStore, StravaId, StravaSpec, StravaUser};
+use crate::strava::test_support::strava_user;
+use crate::strava::{StravaId, StravaSpec, StravaUser};
 use crate::test_support::{
-    MockEntityFacade, begin_test, icu_webhook_secret, init_test_config_once, queue,
+    MockEntityFacade, MockStore, begin_test, icu_webhook_secret, init_test_config_once, queue,
 };
 
 use super::{accept_event, deauthorize, delete_user, gear_url, login, sync_users, user_url};
 
 // ─── The composite store double ─────────────────────────────────────────────
 //
-// The dispatch's `StravaDataStore + IcuDataStore` bound: the two providers'
-// data stores, delegated field by field. The mocks carry the canned outcomes
-// the tests assert on.
+// The dispatch's `Store<StravaSpec> + Store<IcuSpec>` bound: the two
+// providers' store doubles, delegated field by field. The mocks carry the
+// canned outcomes the tests assert on.
 
-/// The dispatch suite's store double: [`MockStravaDataStore`] plus
-/// [`MockIcuDataStore`], delegated field by field — the
-/// `StravaDataStore + IcuDataStore` bound the dispatch functions carry.
+/// The dispatch suite's store double: [`MockStore<StravaSpec>`] plus
+/// [`MockStore<IcuSpec>`], delegated field by field — the
+/// `Store<StravaSpec> + Store<IcuSpec>` bound the dispatch functions carry.
+/// The single [`MockStore`](crate::test_support::MockStore) double stands in
+/// for the per-provider data-store mocks (spec #1029, ticket #1034).
 #[derive(Default)]
 struct DispatchStore {
-    strava: MockStravaDataStore,
-    icu: MockIcuDataStore,
-}
-
-#[async_trait::async_trait]
-impl StravaDataStore for DispatchStore {
-    async fn stravauser_get_all(&mut self) -> TbResult<Vec<StravaUser>> {
-        self.strava.stravauser_get_all().await
-    }
-    async fn stravauser_get_by_tbid(&mut self, id: UserId) -> TbResult<StravaUser> {
-        self.strava.stravauser_get_by_tbid(id).await
-    }
-    async fn stravauser_get_by_stravaid(&mut self, id: &StravaId) -> TbResult<Option<StravaUser>> {
-        self.strava.stravauser_get_by_stravaid(id).await
-    }
-    async fn stravauser_create(&mut self, user: StravaUser) -> TbResult<StravaUser> {
-        self.strava.stravauser_create(user).await
-    }
-    async fn stravauser_update_token(
-        &mut self,
-        stravaid: StravaId,
-        refresh: Option<String>,
-    ) -> TbResult<StravaUser> {
-        self.strava.stravauser_update_token(stravaid, refresh).await
-    }
-    async fn stravauser_delete(&mut self, user: UserId) -> TbResult<usize> {
-        self.strava.stravauser_delete(user).await
-    }
-    async fn strava_event_create(&mut self, e: Event) -> TbResult<()> {
-        self.strava.strava_event_create(e).await
-    }
-    async fn strava_event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {
-        self.strava.strava_event_delete(event_id).await
-    }
-    async fn strava_event_set_time(&mut self, e_id: Option<i32>, e_time: i64) -> TbResult<()> {
-        self.strava.strava_event_set_time(e_id, e_time).await
-    }
-    async fn strava_event_get_next_for_user(&mut self, user: StravaId) -> TbResult<Option<Event>> {
-        self.strava.strava_event_get_next_for_user(user).await
-    }
-    async fn strava_event_get_later(&mut self, obj_id: i64, oid: StravaId) -> TbResult<Vec<Event>> {
-        self.strava.strava_event_get_later(obj_id, oid).await
-    }
-    async fn strava_events_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
-        self.strava.strava_events_delete_batch(values).await
-    }
-    async fn strava_events_get_count_for_user(&mut self, user: &StravaId) -> TbResult<i64> {
-        self.strava.strava_events_get_count_for_user(user).await
-    }
-    async fn strava_events_delete_for_user(&mut self, user: &StravaId) -> TbResult<usize> {
-        self.strava.strava_events_delete_for_user(user).await
-    }
-}
-
-#[async_trait::async_trait]
-impl IcuDataStore for DispatchStore {
-    async fn icuser_get_all(&mut self) -> TbResult<Vec<IcuUser>> {
-        self.icu.icuser_get_all().await
-    }
-    async fn icuser_get_by_tbid(&mut self, id: UserId) -> TbResult<IcuUser> {
-        self.icu.icuser_get_by_tbid(id).await
-    }
-    async fn icuser_get_by_icuid(&mut self, id: &IcuId) -> TbResult<Option<IcuUser>> {
-        self.icu.icuser_get_by_icuid(id).await
-    }
-    async fn icuser_create(&mut self, user: IcuUser) -> TbResult<IcuUser> {
-        self.icu.icuser_create(user).await
-    }
-    async fn icuser_update_token(
-        &mut self,
-        icuid: IcuId,
-        access_token: Option<String>,
-    ) -> TbResult<IcuUser> {
-        self.icu.icuser_update_token(icuid, access_token).await
-    }
-    async fn icuser_delete(&mut self, user: UserId) -> TbResult<usize> {
-        self.icu.icuser_delete(user).await
-    }
-    async fn icu_event_create(&mut self, e: IcuEvent) -> TbResult<()> {
-        self.icu.icu_event_create(e).await
-    }
-    async fn icu_event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {
-        self.icu.icu_event_delete(event_id).await
-    }
-    async fn icu_event_set_time(&mut self, e_id: Option<i32>, e_time: i64) -> TbResult<()> {
-        self.icu.icu_event_set_time(e_id, e_time).await
-    }
-    async fn icu_event_get_next_for_user(&mut self, user: IcuId) -> TbResult<Option<IcuEvent>> {
-        self.icu.icu_event_get_next_for_user(user).await
-    }
-    async fn icu_event_get_later(
-        &mut self,
-        activity_id: &str,
-        icu_athlete_id: &IcuId,
-    ) -> TbResult<Vec<IcuEvent>> {
-        self.icu
-            .icu_event_get_later(activity_id, icu_athlete_id)
-            .await
-    }
-    async fn icu_events_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
-        self.icu.icu_events_delete_batch(values).await
-    }
-    async fn icu_events_get_count_for_user(&mut self, user: &IcuId) -> TbResult<i64> {
-        self.icu.icu_events_get_count_for_user(user).await
-    }
-    async fn icu_events_get_latest_time(&mut self, user: &IcuId) -> TbResult<Option<i64>> {
-        self.icu.icu_events_get_latest_time(user).await
-    }
-    async fn icu_events_delete_for_user(&mut self, user: &IcuId) -> TbResult<usize> {
-        self.icu.icu_events_delete_for_user(user).await
-    }
-    async fn icu_events_delete_sync_for_user(&mut self, user: &IcuId) -> TbResult<usize> {
-        self.icu.icu_events_delete_sync_for_user(user).await
-    }
+    strava: MockStore<StravaSpec>,
+    icu: MockStore<IcuSpec>,
 }
 
 #[async_trait::async_trait]
@@ -313,17 +204,14 @@ async fn accept_event_strava_queues_an_activity_event() -> TbResult<()> {
     let user = strava_user(UserId::from(7), 42, true);
     store
         .strava
-        .expect_stravauser_get_by_stravaid()
+        .expect_user_get_by_provider_id()
         .returning(move |_id| Ok(Some(user.clone())));
     let created = Arc::new(Mutex::new(None));
     let created_cell = created.clone();
-    store
-        .strava
-        .expect_strava_event_create()
-        .returning(move |e| {
-            *created_cell.lock().expect("the capture is not poisoned") = Some(e.clone());
-            Ok(())
-        });
+    store.strava.expect_event_create().returning(move |e| {
+        *created_cell.lock().expect("the capture is not poisoned") = Some(e.clone());
+        Ok(())
+    });
 
     let queued = accept_event(Provider::Strava, &strava_activity_body(42), &mut store).await?;
 
@@ -349,19 +237,12 @@ async fn accept_event_strava_athlete_deauth_disables_the_user() -> TbResult<()> 
     let lookup = user.clone();
     store
         .strava
-        .expect_stravauser_get_by_stravaid()
+        .expect_user_get_by_provider_id()
         .returning(move |_id| Ok(Some(lookup.clone())));
     store
         .strava
-        .expect_strava_events_delete_for_user()
-        .returning(|_id| Ok(0));
-    store
-        .strava
-        .expect_stravauser_update_token()
-        .returning(move |_id, refresh| {
-            assert!(refresh.is_none(), "the deauth clears the token");
-            Ok(user.clone())
-        });
+        .expect_user_disable()
+        .returning(|_owner| Ok(()));
 
     let queued = accept_event(Provider::Strava, &strava_deauth_body(42), &mut store).await?;
 
@@ -377,7 +258,7 @@ async fn accept_event_strava_unknown_owner_is_rejected() -> TbResult<()> {
     let mut store = DispatchStore::default();
     store
         .strava
-        .expect_stravauser_get_by_stravaid()
+        .expect_user_get_by_provider_id()
         .returning(|_id| Ok(None));
 
     let err = accept_event(Provider::Strava, &strava_activity_body(42), &mut store)
@@ -413,11 +294,11 @@ async fn accept_event_icu_queues_subscribed_events_only() -> TbResult<()> {
     let user = icu_user(UserId::from(9), "a1", true);
     store
         .icu
-        .expect_icuser_get_by_icuid()
+        .expect_user_get_by_provider_id()
         .returning(move |_id| Ok(Some(user.clone())));
     let created = Arc::new(Mutex::new(Vec::new()));
     let created_cell = created.clone();
-    store.icu.expect_icu_event_create().returning(move |e| {
+    store.icu.expect_event_create().returning(move |e| {
         created_cell
             .lock()
             .expect("the capture is not poisoned")
@@ -542,11 +423,11 @@ async fn accept_event_icu_queues_a_deleted_event() -> TbResult<()> {
     let user = icu_user(UserId::from(9), "a1", true);
     store
         .icu
-        .expect_icuser_get_by_icuid()
+        .expect_user_get_by_provider_id()
         .returning(move |_id| Ok(Some(user.clone())));
     let created = Arc::new(Mutex::new(Vec::new()));
     let created_cell = created.clone();
-    store.icu.expect_icu_event_create().returning(move |e| {
+    store.icu.expect_event_create().returning(move |e| {
         created_cell
             .lock()
             .expect("the capture is not poisoned")
@@ -613,26 +494,15 @@ async fn deauthorize_icu_disables_the_user() -> TbResult<()> {
     // The provider lookup: no Strava row, an icu row → the icu arm.
     store
         .strava
-        .expect_stravauser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .returning(|_| Err(Error::NotFound("no strava user".into())));
     let icu = icu_user(UserId::from(9), "a1", true);
     let icu_read = icu.clone();
     store
         .icu
-        .expect_icuser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .returning(move |_| Ok(icu_read.clone()));
-    store
-        .icu
-        .expect_icu_events_delete_for_user()
-        .returning(|_id| Ok(0));
-    let icu_token = icu.clone();
-    store
-        .icu
-        .expect_icuser_update_token()
-        .returning(move |_id, token| {
-            assert!(token.is_none(), "the deauth clears the token");
-            Ok(icu_token.clone())
-        });
+    store.icu.expect_user_disable().returning(|_owner| Ok(()));
 
     let mut session = mock_session_admin(UserId::from(1));
     deauthorize(&mut session, UserId::from(9), &mut store).await?;
@@ -651,24 +521,16 @@ async fn delete_user_icu_deletes_the_user() -> TbResult<()> {
     // The provider lookup: no Strava row, an icu row → the icu arm.
     store
         .strava
-        .expect_stravauser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .returning(|_| Err(Error::NotFound("no strava user".into())));
     let icu = icu_user(UserId::from(9), "a1", true);
     let icu_read = icu.clone();
     store
         .icu
-        .expect_icuser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .returning(move |_| Ok(icu_read.clone()));
-    store
-        .icu
-        .expect_icu_events_delete_for_user()
-        .returning(|_id| Ok(0));
-    let icu_token = icu.clone();
-    store
-        .icu
-        .expect_icuser_update_token()
-        .returning(move |_id, _token| Ok(icu_token.clone()));
-    store.icu.expect_icuser_delete().returning(|_id| Ok(1));
+    store.icu.expect_user_disable().returning(|_owner| Ok(()));
+    store.icu.expect_user_delete().returning(|_id| Ok(1));
 
     let mut session = mock_session_admin(UserId::from(1));
     delete_user(&mut session, UserId::from(9), &facade, &mut store).await?;
@@ -744,7 +606,7 @@ async fn provider_of_strava_when_a_strava_row_exists() -> TbResult<()> {
     let strava = strava_user(UserId::from(7), 42, true);
     store
         .strava
-        .expect_stravauser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .returning(move |_| Ok(strava.clone()));
 
     let provider = crate::provider_of(&mut store, UserId::from(7)).await?;
@@ -758,12 +620,12 @@ async fn provider_of_icu_when_only_an_icu_row_exists() -> TbResult<()> {
     let mut store = DispatchStore::default();
     store
         .strava
-        .expect_stravauser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .returning(|_| Err(Error::NotFound("no strava user".into())));
     let icu = icu_user(UserId::from(9), "a1", true);
     store
         .icu
-        .expect_icuser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .returning(move |_| Ok(icu.clone()));
 
     let provider = crate::provider_of(&mut store, UserId::from(9)).await?;
@@ -777,11 +639,11 @@ async fn provider_of_not_found_when_no_row_exists() -> TbResult<()> {
     let mut store = DispatchStore::default();
     store
         .strava
-        .expect_stravauser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .returning(|_| Err(Error::NotFound("no strava user".into())));
     store
         .icu
-        .expect_icuser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .returning(|_| Err(Error::NotFound("no icu user".into())));
 
     let err = crate::provider_of(&mut store, UserId::from(7))
@@ -820,7 +682,7 @@ async fn gear_url_strava_owner_builds_the_strava_url() -> TbResult<()> {
     let strava = strava_user(UserId::from(7), 42, true);
     store
         .strava
-        .expect_stravauser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .times(1)
         .returning(move |_| Ok(strava.clone()));
 
@@ -855,13 +717,13 @@ async fn gear_url_icu_owner_is_the_typed_absence() -> TbResult<()> {
     // The owner's provider lookup: no Strava row, an icu row → icu.
     store
         .strava
-        .expect_stravauser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .times(1)
         .returning(|_| Err(Error::NotFound("no strava user".into())));
     let icu = icu_user(UserId::from(9), "a1", true);
     store
         .icu
-        .expect_icuser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .times(1)
         .returning(move |_| Ok(icu.clone()));
 
@@ -914,7 +776,7 @@ async fn user_url_strava_target_builds_the_strava_url() -> TbResult<()> {
     // `strava_url` (the athlete id for the public profile URL).
     store
         .strava
-        .expect_stravauser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .times(2)
         .returning(move |_| Ok(strava.clone()));
 
@@ -931,7 +793,7 @@ async fn user_url_icu_target_builds_the_icu_url() -> TbResult<()> {
     // The target's provider lookup: no Strava row, an icu row → icu.
     store
         .strava
-        .expect_stravauser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .times(1)
         .returning(|_| Err(Error::NotFound("no strava user".into())));
     let icu = icu_user(UserId::from(3), "a1", true);
@@ -939,7 +801,7 @@ async fn user_url_icu_target_builds_the_icu_url() -> TbResult<()> {
     // `user_url` (the athlete id for the public profile URL).
     store
         .icu
-        .expect_icuser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .times(2)
         .returning(move |_| Ok(icu.clone()));
 
@@ -975,7 +837,7 @@ async fn sync_users_queues_icu_users() -> TbResult<()> {
     // No Strava row for this user → the `provider_of` lookup resolves icu.
     store
         .strava
-        .expect_stravauser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .returning(|_| Err(Error::NotFound("no strava user".into())));
     // The provider lookup, the lane read, and the `insert_sync`'s
     // `get_icu_id` all resolve the icu user.
@@ -983,17 +845,14 @@ async fn sync_users_queues_icu_users() -> TbResult<()> {
     let icu_read = icu.clone();
     store
         .icu
-        .expect_icuser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .returning(move |_| Ok(icu_read.clone()));
     // The `insert_sync`'s REPLACE: no existing `SYNC` row to drop, then the
     // fresh `SYNC` row is queued.
-    store
-        .icu
-        .expect_icu_events_delete_sync_for_user()
-        .returning(|_id| Ok(0));
+    store.icu.expect_event_delete_sync().returning(|_id| Ok(0));
     let created = Arc::new(Mutex::new(Vec::new()));
     let created_rec = created.clone();
-    store.icu.expect_icu_event_create().returning(move |e| {
+    store.icu.expect_event_create().returning(move |e| {
         created_rec.lock().unwrap().push(e);
         Ok(())
     });
@@ -1037,27 +896,21 @@ async fn sync_users_queues_strava_users() -> TbResult<()> {
     // The all-users Strava read; no icu users.
     store
         .strava
-        .expect_stravauser_get_all()
+        .expect_user_get_all()
         .returning(|| Ok(vec![strava_user(UserId::from(7), 42, true)]));
-    store
-        .icu
-        .expect_icuser_get_all()
-        .returning(|| Ok(Vec::new()));
+    store.icu.expect_user_get_all().returning(|| Ok(Vec::new()));
     // The `insert_sync`'s `get_strava_id` read + the queue insert.
     let strava = strava_user(UserId::from(7), 42, true);
     store
         .strava
-        .expect_stravauser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .returning(move |_| Ok(strava.clone()));
     let created = Arc::new(Mutex::new(Vec::new()));
     let created_rec = created.clone();
-    store
-        .strava
-        .expect_strava_event_create()
-        .returning(move |e| {
-            created_rec.lock().unwrap().push(e.clone());
-            Ok(())
-        });
+    store.strava.expect_event_create().returning(move |e| {
+        created_rec.lock().unwrap().push(e.clone());
+        Ok(())
+    });
 
     let mut session = mock_session_admin(UserId::from(1));
     let queued = sync_users(&mut session, None, 1_700_000_000, &mut store).await?;
@@ -1078,11 +931,11 @@ async fn sync_users_skips_disabled() -> TbResult<()> {
     // A disabled Strava user and a disabled icu user.
     store
         .strava
-        .expect_stravauser_get_all()
+        .expect_user_get_all()
         .returning(|| Ok(vec![strava_user(UserId::from(7), 42, false)]));
     store
         .icu
-        .expect_icuser_get_all()
+        .expect_user_get_all()
         .returning(|| Ok(vec![icu_user(UserId::from(9), "a1", false)]));
 
     let mut session = mock_session_admin(UserId::from(1));
@@ -1103,17 +956,14 @@ async fn sync_users_single_strava() -> TbResult<()> {
     let strava = strava_user(UserId::from(7), 42, true);
     store
         .strava
-        .expect_stravauser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .returning(move |_| Ok(strava.clone()));
     let created = Arc::new(Mutex::new(Vec::new()));
     let created_rec = created.clone();
-    store
-        .strava
-        .expect_strava_event_create()
-        .returning(move |e| {
-            created_rec.lock().unwrap().push(e.clone());
-            Ok(())
-        });
+    store.strava.expect_event_create().returning(move |e| {
+        created_rec.lock().unwrap().push(e.clone());
+        Ok(())
+    });
 
     let mut session = mock_session_admin(UserId::from(1));
     let queued = sync_users(
@@ -1140,11 +990,11 @@ async fn sync_users_unknown_user() {
     let mut store = DispatchStore::default();
     store
         .strava
-        .expect_stravauser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .returning(|_| Err(Error::NotFound("no strava user".into())));
     store
         .icu
-        .expect_icuser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .returning(|_| Err(Error::NotFound("no icu user".into())));
 
     let mut session = mock_session_admin(UserId::from(1));
