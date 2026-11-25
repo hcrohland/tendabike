@@ -50,7 +50,7 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     proxy: {
-      "^/(api|strava|icu|source)": {
+      "^/(api|strava|icu|source|logout|admin)": {
         target: "http://localhost:8000",
         changeOrigin: true,
       },
