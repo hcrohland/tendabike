@@ -1199,9 +1199,9 @@ async fn user_ping_returns_204() {
     assert!(body.is_empty());
 }
 
-/// `GET /api/user/all` (admin) rides the admin user's own channel as the
-/// exec-level `AllStats` read (spec #558 §3.3) and answers `200` with the
-/// per-user stats — empty for the mock's canned reply.
+/// `GET /api/user/all` (admin) runs the provider-agnostic `all_stats` read
+/// (spec #558 §3.3) and answers `200` with the per-user stats — empty for
+/// the mock's canned reply.
 #[tokio::test]
 async fn user_all_returns_200_and_stats() {
     let (store, mut mock, provider) = mock_ctx();

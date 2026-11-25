@@ -15,7 +15,8 @@ use std::sync::{Arc, Mutex};
 
 use crate::Provider;
 use crate::facade::{
-    Error, PartId, PartTypeId, TbResult, UserId, mock_session, mock_session_admin,
+    Error, OnboardingStatus, PartId, PartTypeId, Stat, TbResult, User, UserId, mock_session,
+    mock_session_admin,
 };
 use crate::icu::test_support::{gear_json, icu_user, part};
 use crate::icu::{IcuEvent, IcuId, IcuObjectType, IcuSpec, IcuUser};
@@ -27,7 +28,9 @@ use crate::test_support::{
     MockEntityFacade, MockStore, begin_test, icu_webhook_secret, init_test_config_once, queue,
 };
 
-use super::{accept_event, deauthorize, delete_user, gear_url, login, sync_users, user_url};
+use super::{
+    accept_event, all_stats, deauthorize, delete_user, gear_url, login, sync_users, user_url,
+};
 
 // ─── The composite store double ─────────────────────────────────────────────
 //
@@ -1017,4 +1020,111 @@ async fn sync_users_forbidden_for_non_admin() {
 
     let res = sync_users(&mut session, None, 1_700_000_000, &mut store).await;
     assert!(matches!(res, Err(Error::Forbidden(_))));
+}
+
+// ─── all_stats: the provider-agnostic all-user stat read ────────────────────
+//
+// The admin `GET /user/all` read: every enabled provider's users, each row
+// stamped with its provider's wire value by the driver's `all_stats` — the
+// admin's list is provider-agnostic (an admin of one provider sees the
+// other provider's users too).
+
+/// Both lanes: a Strava user and an icu user each appear in the list,
+/// stamped with their provider's wire value, in the `Provider` enum's
+/// definition order (Strava first). The admin's provider is irrelevant —
+/// the read is not the admin's own lane.
+#[tokio::test]
+async fn all_stats_lists_users_of_both_providers() -> TbResult<()> {
+    init_test_config_once();
+    let mut store = DispatchStore::default();
+    let mut facade: MockEntityFacade<DispatchStore> = MockEntityFacade::new();
+    // The all-user reads: one Strava user, one icu user.
+    store
+        .strava
+        .expect_user_get_all()
+        .returning(|| Ok(vec![strava_user(UserId::from(7), 42, true)]));
+    store
+        .icu
+        .expect_user_get_all()
+        .returning(|| Ok(vec![icu_user(UserId::from(9), "a1", true)]));
+    // The per-user queued-event counts (the driver's `all_stats` read).
+    store
+        .strava
+        .expect_user_event_count()
+        .returning(|_owner| Ok(3));
+    store
+        .icu
+        .expect_user_event_count()
+        .returning(|_owner| Ok(1));
+    // The domain stat per user.
+    facade.expect_get_stat().returning(|id, _s| {
+        Ok(Stat::new(User {
+            id: *id,
+            name: "n".to_string(),
+            firstname: "f".to_string(),
+            avatar: None,
+            is_admin: false,
+            onboarding_status: OnboardingStatus::default(),
+        }))
+    });
+
+    let stats = all_stats(&facade, &mut store).await?;
+
+    assert_eq!(stats.len(), 2, "both providers' users appear");
+    assert_eq!(
+        stats[0].stat.user.id,
+        UserId::from(7),
+        "the Strava user is first (the enum order)"
+    );
+    assert_eq!(
+        stats[0].provider, "strava",
+        "the Strava row is stamped strava"
+    );
+    assert_eq!(stats[0].events, 3);
+    assert!(!stats[0].disabled);
+    assert_eq!(
+        stats[1].stat.user.id,
+        UserId::from(9),
+        "the icu user appears"
+    );
+    assert_eq!(stats[1].provider, "icu", "the icu row is stamped icu");
+    assert_eq!(stats[1].events, 1);
+    assert!(!stats[1].disabled);
+    Ok(())
+}
+
+/// A disabled user's row still appears (with its `disabled` flag set) — the
+/// admin list shows disabled users, it does not skip them (the skip is the
+/// sync trigger's, not the stat read's).
+#[tokio::test]
+async fn all_stats_includes_disabled_users_flagged() -> TbResult<()> {
+    init_test_config_once();
+    let mut store = DispatchStore::default();
+    let mut facade: MockEntityFacade<DispatchStore> = MockEntityFacade::new();
+    // A disabled Strava user; no icu users.
+    store
+        .strava
+        .expect_user_get_all()
+        .returning(|| Ok(vec![strava_user(UserId::from(7), 42, false)]));
+    store.icu.expect_user_get_all().returning(|| Ok(Vec::new()));
+    store
+        .strava
+        .expect_user_event_count()
+        .returning(|_owner| Ok(0));
+    facade.expect_get_stat().returning(|id, _s| {
+        Ok(Stat::new(User {
+            id: *id,
+            name: "n".to_string(),
+            firstname: "f".to_string(),
+            avatar: None,
+            is_admin: false,
+            onboarding_status: OnboardingStatus::default(),
+        }))
+    });
+
+    let stats = all_stats(&facade, &mut store).await?;
+
+    assert_eq!(stats.len(), 1, "the disabled user appears");
+    assert!(stats[0].disabled, "the disabled flag is set");
+    Ok(())
 }

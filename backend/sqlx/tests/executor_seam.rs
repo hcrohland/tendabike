@@ -1196,6 +1196,63 @@ async fn rescan_stops_the_executors() {
     assert!(recv.is_err(), "the rescan must close the frame channel");
 }
 
+/// The admin all-user stat read (spec #558 §3.3): the read is
+/// provider-agnostic — the list carries every enabled provider's users, each
+/// row stamped with its provider's wire value. Regression: the read used to
+/// ride the admin's own provider lane, so a Strava admin never saw the icu
+/// users.
+#[tokio::test]
+#[ignore]
+async fn all_stats_lists_users_of_both_providers() {
+    let seam = ready().await;
+    // The admin (user 1, the fixture user) is a Strava user.
+    seed_strava_user(&seam.pool, false).await;
+    // The icu user (user 2: the users row plus the icu row).
+    let user2 = UserId::from(2);
+    {
+        let mut conn = seam.pool.begin().await.expect("a transaction");
+        sqlx::query(
+            "INSERT INTO users (id, name, firstname, is_admin) VALUES (2, 'Seam Two', 'Seam', false)",
+        )
+        .execute(&mut **conn)
+        .await
+        .expect("seeding the second user");
+        sqlx::query(
+            "INSERT INTO icu_users (tbid, icu_athlete_id, access_token) \
+             VALUES ($1, 'ath-43', 'tok')",
+        )
+        .bind(i32::from(user2))
+        .execute(&mut **conn)
+        .await
+        .expect("seeding the icu user");
+        conn.commit().await.expect("committing the seed");
+    }
+    let reg = registry(&seam.pool);
+
+    let stats = tokio::time::timeout(
+        TEST_TIMEOUT,
+        ServiceApi::all_stats(&reg, Box::new(mock_session_admin(UserId::from(1)))),
+    )
+    .await
+    .expect("the stats read must return in time")
+    .expect("the stats read must succeed");
+
+    assert_eq!(stats.len(), 2, "both providers' users appear");
+    let strava_stat = stats
+        .iter()
+        .find(|s| s.stat.user.id == UserId::from(1))
+        .expect("the Strava user appears");
+    assert_eq!(
+        strava_stat.provider, "strava",
+        "the Strava row is stamped strava"
+    );
+    let icu_stat = stats
+        .iter()
+        .find(|s| s.stat.user.id == user2)
+        .expect("the icu user appears");
+    assert_eq!(icu_stat.provider, "icu", "the icu row is stamped icu");
+}
+
 /// The webhook accept direct op (spec #558 §5.2/§8): one transaction — the
 /// queue insert (or the athlete-deauth branch) — then the wake if a user
 /// was queued (fire-and-forget: it never spawns). A failed ingest (an

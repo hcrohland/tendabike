@@ -281,12 +281,12 @@ where
     }
 
     /// Enqueue a [`Request`] on the user's executor and await its oneshot
-    /// — the shared shape of the registry's `read`, `all_stats`, and
-    /// `write` (spec #558 §3): spawn-or-join the executor,
+    /// — the shared shape of the registry's `read` and `write` (spec
+    /// #558 §3): spawn-or-join the executor,
     /// send the request on the user's request channel, and await the oneshot
     /// (unbounded — the message is serialized behind any in-flight one,
     /// spec #558 §3.7). `dropped` names the message in the reply-drop
-    /// error ("read", "stats read", "write"). `exec_field`
+    /// error ("read", "write"). `exec_field`
     /// drops the registry lock on return, so the unbounded reply await
     /// runs without it.
     async fn send_request<Out>(
@@ -378,14 +378,14 @@ where
 #[async_trait::async_trait]
 impl<S, P, Q, D> ServiceApi for Registry<S, P, Q, D>
 where
-    // The generic channel ops (`read`/`write`/`subscribe`/
-    // `all_stats`) ride the executor and need only `Txn` (their domain work
-    // rides the facade and the lane). The three provider-neutral direct ops
-    // (`rescan`, `subscribe_shop`, `trigger_processing`, ADR-0014) own their
-    // own transactions — the rescan's `rescan_all` and the shop-ownership
-    // check ride the domain facade (no store bound), and the `sync_users`
-    // queue op rides the provider-agnostic `Store` over each marker — so this
-    // impl carries the `Store<Spec> + Txn` bound.
+    // The generic channel ops (`read`/`write`/`subscribe`) ride the executor
+    // and need only `Txn` (their domain work rides the facade and the lane).
+    // The four provider-neutral direct ops (`all_stats`, `rescan`,
+    // `subscribe_shop`, `trigger_processing`, ADR-0014) own their own
+    // transactions — the rescan's `rescan_all` and the shop-ownership check
+    // ride the domain facade (no store bound), and the `all_stats` and
+    // `sync_users` ops ride the provider-agnostic `Store` over each marker —
+    // so this impl carries the `Store<Spec> + Txn` bound.
     S: TxnSource + Clone + 'static,
     S::Conn: tb_provider::Store<tb_provider::strava::StravaSpec>
         + tb_provider::Store<tb_provider::icu::IcuSpec>
@@ -435,17 +435,17 @@ where
         .await
     }
 
-    /// Enqueue the admin [`AllStats`](Request::AllStats) read on the user's
-    /// executor and await its stats (spec #558 §3.3): the admin's `GET
-    /// /user/all` rides the admin user's own channel — `get_all_stats` is a
-    /// `tb_provider::strava` op, so it is an exec-level variant, dispatched loop-side
-    /// in the loop's own transaction. The oneshot wait is unbounded, like a
-    /// read's (spec #558 §3.7).
-    async fn all_stats(&self, session: Box<dyn Session>) -> TbResult<Vec<UserStat>> {
-        let user_id = session.user_id();
-        let (request, reply) = Request::new_all_stats(session);
-        self.send_request(user_id, request, reply, "stats read")
-            .await
+    /// The admin all-user stat read (spec #558 §3.3): one transaction (the
+    /// provider-agnostic `all_stats` dispatch) — the list is
+    /// provider-agnostic (a Strava admin sees the icu users too), so it
+    /// reads every enabled provider's users in its own transaction, not
+    /// through the admin's own provider lane (the direct-op shape, like
+    /// `rescan` and `trigger_processing`).
+    async fn all_stats(&self, _session: Box<dyn Session>) -> TbResult<Vec<UserStat>> {
+        let mut store = self.source.begin().await?;
+        let stats = tb_provider::dispatch::all_stats(self.strava_lane.facade(), &mut store).await?;
+        store.commit().await?;
+        Ok(stats)
     }
 
     /// The admin rescan (spec #558 §5.2): one transaction

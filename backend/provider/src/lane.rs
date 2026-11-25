@@ -32,7 +32,7 @@
 
 use std::marker::PhantomData;
 
-use crate::facade::{PartId, Summary, TbResult, UserId, UserStat};
+use crate::facade::{PartId, Summary, TbResult, UserId};
 
 use crate::EntityFacade;
 
@@ -145,7 +145,7 @@ impl<E> QueueRead<E> {
 /// Beyond the queue's two-step (`probe`/`process`), the lane carries the
 /// provider-specific ops the loop drives in its own transaction — `import_gear`
 /// and `queue_sync` (the onboarding's two steps: the gear import and the queued
-/// activity sync) and `all_stats` (the admin read).
+/// activity sync).
 ///
 /// The lane is generic over the provider marker and driver: it is bounded on
 /// the single [`Store<P>`](crate::store::Store) interface and drives the
@@ -204,11 +204,6 @@ pub trait ProviderLane: Send + Sync {
     /// ([`import_gear`](ProviderLane::import_gear)).
     async fn queue_sync(&self, user_id: UserId, time: i64, store: &mut Self::Store)
     -> TbResult<()>;
-
-    /// Read every user's provider-neutral stat (the admin read's provider
-    /// side, spec #558 §3.3): the domain [`UserStat`] — the stat plus the
-    /// provider's queued-event count and disabled flag.
-    async fn all_stats(&self, store: &mut Self::Store) -> TbResult<Vec<UserStat>>;
 }
 
 #[cfg(test)]

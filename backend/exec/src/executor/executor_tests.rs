@@ -45,8 +45,8 @@ use crate::facade::{
     ApiRead, ApiWrite, CHAIN, Error, GearItem, Notification, NotificationId, NotificationKind,
     NotificationLifecycle, NotificationState, NotificationSubject, OnboardingStatus, Part, PartId,
     PartTypeId, ReadOutcome, Service, ServiceId, Shop, ShopId, SubscriptionId, Summary, TbResult,
-    Usage, UsageId, User, UserId, UserStat, UserState, WriteOutcome, mock_session,
-    mock_session_with_shop, sample_purchase_date, sole_live,
+    Usage, UsageId, User, UserId, UserState, WriteOutcome, mock_session, mock_session_with_shop,
+    sample_purchase_date, sole_live,
 };
 use tb_provider::strava::event::Event;
 use tb_provider::{Probe, ProviderLane};
@@ -74,7 +74,7 @@ use crate::{
 //
 // [`MockLane`] is the `mockall` `mock!` witness for the [`ProviderLane`]
 // seam: the executor's door into the provider ops (`probe`, `process`,
-// `insert_sync`, `update_gear`, `all_stats`). Its `Store` is [`MockConn`]
+// `insert_sync`, `update_gear`). Its `Store` is [`MockConn`]
 // (the `FakeSource`'s connection), so the loop's transaction ties to it.
 //
 // `#[async_trait]` on each impl block is the trick that makes the `async fn`
@@ -116,7 +116,6 @@ mockall::mock! {
             time: i64,
             store: &mut MockConn,
         ) -> TbResult<()>;
-        async fn all_stats(&self, store: &mut MockConn) -> TbResult<Vec<UserStat>>;
     }
 }
 
@@ -969,42 +968,6 @@ async fn cleanly_committed_read_resets_the_backoff() {
         Duration::from_secs(1),
         "a cleanly committed read resets the backoff"
     );
-}
-
-// --- The loop-side Strava dispatches (spec #558 §3.3/§4) ---
-
-#[tokio::test]
-async fn all_stats_round_trips_through_the_loop_transaction() {
-    // The admin stats read is dispatched loop-side in the loop's own
-    // transaction (spec #558 §3.3): the oneshot resolves with the stats
-    // after the commit. The canned store has no Strava users, so the stats are
-    // empty.
-    let mut conn = MockConn::new();
-    conn.expect_commit().returning(|| Ok(()));
-    let source = FakeSource::with(conn);
-    let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_all_stats(Box::new(mock_session(UserId::from(1))));
-    // The canned lane has no Strava users, so the stats are empty.
-    let mut lane = MockLane::new();
-    lane.expect_all_stats().returning(|_st| Ok(Vec::new()));
-    let pusher = RecordingPusher::new();
-    let mut ctx = test_context(
-        source,
-        MockDomainFacade::new(),
-        lane,
-        frames,
-        Box::new(pusher),
-    );
-    let result = run_request(&mut ctx, request).await;
-    assert!(
-        result.is_ok(),
-        "a committed stats read must not end the loop"
-    );
-    let stats = reply
-        .await
-        .expect("the oneshot resolves")
-        .expect("the stats read succeeds");
-    assert!(stats.is_empty(), "the canned store has no Strava users");
 }
 
 // --- The onboarding's provider side (spec #829) ---

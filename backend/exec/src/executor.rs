@@ -21,8 +21,8 @@
 //! The per-user executor loop (ADR-0005, executable spec #446 §4.3–4.5;
 //! ADR-0007, executable spec #558 §3): one long-lived task per user that
 //! consumes the two message sources (the user's request channel — writes,
-//! reads, the hydration write, the admin stats read — then the
-//! `strava_events` queue), runs each message in one transaction, and pushes
+//! reads, the hydration write — then the `strava_events` queue), runs each
+//! message in one transaction, and pushes
 //! the resulting `Summary` to the user's SSE streams.
 //!
 //! The loop is generic over the transaction source ([`TxnSource`]; the
@@ -41,7 +41,7 @@ use tokio::sync::{broadcast, oneshot};
 
 use crate::facade::{
     ApiRead, ApiWrite, Error, GearItem, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
-    UserStat, WriteOutcome,
+    WriteOutcome,
 };
 use crate::message::{Request, RequestReceiver};
 use crate::{DeliveryContext, DomainFacade, FramePusher, Txn, TxnSource};
@@ -385,7 +385,7 @@ where
     /// # Arguments
     ///
     /// * `rx` — the receive half of the user's request channel (writes, reads,
-    ///   the hydration write, and the admin stats read — spec #558 §3.2). The
+    ///   and the hydration write — spec #558 §3.2). The
     ///   rest of the loop's wiring is the context's ([`LoopContext`]).
     ///
     /// # Failure semantics (spec §4.6)
@@ -663,11 +663,11 @@ where
 
 /// One in-memory request in the loop's own transaction (spec #558 §3.2):
 /// the variant decides the work — the write's `exec` dispatch, the read's
-/// `apiread` dispatch, the hydration write, the admin stats read — and the
-/// backoff discipline (the writes and the hydration record DB failures;
-/// the reads never arm the backoff, spec #558 §3.7). The oneshot always
-/// resolves and the message is consumed; only a failed `rollback` ends the
-/// loop (the sub-dispatchers' `Err` return).
+/// `apiread` dispatch, the hydration write — and the backoff discipline
+/// (the writes and the hydration record DB failures; the reads never arm the
+/// backoff, spec #558 §3.7). The oneshot always resolves and the message is
+/// consumed; only a failed `rollback` ends the loop (the sub-dispatchers'
+/// `Err` return).
 async fn run_request<T, P, D>(ctx: &mut LoopContext<T, P, D>, request: Request) -> Result<(), Error>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
@@ -685,7 +685,6 @@ where
             session,
             reply,
         } => run_read(ctx, session, read, reply).await,
-        Request::AllStats { session, reply } => run_all_stats(ctx, session, reply).await,
     }
 }
 
@@ -707,8 +706,8 @@ where
 ///   delivers nothing (a read produces no `Summary`, spec #558 §3.6).
 ///
 /// `noun` names the variant in the transaction log lines ("write", "read",
-/// "hydration", "stats read"); `what` names it in the final failure line
-/// ("API write", "API read", "hydration write", "all-user stats read").
+/// "hydration"); `what` names it in the final failure line ("API write",
+/// "API read", "hydration write").
 ///
 /// `work` takes the connection by value and yields it back with the
 /// outcome, so the commit/rollback (which consume the connection) stay in
@@ -957,43 +956,6 @@ where
         |mut conn, facade, _lane| {
             Box::pin(async move {
                 let outcome = facade.read(read, &*session, &mut conn).await;
-                (outcome, conn, None)
-            })
-        },
-    )
-    .await
-}
-
-/// The admin `AllStats` read in the loop's own transaction (spec #558
-/// §3.3): `begin` → [`get_all_stats`] → `commit`, read-only within it by
-/// spec. `get_all_stats` is a `tb_provider::strava` op, so it is dispatched loop-side
-/// — the same home the Strava events' `process`
-/// gets — riding the admin user's channel. The backoff discipline is the
-/// read's (spec #558 §3.7): a failure resolves the oneshot with the `Err`
-/// and never arms the backoff; a cleanly committed read resets it.
-async fn run_all_stats<T, P, D>(
-    ctx: &mut LoopContext<T, P, D>,
-    session: Box<dyn Session>,
-    reply: oneshot::Sender<TbResult<Vec<UserStat>>>,
-) -> Result<(), Error>
-where
-    T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane<Store = T::Conn> + Send + Sync + 'static,
-    D: DomainFacade<T::Conn> + Send + Sync + 'static,
-{
-    debug!("user {}: Reading the all-user stats", session.user_id());
-    let shop = session.shop();
-    run_message(
-        ctx,
-        "stats read",
-        "all-user stats read",
-        reply,
-        false, // a failed read never arms the backoff (spec #558 §3.7)
-        shop,
-        |_| None, // the stats read pushes no frame (spec #558 §3.7)
-        |mut conn, _facade, lane| {
-            Box::pin(async move {
-                let outcome = lane.all_stats(&mut conn).await;
                 (outcome, conn, None)
             })
         },

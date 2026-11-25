@@ -219,8 +219,8 @@ async fn userlist(
     admin: AxumAdmin,
     State(state): State<AppState>,
 ) -> ApiResult<Vec<tb_domain::UserStat>> {
-    // The admin read rides the admin user's own channel (spec #558 §3.3):
-    // the `AxumAdmin` extractor carries the admin's acting session, which
-    // the stats read runs against.
+    // The admin read is provider-agnostic (spec #558 §3.3): the
+    // `AxumAdmin` extractor carries the admin's acting session, which the
+    // stats read runs against.
     Ok(Json(state.api.all_stats(Box::new(admin.session())).await?))
 }

@@ -172,8 +172,8 @@ impl Stat {
 /// The all-user stat (the admin `GET /user/all` read's row, spec #558 §3.3):
 /// the provider-neutral [`Stat`] plus the provider's queued-event count and
 /// disabled flag. Provider-neutral in name (the `all_stats` op is generic —
-/// it rides the admin user's channel and is not Strava-specific), so it lives
-/// beside [`Stat`] in the domain, not in a driver crate.
+/// it reads every enabled provider's users and is not Strava-specific), so
+/// it lives beside [`Stat`] in the domain, not in a driver crate.
 #[derive(Debug, Serialize)]
 pub struct UserStat {
     #[serde(flatten)]

@@ -40,7 +40,7 @@
 
 use crate::ProviderSpec;
 use crate::driver::Provider;
-use crate::facade::{Error, PartId, Summary, TbResult, UserId, UserStat};
+use crate::facade::{Error, PartId, Summary, TbResult, UserId};
 use crate::store::Store;
 
 use crate::EntityFacade;
@@ -118,11 +118,5 @@ where
     /// `insert_sync` method.
     async fn queue_sync(&self, user_id: UserId, time: i64, store: &mut S) -> TbResult<()> {
         D::insert_sync(user_id, time, store).await
-    }
-
-    /// Read every user's provider-neutral stat (the admin read's provider
-    /// side): drives the [`Provider<P>`] driver's `all_stats` method.
-    async fn all_stats(&self, store: &mut S) -> TbResult<Vec<UserStat>> {
-        D::all_stats(&self.facade, store).await
     }
 }

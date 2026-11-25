@@ -44,7 +44,7 @@ use tb_provider::strava::event::Event;
 use tokio::sync::broadcast;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::facade::{ApiRead, ApiWrite, ReadOutcome, Session, TbResult, UserStat, WriteOutcome};
+use crate::facade::{ApiRead, ApiWrite, ReadOutcome, Session, TbResult, WriteOutcome};
 
 /// The one message the per-user executor consumes: a unified wrapper over the
 /// message sources (spec §4.2) — the user's API-write channel plus the
@@ -71,9 +71,6 @@ pub(crate) enum Message {
 /// - [`Request::Read`] — a read route's [`ApiRead`] descriptor: the loop
 ///   runs it in its own transaction (read-only within it by spec) and
 ///   resolves the read's data (a [`ReadOutcome`]) or the error.
-/// - [`Request::AllStats`] — the admin `GET /user/all` read (spec #558
-///   §3.3): `get_all_stats` is a `tb_provider::strava` op, so it rides the admin
-///   user's channel as an exec-level variant, dispatched loop-side.
 ///
 /// `pub` (the fields stay private) because the integration (seam) suite —
 /// a separate crate — builds one per request through the constructors and
@@ -96,14 +93,6 @@ pub enum Request {
         session: Box<dyn Session>,
         /// Resolved exactly once when the read commits or fails.
         reply: oneshot::Sender<TbResult<ReadOutcome>>,
-    },
-    /// The admin `GET /user/all` read (spec #558 §3.3): `get_all_stats` in
-    /// the loop's own transaction, read-only within it by spec.
-    AllStats {
-        session: Box<dyn Session>,
-        /// Resolved with the all-user stats on commit, or the error on
-        /// failure.
-        reply: oneshot::Sender<TbResult<Vec<UserStat>>>,
     },
 }
 
@@ -143,15 +132,6 @@ impl Request {
             rx,
         )
     }
-
-    /// The admin stats read and its session with a fresh reply channel (spec
-    /// #558 §3.3).
-    pub(crate) fn new_all_stats(
-        session: Box<dyn Session>,
-    ) -> (Self, oneshot::Receiver<TbResult<Vec<UserStat>>>) {
-        let (reply, rx) = oneshot::channel();
-        (Self::AllStats { session, reply }, rx)
-    }
 }
 
 impl std::fmt::Debug for Request {
@@ -166,11 +146,6 @@ impl std::fmt::Debug for Request {
             Self::Read { read, .. } => f
                 .debug_struct("Request::Read")
                 .field("read", read)
-                .field("session", &"<session>")
-                .field("reply", &"<oneshot>")
-                .finish(),
-            Self::AllStats { .. } => f
-                .debug_struct("Request::AllStats")
                 .field("session", &"<session>")
                 .field("reply", &"<oneshot>")
                 .finish(),
