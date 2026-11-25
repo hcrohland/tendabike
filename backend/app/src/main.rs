@@ -38,7 +38,11 @@ async fn main() -> anyhow::Result<()> {
     let registry = tb_exec::Registry::with_defaults(
         tb_exec::DetachedBegin::new(db_pool),
         tb_exec::DomainFacadeImpl,
-        tb_provider::UnifiedLane::new(tb_provider::EntityFacadeImpl),
+        tb_provider::ProviderLaneImpl::<
+            tb_provider::strava::StravaSpec,
+            _,
+            tb_provider::strava::driver::StravaDriver,
+        >::new(tb_provider::EntityFacadeImpl),
     );
     let api = std::sync::Arc::new(registry.clone()) as std::sync::Arc<dyn tb_exec::ServiceApi>;
     let provider = std::sync::Arc::new(registry)

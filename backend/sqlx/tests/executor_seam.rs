@@ -93,11 +93,14 @@ use tb_exec::{
 };
 use tb_provider::Provider;
 use tb_provider::ProviderLane;
+use tb_provider::strava::StravaSpec;
+use tb_provider::strava::driver::StravaDriver;
+use tb_provider::strava::event::Event as StravaEvent;
 use tb_provider::strava::{
     StravaId,
     test_support::{canned_strava, seed_token_cache},
 };
-use tb_provider::{EntityFacadeImpl, LaneEvent, UnifiedLane};
+use tb_provider::{EntityFacadeImpl, ProviderLaneImpl};
 use tb_sqlx::{DbPool, SNAPSHOT_JSON, SqlxConn};
 use time::macros::datetime;
 use tokio::sync::{MutexGuard, Notify, broadcast};
@@ -158,7 +161,7 @@ const IDLE_TIMEOUT: Duration = Duration::from_millis(300);
 fn loop_ctx(
     pool: DbPool,
     frames: broadcast::Sender<Summary>,
-    events: broadcast::Sender<LaneEvent>,
+    events: broadcast::Sender<StravaEvent>,
     rx: RequestReceiver,
 ) -> impl std::future::Future<Output = tb_domain::TbResult<()>> {
     LoopContext::new(
@@ -167,7 +170,7 @@ fn loop_ctx(
         UserId::from(1),
         frames,
         Box::new(NoopPusher),
-        UnifiedLane::new(EntityFacadeImpl),
+        ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
         events,
         IDLE_TIMEOUT,
         Arc::new(Notify::new()),
@@ -931,7 +934,7 @@ async fn sync_enqueues() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        UnifiedLane::new(EntityFacadeImpl),
+        ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
         Duration::from_secs(3600),
     );
 
@@ -996,7 +999,7 @@ async fn trigger_processing_drains_each_queued_user() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        UnifiedLane::new(EntityFacadeImpl),
+        ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
         Duration::from_secs(3600),
     );
     // Both executors running and idle-waiting (streams attached keep them
@@ -1080,11 +1083,15 @@ async fn seed_strava_user(pool: &DbPool, queue_event: bool) {
 /// re-probe.
 fn registry(
     pool: &DbPool,
-) -> Registry<DetachedBegin<DbPool>, UnifiedLane<SqlxConn<'static>>, DomainFacadeImpl> {
+) -> Registry<
+    DetachedBegin<DbPool>,
+    ProviderLaneImpl<StravaSpec, SqlxConn<'static>, StravaDriver>,
+    DomainFacadeImpl,
+> {
     Registry::new(
         DetachedBegin::new(pool.clone()),
         DomainFacadeImpl,
-        UnifiedLane::new(EntityFacadeImpl),
+        ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
         IDLE_TIMEOUT,
     )
 }
@@ -1480,7 +1487,7 @@ async fn shop_subscribe_policy() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        UnifiedLane::new(EntityFacadeImpl),
+        ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
         Duration::from_secs(3600),
     );
 
@@ -1582,7 +1589,7 @@ async fn attached_stream_keeps_the_executor_alive() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        UnifiedLane::new(EntityFacadeImpl),
+        ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
         Duration::from_millis(300),
     );
 
@@ -1635,7 +1642,7 @@ async fn stream_survives_executor_reap() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        UnifiedLane::new(EntityFacadeImpl),
+        ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
         Duration::from_millis(300),
     );
 

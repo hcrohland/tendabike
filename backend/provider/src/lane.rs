@@ -22,13 +22,13 @@
 //! probe and process a provider's event queue. The loop is generic over this
 //! trait: it calls `probe` to read the provider's queue (one transaction's
 //! housekeeping) and `process` to handle a queued event (the work
-//! transaction), and never names a concrete provider. The unified lane
-//! ([`unified`]) is the seam's single impl (ADR-0014, amended): it selects
-//! between the two providers per call from the user's `provider` column, so
-//! the loop's control flow is unchanged and provider-agnostic. The
-//! [`Probe`] outcome is generic over the lane's event type.
-//!
-//! [`unified`]: crate::unified
+//! transaction), and never names a concrete provider. The lane is generic
+//! over the provider marker [`ProviderSpec`](crate::ProviderSpec) and the
+//! [`Provider`](crate::driver::Provider) driver: it is bounded on the single
+//! [`Store`](crate::store::Store) interface and drives the `Provider` trait
+//! methods, so it is provider-agnostic. Provider selection happens at the
+//! call site (the dispatch), not in the lane. The [`Probe`] outcome is
+//! generic over the lane's event type.
 
 use std::marker::PhantomData;
 
@@ -36,47 +36,51 @@ use crate::facade::{PartId, Summary, TbResult, UserId, UserStat};
 
 use crate::EntityFacade;
 
-/// The provider lane: a `PhantomData` over the store type `S` and the lane's
-/// event type `E`, plus the lane's entity-op facade `F` (the provider's door
-/// into the domain, which the lane's ops forward domain work through). The
-/// unified lane is the single [`ProviderLane`] impl, keyed by the unified
-/// event type ([`crate::LaneEvent`]).
+/// The provider lane: a `PhantomData` over the provider marker `P`, the store
+/// type `S`, and the driver `D`, plus the lane's entity-op facade `F` (the
+/// provider's door into the domain, which the lane's ops forward domain work
+/// through). The lane is generic over the provider marker and driver, so it
+/// is provider-agnostic: it is bounded on the single [`Store<P>`] interface
+/// and drives the [`Provider<P>`] trait methods.
 ///
 /// The store marker is a `PhantomData<fn() -> S>` (a function pointer, which
 /// is unconditionally `Send + Sync`) rather than a `PhantomData<S>`: the
 /// `ProviderLane: Send + Sync` bound must hold for the lane independent of
 /// the store type. The `Debug` impl is written by hand (just `Lane`): a
-/// derive would require `S: Debug`/`E: Debug`/`F: Debug`, but a database
-/// connection is not `Debug`.
-pub struct Lane<S, E, F> {
+/// derive would require `S: Debug`/`F: Debug`, but a database connection is
+/// not `Debug`.
+pub struct Lane<P, S, F, D> {
+    _spec: PhantomData<P>,
     _store: PhantomData<fn() -> S>,
-    _event: PhantomData<E>,
+    _driver: PhantomData<D>,
     pub(crate) facade: F,
 }
 
-impl<S, E, F: Clone> Clone for Lane<S, E, F> {
+impl<P, S, F: Clone, D> Clone for Lane<P, S, F, D> {
     fn clone(&self) -> Self {
         Self {
+            _spec: PhantomData,
             _store: PhantomData,
-            _event: PhantomData,
+            _driver: PhantomData,
             facade: self.facade.clone(),
         }
     }
 }
 
-impl<S, E, F> std::fmt::Debug for Lane<S, E, F> {
+impl<P, S, F, D> std::fmt::Debug for Lane<P, S, F, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Lane").finish()
     }
 }
 
-impl<S, E, F> Lane<S, E, F> {
-    /// The lane for a store of type `S`, event type `E`, and entity-op
-    /// facade `F`.
+impl<P, S, F, D> Lane<P, S, F, D> {
+    /// The lane for a provider marker `P`, store of type `S`, entity-op
+    /// facade `F`, and driver `D`.
     pub fn new(facade: F) -> Self {
         Self {
+            _spec: PhantomData,
             _store: PhantomData,
-            _event: PhantomData,
+            _driver: PhantomData,
             facade,
         }
     }
@@ -141,15 +145,16 @@ impl<E> QueueRead<E> {
 /// Beyond the queue's two-step (`probe`/`process`), the lane carries the
 /// provider-specific ops the loop drives in its own transaction — `import_gear`
 /// and `queue_sync` (the onboarding's two steps: the gear import and the queued
-/// activity sync) and `all_stats` (the admin read). These are provider-specific:
-/// a second provider implements them for its own domain.
+/// activity sync) and `all_stats` (the admin read).
 ///
-/// The unified lane ([`crate::unified`]) is the seam's single impl (ADR-0014,
-/// amended): it selects between the two providers per call from the user's
-/// `provider` column. The lane carries its entity-op facade
+/// The lane is generic over the provider marker and driver: it is bounded on
+/// the single [`Store<P>`](crate::store::Store) interface and drives the
+/// [`Provider<P>`](crate::driver::Provider) trait methods, so it is
+/// provider-agnostic. Provider selection happens at the call site (the
+/// dispatch), not in the lane. The lane carries its entity-op facade
 /// ([`Facade`](ProviderLane::Facade) — the provider's door into the domain,
 /// ADR-0013), which its ops forward domain work through, so the impl bounds
-/// on the providers' local data stores, not the full domain store.
+/// on the single store interface, not the full domain store.
 #[async_trait::async_trait]
 pub trait ProviderLane: Send + Sync {
     /// The provider's event type.

@@ -58,11 +58,12 @@
 //! store interface, generic over the marker, carrying the user-row and the
 //! event-row operations (spec #1029).
 //!
-//! [`unified`] — the unified lane (ADR-0014): the [`ProviderLane`] impl,
-//! keyed by the [`LaneEvent`] the two providers' event rows share. The lane
-//! the executor loop runs in production: it selects between the two
-//! providers per call, with a typed switch on [`Provider`], and calls the
-//! driver functions directly.
+//! [`unified`] — the provider lane: the [`ProviderLane`] impl the executor
+//! loop runs in production. Generic over the provider marker and driver, it
+//! is bounded on the single [`Store`](crate::store::Store) interface and
+//! drives the [`Provider`](crate::driver::Provider) trait methods, so it is
+//! provider-agnostic. Provider selection happens at the call site (the
+//! dispatch), not in the lane.
 
 mod config;
 pub use config::{ProviderConfig, disabled, enabled_providers, init};

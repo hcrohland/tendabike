@@ -126,11 +126,6 @@ where
 /// (spec #829) — the combined gear-import-plus-queue sync op. The admin
 /// trigger delegates here (the registry's
 /// [`sync`](crate::dispatch::sync)); it drops the gear ids.
-///
-/// The onboarding's two steps do not run through this combined op: they use
-/// the split [`import_gear_user`](crate::dispatch::import_gear_user) and
-/// [`queue_sync_user`](crate::dispatch::queue_sync_user), so the gear import
-/// and the activity queue are separate decisions (spec #829).
 pub(crate) async fn sync_user<S, D: EntityFacade<S>>(
     user_id: UserId,
     event_time: i64,
@@ -150,56 +145,6 @@ where
     match provider {
         Provider::Strava => crate::strava::onboard(user_id, event_time, facade, store).await,
         Provider::Icu => crate::icu::onboard(user_id, event_time, facade, store).await,
-    }
-}
-
-/// The onboarding gear import (spec #829, the first step): import the user's
-/// gear (bikes + shoes) from the provider, returning the created part ids. No
-/// activity sync is queued — the user decides on that next (the second step,
-/// [`queue_sync_user`](crate::dispatch::queue_sync_user)). The provider is the
-/// user's real one, read in-transaction.
-pub(crate) async fn import_gear_user<S, D: EntityFacade<S>>(
-    user_id: UserId,
-    facade: &D,
-    store: &mut S,
-) -> TbResult<Vec<PartId>>
-where
-    S: crate::strava::StravaDataStore
-        + crate::icu::IcuDataStore
-        + crate::store::Store<crate::strava::StravaSpec>
-        + crate::store::Store<crate::icu::IcuSpec>,
-{
-    let provider = crate::provider_of(store, user_id).await?;
-    // A disabled provider's gear import fails loudly (ADR-0016).
-    crate::config::require_enabled(provider)?;
-    match provider {
-        Provider::Strava => crate::strava::StravaUser::update_gear(user_id, facade, store).await,
-        Provider::Icu => crate::icu::gear::update_gear(user_id, facade, store).await,
-    }
-}
-
-/// The onboarding activity sync (spec #829, the second step): queue the
-/// activity sync on the user's provider queue (the Strava `strava_events` row,
-/// the icu `SYNC` event). No gear import — that was the first step
-/// ([`import_gear_user`](crate::dispatch::import_gear_user)). The provider is
-/// the user's real one, read in-transaction.
-pub(crate) async fn queue_sync_user<S>(
-    user_id: UserId,
-    event_time: i64,
-    store: &mut S,
-) -> TbResult<()>
-where
-    S: crate::strava::StravaDataStore
-        + crate::icu::IcuDataStore
-        + crate::store::Store<crate::strava::StravaSpec>
-        + crate::store::Store<crate::icu::IcuSpec>,
-{
-    let provider = crate::provider_of(store, user_id).await?;
-    // A disabled provider's queued sync fails loudly (ADR-0016).
-    crate::config::require_enabled(provider)?;
-    match provider {
-        Provider::Strava => crate::strava::event::insert_sync(user_id, event_time, store).await,
-        Provider::Icu => crate::icu::event::insert_sync(user_id, event_time, store).await,
     }
 }
 
