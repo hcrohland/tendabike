@@ -8,13 +8,15 @@
 @theme {
   /*
    * Unified gray-first color scheme. The theme is the single source of the
-   * app's color: two neutral gray tones (primary = light, secondary = darker)
-   * that form a card/content flip, plus four muted status scales.
+   * app's neutral color: two neutral gray tones (primary = light, secondary =
+   * darker) that form a card/content flip. Status colors use the standard
+   * (vivid) Tailwind hue scales — the theme defines no status scales of its
+   * own.
    *
    * Each scale is defined once (no per-mode values). flowbite's components and
    * the app pick the step per mode — a light-mode background lives at step 100
-   * and a dark-mode background at step 900 — so the muted/gray values read
-   * correctly in both modes.
+   * and a dark-mode background at step 900 — so the values read correctly in
+   * both modes.
    */
 
   /* Neutral tones — one consistent cool-gray family (Tailwind gray). primary
@@ -43,69 +45,6 @@
   --color-secondary-800: #5c6572;
   --color-secondary-900: #4b5563;
   --color-secondary-950: #4f4f4f;
-
-  /* Muted status scales — override the standard hue scales so raw hue
-     utilities and flowbite's colored components both pick up muted values.
-     danger=red, warning=amber, success=emerald (green aliased to it),
-     info=blue. The light-mode background is step 100, the dark-mode
-     background step 900. */
-  --color-red-50: #fef7f6;
-  --color-red-100: #fbe6e4;
-  --color-red-200: #f3bfba;
-  --color-red-300: #ea9a93;
-  --color-red-400: #de766d;
-  --color-red-500: #d15449;
-  --color-red-600: #b53e33;
-  --color-red-700: #8b332b;
-  --color-red-800: #632722;
-  --color-red-900: #3d1a17;
-  --color-red-950: #2b1311;
-  --color-amber-50: #fcf6ea;
-  --color-amber-100: #f8edd6;
-  --color-amber-200: #f0d9ae;
-  --color-amber-300: #e7c487;
-  --color-amber-400: #ddad61;
-  --color-amber-500: #d2953c;
-  --color-amber-600: #b3792c;
-  --color-amber-700: #8b5d24;
-  --color-amber-800: #63421c;
-  --color-amber-900: #3d2812;
-  --color-amber-950: #2a1c0d;
-  --color-emerald-50: #edf7f1;
-  --color-emerald-100: #dcefe4;
-  --color-emerald-200: #badfca;
-  --color-emerald-300: #99cfb1;
-  --color-emerald-400: #78bf98;
-  --color-emerald-500: #57ae80;
-  --color-emerald-600: #458f69;
-  --color-emerald-700: #356d51;
-  --color-emerald-800: #254b39;
-  --color-emerald-900: #152a20;
-  --color-emerald-950: #0d1914;
-  /* green is aliased to the success (emerald) scale: the app uses green for
-     success today, so it must mute with it. */
-  --color-green-50: #edf7f1;
-  --color-green-100: #dcefe4;
-  --color-green-200: #badfca;
-  --color-green-300: #99cfb1;
-  --color-green-400: #78bf98;
-  --color-green-500: #57ae80;
-  --color-green-600: #458f69;
-  --color-green-700: #356d51;
-  --color-green-800: #254b39;
-  --color-green-900: #152a20;
-  --color-green-950: #0d1914;
-  --color-blue-50: #f3f7fa;
-  --color-blue-100: #e2ebf3;
-  --color-blue-200: #c1d4e5;
-  --color-blue-300: #9fbcd6;
-  --color-blue-400: #7fa4c7;
-  --color-blue-500: #5e8db8;
-  --color-blue-600: #4774a0;
-  --color-blue-700: #395c7e;
-  --color-blue-800: #2b445d;
-  --color-blue-900: #1c2c3c;
-  --color-blue-950: #15202c;
 }
 
 @source "../../node_modules/flowbite-svelte/dist";

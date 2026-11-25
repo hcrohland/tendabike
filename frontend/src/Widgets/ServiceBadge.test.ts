@@ -19,10 +19,10 @@ describe("ServiceBadge", () => {
     expect(badge.className).toMatch(/red/);
   });
 
-  it("renders an amber badge for a 'warn' verdict", () => {
+  it("renders a yellow badge for a 'warn' verdict", () => {
     render(ServiceBadge, { due: new Due(3, 100, "warn") });
     const badge = screen.getByText(/%/);
-    expect(badge.className).toMatch(/amber/);
+    expect(badge.className).toMatch(/yellow/);
   });
 
   it("renders a green badge for an 'ok' verdict", () => {
