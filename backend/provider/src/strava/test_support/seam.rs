@@ -25,9 +25,8 @@ use crate::facade::{
     MockSession, OnboardingStatus, UsageId, User, mock_session, mock_session_admin,
 };
 
-use super::super::{
-    ActTypeId, Activity, ActivityId, Part, PartId, PartTypeId, StravaId, StravaUser, UserId,
-};
+use super::super::{ActTypeId, Activity, Part, PartId, PartTypeId, StravaId, StravaUser, UserId};
+use crate::facade::ActivityId;
 use crate::test_support as kit;
 
 // The recorded `deauthorize()` calls — Strava's extra, kept in its own
@@ -94,17 +93,19 @@ pub fn strava_admin_session(user: UserId, strava: StravaId) -> MockSession {
     mock_session_admin(user)
 }
 
-/// The standard test triple: a fresh `MockStravaDataStore`, a
-/// `MockEntityFacade` (with `C` = `MockStravaDataStore`), and a
+/// The standard test triple: a fresh [`MockStore<StravaSpec>`], a
+/// [`MockEntityFacade`] (with `C` = [`MockStore<StravaSpec>`]), and a
 /// [`strava_session`] for user 1 / Strava ID 42.
 #[cfg(test)]
 pub fn setup() -> (
-    super::super::traits::MockStravaDataStore,
-    crate::MockEntityFacade<super::super::traits::MockStravaDataStore>,
+    crate::test_support::MockStore<super::super::StravaSpec>,
+    crate::MockEntityFacade<crate::test_support::MockStore<super::super::StravaSpec>>,
     MockSession,
 ) {
-    let store = super::super::traits::MockStravaDataStore::new();
-    let facade = crate::MockEntityFacade::<super::super::traits::MockStravaDataStore>::new();
+    let mut store = crate::test_support::MockStore::<super::super::StravaSpec>::new();
+    store.expect_limited_until().returning(|| None);
+    let facade =
+        crate::MockEntityFacade::<crate::test_support::MockStore<super::super::StravaSpec>>::new();
     let session = strava_session(UserId::from(1), 42.into());
     (store, facade, session)
 }

@@ -6,9 +6,9 @@ use crate::test_support::{queue, requests};
 
 /// The `request_json` → `access_token` path reads the durable token from
 /// `icu_users`; the import tests seed a tokened user for icu id `a1`.
-fn expect_token(store: &mut super::super::traits::MockIcuDataStore) {
+fn expect_token(store: &mut crate::test_support::MockStore<crate::icu::IcuSpec>) {
     store
-        .expect_icuser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
 }
 

@@ -311,7 +311,7 @@ where
     let part = facade.part(id, session, store).await?;
     let provider = crate::provider_of(store, part.owner).await?;
     match provider {
-        Provider::Strava => crate::strava::gear::strava_url(&part),
+        Provider::Strava => crate::strava::driver::StravaDriver::gear_url_from_part(&part),
         Provider::Icu => Ok(None),
     }
 }

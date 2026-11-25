@@ -97,7 +97,7 @@ pub(crate) async fn into_partid<D: EntityFacade<S>, S: Store<IcuSpec>>(
 /// Skips the icu call silently when the rate limiter reports no budget:
 /// hydration is best-effort and must not be blocked by a non-essential API
 /// call (mirrors the Strava driver's `update_gear`).
-pub async fn update_gear<D: EntityFacade<S>, S: Store<IcuSpec>>(
+pub(crate) async fn update_gear<D: EntityFacade<S>, S: Store<IcuSpec>>(
     user_id: UserId,
     facade: &D,
     store: &mut S,

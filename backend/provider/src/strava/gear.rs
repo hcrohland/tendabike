@@ -8,9 +8,8 @@ use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
 use super::http::request_json;
-use super::{Error, OnBehalf, PartId, PartTypeId, StravaSpec, TbResult, UserId};
+use super::{OnBehalf, PartId, PartTypeId, StravaSpec, TbResult, UserId};
 use crate::EntityFacade;
-use crate::facade::Part;
 use crate::store::Store;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -22,22 +21,6 @@ struct StravaGear {
     /// What kind of bike. Only bikes have a frametype.
     /// Id None it is shoes
     frame_type: Option<i32>,
-}
-
-/// The Strava gear page for the part (the dispatch's part read — the
-/// ownership check — is done before this is called). The one non-total URL
-/// op (ADR-0014): a part with no provider source (a manual part) is the
-/// typed absence (`None`) — the route maps it to a no-op; an unrecognized
-/// source prefix is a `NotFound`.
-pub(crate) fn strava_url(part: &Part) -> TbResult<Option<String>> {
-    let Some(g) = &part.source else {
-        return Ok(None);
-    };
-    match &g[0..1] {
-        "b" => Ok(Some(format!("https://strava.com/bikes/{}", &g[1..]))),
-        "g" => Ok(Some("https://www.strava.com/settings/gear".into())),
-        _ => Err(Error::NotFound("".to_string())),
-    }
 }
 
 impl StravaGear {

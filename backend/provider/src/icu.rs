@@ -12,8 +12,8 @@
 //!
 //! - `client`: the icu oauth client and its wire types (the token response
 //!   and the athlete info the login exchange parses).
-//! - `traits`: the `IcuDataStore` trait (the `icu_users` and `icu_events`
-//!   tables) and the `IcuStore` umbrella.
+//! - `traits`: the `IcuSpec` marker (the `icu_users` and `icu_events`
+//!   tables' provider spec).
 //! - `user`: the `IcuUser` and the login `upsert` op.
 //! - `event`: the `IcuEvent` queue row and the queue's read/process ops.
 //! - `http`: the thin icu HTTP calls (the bearer GET, the 401/429 mapping).
@@ -28,7 +28,7 @@
 //!
 
 use crate::OnBehalf;
-use crate::facade::{Error, PartId, Session, TbResult, UserId, UserStat};
+use crate::facade::{Error, Session, TbResult, UserId};
 
 mod traits;
 pub use traits::*;

@@ -47,9 +47,9 @@ async fn accept_queues_event_and_returns_tbid() {
     let (mut store, _facade) = setup();
     let e = event(1, "10");
     store
-        .expect_icuser_get_by_icuid()
+        .expect_user_get_by_provider_id()
         .returning(|_id| Ok(Some(icu_user(UserId::from(1), "a1", true))));
-    store.expect_icu_event_create().returning(|_e| Ok(()));
+    store.expect_event_create().returning(|_e| Ok(()));
     let tbid = e.accept(&mut store).await.unwrap();
     assert_eq!(tbid, UserId::from(1));
 }
@@ -58,7 +58,9 @@ async fn accept_queues_event_and_returns_tbid() {
 async fn accept_unknown_athlete_is_bad_request() {
     let (mut store, _facade) = setup();
     let e = event(1, "10");
-    store.expect_icuser_get_by_icuid().returning(|_id| Ok(None));
+    store
+        .expect_user_get_by_provider_id()
+        .returning(|_id| Ok(None));
     let res = e.accept(&mut store).await;
     assert!(matches!(res, Err(Error::BadRequest(_))));
 }
@@ -71,10 +73,10 @@ fn queue_event(store: &mut MockIcuDataStore, event: IcuEvent) {
     let next = event.clone();
     let later = event.clone();
     store
-        .expect_icu_event_get_next_for_user()
+        .expect_event_get_next()
         .returning(move |_id| Ok(Some(next.clone())));
     store
-        .expect_icu_event_get_later()
+        .expect_event_get_later()
         .returning(move |_activity, _icu| Ok(vec![later.clone()]));
 }
 
@@ -83,12 +85,12 @@ async fn process_imports_activity() {
     let (mut store, mut facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     store
-        .expect_icuser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .times(..)
         .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
     // One event: the kit's `get_event` reads it (the dedup no-ops).
     queue_event(&mut store, event(1, "10"));
-    store.expect_icu_event_delete().returning(|_id| Ok(()));
+    store.expect_event_delete().returning(|_id| Ok(()));
     queue("/activity/10", &activity_json("10", "Ride", None));
     facade
         .expect_upsert_activity()
@@ -109,11 +111,11 @@ async fn process_stub_emits_one_notice() {
     let (mut store, mut facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     store
-        .expect_icuser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .times(..)
         .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
     queue_event(&mut store, event(1, "10"));
-    store.expect_icu_event_delete().returning(|_id| Ok(()));
+    store.expect_event_delete().returning(|_id| Ok(()));
     queue("/activity/10", &stub_activity_json("10", "Ride"));
     // The one per-event notice: the facade's create_notification returns it.
     facade
@@ -136,17 +138,13 @@ async fn process_401_disables_user() {
     let (mut store, facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     store
-        .expect_icuser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .times(..)
         .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
     queue_event(&mut store, event(1, "10"));
-    // The 401 disables the user: the events are dropped and the token cleared.
-    store
-        .expect_icu_events_delete_for_user()
-        .returning(|_id| Ok(1));
-    store
-        .expect_icuser_update_token()
-        .returning(|_id, _t| Ok(icu_user(UserId::from(1), "a1", false)));
+    // The 401 disables the user: the store's single `user_disable` op drops the
+    // queued events and clears the token.
+    store.expect_user_disable().returning(|_owner| Ok(()));
     queue_error("/activity/10", Error::NotAuth("revoked".to_string()));
     let summary = process(UserId::from(1), &facade, &mut store).await.unwrap();
     assert!(summary.is_empty());
@@ -157,12 +155,12 @@ async fn process_429_keeps_event_queued() {
     let (mut store, _facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     store
-        .expect_icuser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .times(..)
         .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
     queue_event(&mut store, event(1, "10"));
     // The 429 keeps the event queued: it is NOT deleted (it stays queued).
-    store.expect_icu_event_delete().times(0);
+    store.expect_event_delete().times(0);
     queue_error("/activity/10", Error::TryAgain("rate limited"));
     let summary = process(UserId::from(1), &_facade, &mut store)
         .await
@@ -178,7 +176,7 @@ async fn process_permanent_error_drops_event() {
     let (mut store, _facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     store
-        .expect_icuser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .times(..)
         .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
     queue_event(&mut store, event(1, "10"));
@@ -186,7 +184,7 @@ async fn process_permanent_error_drops_event() {
     let deleted: std::sync::Arc<std::sync::Mutex<Option<Option<i32>>>> =
         std::sync::Arc::new(std::sync::Mutex::new(None));
     let rec = deleted.clone();
-    store.expect_icu_event_delete().returning(move |id| {
+    store.expect_event_delete().returning(move |id| {
         rec.lock().unwrap().replace(id);
         Ok(())
     });
@@ -209,12 +207,12 @@ async fn process_deletes_activity_on_deleted_event() {
     let (mut store, mut facade) = setup();
     super::super::ratelimit::test_set_not_limited();
     store
-        .expect_icuser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .times(..)
         .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
     // One ACTIVITY_DELETED event: the kit's `get_event` reads it.
     queue_event(&mut store, deleted_event(1, "10"));
-    store.expect_icu_event_delete().returning(|_id| Ok(()));
+    store.expect_event_delete().returning(|_id| Ok(()));
     // The delete returns the domain's summary (the activity tombstone).
     facade
         .expect_delete_activity()
@@ -245,7 +243,7 @@ async fn process_routes_sync_row_to_its_walk() {
     // sentinel key groups with nothing else).
     queue_event(&mut store, sync_event(1, 0, now));
     // The walk's completion deletes the row.
-    store.expect_icu_event_delete().returning(|_id| Ok(()));
+    store.expect_event_delete().returning(|_id| Ok(()));
     // The `SYNC` walk's batch (< 100 → end of history → the row is deleted).
     queue(
         &sync_uri(0, now),
@@ -312,12 +310,12 @@ fn sync_uri(oldest: i64, newest: i64) -> String {
 /// athlete id (the `insert_sync`'s `get_icu_id`).
 fn sync_user_fixture(store: &mut MockIcuDataStore) {
     store
-        .expect_icuser_get_by_tbid()
+        .expect_user_get_by_tbid()
         .times(..)
         .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
 }
 
-type MockIcuDataStore = super::super::traits::MockIcuDataStore;
+type MockIcuDataStore = crate::test_support::MockStore<crate::icu::IcuSpec>;
 
 /// `insert_sync` enqueues a `SYNC` event with the `oldest` bound and the `0`
 /// newest sentinel.
@@ -325,13 +323,11 @@ type MockIcuDataStore = super::super::traits::MockIcuDataStore;
 async fn insert_sync_enqueues_sync_event() {
     let (mut store, _facade) = setup();
     sync_user_fixture(&mut store);
-    store
-        .expect_icu_events_delete_sync_for_user()
-        .returning(|_id| Ok(0));
+    store.expect_event_delete_sync().returning(|_id| Ok(0));
     let created: std::sync::Arc<std::sync::Mutex<Vec<IcuEvent>>> =
         std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let rec = created.clone();
-    store.expect_icu_event_create().returning(move |e| {
+    store.expect_event_create().returning(move |e| {
         rec.lock().unwrap().push(e);
         Ok(())
     });
@@ -362,13 +358,11 @@ async fn insert_sync_replaces_existing_sync() {
     // one is queued.
     let deletes = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let del = deletes.clone();
-    store
-        .expect_icu_events_delete_sync_for_user()
-        .returning(move |_id| {
-            del.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            Ok(1)
-        });
-    store.expect_icu_event_create().returning(|_e| Ok(()));
+    store.expect_event_delete_sync().returning(move |_id| {
+        del.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(1)
+    });
+    store.expect_event_create().returning(|_e| Ok(()));
 
     // Two enqueues: each replaces the prior `SYNC` row.
     super::insert_sync(UserId::from(1), 0, &mut store)
@@ -405,10 +399,8 @@ async fn process_sync_short_batch_deletes_row() {
     queue_event(&mut store, sync_event(1, 0, 0));
     // The zero-sentinel resolution persists `now`; the completion deletes the
     // row.
-    store
-        .expect_icu_event_set_time()
-        .returning(|_id, _t| Ok(()));
-    store.expect_icu_event_delete().returning(|_id| Ok(()));
+    store.expect_event_set_time().returning(|_id, _t| Ok(()));
+    store.expect_event_delete().returning(|_id| Ok(()));
     // One batch of activities (< 100 → end of history).
     queue(
         &sync_uri(0, now_ts()),
@@ -450,9 +442,7 @@ async fn process_sync_429_keeps_cursor_and_row() {
     // The zero-sentinel resolution persists `now` (the cursor is set before
     // the fetch). No `icu_event_delete` is expected: the 429 keeps the row
     // queued.
-    store
-        .expect_icu_event_set_time()
-        .returning(|_id, _t| Ok(()));
+    store.expect_event_set_time().returning(|_id, _t| Ok(()));
     queue_error(&sync_uri(0, now_ts()), Error::TryAgain("rate limited"));
     // No activities are imported (the 429 precedes any import).
     facade.expect_upsert_activity().times(0);
@@ -483,11 +473,11 @@ async fn process_sync_full_batch_advances_cursor_and_keeps_row() {
     let set_times: std::sync::Arc<std::sync::Mutex<Vec<i64>>> =
         std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let rec = set_times.clone();
-    store.expect_icu_event_set_time().returning(move |_id, t| {
+    store.expect_event_set_time().returning(move |_id, t| {
         rec.lock().unwrap().push(t);
         Ok(())
     });
-    store.expect_icu_event_delete().times(0);
+    store.expect_event_delete().times(0);
     // A full batch (100) → the cursor advances to the oldest activity.
     let acts: Vec<String> = (0..100)
         .map(|i| activity_json(&format!("100{}", i), "Ride", None))
@@ -547,8 +537,8 @@ async fn process_sync_resumes_from_stored_cursor() {
     // The stored cursor is non-zero: the sentinel is NOT re-resolved, so no
     // `icu_event_set_time` at all (the short batch completes and deletes the
     // row).
-    store.expect_icu_event_set_time().times(0);
-    store.expect_icu_event_delete().returning(|_id| Ok(()));
+    store.expect_event_set_time().times(0);
+    store.expect_event_delete().returning(|_id| Ok(()));
     // The batch is bounded by the stored cursor (not now).
     queue(
         &sync_uri(0, cursor),
@@ -602,13 +592,13 @@ async fn process_sync_full_batch_on_start_day_steps_back_a_day() {
     let set_times: std::sync::Arc<std::sync::Mutex<Vec<i64>>> =
         std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let rec = set_times.clone();
-    store.expect_icu_event_set_time().returning(move |_id, t| {
+    store.expect_event_set_time().returning(move |_id, t| {
         rec.lock().unwrap().push(t);
         Ok(())
     });
     // The row stays queued (the next `process` resumes from the stepped-back
     // cursor).
-    store.expect_icu_event_delete().times(0);
+    store.expect_event_delete().times(0);
 
     // A full batch (100), all on the start day (2026-01-02).
     let acts: Vec<String> = (0..100)
@@ -663,23 +653,17 @@ async fn accept_event_scope_change_disables_a_known_athlete() {
     let (mut store, _facade) = setup();
     // The athlete is resolved to a connected user (the lookup runs once).
     store
-        .expect_icuser_get_by_icuid()
+        .expect_user_get_by_provider_id()
         .times(1)
         .returning(|_id| Ok(Some(icu_user(UserId::from(1), "a1", true))));
-    // The disable: the queued events are dropped and the token is cleared.
+    // The disable: the store's single `user_disable` op drops the queued
+    // events and clears the token.
     store
-        .expect_icu_events_delete_for_user()
+        .expect_user_disable()
         .times(1)
-        .returning(|_id| Ok(2));
-    store
-        .expect_icuser_update_token()
-        .times(1)
-        .returning(|_id, token| {
-            assert!(token.is_none(), "the scope change clears the token");
-            Ok(icu_user(UserId::from(1), "a1", false))
-        });
+        .returning(|_owner| Ok(()));
     // Not queued: no `icu_event_create`.
-    store.expect_icu_event_create().times(0);
+    store.expect_event_create().times(0);
 
     let body = icu_body(&secret, &scope_changed_json("a1", true, ""));
     let queued = accept_event(&body, &mut store).await.unwrap();
@@ -694,13 +678,12 @@ async fn accept_event_scope_change_is_a_noop_for_an_unknown_athlete() {
     let (mut store, _facade) = setup();
     // The athlete is looked up (once) and not found.
     store
-        .expect_icuser_get_by_icuid()
+        .expect_user_get_by_provider_id()
         .times(1)
         .returning(|_id| Ok(None));
-    // No disable: the queue drop and the token clear never run.
-    store.expect_icu_events_delete_for_user().times(0);
-    store.expect_icuser_update_token().times(0);
-    store.expect_icu_event_create().times(0);
+    // No disable: the store's `user_disable` op never runs.
+    store.expect_user_disable().times(0);
+    store.expect_event_create().times(0);
 
     let body = icu_body(
         &secret,

@@ -13,7 +13,9 @@ async fn upsert_creates_new_user() -> TbResult<()> {
     let created_user_rec = created_user.clone();
     let created_icu = Arc::new(Mutex::new(None));
     let created_icu_rec = created_icu.clone();
-    store.expect_icuser_get_by_icuid().returning(|_id| Ok(None));
+    store
+        .expect_user_get_by_provider_id()
+        .returning(|_id| Ok(None));
     facade
         .expect_create_user()
         .returning(move |firstname, lastname, _avatar, _store| {
@@ -23,7 +25,7 @@ async fn upsert_creates_new_user() -> TbResult<()> {
                 .replace((firstname.to_string(), lastname.to_string()));
             Ok(UserId::from(1))
         });
-    store.expect_icuser_create().returning(move |su| {
+    store.expect_user_create().returning(move |su| {
         created_icu_rec.lock().unwrap().replace(su.clone());
         Ok(su)
     });
@@ -64,7 +66,7 @@ async fn upsert_updates_existing_user() -> TbResult<()> {
     let updated_token: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
     let updated_token_rec = updated_token.clone();
     store
-        .expect_icuser_get_by_icuid()
+        .expect_user_get_by_provider_id()
         .returning(|_id| Ok(Some(icu_user(UserId::from(1), "ath-42", true))));
     facade
         .expect_update_user()
@@ -73,7 +75,7 @@ async fn upsert_updates_existing_user() -> TbResult<()> {
             Ok(UserId::from(1))
         });
     store
-        .expect_icuser_update_token()
+        .expect_user_update_token()
         .returning(move |_id, access_token| {
             *updated_token_rec.lock().unwrap() = access_token;
             Ok(icu_user(UserId::from(1), "ath-42", true))

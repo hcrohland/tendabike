@@ -13,10 +13,7 @@ use time::{OffsetDateTime, UtcOffset};
 #[cfg(test)]
 use super::PartId;
 use super::http::request_json;
-use super::{
-    ActTypeId, Activity, ActivityId, Error, OnBehalf, Session, StravaSpec, Summary, TbResult,
-    UserId, gear,
-};
+use super::{ActTypeId, Activity, Error, OnBehalf, StravaSpec, Summary, TbResult, UserId, gear};
 use crate::store::Store;
 use crate::{EntityFacade, ProviderActivityId, StravaActivityId};
 
@@ -123,23 +120,6 @@ impl StravaActivity {
         let session = Box::new(OnBehalf::new(user_id));
         facade.upsert_activity(activity, session, store).await
     }
-}
-
-/// The Strava URL for a Strava activity: the driver extracts the raw
-/// (unprefixed) Strava id from the domain's opaque [`ActivityId`], the read
-/// is the ownership check, and the URL is built from the raw id.
-pub async fn strava_url<D: EntityFacade<S>, S: Store<StravaSpec>>(
-    id: ActivityId,
-    user: Box<dyn Session>,
-    facade: &D,
-    store: &mut S,
-) -> TbResult<String> {
-    let ProviderActivityId::Strava(raw) = ProviderActivityId::try_from(id)? else {
-        return Err(Error::BadRequest("not a strava activity".to_string()));
-    };
-    let full: ActivityId = ProviderActivityId::Strava(raw).into();
-    facade.read_activity(&full, user, store).await?;
-    Ok(format!("https://strava.com/activities/{raw}"))
 }
 
 pub(crate) async fn upsert_activity<D: EntityFacade<S>, S: Store<StravaSpec>>(

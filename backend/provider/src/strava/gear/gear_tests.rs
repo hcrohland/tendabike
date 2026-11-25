@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use super::super::test_support::{gear_json, part, setup};
 use super::*;
+use crate::facade::{Error, Part};
 use crate::test_support::{queue, queue_error, requests};
 
 #[tokio::test]
@@ -136,14 +137,20 @@ fn sourced_part(source: &str, owner: UserId) -> Part {
 
 #[test]
 fn gear_strava_url_bike() -> TbResult<()> {
-    let url = strava_url(&sourced_part("b42", UserId::from(1)))?;
+    let url = super::super::driver::StravaDriver::gear_url_from_part(&sourced_part(
+        "b42",
+        UserId::from(1),
+    ))?;
     assert_eq!(url, Some("https://strava.com/bikes/42".to_string()));
     Ok(())
 }
 
 #[test]
 fn gear_strava_url_shoes() -> TbResult<()> {
-    let url = strava_url(&sourced_part("g1", UserId::from(1)))?;
+    let url = super::super::driver::StravaDriver::gear_url_from_part(&sourced_part(
+        "g1",
+        UserId::from(1),
+    ))?;
     assert_eq!(
         url,
         Some("https://www.strava.com/settings/gear".to_string())
@@ -153,7 +160,10 @@ fn gear_strava_url_shoes() -> TbResult<()> {
 
 #[test]
 fn gear_strava_url_unknown_source() -> TbResult<()> {
-    let res = strava_url(&sourced_part("x9", UserId::from(1)));
+    let res = super::super::driver::StravaDriver::gear_url_from_part(&sourced_part(
+        "x9",
+        UserId::from(1),
+    ));
     assert!(matches!(res, Err(Error::NotFound(_))));
     Ok(())
 }
@@ -162,7 +172,12 @@ fn gear_strava_url_unknown_source() -> TbResult<()> {
 fn gear_strava_url_missing_source() -> TbResult<()> {
     // A locally created part (no Strava source): `strava_url` is the typed
     // absence (`None`) — the route maps it to a no-op (ADR-0014).
-    let res = strava_url(&part(PartId::from(1), UserId::from(1), 1.into(), None))?;
+    let res = super::super::driver::StravaDriver::gear_url_from_part(&part(
+        PartId::from(1),
+        UserId::from(1),
+        1.into(),
+        None,
+    ))?;
     assert_eq!(res, None);
     Ok(())
 }

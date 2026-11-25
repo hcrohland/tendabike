@@ -5,13 +5,9 @@
 //! [`crate::test_support`]; the icu driver has no provider-specific canned
 //! data of its own (its tokens are durable, read straight from `icu_users`).
 //!
-//! - `test-support` feature → exposes [`MockIcuDataStore`] to consumer crates
-//!   (`tb_exec`, `tb_sqlx`).
-//! - `#[cfg(test)]` → exposes [`MockIcuDataStore`] (the `automock` witness)
-//!   and the fixture constructors to the icu module's own tests.
-
-#[cfg(any(test, feature = "test-support"))]
-pub use super::traits::MockIcuDataStore;
+//! The store double is the single [`MockStore`](crate::test_support::MockStore)
+//! over [`IcuSpec`](super::IcuSpec) (spec #1029) — the per-provider data-store
+//! mock is gone.
 
 use super::{IcuId, IcuUser};
 use time::OffsetDateTime;
@@ -41,20 +37,24 @@ pub fn user(id: UserId) -> User {
     }
 }
 
-/// The standard test pair: a fresh `MockIcuDataStore` and a
-/// `MockEntityFacade` (with `C` = `MockIcuDataStore`). The icu lane has no
-/// acting session of its own, so (unlike the Strava driver's `setup`, which
-/// reaches the seam through the session) this enables the HTTP seam's test
-/// mode directly — the kit's `begin_test` marks the thread in test mode so
-/// the canned responses the tests queue are replayed instead of the real API.
+/// The standard test pair: a fresh [`MockStore<IcuSpec>`] and a
+/// [`MockEntityFacade`] (with `C` = [`MockStore<IcuSpec>`]). The icu lane has
+/// no acting session of its own, so (unlike the Strava driver's `setup`,
+/// which reaches the seam through the session) this enables the HTTP seam's
+/// test mode directly — the kit's `begin_test` marks the thread in test mode
+/// so the canned responses the tests queue are replayed instead of the real
+/// API.
 #[cfg(test)]
 pub fn setup() -> (
-    super::traits::MockIcuDataStore,
-    crate::MockEntityFacade<super::traits::MockIcuDataStore>,
+    crate::test_support::MockStore<super::IcuSpec>,
+    crate::test_support::MockEntityFacade<crate::test_support::MockStore<super::IcuSpec>>,
 ) {
     crate::test_support::begin_test();
-    let store = super::traits::MockIcuDataStore::new();
-    let facade = crate::MockEntityFacade::<super::traits::MockIcuDataStore>::new();
+    let mut store = crate::test_support::MockStore::<super::IcuSpec>::new();
+    store.expect_limited_until().returning(|| None);
+    let facade = crate::test_support::MockEntityFacade::<
+        crate::test_support::MockStore<super::IcuSpec>,
+    >::new();
     (store, facade)
 }
 

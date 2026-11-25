@@ -8,20 +8,13 @@
 
 use anyhow::Context;
 use derive_more::{Display, From, Into};
-use log::{debug, info, warn};
-use oauth2::{AuthorizationCode, RefreshToken, TokenResponse};
+use log::{debug, info};
+use oauth2::RefreshToken;
 use serde::{Deserialize, Serialize};
 
-#[cfg(test)]
-use super::Stat;
-use super::client::{HTTP_CLIENT, SCOPES, strava_client};
-use super::http::{deauthorize, request_json};
-use super::session::get_strava_id;
-use super::{
-    Error, PartId, Session, StravaAthleteInfo, StravaSpec, TbResult, UserId, UserStat, gear,
-};
+use super::{Error, StravaSpec, TbResult, UserId};
+use crate::EntityFacade;
 use crate::store::Store;
-use crate::{EntityFacade, Provider};
 
 /// The Strava athlete/user id.
 #[derive(
@@ -150,98 +143,23 @@ impl StravaUser {
         // Note: Automatic sync removed - user must manually trigger initial activity import
         Ok(user)
     }
-
-    /// Get list of gear for user from Strava.
-    ///
-    /// Skips the Strava call silently when the rate limiter reports no
-    /// budget: hydration is best-effort and must not be blocked by a
-    /// non-essential API call.
-    pub async fn update_gear<D: EntityFacade<S>, S: Store<StravaSpec>>(
-        user_id: UserId,
-        facade: &D,
-        store: &mut S,
-    ) -> TbResult<Vec<PartId>> {
-        if super::ratelimit::limited_until().is_some() {
-            log::debug!("update_gear: rate limited, skipping hydration");
-            return Ok(Vec::new());
-        }
-
-        #[derive(Deserialize, Debug)]
-        struct Gear {
-            id: String,
-        }
-
-        #[derive(Deserialize, Debug)]
-        struct Athlete {
-            // firstname: String,
-            // lastname: String,
-            bikes: Vec<Gear>,
-            shoes: Vec<Gear>,
-        }
-
-        let ath: Athlete = request_json(user_id, "/athlete", store).await?;
-
-        let mut parts = Vec::new();
-        for gear in ath.bikes.into_iter().chain(ath.shoes) {
-            parts.push(gear::into_partid(gear.id, user_id, facade, store).await?);
-        }
-
-        Ok(parts)
-    }
-}
-
-/// The driver's `onboard` primitive (mirroring intervals.icu's): import the
-/// user's Strava gear (bikes + shoes), then enqueue the durable activity-sync
-/// event, returning the created gear part ids (the onboarding response lists
-/// them).
-pub async fn onboard<D: EntityFacade<S>, S: Store<StravaSpec>>(
-    user_id: UserId,
-    event_time: i64,
-    facade: &D,
-    store: &mut S,
-) -> TbResult<Vec<PartId>> {
-    let gear = StravaUser::update_gear(user_id, facade, store).await?;
-    super::event::insert_sync(user_id, event_time, store).await?;
-    Ok(gear)
-}
-
-/// The all-user stat read (spec #558 §3.3): every Strava user's provider
-/// neutral [`UserStat`] — the domain [`Stat`] plus this provider's queued
-/// event count and disabled flag. The [`UserStat`] type is provider-neutral
-/// (it lives in `tb_domain`, beside [`Stat`]), so a second provider's
-/// `all_stats` op returns the same type.
-pub async fn get_all_stats<D: EntityFacade<S>, S: Store<StravaSpec>>(
-    facade: &D,
-    store: &mut S,
-) -> TbResult<Vec<UserStat>> {
-    let users = store.user_get_all().await?;
-
-    let mut res = Vec::new();
-    for u in users {
-        let stat = facade.get_stat(&u.tendabike_id, store).await?;
-        let events = store.user_event_count(&u.id).await?;
-        res.push(UserStat {
-            stat,
-            events,
-            disabled: u.disabled(),
-            provider: Provider::Strava.wire_value().to_string(),
-        });
-    }
-    Ok(res)
 }
 
 /// The login (ADR-0014): the provider's login work behind the seam — the
 /// scope check, the token exchange, the wire-shape parsing of the athlete
 /// (plus the avatar normalization: a non-`http` avatar is dropped), and the
-/// upsert, returning the identity and the admin flag. `code` and `scope` are
-/// the opaque callback values the presentation layer forwards (no driver
-/// wire type crosses the seam).
-pub async fn login<D: EntityFacade<S>, S: Store<StravaSpec>>(
+/// upsert, returning the identity and the admin flag.
+pub(crate) async fn do_login<D: EntityFacade<S>, S: Store<StravaSpec>>(
     code: &str,
     scope: &str,
     facade: &D,
     store: &mut S,
 ) -> TbResult<(UserId, bool)> {
+    use super::StravaAthleteInfo;
+    use super::client::{SCOPES, strava_client};
+    use crate::client::HTTP_CLIENT;
+    use oauth2::{AuthorizationCode, TokenResponse};
+
     if scope != SCOPES {
         return Err(Error::BadRequest(format!(
             "insufficient authorization {scope}"
@@ -279,74 +197,6 @@ pub async fn login<D: EntityFacade<S>, S: Store<StravaSpec>>(
     .await?;
     let is_admin = facade.user_admin(&user.user_id(), store).await?;
     Ok((user.user_id(), is_admin))
-}
-
-/// Deauthorize a user: revoke their Strava token and disable their local
-/// row. Admin-only — the acting `session` must be an admin (the domain
-/// enforces the invariant, defense-in-depth over the web layer's `AxumAdmin`
-/// guard); `user_id` is the target user.
-///
-/// # Errors
-///
-/// This function will return an error if the acting session is not an admin
-/// (`Forbidden`), or if the target user does not exist, is already disabled,
-/// or has open events and if strava or the database is not reachable. A
-/// failed Strava token revocation is non-fatal (logged).
-pub async fn user_deauthorize(
-    session: &mut dyn Session,
-    user_id: UserId,
-    store: &mut impl Store<StravaSpec>,
-) -> TbResult<()> {
-    if !session.is_admin() {
-        return Err(Error::Forbidden(
-            "only an admin can deauthorize a user".to_string(),
-        ));
-    }
-
-    if let Err(err) = deauthorize(user_id, store).await {
-        warn!("could not deauthorize user {user_id}: {:#}", err)
-    }
-
-    warn!("User {user_id} deauthorized");
-
-    let strava_id = get_strava_id(user_id, store).await?;
-    strava_id.disable(store).await
-}
-
-/// Returns the Strava URL for a user with the given Strava ID.
-///
-/// # Arguments
-///
-/// * `user_id` - An `UserId` representing the TendaBike user ID of the user.
-/// * `store` - A mutable reference to a `AppConn` representing the database connection.
-///
-/// # Returns
-///
-/// An `TbResult` containing a `String` representing the Strava URL for the user.
-pub async fn strava_url(user_id: UserId, store: &mut impl Store<StravaSpec>) -> TbResult<String> {
-    let user = store.user_get_by_tbid(user_id).await?;
-    Ok(format!("https://strava.com/athletes/{}", user.strava_id()))
-}
-
-/// Delete a user: deauthorize them (admin-only) plus delete their rows.
-/// Admin-only — the acting `session` must be an admin; `tbid` is the target
-/// user.
-pub async fn user_delete<D: EntityFacade<S>, S: Store<StravaSpec>>(
-    session: &mut dyn Session,
-    tbid: UserId,
-    facade: &D,
-    store: &mut S,
-) -> TbResult<()> {
-    if !session.is_admin() {
-        return Err(Error::Forbidden(
-            "only an admin can delete a user".to_string(),
-        ));
-    }
-    debug!("Deauthorizing user {tbid}");
-    user_deauthorize(session, tbid, store).await?;
-    let n = store.user_delete(tbid).await?;
-    debug!("Deleted {n} strava user");
-    facade.delete_user(&tbid, store).await
 }
 
 #[cfg(test)]

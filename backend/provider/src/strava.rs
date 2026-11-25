@@ -15,14 +15,11 @@
 //!
 
 use crate::OnBehalf;
+#[cfg(test)]
+use crate::facade::ActivityId;
 #[cfg(any(test, feature = "test-support"))]
 use crate::facade::Part;
-#[cfg(test)]
-use crate::facade::Stat;
-use crate::facade::{
-    ActTypeId, Activity, ActivityId, Error, PartId, PartTypeId, Session, Summary, TbResult, UserId,
-    UserStat,
-};
+use crate::facade::{ActTypeId, Activity, Error, PartId, PartTypeId, Summary, TbResult, UserId};
 
 mod traits;
 pub use traits::*;

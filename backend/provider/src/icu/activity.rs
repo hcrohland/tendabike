@@ -25,7 +25,7 @@ use crate::{EntityFacade, IcuActivityId, ProviderActivityId};
 /// redirect target): the driver extracts the raw id from the domain's opaque
 /// [`ActivityId`], verifies ownership via the facade, then builds the
 /// provider URL from the raw id.
-pub async fn activity_url<D, S>(
+pub(crate) async fn activity_url<D, S>(
     id: ActivityId,
     user: Box<dyn Session>,
     facade: &D,

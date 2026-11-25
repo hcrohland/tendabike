@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use super::super::test_support::{activity, activity_json, gear_json, part, setup};
 use super::*;
+use crate::facade::ActivityId;
 use crate::test_support::{queue, queue_error, requests};
 
 fn strava_activity(gear: Option<&str>) -> StravaActivity {
@@ -196,9 +197,10 @@ async fn activity_strava_url() -> TbResult<()> {
     facade
         .expect_read_activity()
         .returning(move |_id, _user, _store| Ok(activity(strava_id(10), UserId::from(1))));
-    let url = strava_url(
-        ActivityId::from("strava:10"),
+    use crate::driver::Provider;
+    let url = super::super::driver::StravaDriver::activity_url(
         Box::new(session),
+        ActivityId::from("strava:10"),
         &facade,
         &mut store,
     )
@@ -214,9 +216,10 @@ async fn activity_strava_url_missing() {
     facade
         .expect_read_activity()
         .returning(|_id, _user, _store| Err(Error::NotFound("".to_string())));
-    let res = strava_url(
-        ActivityId::from("strava:99"),
+    use crate::driver::Provider;
+    let res = super::super::driver::StravaDriver::activity_url(
         Box::new(session),
+        ActivityId::from("strava:99"),
         &facade,
         &mut store,
     )

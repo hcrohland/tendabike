@@ -12,14 +12,14 @@
 
 use anyhow::Context;
 use derive_more::{Display, From, Into};
-use log::{debug, info, warn};
+use log::{debug, info};
 use oauth2::{AuthorizationCode, PkceCodeVerifier, TokenResponse};
 use serde::{Deserialize, Serialize};
 
 use super::client::{HTTP_CLIENT, SCOPES, icu_client};
-use super::{Error, IcuAthleteInfo, IcuSpec, PartId, Session, TbResult, UserId, UserStat};
+use super::{Error, IcuAthleteInfo, IcuSpec, TbResult, UserId};
+use crate::EntityFacade;
 use crate::store::Store;
-use crate::{EntityFacade, Provider};
 
 /// The icu athlete ID: a provider text id (intervals.icu ids are not
 /// integers), wrapped as an opaque newtype. The inner value is private —
@@ -137,7 +137,7 @@ impl IcuUser {
 ///
 /// intervals.icu omits the `scope` query param on some callbacks: an absent
 /// scope (the empty string) is accepted, a present one must match.
-pub async fn login<D: EntityFacade<S>, S: Store<IcuSpec>>(
+pub(crate) async fn login<D: EntityFacade<S>, S: Store<IcuSpec>>(
     code: &str,
     scope: &str,
     code_verifier: &str,
@@ -175,90 +175,9 @@ pub async fn login<D: EntityFacade<S>, S: Store<IcuSpec>>(
 
 /// The admin sync trigger's provider side: import the user's icu gear
 /// (inline), then enqueue the durable `SYNC` event — the `oldest` bound is
-/// the trigger time, and the `newest` sentinel is `0` (resolved to now at
-/// first processing). The date-cursor walk runs in the lane's `process` (the
-/// `SYNC` row's cursor walk). Returns the created gear part ids (spec #829:
-/// the onboarding response lists them).
-pub async fn onboard<D: EntityFacade<S>, S: Store<IcuSpec>>(
-    user_id: UserId,
-    time: i64,
-    facade: &D,
-    store: &mut S,
-) -> TbResult<Vec<PartId>> {
-    let gear = super::gear::update_gear(user_id, facade, store).await?;
-    super::event::insert_sync(user_id, time, store).await?;
-    Ok(gear)
-}
-
-/// The all-user icu stat read (spec #764): every icu user's provider-neutral
-/// [`UserStat`] — the domain stat plus this provider's queued-event count and
-/// disabled flag.
-pub async fn get_all_stats<D: EntityFacade<S>, S: Store<IcuSpec>>(
-    facade: &D,
-    store: &mut S,
-) -> TbResult<Vec<UserStat>> {
-    let users = store.user_get_all().await?;
-    let mut res = Vec::new();
-    for u in users {
-        let events = store.user_event_count(&u.id).await?;
-        res.push(UserStat {
-            stat: facade.get_stat(&u.tendabike_id, store).await?,
-            events,
-            disabled: u.disabled(),
-            provider: Provider::Icu.wire_value().to_string(),
-        });
-    }
-    Ok(res)
-}
-
-/// Deauthorize a user: disable their local row (their queued events dropped,
-/// their durable token cleared). Admin-only — the acting `session` must be an
-/// admin (the domain enforces the invariant, defense-in-depth over the web
-/// layer's `AxumAdmin` guard); `user_id` is the target user.
-///
-/// Unlike the Strava driver, intervals.icu tokens are durable and there is no
-/// revocation API, so the deauthorization is purely local: the cleared token
-/// is the disable signal ([`IcuUser::disabled`]).
-pub async fn user_deauthorize(
-    session: &mut dyn Session,
-    user_id: UserId,
-    store: &mut impl Store<IcuSpec>,
-) -> TbResult<()> {
-    if !session.is_admin() {
-        return Err(Error::Forbidden(
-            "only an admin can deauthorize a user".to_string(),
-        ));
-    }
-
-    let icu_id = super::event::get_icu_id(user_id, store).await?;
-    warn!("User {user_id} deauthorized");
-    icu_id.disable(store).await
-}
-
-/// Delete a user: deauthorize them (admin-only) plus delete their rows.
-/// Admin-only — the acting `session` must be an admin; `tbid` is the target
-/// user.
-pub async fn user_delete<D: EntityFacade<S>, S: Store<IcuSpec>>(
-    session: &mut dyn Session,
-    tbid: UserId,
-    facade: &D,
-    store: &mut S,
-) -> TbResult<()> {
-    if !session.is_admin() {
-        return Err(Error::Forbidden(
-            "only an admin can delete a user".to_string(),
-        ));
-    }
-    debug!("Deauthorizing user {tbid}");
-    user_deauthorize(session, tbid, store).await?;
-    let n = store.user_delete(tbid).await?;
-    debug!("Deleted {n} icu user");
-    facade.delete_user(&tbid, store).await
-}
-
 /// The icu half of the provider-agnostic `user_url` dispatch (ADR-0014): the
 /// public athlete profile page for the icu user's athlete id.
-pub async fn user_url<S: Store<IcuSpec>>(id: UserId, store: &mut S) -> TbResult<String> {
+pub(crate) async fn user_url<S: Store<IcuSpec>>(id: UserId, store: &mut S) -> TbResult<String> {
     let icu_id = super::event::get_icu_id(id, store).await?;
     Ok(format!("https://intervals.icu/athletes/{icu_id}"))
 }

@@ -49,8 +49,6 @@ use tokio::sync::{broadcast, oneshot, watch};
 
 use tb_provider::Provider;
 use tb_provider::ProviderLane;
-use tb_provider::icu::IcuDataStore;
-use tb_provider::strava::StravaDataStore;
 
 use crate::api::ServiceApi;
 use crate::facade::{
@@ -293,13 +291,10 @@ where
     // (`rescan`, `subscribe_shop`, `trigger_processing`, ADR-0014) own their
     // own transactions — the rescan's `rescan_all` and the shop-ownership
     // check ride the domain facade (no store bound), and the `sync_users`
-    // queue op rides the two providers' local data stores plus the
-    // provider-agnostic `Store` over each marker — so this impl carries the
-    // `StravaDataStore + IcuDataStore + Store<Spec> + Txn` bound.
+    // queue op rides the provider-agnostic `Store` over each marker — so this
+    // impl carries the `Store<Spec> + Txn` bound.
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaDataStore
-        + IcuDataStore
-        + tb_provider::Store<tb_provider::strava::StravaSpec>
+    S::Conn: tb_provider::Store<tb_provider::strava::StravaSpec>
         + tb_provider::Store<tb_provider::icu::IcuSpec>
         + Txn,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,

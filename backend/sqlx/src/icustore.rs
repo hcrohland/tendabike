@@ -2,7 +2,7 @@ use sqlx::FromRow;
 
 use crate::{SqlxConn, into_domain, option_into, vec_into};
 use tb_domain::{TbResult, UserId};
-use tb_provider::icu::{IcuDataStore, IcuEvent, IcuId, IcuUser};
+use tb_provider::icu::{IcuEvent, IcuId, IcuUser};
 
 #[derive(Clone, Debug, Default, FromRow)]
 struct DbIcuUser {
@@ -105,9 +105,14 @@ impl From<DbIcuEvent> for IcuEvent {
     }
 }
 
+/// The provider-agnostic store over the icu tables (spec #1029): the single
+/// uniform [`Store`](tb_provider::Store) interface, generic over the
+/// [`IcuSpec`](tb_provider::icu::IcuSpec) marker. `user_disable` is the
+/// disable policy (drop the queued events, clear the token) and `limited_until`
+/// the process-wide limiter.
 #[async_trait::async_trait]
-impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
-    async fn icuser_get_all(&mut self) -> TbResult<Vec<IcuUser>> {
+impl<'c> tb_provider::Store<tb_provider::icu::IcuSpec> for SqlxConn<'c> {
+    async fn user_get_all(&mut self) -> TbResult<Vec<IcuUser>> {
         sqlx::query_as!(DbIcuUser, "SELECT * FROM icu_users")
             .fetch_all(&mut **self.inner())
             .await
@@ -115,7 +120,7 @@ impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
             .map(vec_into)
     }
 
-    async fn icuser_get_by_tbid(&mut self, id: UserId) -> TbResult<IcuUser> {
+    async fn user_get_by_tbid(&mut self, id: UserId) -> TbResult<IcuUser> {
         sqlx::query_as!(
             DbIcuUser,
             "SELECT * FROM icu_users WHERE tbid = $1",
@@ -127,7 +132,7 @@ impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
         .map(Into::into)
     }
 
-    async fn icuser_get_by_icuid(&mut self, id: &IcuId) -> TbResult<Option<IcuUser>> {
+    async fn user_get_by_provider_id(&mut self, id: &IcuId) -> TbResult<Option<IcuUser>> {
         sqlx::query_as!(
             DbIcuUser,
             "SELECT * FROM icu_users WHERE icu_athlete_id = $1",
@@ -139,7 +144,7 @@ impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
         .map(option_into)
     }
 
-    async fn icuser_create(&mut self, user: IcuUser) -> TbResult<IcuUser> {
+    async fn user_create(&mut self, user: IcuUser) -> TbResult<IcuUser> {
         let db_user = DbIcuUser::from(user);
         sqlx::query_as!(
             DbIcuUser,
@@ -156,10 +161,10 @@ impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
         .map(Into::into)
     }
 
-    async fn icuser_update_token(
+    async fn user_update_token(
         &mut self,
-        icuid: IcuId,
-        access_token: Option<String>,
+        owner: IcuId,
+        token: Option<String>,
     ) -> TbResult<IcuUser> {
         sqlx::query_as!(
             DbIcuUser,
@@ -167,8 +172,8 @@ impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
              SET access_token = $2
              WHERE icu_athlete_id = $1
              RETURNING *",
-            icuid.to_string(),
-            access_token
+            owner.to_string(),
+            token
         )
         .fetch_one(&mut **self.inner())
         .await
@@ -176,7 +181,7 @@ impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
         .map(Into::into)
     }
 
-    async fn icuser_delete(&mut self, user: UserId) -> TbResult<usize> {
+    async fn user_delete(&mut self, user: UserId) -> TbResult<usize> {
         let result = sqlx::query!("DELETE FROM icu_users WHERE tbid = $1", i32::from(user))
             .execute(&mut **self.inner())
             .await
@@ -185,7 +190,104 @@ impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
         Ok(result.rows_affected() as usize)
     }
 
-    async fn icu_event_create(&mut self, e: IcuEvent) -> TbResult<()> {
+    /// The disable policy (a 401's policy): drop the user's queued events,
+    /// then clear their (durable) token (the cleared token is the disable
+    /// signal).
+    async fn user_disable(&mut self, owner: IcuId) -> TbResult<()> {
+        let _ = sqlx::query!(
+            "DELETE FROM icu_events WHERE icu_athlete_id = $1",
+            owner.to_string()
+        )
+        .execute(&mut **self.inner())
+        .await
+        .map_err(into_domain)?;
+        tb_provider::Store::<tb_provider::icu::IcuSpec>::user_update_token(self, owner, None)
+            .await?;
+        Ok(())
+    }
+
+    async fn user_event_count(&mut self, owner: &IcuId) -> TbResult<i64> {
+        let count = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM icu_events WHERE icu_athlete_id = $1",
+            owner.to_string()
+        )
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)?;
+        Ok(count.unwrap_or(0))
+    }
+
+    async fn event_get_next(&mut self, owner: IcuId) -> TbResult<Option<IcuEvent>> {
+        sqlx::query_as!(
+            DbIcuEvent,
+            r#"SELECT id, icu_athlete_id, activity_id as "activity_id!", event_time, object_type as "object_type!", event_type as "event_type!", oldest FROM icu_events
+             WHERE icu_athlete_id = $1
+             ORDER BY event_time ASC
+             LIMIT 1"#,
+            owner.to_string()
+        )
+        .fetch_optional(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(option_into)
+    }
+
+    async fn event_get_later(&mut self, key: String, owner: IcuId) -> TbResult<Vec<IcuEvent>> {
+        sqlx::query_as!(
+            DbIcuEvent,
+            r#"SELECT id, icu_athlete_id, activity_id as "activity_id!", event_time, object_type as "object_type!", event_type as "event_type!", oldest FROM icu_events
+               WHERE activity_id = $1 AND icu_athlete_id = $2
+               ORDER BY event_time ASC"#,
+            key,
+            owner.to_string()
+        )
+        .fetch_all(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(vec_into)
+    }
+
+    async fn event_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
+        sqlx::query!("DELETE FROM icu_events WHERE id = ANY($1)", values as _)
+            .execute(&mut **self.inner())
+            .await
+            .map_err(into_domain)?;
+        Ok(())
+    }
+
+    async fn event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {
+        sqlx::query!("DELETE FROM icu_events WHERE id = $1", event_id)
+            .execute(&mut **self.inner())
+            .await
+            .map_err(into_domain)?;
+        Ok(())
+    }
+
+    async fn event_set_time(&mut self, event_id: Option<i32>, time: i64) -> TbResult<()> {
+        sqlx::query!(
+            "UPDATE icu_events SET event_time = $2 WHERE id = $1",
+            event_id,
+            time
+        )
+        .execute(&mut **self.inner())
+        .await
+        .map_err(into_domain)?;
+        Ok(())
+    }
+
+    async fn event_delete_sync(&mut self, owner: &IcuId) -> TbResult<usize> {
+        let result = sqlx::query!(
+            "DELETE FROM icu_events WHERE icu_athlete_id = $1 AND object_type = 'SYNC'",
+            owner.to_string()
+        )
+        .execute(&mut **self.inner())
+        .await
+        .map_err(into_domain)?;
+
+        Ok(result.rows_affected() as usize)
+    }
+
+    async fn event_create(&mut self, e: IcuEvent) -> TbResult<()> {
         let e: DbIcuEvent = e.into();
         sqlx::query_as!(
             DbIcuEvent,
@@ -205,174 +307,6 @@ impl<'c> tb_provider::icu::IcuDataStore for SqlxConn<'c> {
         Ok(())
     }
 
-    async fn icu_event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {
-        sqlx::query!("DELETE FROM icu_events WHERE id = $1", event_id)
-            .execute(&mut **self.inner())
-            .await
-            .map_err(into_domain)?;
-        Ok(())
-    }
-
-    async fn icu_event_set_time(&mut self, e_id: Option<i32>, e_time: i64) -> TbResult<()> {
-        sqlx::query!(
-            "UPDATE icu_events SET event_time = $2 WHERE id = $1",
-            e_id,
-            e_time
-        )
-        .execute(&mut **self.inner())
-        .await
-        .map_err(into_domain)?;
-        Ok(())
-    }
-
-    async fn icu_event_get_next_for_user(&mut self, user: IcuId) -> TbResult<Option<IcuEvent>> {
-        sqlx::query_as!(
-            DbIcuEvent,
-            r#"SELECT id, icu_athlete_id, activity_id as "activity_id!", event_time, object_type as "object_type!", event_type as "event_type!", oldest FROM icu_events
-             WHERE icu_athlete_id = $1
-             ORDER BY event_time ASC
-             LIMIT 1"#,
-            user.to_string()
-        )
-        .fetch_optional(&mut **self.inner())
-        .await
-        .map_err(into_domain)
-        .map(option_into)
-    }
-
-    async fn icu_event_get_later(
-        &mut self,
-        activity_id: &str,
-        icu_athlete_id: &IcuId,
-    ) -> TbResult<Vec<IcuEvent>> {
-        sqlx::query_as!(
-            DbIcuEvent,
-            r#"SELECT id, icu_athlete_id, activity_id as "activity_id!", event_time, object_type as "object_type!", event_type as "event_type!", oldest FROM icu_events
-              WHERE activity_id = $1 AND icu_athlete_id = $2
-              ORDER BY event_time ASC"#,
-            activity_id,
-            icu_athlete_id.to_string()
-        )
-        .fetch_all(&mut **self.inner())
-        .await
-        .map_err(into_domain)
-        .map(vec_into)
-    }
-
-    async fn icu_events_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
-        sqlx::query!("DELETE FROM icu_events WHERE id = ANY($1)", values as _)
-            .execute(&mut **self.inner())
-            .await
-            .map_err(into_domain)?;
-        Ok(())
-    }
-
-    async fn icu_events_get_count_for_user(&mut self, user: &IcuId) -> TbResult<i64> {
-        let count = sqlx::query_scalar!(
-            "SELECT COUNT(*) FROM icu_events WHERE icu_athlete_id = $1",
-            user.to_string()
-        )
-        .fetch_one(&mut **self.inner())
-        .await
-        .map_err(into_domain)?;
-        Ok(count.unwrap_or(0))
-    }
-
-    async fn icu_events_get_latest_time(&mut self, user: &IcuId) -> TbResult<Option<i64>> {
-        let latest = sqlx::query_scalar!(
-            "SELECT MAX(event_time) FROM icu_events WHERE icu_athlete_id = $1",
-            user.to_string()
-        )
-        .fetch_one(&mut **self.inner())
-        .await
-        .map_err(into_domain)?;
-        Ok(latest)
-    }
-
-    async fn icu_events_delete_for_user(&mut self, user: &IcuId) -> TbResult<usize> {
-        let result = sqlx::query!(
-            "DELETE FROM icu_events WHERE icu_athlete_id = $1",
-            user.to_string()
-        )
-        .execute(&mut **self.inner())
-        .await
-        .map_err(into_domain)?;
-
-        Ok(result.rows_affected() as usize)
-    }
-
-    async fn icu_events_delete_sync_for_user(&mut self, user: &IcuId) -> TbResult<usize> {
-        let result = sqlx::query!(
-            "DELETE FROM icu_events WHERE icu_athlete_id = $1 AND object_type = 'SYNC'",
-            user.to_string()
-        )
-        .execute(&mut **self.inner())
-        .await
-        .map_err(into_domain)?;
-
-        Ok(result.rows_affected() as usize)
-    }
-}
-
-impl<'c> tb_provider::icu::IcuStore for SqlxConn<'c> {}
-
-/// The provider-agnostic store over the unified store (spec #1029, ticket
-/// #1030): a thin forward onto the [`IcuDataStore`] user-row and event-row
-/// ops; `user_disable` is the disable policy (drop the queued events, clear
-/// the token) and `limited_until` the process-wide limiter.
-#[async_trait::async_trait]
-impl<'c> tb_provider::Store<tb_provider::icu::IcuSpec> for SqlxConn<'c> {
-    async fn user_get_all(&mut self) -> TbResult<Vec<IcuUser>> {
-        self.icuser_get_all().await
-    }
-    async fn user_get_by_tbid(&mut self, id: UserId) -> TbResult<IcuUser> {
-        self.icuser_get_by_tbid(id).await
-    }
-    async fn user_get_by_provider_id(&mut self, id: &IcuId) -> TbResult<Option<IcuUser>> {
-        self.icuser_get_by_icuid(id).await
-    }
-    async fn user_create(&mut self, user: IcuUser) -> TbResult<IcuUser> {
-        self.icuser_create(user).await
-    }
-    async fn user_update_token(
-        &mut self,
-        owner: IcuId,
-        token: Option<String>,
-    ) -> TbResult<IcuUser> {
-        self.icuser_update_token(owner, token).await
-    }
-    async fn user_delete(&mut self, user: UserId) -> TbResult<usize> {
-        self.icuser_delete(user).await
-    }
-    async fn user_disable(&mut self, owner: IcuId) -> TbResult<()> {
-        let _ = self.icu_events_delete_for_user(&owner).await?;
-        self.icuser_update_token(owner, None).await?;
-        Ok(())
-    }
-    async fn user_event_count(&mut self, owner: &IcuId) -> TbResult<i64> {
-        self.icu_events_get_count_for_user(owner).await
-    }
-    async fn event_get_next(&mut self, owner: IcuId) -> TbResult<Option<IcuEvent>> {
-        self.icu_event_get_next_for_user(owner).await
-    }
-    async fn event_get_later(&mut self, key: String, owner: IcuId) -> TbResult<Vec<IcuEvent>> {
-        self.icu_event_get_later(&key, &owner).await
-    }
-    async fn event_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
-        self.icu_events_delete_batch(values).await
-    }
-    async fn event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {
-        self.icu_event_delete(event_id).await
-    }
-    async fn event_set_time(&mut self, event_id: Option<i32>, time: i64) -> TbResult<()> {
-        self.icu_event_set_time(event_id, time).await
-    }
-    async fn event_delete_sync(&mut self, owner: &IcuId) -> TbResult<usize> {
-        self.icu_events_delete_sync_for_user(owner).await
-    }
-    async fn event_create(&mut self, e: IcuEvent) -> TbResult<()> {
-        self.icu_event_create(e).await
-    }
     fn limited_until(&self) -> Option<i64> {
         tb_provider::icu::limited_until()
     }
