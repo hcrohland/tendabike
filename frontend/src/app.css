@@ -17,29 +17,30 @@
    * correctly in both modes.
    */
 
-  /* Neutral tones — both gray. primary is the light tone, secondary the
-     darker tone. Anchored to the current surface grays: primary bg is
-     gray-100/gray-800, secondary bg is gray-300/gray-600. */
+  /* Neutral tones — one consistent cool-gray family (Tailwind gray). primary
+     is the light tone, secondary the darker tone. Each scale interpolates
+     between its surface anchors (primary gray-100/gray-800, secondary
+     gray-300/gray-600), so every step of each scale is the same cool gray. */
   --color-primary-50: #fafafa;
   --color-primary-100: #f3f4f6;
-  --color-primary-200: #dbdbdb;
-  --color-primary-300: #c2c2c2;
-  --color-primary-400: #a9a9a9;
-  --color-primary-500: #909090;
-  --color-primary-600: #777777;
-  --color-primary-700: #5d5d5d;
-  --color-primary-800: #444444;
+  --color-primary-200: #e5e7eb;
+  --color-primary-300: #d1d5db;
+  --color-primary-400: #9ca3af;
+  --color-primary-500: #6b7280;
+  --color-primary-600: #4b5563;
+  --color-primary-700: #374151;
+  --color-primary-800: #2b3544;
   --color-primary-900: #1f2937;
   --color-primary-950: #1e1e1e;
   --color-secondary-50: #dedede;
   --color-secondary-100: #d1d5db;
-  --color-secondary-200: #c6c6c6;
-  --color-secondary-300: #b6b6b6;
-  --color-secondary-400: #a6a6a6;
-  --color-secondary-500: #969696;
-  --color-secondary-600: #878787;
-  --color-secondary-700: #777777;
-  --color-secondary-800: #676767;
+  --color-secondary-200: #c0c5cc;
+  --color-secondary-300: #b0b5bd;
+  --color-secondary-400: #9fa5ae;
+  --color-secondary-500: #8e959f;
+  --color-secondary-600: #7d8590;
+  --color-secondary-700: #6d7581;
+  --color-secondary-800: #5c6572;
   --color-secondary-900: #4b5563;
   --color-secondary-950: #4f4f4f;
 
