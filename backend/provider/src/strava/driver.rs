@@ -5,7 +5,7 @@
 //! (the lane, the dispatch) drives through.
 
 use crate::driver::Provider;
-use crate::facade::{ActivityId, EntityFacade, PartId, Session, Summary, TbResult, UserId};
+use crate::facade::{ActivityId, EntityFacade, Part, PartId, Session, Summary, TbResult, UserId};
 use crate::store::Store;
 use crate::strava::{StravaId, StravaSpec, StravaUser};
 use oauth2::RefreshToken;
@@ -80,8 +80,18 @@ impl Provider<StravaSpec> for StravaDriver {
         Ok(())
     }
 
-    fn authorize_url(state: &str, code_verifier: Option<&str>) -> String {
-        crate::Provider::Strava.authorize_url(state, code_verifier)
+    fn authorize_url(state: &str, _code_verifier: Option<&str>) -> String {
+        use super::client::{SCOPES, strava_client};
+        use oauth2::{CsrfToken, Scope};
+
+        // The Strava flow is a plain authorization-code exchange: no PKCE
+        // challenge, so the code verifier is unused. The URL carries the
+        // driver's client id, redirect URI, and scopes.
+        let (auth_url, _) = strava_client()
+            .authorize_url(|| CsrfToken::new(state.to_string()))
+            .add_scope(Scope::new(SCOPES.to_string()))
+            .url();
+        auth_url.to_string()
     }
 
     async fn login<S: Store<StravaSpec>, D: EntityFacade<S>>(
@@ -193,14 +203,8 @@ impl Provider<StravaSpec> for StravaDriver {
         Ok(format!("https://strava.com/activities/{raw}"))
     }
 
-    async fn gear_url<S: Store<StravaSpec>, D: EntityFacade<S>>(
-        session: Box<dyn Session>,
-        id: PartId,
-        facade: &D,
-        store: &mut S,
-    ) -> TbResult<Option<String>> {
-        let part = facade.part(id, session, store).await?;
-        Self::gear_url_from_part(&part)
+    fn gear_url(part: &Part) -> TbResult<Option<String>> {
+        Self::gear_url_from_part(part)
     }
 
     async fn user_url<S: Store<StravaSpec>>(id: UserId, store: &mut S) -> TbResult<String> {

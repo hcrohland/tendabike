@@ -3,8 +3,8 @@
 //!
 //! It mirrors the Strava driver's `oauth` module (ADR-0014): the `/icu/login`
 //! redirect (the CSRF state is generated in the web shell, beside its other
-//! protocol secrets; the authorize URL is the `Provider` enum's
-//! `authorize_url`) and the `/icu/token` callback (the query values are
+//! protocol secrets; the authorize URL is the driver's `authorize_url`) and
+//! the `/icu/token` callback (the query values are
 //! extracted and forwarded opaquely to the provider service's `login` op —
 //! the scope check, the token exchange, and the wire-shape parsing are the
 //! provider layer's work). The CSRF state handling is the same HMAC scheme as
@@ -32,6 +32,8 @@ use crate::{
     oauth_common::{gentoken_pkce, getpath_and_verifier, login_and_redirect},
 };
 use tb_provider::Provider;
+use tb_provider::driver::Provider as _;
+use tb_provider::icu::IcuDriver;
 
 #[derive(Deserialize)]
 pub(crate) struct PathParam {
@@ -52,10 +54,10 @@ pub(crate) async fn icu_auth(
     }
     let path = path.inner.unwrap_or("/".to_owned());
     // A fresh random verifier per login: it round-trips in the signed state
-    // (the callback recovers it for the token exchange), and the enum derives
-    // the authorize URL's S256 challenge from it.
+    // (the callback recovers it for the token exchange), and the driver
+    // derives the authorize URL's S256 challenge from it.
     let (_, verifier) = PkceCodeChallenge::new_random_sha256();
-    let url = Provider::Icu.authorize_url(
+    let url = IcuDriver::authorize_url(
         gentoken_pkce(path, verifier.secret()).secret(),
         Some(verifier.secret()),
     );

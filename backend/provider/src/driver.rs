@@ -25,7 +25,7 @@ use log::{debug, warn};
 
 use crate::ProviderSpec;
 use crate::facade::{
-    ActivityId, EntityFacade, Error, PartId, Session, Summary, TbResult, UserId, UserStat,
+    ActivityId, EntityFacade, Error, Part, PartId, Session, Summary, TbResult, UserId, UserStat,
 };
 use crate::store::Store;
 
@@ -112,16 +112,10 @@ pub trait Provider<P: ProviderSpec>: Send + Sync {
         store: &mut S,
     ) -> TbResult<String>;
 
-    /// The provider's gear page for the part `id`, gated on the acting
-    /// session's ownership (the part read is the ownership check). The one
-    /// non-total op: a provider without a public gear page is the typed
-    /// absence (`None`).
-    async fn gear_url<S: Store<P>, D: EntityFacade<S>>(
-        session: Box<dyn Session>,
-        id: PartId,
-        facade: &D,
-        store: &mut S,
-    ) -> TbResult<Option<String>>;
+    /// The provider's gear page for the part `part` (already read by the
+    /// caller — the part read is the ownership check). The one non-total op:
+    /// a provider without a public gear page is the typed absence (`None`).
+    fn gear_url(part: &Part) -> TbResult<Option<String>>;
 
     /// The provider's public user profile URL for the TendaBike user `id`
     /// (no session: the route has no user context to gate on).

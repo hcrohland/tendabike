@@ -11,7 +11,9 @@
 use oauth2::AccessToken;
 
 use crate::driver::Provider;
-use crate::facade::{ActivityId, EntityFacade, Error, PartId, Session, Summary, TbResult, UserId};
+use crate::facade::{
+    ActivityId, EntityFacade, Error, Part, PartId, Session, Summary, TbResult, UserId,
+};
 use crate::icu::{IcuId, IcuSpec, IcuUser};
 use crate::store::Store;
 
@@ -42,7 +44,23 @@ impl Provider<IcuSpec> for IcuDriver {
     }
 
     fn authorize_url(state: &str, code_verifier: Option<&str>) -> String {
-        crate::Provider::Icu.authorize_url(state, code_verifier)
+        use super::client::{SCOPES, icu_client};
+        use oauth2::{CsrfToken, PkceCodeChallenge, PkceCodeVerifier, Scope};
+
+        // The intervals.icu flow is PKCE (S256): the authorize URL carries the
+        // driver's client id, redirect URI, and scopes, plus the S256
+        // challenge derived from the code verifier.
+        let mut builder = icu_client()
+            .authorize_url(|| CsrfToken::new(state.to_string()))
+            .add_scope(Scope::new(SCOPES.to_string()));
+        if let Some(verifier) = code_verifier {
+            let challenge = PkceCodeChallenge::from_code_verifier_sha256(&PkceCodeVerifier::new(
+                verifier.to_string(),
+            ));
+            builder = builder.set_pkce_challenge(challenge);
+        }
+        let (auth_url, _) = builder.url();
+        auth_url.to_string()
     }
 
     async fn login<S: Store<IcuSpec>, D: EntityFacade<S>>(
@@ -87,15 +105,9 @@ impl Provider<IcuSpec> for IcuDriver {
         super::activity::activity_url(id, session, facade, store).await
     }
 
-    async fn gear_url<S: Store<IcuSpec>, D: EntityFacade<S>>(
-        session: Box<dyn Session>,
-        id: PartId,
-        facade: &D,
-        store: &mut S,
-    ) -> TbResult<Option<String>> {
-        // The part read is the ownership check; icu gear is a private
-        // settings item with no public page — the typed absence.
-        facade.part(id, session, store).await?;
+    fn gear_url(_part: &Part) -> TbResult<Option<String>> {
+        // icu gear is a private settings item with no public page — the typed
+        // absence.
         Ok(None)
     }
 

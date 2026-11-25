@@ -1,8 +1,8 @@
 use super::Provider;
 use crate::ProviderSpec;
 use crate::facade::{
-    ActivityId, EntityFacade, MockEntityFacade, OnboardingStatus, PartId, Session, Stat, Summary,
-    TbResult, User, UserId, mock_session, mock_session_admin,
+    ActivityId, EntityFacade, MockEntityFacade, OnboardingStatus, Part, PartId, Session, Stat,
+    Summary, TbResult, User, UserId, mock_session, mock_session_admin,
 };
 use crate::store::Store;
 use crate::strava::{StravaId, StravaSpec, StravaUser};
@@ -83,12 +83,7 @@ impl Provider<StravaSpec> for TestDriver {
         Ok("activity-url".to_string())
     }
 
-    async fn gear_url<S: Store<StravaSpec>, D: EntityFacade<S>>(
-        _session: Box<dyn Session>,
-        _id: PartId,
-        _facade: &D,
-        _store: &mut S,
-    ) -> TbResult<Option<String>> {
+    fn gear_url(_part: &Part) -> TbResult<Option<String>> {
         Ok(None)
     }
 

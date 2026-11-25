@@ -304,15 +304,14 @@ where
     S: Store<StravaSpec> + Store<IcuSpec>,
 {
     // The part read is the ownership check; the provider is the part
-    // owner's real one (the domain stores no provider). The read is the
-    // ownership check (it consumes the acting session), so the arms build
-    // the URL from the read part: the Strava arm's source, the icu arm the
-    // typed absence (icu gear has no public page).
+    // owner's real one (the domain stores no provider). The arms drive the
+    // driver's `gear_url` from the read part: the Strava arm's source, the
+    // icu arm the typed absence (icu gear has no public page).
     let part = facade.part(id, session, store).await?;
     let provider = crate::provider_of(store, part.owner).await?;
     match provider {
-        Provider::Strava => crate::strava::driver::StravaDriver::gear_url_from_part(&part),
-        Provider::Icu => Ok(None),
+        Provider::Strava => StravaDriver::gear_url(&part),
+        Provider::Icu => IcuDriver::gear_url(&part),
     }
 }
 
