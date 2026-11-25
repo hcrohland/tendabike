@@ -10,8 +10,7 @@
 //! app-internal — not part of the driver author's surface.
 //!
 //! Under `test-support`, `mockall`'s `#[automock]` generates a single
-//! [`MockStore`] double for the DB-free suites (replacing the hand-written
-//! composite of per-provider data-store mocks).
+//! [`MockStore`] double for the DB-free suites.
 
 use crate::ProviderSpec;
 use crate::facade::{TbResult, UserId};

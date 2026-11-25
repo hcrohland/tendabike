@@ -3,9 +3,9 @@ This file defines the Strava provider marker.
 
 `StravaSpec` is the type carrier for Strava's wire shapes (spec #1029) — the
 [`StravaUser`] row, the [`Event`] row, the [`StravaId`] owner, and the `i64`
-dedup key (the `object_id`). The per-provider data-store trait is gone: the
-store is the single uniform [`Store`](crate::store::Store) interface, generic
-over this marker (the database crate implements it once per provider).
+dedup key (the `object_id`). The store is the single uniform
+[`Store`](crate::store::Store) interface, generic over this marker (the
+database crate implements it once per provider).
 */
 
 use super::{StravaId, StravaUser, event::Event};

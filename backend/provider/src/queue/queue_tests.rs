@@ -186,8 +186,7 @@ async fn fail_event_keep_queued_is_a_noop() {
 
 /// Dead auth (`NotAuth`) disables the user (which drops their queued events):
 /// the disable commits with the caller's transaction. The disable is a store
-/// user-lifecycle op (`Store::user_disable`) — it no longer lives on the event
-/// queue (spec #1029, ticket #1031).
+/// user-lifecycle op (`Store::user_disable`) (spec #1029, ticket #1031).
 #[tokio::test]
 async fn fail_event_disable_user_disables() {
     let mut queue = MockQueue::new();

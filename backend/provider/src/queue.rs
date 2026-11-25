@@ -5,9 +5,7 @@
 //! The event identity (id, owner, key) is carried by the marker's type-level
 //! accessors; the queue operations (get-next, get-later, delete-batch,
 //! delete, disable, the rate-limit gate) are driven through the single
-//! [`Store`](crate::store::Store) interface. The event-identity trait and the
-//! event-queue trait are gone — the marker's accessors and the [`Store`]
-//! event ops replace them.
+//! [`Store`](crate::store::Store) interface (spec #1029, ticket #1031).
 //!
 //! The two generic ops: [`get_event`] (the read-side rules — the rate-limit
 //! gate, then the latest-per-key dedup, ADR-0005 / spec #446 §4.3) and
@@ -79,8 +77,8 @@ where
 /// place on `DropEvent` (here) — no second delete on the caller's fall-through.
 ///
 /// The user-disable arm is a store user-lifecycle op
-/// ([`Store::user_disable`](crate::store::Store::user_disable)) — the
-/// disable no longer lives on the event queue (spec #1029, ticket #1031).
+/// ([`Store::user_disable`](crate::store::Store::user_disable)) (spec #1029,
+/// ticket #1031).
 pub(crate) async fn fail_event<P, S>(
     event: &P::Event,
     err: Error,

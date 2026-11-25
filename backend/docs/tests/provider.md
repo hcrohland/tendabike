@@ -15,22 +15,21 @@ Shared conventions (the seam model, writing conventions, the mockall `.times` go
 
 ## Shared pattern
 
-Each driver owns its **provider → domain mapping** (JSON → domain entities) and the driver-logic free functions over it. The logic runs for real against the driver's `Mock<X>DataStore` (an `#[automock]` of the driver's store trait); domain ops go through `MockEntityFacade` (`C` inferred as the mock store); the HTTP API is stubbed behind the shared canned-response kit. Assert on canned store outcomes for state; on `requests()` for API calls.
+Each driver owns its **provider → domain mapping** (JSON → domain entities) and the driver-logic free functions over it. The logic runs for real against the driver's `MockStore<Spec>` (the `#[automock]` of the single `Store` trait); domain ops go through `MockEntityFacade` (`C` inferred as the mock store); the HTTP API is stubbed behind the shared canned-response kit. Assert on canned store outcomes for state; on `requests()` for API calls.
 
 ## Strava driver
 
-- **`MockStravaDataStore`** (`strava/traits.rs`) — the `StravaDataStore` automock.
+- **`MockStore<StravaSpec>`** (`store.rs`) — the `Store` automock.
 - **`strava_session` / `strava_admin_session`** (`strava/test_support.rs`) — build a `MockSession` with a warm `TokenCache` (no refresh). `strava_session` begins the thread-local canned-response scope. Extra: `deauthorizes() -> Vec<StravaId>` records `deauthorize()` calls.
 - **JSON helpers**: `activity_json(id, type, gear)` (timestamp `1767348000`, distance `25000.0`, elevation `300.0`), `gear_json(id, frame_type)` (`None` = shoes), `strava_user(tbid, stravaid, enabled)`.
 
 ```rust
-use crate::test_support::{TestStravaStore, queue, strava_session};
+use crate::strava::test_support::{setup, gear_json};
+use crate::test_support::queue;
 
 #[tokio::test]
 async fn my_test() -> TbResult<()> {
-    let mut store = TestStravaStore::new();
-    store.insert_user(strava_user(UserId::from(1), 42, true));
-    let mut session = strava_session(UserId::from(1), 42.into());
+    let (mut store, _facade, _session) = setup();
     queue("/gear/b1", &gear_json("b1", Some(0)));
     // ...
     Ok(())
@@ -43,17 +42,17 @@ async fn my_test() -> TbResult<()> {
 
 ## ICU driver
 
-- **`MockIcuDataStore`** (`icu/traits.rs`) — the `IcuDataStore` automock.
-- **`setup()`** (`icu/test_support.rs`) — builds a fresh `MockIcuDataStore` + `MockEntityFacade` and calls `begin_test()`. No token cache to seed (icu tokens are durable, read from `icu_users`), so `setup()` is the only entry point.
+- **`MockStore<IcuSpec>`** (`store.rs`) — the `Store` automock.
+- **`setup()`** (`icu/test_support.rs`) — builds a fresh `MockStore<IcuSpec>` + `MockEntityFacade` and calls `begin_test()`. No token cache to seed (icu tokens are durable, read from `icu_users`), so `setup()` is the only entry point.
 - **Fixtures**: `icu_user(tbid, icuathlete, enabled)`, `user(id)`, `icu_id(n)`, `part(id, owner, what, source)`, `activity_json(id, type, gear)` (timestamp `1767348000`, distance `25000.0`, moving time `3300`, joules `4000.0`), `stub_activity_json(id, type)` (distance + moving_time null), `gear_json(id, type)`.
 
 ```rust
-use crate::test_support::{setup, queue, activity_json, icu_user};
+use crate::icu::test_support::{setup, activity_json};
+use crate::test_support::queue;
 
 #[tokio::test]
 async fn my_test() -> TbResult<()> {
-    let (mut store, mut facade) = setup();
-    store.insert_user(icu_user(UserId::from(1), "i55751783", true));
+    let (mut store, _facade) = setup();
     queue("/activity/abc123", &activity_json("abc123", "Ride", Some("g1")));
     // ...
     Ok(())

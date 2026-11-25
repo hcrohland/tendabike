@@ -19,7 +19,7 @@ Every suite runs the crate's own logic for real and scripts only its I/O seams, 
 | Crate | Owns | Scripts (mocks) | Delegates to |
 |-------|------|-----------------|--------------|
 | `tb_domain` | domain results (`Summary`, `TbResult`) | the store seam (`MockStore`) | store I/O → `tb_sqlx` |
-| `tb_provider` | provider → domain mapping + provider logic | the provider store seam (`MockStravaDataStore` / `MockIcuDataStore`) | store I/O → `tb_sqlx`; domain results → `tb_domain` |
+| `tb_provider` | provider → domain mapping + provider logic | the provider store seam (`MockStore<Spec>`) | store I/O → `tb_sqlx`; domain results → `tb_domain` |
 | `tb_exec` | frame-push / orchestration | the loop's seams (`MockConn`, `MockDomainFacade`, `MockLane`) | store I/O → `tb_sqlx`; domain results → `tb_domain`; provider mapping → `tb_provider` |
 | `tb_axum` | the HTTP layer (status, JSON, routing, `Error`→response, SSE) | the domain (`MockServiceApi`) | loop + store truth → `tb_sqlx`; dispatch → `tb_domain` |
 | `tb_sqlx` | store I/O + the executor's txn lifecycle, on real Postgres | nothing at the store level | domain results → `tb_domain`; orchestration → `tb_exec` |
