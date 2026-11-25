@@ -17,7 +17,8 @@ use oauth2::{AuthorizationCode, PkceCodeVerifier, TokenResponse};
 use serde::{Deserialize, Serialize};
 
 use super::client::{HTTP_CLIENT, SCOPES, icu_client};
-use super::{Error, IcuAthleteInfo, IcuDataStore, PartId, Session, TbResult, UserId, UserStat};
+use super::{Error, IcuAthleteInfo, IcuSpec, PartId, Session, TbResult, UserId, UserStat};
+use crate::store::Store;
 use crate::{EntityFacade, Provider};
 
 /// The icu athlete ID: a provider text id (intervals.icu ids are not
@@ -37,21 +38,16 @@ impl From<&str> for IcuId {
 
 impl IcuId {
     /// Read the icu user for this athlete id, if one exists.
-    pub(crate) async fn read(&self, store: &mut impl IcuDataStore) -> TbResult<Option<IcuUser>> {
-        store.icuser_get_by_icuid(self).await
+    pub(crate) async fn read(&self, store: &mut impl Store<IcuSpec>) -> TbResult<Option<IcuUser>> {
+        store.user_get_by_provider_id(self).await
     }
 
     /// Disable the user (a 401 on a live request, spec #764): drop their
     /// queued events and clear their (durable) access token. The cleared
     /// token is the disable signal — [`IcuUser::disabled`] reports it.
-    pub async fn disable(&self, store: &mut impl IcuDataStore) -> TbResult<()> {
+    pub async fn disable(&self, store: &mut impl Store<IcuSpec>) -> TbResult<()> {
         info!("disabling icu user {self}");
-        let events = store.icu_events_delete_for_user(self).await?;
-        if events > 0 {
-            info!("deleted {events} open events for icu user {self}");
-        }
-        store.icuser_update_token(self.clone(), None).await?;
-        Ok(())
+        store.user_disable(self.clone()).await
     }
 }
 
@@ -92,7 +88,7 @@ impl IcuUser {
     /// # Returns
     ///
     /// An `TbResult` containing the upserted [`IcuUser`].
-    pub async fn upsert<D: EntityFacade<S>, S: IcuDataStore>(
+    pub async fn upsert<D: EntityFacade<S>, S: Store<IcuSpec>>(
         id: IcuId,
         name: &str,
         access_token: &str,
@@ -109,7 +105,7 @@ impl IcuUser {
                 .update_user(&user.tendabike_id, firstname, lastname, &avatar, store)
                 .await?;
             store
-                .icuser_update_token(user.id.clone(), Some(access_token.to_string()))
+                .user_update_token(user.id.clone(), Some(access_token.to_string()))
                 .await?;
             return Ok(user);
         }
@@ -126,7 +122,7 @@ impl IcuUser {
         };
         info!("creating new icu user id {user:?}");
 
-        let user = store.icuser_create(user).await?;
+        let user = store.user_create(user).await?;
         Ok(user)
     }
 }
@@ -141,7 +137,7 @@ impl IcuUser {
 ///
 /// intervals.icu omits the `scope` query param on some callbacks: an absent
 /// scope (the empty string) is accepted, a present one must match.
-pub async fn login<D: EntityFacade<S>, S: IcuDataStore>(
+pub async fn login<D: EntityFacade<S>, S: Store<IcuSpec>>(
     code: &str,
     scope: &str,
     code_verifier: &str,
@@ -183,7 +179,7 @@ pub async fn login<D: EntityFacade<S>, S: IcuDataStore>(
 /// first processing). The date-cursor walk runs in the lane's `process` (the
 /// `SYNC` row's cursor walk). Returns the created gear part ids (spec #829:
 /// the onboarding response lists them).
-pub async fn onboard<D: EntityFacade<S>, S: IcuDataStore>(
+pub async fn onboard<D: EntityFacade<S>, S: Store<IcuSpec>>(
     user_id: UserId,
     time: i64,
     facade: &D,
@@ -197,14 +193,14 @@ pub async fn onboard<D: EntityFacade<S>, S: IcuDataStore>(
 /// The all-user icu stat read (spec #764): every icu user's provider-neutral
 /// [`UserStat`] — the domain stat plus this provider's queued-event count and
 /// disabled flag.
-pub async fn get_all_stats<D: EntityFacade<S>, S: IcuDataStore>(
+pub async fn get_all_stats<D: EntityFacade<S>, S: Store<IcuSpec>>(
     facade: &D,
     store: &mut S,
 ) -> TbResult<Vec<UserStat>> {
-    let users = store.icuser_get_all().await?;
+    let users = store.user_get_all().await?;
     let mut res = Vec::new();
     for u in users {
-        let events = store.icu_events_get_count_for_user(&u.id).await?;
+        let events = store.user_event_count(&u.id).await?;
         res.push(UserStat {
             stat: facade.get_stat(&u.tendabike_id, store).await?,
             events,
@@ -226,7 +222,7 @@ pub async fn get_all_stats<D: EntityFacade<S>, S: IcuDataStore>(
 pub async fn user_deauthorize(
     session: &mut dyn Session,
     user_id: UserId,
-    store: &mut impl IcuDataStore,
+    store: &mut impl Store<IcuSpec>,
 ) -> TbResult<()> {
     if !session.is_admin() {
         return Err(Error::Forbidden(
@@ -242,7 +238,7 @@ pub async fn user_deauthorize(
 /// Delete a user: deauthorize them (admin-only) plus delete their rows.
 /// Admin-only — the acting `session` must be an admin; `tbid` is the target
 /// user.
-pub async fn user_delete<D: EntityFacade<S>, S: IcuDataStore>(
+pub async fn user_delete<D: EntityFacade<S>, S: Store<IcuSpec>>(
     session: &mut dyn Session,
     tbid: UserId,
     facade: &D,
@@ -255,14 +251,14 @@ pub async fn user_delete<D: EntityFacade<S>, S: IcuDataStore>(
     }
     debug!("Deauthorizing user {tbid}");
     user_deauthorize(session, tbid, store).await?;
-    let n = store.icuser_delete(tbid).await?;
+    let n = store.user_delete(tbid).await?;
     debug!("Deleted {n} icu user");
     facade.delete_user(&tbid, store).await
 }
 
 /// The icu half of the provider-agnostic `user_url` dispatch (ADR-0014): the
 /// public athlete profile page for the icu user's athlete id.
-pub async fn user_url<S: IcuDataStore>(id: UserId, store: &mut S) -> TbResult<String> {
+pub async fn user_url<S: Store<IcuSpec>>(id: UserId, store: &mut S) -> TbResult<String> {
     let icu_id = super::event::get_icu_id(id, store).await?;
     Ok(format!("https://intervals.icu/athletes/{icu_id}"))
 }

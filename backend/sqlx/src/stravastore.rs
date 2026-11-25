@@ -311,8 +311,8 @@ impl<'c> tb_provider::strava::StravaStore for SqlxConn<'c> {}
 
 /// The provider-agnostic store over the unified store (spec #1029, ticket
 /// #1030): a thin forward onto the [`StravaDataStore`] user-row and event-row
-/// ops; `user_disable` and `limited_until` drive the driver's own policy (the
-/// `StravaId` disable, the process-wide limiter).
+/// ops; `user_disable` is the disable policy (drop the queued events, clear
+/// the token) and `limited_until` the process-wide limiter.
 #[async_trait::async_trait]
 impl<'c> tb_provider::Store<tb_provider::strava::StravaSpec> for SqlxConn<'c> {
     async fn user_get_all(&mut self) -> TbResult<Vec<StravaUser>> {
@@ -338,7 +338,9 @@ impl<'c> tb_provider::Store<tb_provider::strava::StravaSpec> for SqlxConn<'c> {
         self.stravauser_delete(user).await
     }
     async fn user_disable(&mut self, owner: StravaId) -> TbResult<()> {
-        owner.disable(self).await
+        let _ = self.strava_events_delete_for_user(&owner).await?;
+        self.stravauser_update_token(owner, None).await?;
+        Ok(())
     }
     async fn user_event_count(&mut self, owner: &StravaId) -> TbResult<i64> {
         self.strava_events_get_count_for_user(owner).await
@@ -354,6 +356,16 @@ impl<'c> tb_provider::Store<tb_provider::strava::StravaSpec> for SqlxConn<'c> {
     }
     async fn event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {
         self.strava_event_delete(event_id).await
+    }
+    async fn event_set_time(&mut self, event_id: Option<i32>, time: i64) -> TbResult<()> {
+        self.strava_event_set_time(event_id, time).await
+    }
+    async fn event_delete_sync(&mut self, owner: &StravaId) -> TbResult<usize> {
+        // The Strava syncs are the owner's `object_id` 0 events.
+        let syncs = self.strava_event_get_later(0, *owner).await?;
+        let ids = syncs.iter().map(|e| e.id).collect();
+        self.strava_events_delete_batch(ids).await?;
+        Ok(syncs.len())
     }
     async fn event_create(&mut self, e: Event) -> TbResult<()> {
         self.strava_event_create(e).await

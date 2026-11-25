@@ -12,15 +12,19 @@ use anyhow::Context;
 use log::trace;
 use serde::de::DeserializeOwned;
 
-use super::{IcuDataStore, IcuId};
+use super::{IcuId, IcuSpec};
 use crate::facade::{Error, TbResult, UserId};
+use crate::store::Store;
 
 const API: &str = "https://intervals.icu/api/v1";
 
 /// A valid access token for `user_id`: the (durable) token stored in
 /// `icu_users`. No refresh — intervals.icu tokens never rotate.
-async fn access_token(user_id: UserId, store: &mut impl IcuDataStore) -> TbResult<(IcuId, String)> {
-    let user = store.icuser_get_by_tbid(user_id).await?;
+async fn access_token(
+    user_id: UserId,
+    store: &mut impl Store<IcuSpec>,
+) -> TbResult<(IcuId, String)> {
+    let user = store.user_get_by_tbid(user_id).await?;
     let token = user
         .access_token
         .clone()
@@ -40,7 +44,7 @@ async fn access_token(user_id: UserId, store: &mut impl IcuDataStore) -> TbResul
 pub(crate) async fn request_json<T: DeserializeOwned>(
     user_id: UserId,
     uri: &str,
-    store: &mut impl IcuDataStore,
+    store: &mut impl Store<IcuSpec>,
 ) -> TbResult<T> {
     let (_icuid, access) = access_token(user_id, store).await?;
 

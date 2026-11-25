@@ -7,9 +7,7 @@ use super::http::request_json;
 use super::session::get_strava_id;
 #[cfg(test)]
 use super::{ActivityId, MockStravaDataStore};
-use super::{
-    Error, StravaDataStore, StravaId, StravaSpec, Summary, TbResult, UserId, activity, get_time,
-};
+use super::{Error, StravaId, StravaSpec, Summary, TbResult, UserId, activity, get_time};
 use crate::EntityFacade;
 use crate::lane::QueueRead;
 use crate::store::Store;
@@ -45,7 +43,7 @@ impl InEvent {
     /// # Returns
     ///
     /// Returns a `Result` containing an `Event` struct if the conversion is successful, or an `anyhow::Error` if it fails.
-    async fn into_event(self, store: &mut impl StravaDataStore) -> TbResult<Event> {
+    async fn into_event(self, store: &mut impl Store<StravaSpec>) -> TbResult<Event> {
         if StravaId::read(&self.owner_id, store).await?.is_none() {
             return Err(Error::BadRequest(format!(
                 "Unknown event owner received: {self:?}"
@@ -80,7 +78,7 @@ impl InEvent {
     /// Returns the owner's TendaBike [`UserId`] when the event was queued (so
     /// the caller can wake that user), or `None` for an athlete
     /// (de)authorization (nothing was queued, so there is nothing to wake).
-    pub async fn accept(self, store: &mut impl StravaDataStore) -> TbResult<Option<UserId>> {
+    pub async fn accept(self, store: &mut impl Store<StravaSpec>) -> TbResult<Option<UserId>> {
         let user_id = StravaId::read(&self.owner_id, store)
             .await?
             .map(|user| user.tendabike_id)
@@ -90,7 +88,7 @@ impl InEvent {
             event.process_user(store).await?;
             Ok(None)
         } else {
-            store.strava_event_create(event).await?;
+            store.event_create(event).await?;
             Ok(Some(user_id))
         }
     }
@@ -104,7 +102,7 @@ impl InEvent {
 /// caller's wake), or `None` for an athlete (de)authorization.
 pub async fn accept_event(
     body: &str,
-    store: &mut impl StravaDataStore,
+    store: &mut impl Store<StravaSpec>,
 ) -> TbResult<Option<UserId>> {
     let event: InEvent = serde_json::from_str(body)
         .map_err(|e| Error::BadRequest(format!("invalid strava webhook envelope: {e}")))?;
@@ -213,17 +211,17 @@ impl std::fmt::Display for Event {
 }
 
 impl Event {
-    async fn delete(&self, store: &mut impl StravaDataStore) -> TbResult<()> {
+    async fn delete(&self, store: &mut impl Store<StravaSpec>) -> TbResult<()> {
         debug!("Deleting {self}");
-        store.strava_event_delete(self.id).await
+        store.event_delete(self.id).await
     }
 
-    async fn setdate(&mut self, time: i64, store: &mut impl StravaDataStore) -> TbResult<()> {
+    async fn setdate(&mut self, time: i64, store: &mut impl Store<StravaSpec>) -> TbResult<()> {
         self.event_time = time;
-        store.strava_event_set_time(self.id, self.event_time).await
+        store.event_set_time(self.id, self.event_time).await
     }
 
-    async fn process_activity<D: EntityFacade<S>, S: StravaDataStore + Store<StravaSpec>>(
+    async fn process_activity<D: EntityFacade<S>, S: Store<StravaSpec>>(
         &self,
         user_id: UserId,
         facade: &D,
@@ -251,7 +249,7 @@ impl Event {
     /// # Examples
     ///
     ///
-    async fn process_hook<D: EntityFacade<S>, S: StravaDataStore>(
+    async fn process_hook<D: EntityFacade<S>, S: Store<StravaSpec>>(
         &self,
         user_id: UserId,
         facade: &D,
@@ -275,7 +273,7 @@ impl Event {
         Ok(res)
     }
 
-    async fn sync<D: EntityFacade<S>, S: StravaDataStore>(
+    async fn sync<D: EntityFacade<S>, S: Store<StravaSpec>>(
         &mut self,
         user_id: UserId,
         facade: &D,
@@ -325,7 +323,7 @@ impl Event {
         Ok(summary)
     }
 
-    async fn process_sync<D: EntityFacade<S>, S: StravaDataStore + Store<StravaSpec>>(
+    async fn process_sync<D: EntityFacade<S>, S: Store<StravaSpec>>(
         mut self,
         user_id: UserId,
         facade: &D,
@@ -340,7 +338,7 @@ impl Event {
         }
     }
 
-    async fn process_user(&self, store: &mut impl StravaDataStore) -> TbResult<()> {
+    async fn process_user(&self, store: &mut impl Store<StravaSpec>) -> TbResult<()> {
         debug!(
             "processing event user {}: {:?}",
             self.object_id, self.aspect_type,
@@ -386,7 +384,7 @@ impl Event {
 pub async fn insert_sync(
     user_id: UserId,
     event_time: i64,
-    store: &mut impl StravaDataStore,
+    store: &mut impl Store<StravaSpec>,
 ) -> TbResult<()> {
     if event_time > get_time() {
         return Err(Error::BadRequest(format!("eventtime {event_time} > now!")));
@@ -399,7 +397,7 @@ pub async fn insert_sync(
         object_type: ObjectType::Sync,
         ..Default::default()
     };
-    store.strava_event_create(event).await
+    store.event_create(event).await
 }
 
 /// Whether `event` is the admin sync for `user_id` at `event_time` (spec
@@ -409,7 +407,7 @@ pub async fn is_sync_for_user(
     event: &Event,
     user_id: UserId,
     event_time: i64,
-    store: &mut impl StravaDataStore,
+    store: &mut impl Store<StravaSpec>,
 ) -> TbResult<bool> {
     let strava_id = get_strava_id(user_id, store).await?;
     Ok(event.object_type == ObjectType::Sync
@@ -423,16 +421,16 @@ pub async fn is_sync_for_user(
 pub async fn sync_queued_for_user(
     user_id: UserId,
     event_time: i64,
-    store: &mut impl StravaDataStore,
+    store: &mut impl Store<StravaSpec>,
 ) -> TbResult<bool> {
     let strava_id = get_strava_id(user_id, store).await?;
-    let syncs = store.strava_event_get_later(0, strava_id).await?;
+    let syncs = store.event_get_later(0, strava_id).await?;
     Ok(syncs.iter().any(|event| event.event_time == event_time))
 }
 
 async fn next_activities(
     user_id: UserId,
-    store: &mut impl StravaDataStore,
+    store: &mut impl Store<StravaSpec>,
     per_page: usize,
     start: i64,
 ) -> TbResult<Vec<StravaActivity>> {
@@ -448,7 +446,7 @@ async fn next_activities(
 /// the queue with the kit's read-side rules ([`crate::queue::get_event`]) and
 /// handle that one event. One event per call — the queue's read and failure
 /// policy are the kit's, generic over the marker (spec #1029).
-pub(crate) async fn process<D: EntityFacade<S>, S: StravaDataStore + Store<StravaSpec>>(
+pub(crate) async fn process<D: EntityFacade<S>, S: Store<StravaSpec>>(
     user_id: UserId,
     facade: &D,
     store: &mut S,

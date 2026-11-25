@@ -76,6 +76,15 @@ pub trait Store<P: ProviderSpec>: Send + Sync {
     /// Delete the queued event `event_id`.
     async fn event_delete(&mut self, event_id: Option<i32>) -> TbResult<()>;
 
+    /// Set the time of the queued event `event_id` (the sync cursor's
+    /// advance — the durable backfill position).
+    async fn event_set_time(&mut self, event_id: Option<i32>, time: i64) -> TbResult<()>;
+
+    /// Delete the queued sync events for `owner` (the durable backfill
+    /// cursor's REPLACE enqueue: at most one sync per user); returns the
+    /// number of rows deleted.
+    async fn event_delete_sync(&mut self, owner: &P::Owner) -> TbResult<usize>;
+
     /// Queue a provider event (a webhook/sync row).
     async fn event_create(&mut self, e: P::Event) -> TbResult<()>;
 

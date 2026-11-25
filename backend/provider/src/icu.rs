@@ -45,6 +45,12 @@ pub use user::*;
 pub mod activity;
 pub mod gear;
 pub mod http;
+
+/// The intervals.icu driver type (spec #1029, ticket #1032): the
+/// [`Provider`](crate::driver::Provider) impl — a thin forward of the
+/// driver's free functions onto the shared skeleton.
+pub mod driver;
+pub use driver::IcuDriver;
 mod ratelimit;
 // The queue's read-side rate-limit gate, re-exported so the `Store` impl
 // over the data store (the sqlx crate) can consult it (spec #1029).

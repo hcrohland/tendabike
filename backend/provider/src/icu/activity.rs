@@ -13,11 +13,12 @@ use time::OffsetDateTime;
 use log::debug;
 use serde::{Deserialize, Serialize};
 
-use super::{IcuDataStore, OnBehalf, Session, TbResult};
+use super::{IcuSpec, OnBehalf, Session, TbResult};
 use crate::facade::{
     ActTypeId, Activity, ActivityId, Error, Notification, NotificationKind, NotificationLifecycle,
     NotificationSubject, PartId, Summary, UserId,
 };
+use crate::store::Store;
 use crate::{EntityFacade, IcuActivityId, ProviderActivityId};
 
 /// The intervals.icu URL for an activity (the `/source/activities/{id}`
@@ -89,7 +90,7 @@ impl IcuActivity {
     }
 
     /// Maps the icu activity to the domain [`Activity`].
-    async fn into_activity<D: EntityFacade<S>, S: IcuDataStore>(
+    async fn into_activity<D: EntityFacade<S>, S: Store<IcuSpec>>(
         self,
         user_id: UserId,
         facade: &D,
@@ -157,7 +158,7 @@ impl IcuActivity {
 /// the gear part has not been imported yet (the activity's gear reference is
 /// dropped — the gear `Part` itself imports via the gear endpoint, a later
 /// ticket).
-async fn gear_into_partid<D: EntityFacade<S>, S: IcuDataStore>(
+async fn gear_into_partid<D: EntityFacade<S>, S: Store<IcuSpec>>(
     id: &str,
     facade: &D,
     store: &mut S,
@@ -173,7 +174,7 @@ async fn gear_into_partid<D: EntityFacade<S>, S: IcuDataStore>(
 /// Imports an icu activity that is already in hand (no HTTP fetch): stub
 /// check → map → upsert. Used by the backfill (the list response carries all
 /// the fields the domain records).
-pub(crate) async fn import_activity_data<D: EntityFacade<S>, S: IcuDataStore>(
+pub(crate) async fn import_activity_data<D: EntityFacade<S>, S: Store<IcuSpec>>(
     act: IcuActivity,
     user_id: UserId,
     facade: &D,
@@ -192,7 +193,7 @@ pub(crate) async fn import_activity_data<D: EntityFacade<S>, S: IcuDataStore>(
 
 /// the upsert's `Summary` for a real activity. Errors (a 401, a 429, a DB
 /// failure) bubble up for the caller to classify.
-pub(crate) async fn import_activity<D: EntityFacade<S>, S: IcuDataStore>(
+pub(crate) async fn import_activity<D: EntityFacade<S>, S: Store<IcuSpec>>(
     activity_id: &str,
     user_id: UserId,
     facade: &D,
@@ -216,7 +217,7 @@ pub(crate) async fn import_activity<D: EntityFacade<S>, S: IcuDataStore>(
 /// webhook carries the activity id, and the domain's `delete` returns the
 /// `Summary` of everything it touched (the activity's tombstone plus the
 /// parts/usages its unregistration affects).
-pub(crate) async fn delete_activity<D: EntityFacade<S>, S: IcuDataStore>(
+pub(crate) async fn delete_activity<D: EntityFacade<S>, S: Store<IcuSpec>>(
     activity_id: &str,
     user_id: UserId,
     facade: &D,
@@ -230,7 +231,7 @@ pub(crate) async fn delete_activity<D: EntityFacade<S>, S: IcuDataStore>(
 
 /// The one transient notification a stub-skip batch carries (spec #764): the
 /// `message` is the skip count. A stub batch (≥1 skipped) creates exactly one.
-pub(crate) async fn stub_notice<D: EntityFacade<S>, S: IcuDataStore>(
+pub(crate) async fn stub_notice<D: EntityFacade<S>, S: Store<IcuSpec>>(
     user_id: UserId,
     skipped: usize,
     facade: &D,

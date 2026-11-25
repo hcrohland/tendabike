@@ -121,6 +121,12 @@ impl ProviderSpec for IcuSpec {
     fn event_key(e: &IcuEvent) -> &String {
         &e.activity_id
     }
+    fn user_tbid(user: &IcuUser) -> &UserId {
+        &user.tendabike_id
+    }
+    fn user_owner(user: &IcuUser) -> &IcuId {
+        &user.id
+    }
 }
 
 /// The provider-agnostic store over the icu data-store mock (spec #1029,
@@ -155,7 +161,9 @@ impl crate::store::Store<IcuSpec> for MockIcuDataStore {
         self.icuser_delete(user).await
     }
     async fn user_disable(&mut self, owner: IcuId) -> TbResult<()> {
-        owner.disable(self).await
+        let _ = self.icu_events_delete_for_user(&owner).await?;
+        self.icuser_update_token(owner, None).await?;
+        Ok(())
     }
     async fn user_event_count(&mut self, owner: &IcuId) -> TbResult<i64> {
         self.icu_events_get_count_for_user(owner).await
@@ -171,6 +179,12 @@ impl crate::store::Store<IcuSpec> for MockIcuDataStore {
     }
     async fn event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {
         self.icu_event_delete(event_id).await
+    }
+    async fn event_set_time(&mut self, event_id: Option<i32>, time: i64) -> TbResult<()> {
+        self.icu_event_set_time(event_id, time).await
+    }
+    async fn event_delete_sync(&mut self, owner: &IcuId) -> TbResult<usize> {
+        self.icu_events_delete_sync_for_user(owner).await
     }
     async fn event_create(&mut self, e: IcuEvent) -> TbResult<()> {
         self.icu_event_create(e).await

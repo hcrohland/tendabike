@@ -8,9 +8,10 @@ use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
 use super::http::request_json;
-use super::{Error, OnBehalf, PartId, PartTypeId, StravaDataStore, TbResult, UserId};
+use super::{Error, OnBehalf, PartId, PartTypeId, StravaSpec, TbResult, UserId};
 use crate::EntityFacade;
 use crate::facade::Part;
+use crate::store::Store;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct StravaGear {
@@ -53,7 +54,7 @@ impl StravaGear {
 ///
 /// If it does not exist create it at tb
 /// None will return None
-pub(crate) async fn into_partid<D: EntityFacade<S>, S: StravaDataStore>(
+pub(crate) async fn into_partid<D: EntityFacade<S>, S: Store<StravaSpec>>(
     strava_id: String,
     user_id: UserId,
     facade: &D,

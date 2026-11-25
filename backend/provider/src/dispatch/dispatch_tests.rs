@@ -17,10 +17,11 @@ use crate::facade::{
     Error, PartId, PartTypeId, TbResult, UserId, mock_session, mock_session_admin,
 };
 use crate::icu::test_support::{MockIcuDataStore, gear_json, icu_user, part};
-use crate::icu::{IcuDataStore, IcuEvent, IcuId, IcuObjectType, IcuUser};
+use crate::icu::{IcuDataStore, IcuEvent, IcuId, IcuObjectType, IcuSpec, IcuUser};
+use crate::store::Store;
 use crate::strava::event::Event;
 use crate::strava::test_support::{MockStravaDataStore, strava_user};
-use crate::strava::{StravaDataStore, StravaId, StravaUser};
+use crate::strava::{StravaDataStore, StravaId, StravaSpec, StravaUser};
 use crate::test_support::{
     MockEntityFacade, begin_test, icu_webhook_secret, init_test_config_once, queue,
 };
@@ -153,6 +154,118 @@ impl IcuDataStore for DispatchStore {
     }
     async fn icu_events_delete_sync_for_user(&mut self, user: &IcuId) -> TbResult<usize> {
         self.icu.icu_events_delete_sync_for_user(user).await
+    }
+}
+
+#[async_trait::async_trait]
+impl Store<StravaSpec> for DispatchStore {
+    async fn user_get_all(&mut self) -> TbResult<Vec<StravaUser>> {
+        self.strava.user_get_all().await
+    }
+    async fn user_get_by_tbid(&mut self, id: UserId) -> TbResult<StravaUser> {
+        self.strava.user_get_by_tbid(id).await
+    }
+    async fn user_get_by_provider_id(&mut self, id: &StravaId) -> TbResult<Option<StravaUser>> {
+        self.strava.user_get_by_provider_id(id).await
+    }
+    async fn user_create(&mut self, user: StravaUser) -> TbResult<StravaUser> {
+        self.strava.user_create(user).await
+    }
+    async fn user_update_token(
+        &mut self,
+        owner: StravaId,
+        token: Option<String>,
+    ) -> TbResult<StravaUser> {
+        self.strava.user_update_token(owner, token).await
+    }
+    async fn user_delete(&mut self, user: UserId) -> TbResult<usize> {
+        self.strava.user_delete(user).await
+    }
+    async fn user_disable(&mut self, owner: StravaId) -> TbResult<()> {
+        self.strava.user_disable(owner).await
+    }
+    async fn user_event_count(&mut self, owner: &StravaId) -> TbResult<i64> {
+        self.strava.user_event_count(owner).await
+    }
+    async fn event_get_next(&mut self, owner: StravaId) -> TbResult<Option<Event>> {
+        self.strava.event_get_next(owner).await
+    }
+    async fn event_get_later(&mut self, key: i64, owner: StravaId) -> TbResult<Vec<Event>> {
+        self.strava.event_get_later(key, owner).await
+    }
+    async fn event_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
+        self.strava.event_delete_batch(values).await
+    }
+    async fn event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {
+        self.strava.event_delete(event_id).await
+    }
+    async fn event_set_time(&mut self, event_id: Option<i32>, time: i64) -> TbResult<()> {
+        self.strava.event_set_time(event_id, time).await
+    }
+    async fn event_delete_sync(&mut self, owner: &StravaId) -> TbResult<usize> {
+        self.strava.event_delete_sync(owner).await
+    }
+    async fn event_create(&mut self, e: Event) -> TbResult<()> {
+        self.strava.event_create(e).await
+    }
+    fn limited_until(&self) -> Option<i64> {
+        self.strava.limited_until()
+    }
+}
+
+#[async_trait::async_trait]
+impl Store<IcuSpec> for DispatchStore {
+    async fn user_get_all(&mut self) -> TbResult<Vec<IcuUser>> {
+        self.icu.user_get_all().await
+    }
+    async fn user_get_by_tbid(&mut self, id: UserId) -> TbResult<IcuUser> {
+        self.icu.user_get_by_tbid(id).await
+    }
+    async fn user_get_by_provider_id(&mut self, id: &IcuId) -> TbResult<Option<IcuUser>> {
+        self.icu.user_get_by_provider_id(id).await
+    }
+    async fn user_create(&mut self, user: IcuUser) -> TbResult<IcuUser> {
+        self.icu.user_create(user).await
+    }
+    async fn user_update_token(
+        &mut self,
+        owner: IcuId,
+        token: Option<String>,
+    ) -> TbResult<IcuUser> {
+        self.icu.user_update_token(owner, token).await
+    }
+    async fn user_delete(&mut self, user: UserId) -> TbResult<usize> {
+        self.icu.user_delete(user).await
+    }
+    async fn user_disable(&mut self, owner: IcuId) -> TbResult<()> {
+        self.icu.user_disable(owner).await
+    }
+    async fn user_event_count(&mut self, owner: &IcuId) -> TbResult<i64> {
+        self.icu.user_event_count(owner).await
+    }
+    async fn event_get_next(&mut self, owner: IcuId) -> TbResult<Option<IcuEvent>> {
+        self.icu.event_get_next(owner).await
+    }
+    async fn event_get_later(&mut self, key: String, owner: IcuId) -> TbResult<Vec<IcuEvent>> {
+        self.icu.event_get_later(key, owner).await
+    }
+    async fn event_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
+        self.icu.event_delete_batch(values).await
+    }
+    async fn event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {
+        self.icu.event_delete(event_id).await
+    }
+    async fn event_set_time(&mut self, event_id: Option<i32>, time: i64) -> TbResult<()> {
+        self.icu.event_set_time(event_id, time).await
+    }
+    async fn event_delete_sync(&mut self, owner: &IcuId) -> TbResult<usize> {
+        self.icu.event_delete_sync(owner).await
+    }
+    async fn event_create(&mut self, e: IcuEvent) -> TbResult<()> {
+        self.icu.event_create(e).await
+    }
+    fn limited_until(&self) -> Option<i64> {
+        self.icu.limited_until()
     }
 }
 

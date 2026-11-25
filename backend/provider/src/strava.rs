@@ -45,6 +45,12 @@ pub use ratelimit::limited_until;
 mod user;
 pub use user::*;
 
+/// The Strava driver type (spec #1029, ticket #1032): the
+/// [`Provider`](crate::driver::Provider) impl — a thin forward of the
+/// driver's free functions onto the shared skeleton.
+pub mod driver;
+pub use driver::StravaDriver;
+
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 

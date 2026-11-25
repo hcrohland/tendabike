@@ -5,8 +5,8 @@
 //! types (the user row, the event row, the owner id, the event key), the
 //! provider's enum value as a constant (the marker → enum direction), the
 //! type-level constructor for the sync event (how this event type represents a
-//! sync), and the event-identity accessors (id, owner, key) as type-level
-//! functions.
+//! sync), and the identity accessors (the event's id/owner/key, the user
+//! row's tbid/owner) as type-level functions.
 //!
 //! It is plumbing, not an interface: the author implements it to declare their
 //! wire shapes, and the kit's generic traits ([`Store`](crate::store::Store))
@@ -17,6 +17,7 @@
 use std::fmt::{Debug, Display};
 
 use crate::Provider;
+use crate::facade::UserId;
 
 /// The provider marker (spec #1029): the type-only carrier of a provider's
 /// wire shapes.
@@ -68,4 +69,11 @@ pub trait ProviderSpec: Send + Sync {
 
     /// The event's dedup key.
     fn event_key(e: &Self::Event) -> &Self::Key;
+
+    /// The user row's TendaBike user id (the domain-side identity the shared
+    /// skeleton drives through the facade).
+    fn user_tbid(user: &Self::User) -> &UserId;
+
+    /// The user row's owner (the provider id — the queue's partition key).
+    fn user_owner(user: &Self::User) -> &Self::Owner;
 }

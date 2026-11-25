@@ -44,9 +44,15 @@
 //! [`ProviderSpec`](crate::ProviderSpec) marker, driven through the
 //! [`Store`](crate::store::Store) interface (spec #1029).
 //!
+//! [`driver`] — [`Provider`](crate::driver::Provider), the provider driver:
+//! the single driver interface, generic over the marker — the
+//! provider-specific core the author writes plus the shared user-lifecycle
+//! skeleton as default methods (spec #1029). Namespaced under `driver` (not
+//! re-exported at the crate root) beside the [`Provider`] enum.
+//!
 //! [`spec`] — [`ProviderSpec`], the provider marker: the type-only carrier of
 //! a provider's wire shapes (the user row, the event row, the owner id, the
-//! event key, the sync-event constructor, and the event-identity accessors).
+//! event key, the sync-event constructor, and the identity accessors).
 //!
 //! [`store`] — [`Store`], the provider-agnostic store: the single uniform
 //! store interface, generic over the marker, carrying the user-row and the
@@ -99,6 +105,14 @@ pub use spec::ProviderSpec;
 
 mod store;
 pub use store::Store;
+
+/// The provider driver trait (spec #1029, ticket #1032): the single driver
+/// interface, generic over the marker — the provider-specific core the author
+/// writes plus the shared user-lifecycle skeleton as default methods. A
+/// public module (not re-exported at the crate root) so the trait's name
+/// (`Provider`) stays namespaced under `driver` rather than colliding with
+/// the crate root's [`Provider`] enum.
+pub mod driver;
 
 mod http;
 pub use http::*;

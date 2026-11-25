@@ -1,7 +1,7 @@
 use super::{fail_event, get_event};
 use crate::Provider;
 use crate::ProviderSpec;
-use crate::facade::{Error, Summary};
+use crate::facade::{Error, Summary, UserId};
 use crate::lane::QueueRead;
 use crate::test_support::MockStore;
 
@@ -13,6 +13,14 @@ struct TestEvent {
     key: i64,
 }
 
+/// A test user row for the marker's user-row accessors: the TendaBike id and
+/// the provider owner the accessors read.
+#[derive(Debug, Clone)]
+struct TestUser {
+    tbid: UserId,
+    owner: i32,
+}
+
 /// The test marker (spec #1029, ticket #1031): the type-only carrier of the
 /// test event's wire shapes, so the queue's read and failure rules run over
 /// the single [`MockStore`] double (generic over the marker).
@@ -20,7 +28,7 @@ struct TestSpec;
 
 impl ProviderSpec for TestSpec {
     const PROVIDER: Provider = Provider::Icu;
-    type User = ();
+    type User = TestUser;
     type Event = TestEvent;
     type Owner = i32;
     type Key = i64;
@@ -39,6 +47,12 @@ impl ProviderSpec for TestSpec {
     }
     fn event_key(e: &TestEvent) -> &i64 {
         &e.key
+    }
+    fn user_tbid(user: &TestUser) -> &UserId {
+        &user.tbid
+    }
+    fn user_owner(user: &TestUser) -> &i32 {
+        &user.owner
     }
 }
 

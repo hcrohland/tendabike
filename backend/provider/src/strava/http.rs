@@ -34,8 +34,9 @@ use serde::de::DeserializeOwned;
 
 use super::client::{HTTP_CLIENT, strava_client};
 use super::session::get_token;
-use super::{StravaDataStore, StravaId};
+use super::{StravaId, StravaSpec};
 use crate::facade::{TbResult, UserId};
+use crate::store::Store;
 
 const API: &str = "https://www.strava.com/api/v3";
 
@@ -44,7 +45,7 @@ const API: &str = "https://www.strava.com/api/v3";
 /// DB when a refresh issues a new one.
 async fn access_token(
     user_id: UserId,
-    store: &mut impl StravaDataStore,
+    store: &mut impl Store<StravaSpec>,
 ) -> TbResult<(StravaId, AccessToken)> {
     get_token(user_id, store).await
 }
@@ -63,7 +64,7 @@ async fn access_token(
 pub(crate) async fn request_json<T: DeserializeOwned>(
     user_id: UserId,
     uri: &str,
-    store: &mut impl StravaDataStore,
+    store: &mut impl Store<StravaSpec>,
 ) -> TbResult<T> {
     let (_strava_id, access) = access_token(user_id, store).await?;
 
@@ -105,7 +106,10 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
 /// [`access_token`] (the `TokenCache`'s `get_token` → persist the refresh
 /// token to the DB if a refresh issued a new one) →
 /// `STRAVACLIENT.revoke_token`. Knows nothing about refresh mechanics.
-pub(crate) async fn deauthorize(user_id: UserId, store: &mut impl StravaDataStore) -> TbResult<()> {
+pub(crate) async fn deauthorize(
+    user_id: UserId,
+    store: &mut impl Store<StravaSpec>,
+) -> TbResult<()> {
     let (strava_id, access) = access_token(user_id, store).await?;
 
     // The offline seam (test-only): in test mode a deauthorization is recorded

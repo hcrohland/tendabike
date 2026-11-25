@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use super::super::StravaDataStore;
 use super::super::event::{AspectType, Event, ObjectType};
 use super::super::test_support::{
     deauthorizes, gear_json, setup, strava_admin_session, strava_user, user,

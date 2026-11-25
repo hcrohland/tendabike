@@ -293,10 +293,15 @@ where
     // (`rescan`, `subscribe_shop`, `trigger_processing`, ADR-0014) own their
     // own transactions — the rescan's `rescan_all` and the shop-ownership
     // check ride the domain facade (no store bound), and the `sync_users`
-    // queue op rides the two providers' local data stores — so this impl
-    // carries the `StravaDataStore + IcuDataStore + Txn` bound.
+    // queue op rides the two providers' local data stores plus the
+    // provider-agnostic `Store` over each marker — so this impl carries the
+    // `StravaDataStore + IcuDataStore + Store<Spec> + Txn` bound.
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaDataStore + IcuDataStore + Txn,
+    S::Conn: StravaDataStore
+        + IcuDataStore
+        + tb_provider::Store<tb_provider::strava::StravaSpec>
+        + tb_provider::Store<tb_provider::icu::IcuSpec>
+        + Txn,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
@@ -419,13 +424,16 @@ where
 /// layer's dispatch free function (the single `match provider`), and commits.
 /// No provider dispatch and no driver naming in this crate. The registry owns
 /// the store (the transaction boundary, ADR-0014); the dispatch bounds on the
-/// two providers' local data stores and takes the facade as a parameter.
+/// two providers' local data stores plus the provider-agnostic `Store` over
+/// each marker and takes the facade as a parameter.
 #[async_trait::async_trait]
 impl<S, P, D> crate::providerservice::ProviderService for Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
     S::Conn: tb_provider::strava::StravaDataStore
         + tb_provider::icu::IcuDataStore
+        + tb_provider::Store<tb_provider::strava::StravaSpec>
+        + tb_provider::Store<tb_provider::icu::IcuSpec>
         + Send
         + Sync
         + 'static,

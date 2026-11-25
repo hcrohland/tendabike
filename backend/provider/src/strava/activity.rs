@@ -14,9 +14,10 @@ use time::{OffsetDateTime, UtcOffset};
 use super::PartId;
 use super::http::request_json;
 use super::{
-    ActTypeId, Activity, ActivityId, Error, OnBehalf, Session, StravaDataStore, Summary, TbResult,
+    ActTypeId, Activity, ActivityId, Error, OnBehalf, Session, StravaSpec, Summary, TbResult,
     UserId, gear,
 };
+use crate::store::Store;
 use crate::{EntityFacade, ProviderActivityId, StravaActivityId};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -55,7 +56,7 @@ pub(crate) struct StravaActivity {
 
 impl StravaActivity {
     /// Converts a StravaActivity into a Activity struct which is used to create a new activity in the Tendabike API.
-    async fn into_activity<D: EntityFacade<S>, S: StravaDataStore>(
+    async fn into_activity<D: EntityFacade<S>, S: Store<StravaSpec>>(
         self,
         user_id: UserId,
         facade: &D,
@@ -112,7 +113,7 @@ impl StravaActivity {
     }
 
     /// Sends the activity to Tendabike API.
-    pub(crate) async fn send_to_tb<D: EntityFacade<S>, S: StravaDataStore>(
+    pub(crate) async fn send_to_tb<D: EntityFacade<S>, S: Store<StravaSpec>>(
         self,
         user_id: UserId,
         facade: &D,
@@ -127,7 +128,7 @@ impl StravaActivity {
 /// The Strava URL for a Strava activity: the driver extracts the raw
 /// (unprefixed) Strava id from the domain's opaque [`ActivityId`], the read
 /// is the ownership check, and the URL is built from the raw id.
-pub async fn strava_url<D: EntityFacade<S>, S: StravaDataStore>(
+pub async fn strava_url<D: EntityFacade<S>, S: Store<StravaSpec>>(
     id: ActivityId,
     user: Box<dyn Session>,
     facade: &D,
@@ -141,7 +142,7 @@ pub async fn strava_url<D: EntityFacade<S>, S: StravaDataStore>(
     Ok(format!("https://strava.com/activities/{raw}"))
 }
 
-pub(crate) async fn upsert_activity<D: EntityFacade<S>, S: StravaDataStore>(
+pub(crate) async fn upsert_activity<D: EntityFacade<S>, S: Store<StravaSpec>>(
     id: i64,
     user_id: UserId,
     facade: &D,
@@ -151,7 +152,7 @@ pub(crate) async fn upsert_activity<D: EntityFacade<S>, S: StravaDataStore>(
     act.send_to_tb(user_id, facade, store).await
 }
 
-pub(crate) async fn delete_activity<D: EntityFacade<S>, S: StravaDataStore>(
+pub(crate) async fn delete_activity<D: EntityFacade<S>, S: Store<StravaSpec>>(
     act: i64,
     user_id: UserId,
     facade: &D,

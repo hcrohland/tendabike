@@ -318,8 +318,8 @@ impl<'c> tb_provider::icu::IcuStore for SqlxConn<'c> {}
 
 /// The provider-agnostic store over the unified store (spec #1029, ticket
 /// #1030): a thin forward onto the [`IcuDataStore`] user-row and event-row
-/// ops; `user_disable` and `limited_until` drive the driver's own policy (the
-/// `IcuId` disable, the process-wide limiter).
+/// ops; `user_disable` is the disable policy (drop the queued events, clear
+/// the token) and `limited_until` the process-wide limiter.
 #[async_trait::async_trait]
 impl<'c> tb_provider::Store<tb_provider::icu::IcuSpec> for SqlxConn<'c> {
     async fn user_get_all(&mut self) -> TbResult<Vec<IcuUser>> {
@@ -345,7 +345,9 @@ impl<'c> tb_provider::Store<tb_provider::icu::IcuSpec> for SqlxConn<'c> {
         self.icuser_delete(user).await
     }
     async fn user_disable(&mut self, owner: IcuId) -> TbResult<()> {
-        owner.disable(self).await
+        let _ = self.icu_events_delete_for_user(&owner).await?;
+        self.icuser_update_token(owner, None).await?;
+        Ok(())
     }
     async fn user_event_count(&mut self, owner: &IcuId) -> TbResult<i64> {
         self.icu_events_get_count_for_user(owner).await
@@ -361,6 +363,12 @@ impl<'c> tb_provider::Store<tb_provider::icu::IcuSpec> for SqlxConn<'c> {
     }
     async fn event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {
         self.icu_event_delete(event_id).await
+    }
+    async fn event_set_time(&mut self, event_id: Option<i32>, time: i64) -> TbResult<()> {
+        self.icu_event_set_time(event_id, time).await
+    }
+    async fn event_delete_sync(&mut self, owner: &IcuId) -> TbResult<usize> {
+        self.icu_events_delete_sync_for_user(owner).await
     }
     async fn event_create(&mut self, e: IcuEvent) -> TbResult<()> {
         self.icu_event_create(e).await
