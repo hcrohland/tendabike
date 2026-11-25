@@ -111,7 +111,9 @@
         {m.wizard_add_more_groups()}
       </Button>
     {:else}
-      <p class="mb-2 text-sm font-semibold text-text-2">
+      <p
+        class="mb-2 text-sm font-semibold text-secondary-900 dark:text-secondary-100"
+      >
         {m.wizard_add_groups()}
       </p>
       <div class="flex flex-col gap-1 sm:gap-2">

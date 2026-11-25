@@ -40,6 +40,8 @@
       {/each}
     </div>
   {:else}
-    <p class="text-xs text-text-1">{m.planblock_no_bikes()}</p>
+    <p class="text-xs text-secondary-600 dark:text-secondary-300">
+      {m.planblock_no_bikes()}
+    </p>
   {/if}
 </Card>
