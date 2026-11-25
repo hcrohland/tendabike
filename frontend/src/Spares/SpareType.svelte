@@ -3,6 +3,7 @@
   import UsageChips from "../Usage/UsageChips.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import { DropdownItem } from "flowbite-svelte";
+  import { bg, border, mainText, mutedText } from "../Widgets/tone.js";
   import Menu from "../Widgets/Menu.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
   import { mounted_on } from "../lib/attachment";
@@ -37,7 +38,11 @@
 </script>
 
 <div
-  class="flex flex-col gap-1 rounded-lg border bg-surface-2 border-border-subtle p-3"
+  class={"flex flex-col gap-1 rounded-lg border " +
+    border() +
+    " " +
+    bg("secondary") +
+    " p-3"}
 >
   <!-- Type header -->
   <div class="flex items-center justify-between gap-2 pb-2">
@@ -45,7 +50,7 @@
       {#if subparts.length > 0}
         <ShowMore bind:show_more {update} title={m.sparetype_attached()} />
       {/if}
-      <span class="text-xs uppercase tracking-wide text-text-2">
+      <span class="text-xs uppercase tracking-wide {mainText()}">
         {type.localizedName()}
       </span>
     </div>
@@ -57,10 +62,12 @@
     <div
       class={"rounded-lg border p-3 " +
         (part.disposed_at
-          ? "bg-surface-2 opacity-70 border-border-strong"
+          ? bg("secondary") +
+            " opacity-70 border-secondary-600 dark:border-secondary-400"
           : mounted_on(part.id, date)
-            ? "bg-surface-2 border-gray-strong"
-            : "bg-surface-1 border-border-subtle")}
+            ? bg("secondary") +
+              " border-secondary-600 dark:border-secondary-400"
+            : bg("primary") + " " + border())}
     >
       <!-- Name + menu -->
       <div class="flex items-center justify-between gap-2">
@@ -69,7 +76,7 @@
             <PartLink {part} />
           </span>
           <span
-            class="text-xs text-text-1 ml-1"
+            class={"text-xs " + mutedText() + " ml-1"}
             title={part.vendor +
               " " +
               part.model +
@@ -111,7 +118,7 @@
 
       <!-- Attached to -->
       {#if attachee > 0}
-        <div class="mt-2 text-xs text-text-1">
+        <div class={"mt-2 text-xs " + mutedText()}>
           {#if part.disposed_at}
             {m.sparetype_disposed()} {fmtDate(part.disposed_at)}
           {:else}

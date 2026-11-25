@@ -7,6 +7,7 @@
   import { providerMeta } from "../lib/provider.svelte";
   import { handleError, myfetch } from "../lib/utils";
   import type { AdminRow, User } from "../lib/user.svelte";
+  import { mainText } from "../Widgets/tone.js";
   import * as m from "../../paraglide/messages";
 
   let {
@@ -64,7 +65,9 @@
       >
         <ProviderMark {provider} size="sm" />
       </a>
-      <span class="text-xs text-text-1 shrink-0">{role}</span>
+      <span class={"text-xs " + mainText() + " shrink-0"}>
+        {role}
+      </span>
     </div>
     <div class="flex items-center gap-1 sm:gap-2 shrink-0">
       {#if syncing}

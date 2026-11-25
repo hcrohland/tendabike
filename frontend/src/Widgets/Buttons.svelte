@@ -22,6 +22,6 @@
       {label}
     </Button>
   {:else}
-    <Button {onclick}>{m.action_close()}</Button>
+    <Button {onclick} color="light">{m.action_close()}</Button>
   {/if}
 </div>

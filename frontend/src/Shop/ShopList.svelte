@@ -13,6 +13,7 @@
   } from "../lib/user.svelte";
   import ShopOwnerMenu from "./ShopOwnerMenu.svelte";
   import { type Map } from "../lib/mapable.svelte";
+  import { mainText } from "../Widgets/tone.js";
 
   interface Props {
     shops: Shop[];
@@ -36,7 +37,7 @@
       {#if isOwner}
         <ShopOwnerMenu {shop} />
       {:else}
-        <Button color="light" onclick={() => request(shop)}>
+        <Button color="blue" onclick={() => request(shop)}>
           {m.shop_request_subscription()}
         </Button>
       {/if}
@@ -46,7 +47,7 @@
 
 {#if shops.length === 0}
   <div class="py-12 text-center">
-    <p class="text-text-1">
+    <p class={mainText()}>
       {m.shop_none_found()}
     </p>
   </div>

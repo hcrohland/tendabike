@@ -7,6 +7,7 @@
     duesForPlans,
     ServicePlan,
   } from "../lib/serviceplan";
+  import { bg, border } from "../Widgets/tone.js";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import * as m from "../../paraglide/messages";
   import Menu from "../Widgets/Menu.svelte";
@@ -37,7 +38,7 @@
 </script>
 
 {#if part}
-  <div class="rounded-lg border border-border-subtle bg-surface-1 p-3">
+  <div class={"rounded-lg border " + border() + " " + bg("primary") + " p-3"}>
     <!-- Header -->
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-2 min-w-0">

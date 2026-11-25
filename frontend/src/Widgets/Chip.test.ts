@@ -53,9 +53,9 @@ describe("Chip", () => {
     expect(badge).toBeTruthy();
   });
 
-  it("applies light background class", () => {
+  it("applies the darker-tone class when light is set (its direction is preserved)", () => {
     render(Chip, { label: "L", value: "V", light: true });
-    const el = screen.getByText("V").closest(".bg-surface-2");
+    const el = screen.getByText("V").closest(".bg-secondary-100");
     expect(el).toBeTruthy();
   });
 });

@@ -53,6 +53,19 @@ describe("GearCard", () => {
     expect(screen.getByText("Max Mustermann")).toBeTruthy();
   });
 
+  it("renders the owner badge neutral, not the success hue", () => {
+    users.setMap([
+      { id: 5, firstname: "Max", name: "Mustermann", avatar: undefined },
+    ]);
+    const { container } = render(GearCard, { part });
+    // The badge is the element that carries the owner name; it must read as a
+    // neutral gray, not the success (green) hue.
+    const badge = screen.getByText("Max Mustermann");
+    expect(badge.className).toContain("bg-gray-100");
+    expect(badge.className).not.toContain("bg-green");
+    expect(container.querySelector(".bg-green-100")).toBeNull();
+  });
+
   it("re-renders the owner badge when the users collection changes", () => {
     users.setMap([
       { id: 5, firstname: "Max", name: "Mustermann", avatar: undefined },
