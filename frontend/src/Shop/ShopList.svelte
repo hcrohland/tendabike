@@ -36,7 +36,7 @@
       {#if isOwner}
         <ShopOwnerMenu {shop} />
       {:else}
-        <Button color="light" onclick={() => request(shop)}>
+        <Button color="blue" onclick={() => request(shop)}>
           {m.shop_request_subscription()}
         </Button>
       {/if}
@@ -46,7 +46,7 @@
 
 {#if shops.length === 0}
   <div class="py-12 text-center">
-    <p class="text-text-1">
+    <p class="text-gray-600 dark:text-gray-400">
       {m.shop_none_found()}
     </p>
   </div>

@@ -28,6 +28,7 @@
   import { changeActivity } from "./ChangeActivity.svelte";
   import { fmtDateTime, fmtNumber, fmtSeconds } from "../lib/utils";
   import { providerOfActivityId, providerMeta } from "../lib/provider.svelte";
+  import { bg } from "../Widgets/tone.js";
   import * as m from "../../paraglide/messages";
 
   let { activity }: { activity: Activity } = $props();
@@ -40,7 +41,10 @@
   let provider = $derived(providerOfActivityId(activity.id));
 </script>
 
-<div class="rounded-lg border border-border-subtle bg-surface-1 p-2 sm:p-3">
+<div
+  class={"rounded-lg border border-secondary-400 dark:border-secondary-700 p-2 sm:p-3 " +
+    bg("secondary")}
+>
   <!-- Header Row: 4-column grid layout (same on mobile and desktop) -->
   <!-- Col 1-3 (col-span-3): Date + Time + Activity Name (wraps freely) -->
   <!-- Col 4 (col-span-1): Device name (right-aligned) + Menu (shrink-0) -->
@@ -51,12 +55,20 @@
       <div class="flex items-center gap-x-0.5 sm:gap-x-1">
         <!-- Date + Time (fmtDateTime is the single format source; the search
              filter in ActList matches against the same string) -->
-        <span class="text-sm text-text-1 shrink-0">
+        <span
+          class="text-sm text-secondary-900 dark:text-secondary-100 shrink-0"
+        >
           {fmtDateTime(activity.start)}
         </span>
         <!-- Gap between Start and Title (em-dash on desktop, thin space on mobile) -->
-        <span class="hidden sm:inline text-text-1"> — </span>
-        <span class="sm:hidden text-text-1">&thinsp;</span>
+        <span
+          class="hidden sm:inline text-secondary-900 dark:text-secondary-100"
+        >
+          —
+        </span>
+        <span class="sm:hidden text-secondary-900 dark:text-secondary-100"
+          >&thinsp;</span
+        >
         <!-- Title (wraps on long names) -->
         <a
           href="/source/activities/{activity.id}"
@@ -79,7 +91,7 @@
     <div class="col-span-1 flex items-center justify-end gap-1 shrink-0">
       <!-- Device name (right-aligned via sm:text-right, truncates on overflow) -->
       <span
-        class="text-xs text-text-1 truncate sm:text-right"
+        class="text-xs text-secondary-900 dark:text-secondary-100 truncate sm:text-right"
         title={activity.device_name}
       >
         {activity.device_name || "-"}

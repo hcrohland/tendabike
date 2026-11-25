@@ -64,7 +64,9 @@
       >
         <ProviderMark {provider} size="sm" />
       </a>
-      <span class="text-xs text-text-1 shrink-0">{role}</span>
+      <span class="text-xs text-secondary-900 dark:text-secondary-100 shrink-0">
+        {role}
+      </span>
     </div>
     <div class="flex items-center gap-1 sm:gap-2 shrink-0">
       {#if syncing}

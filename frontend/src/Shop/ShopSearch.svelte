@@ -57,10 +57,10 @@
   }
 </script>
 
-<hr class="my-4 border-border-subtle" />
+<hr class="my-4 border-secondary-400 dark:border-secondary-700" />
 
 <div>
-  <h3 class="mb-4 text-lg font-semibold text-text-2">
+  <h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-300">
     {m.shop_search_header()}
   </h3>
 
@@ -82,7 +82,7 @@
     {:else if searchResults.length > 0}
       <ShopList shops={searchResults} {users} />
     {:else if searchQuery.trim()}
-      <p class="py-8 text-center text-text-1">
+      <p class="py-8 text-center text-gray-600 dark:text-gray-400">
         {m.shop_search_none({ query: searchQuery })}
       </p>
     {/if}

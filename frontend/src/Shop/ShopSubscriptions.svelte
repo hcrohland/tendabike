@@ -82,14 +82,14 @@
   {#if !(shops[shopId].auto_approve && subscriptions.length === 0)}
     <div>
       <div class="mb-4 flex items-center justify-between">
-        <h3 class="text-lg font-semibold text-text-2">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-300">
           {m.shop_pending_requests()}
         </h3>
 
         <Button
           size="sm"
           color="light"
-          class="bg-surface-2!"
+          class="bg-secondary-300! dark:bg-secondary-600!"
           onclick={loadSubscriptions}
         >
           {m.header_refresh()}
@@ -97,9 +97,9 @@
       </div>
 
       {#if loading}
-        <p class="text-text-1">{m.loading()}</p>
+        <p class="text-gray-600 dark:text-gray-400">{m.loading()}</p>
       {:else if subscriptions.length === 0}
-        <p class="text-text-1">
+        <p class="text-gray-600 dark:text-gray-400">
           {m.shop_no_pending_requests()}
         </p>
       {:else}

@@ -85,7 +85,7 @@
   }
 </script>
 
-<Navbar class="text-text-1">
+<Navbar class="text-gray-600 dark:text-gray-400">
   <NavBrand href="/cat">
     <img
       src="/favicon.png"

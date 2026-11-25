@@ -8,7 +8,7 @@
 
 <div
   class={getShop() != undefined
-    ? "border border-border-subtle p-4 rounded-xl"
+    ? "border border-secondary-400 dark:border-secondary-700 p-4 rounded-xl"
     : ""}
 >
   {#if getShop()}

@@ -46,13 +46,13 @@
       <div class="py-4 space-y-8">
         {#if myShops.length === 0}
           <div class="py-12 text-center">
-            <p class="mb-4 text-text-1">
+            <p class="mb-4 text-gray-600 dark:text-gray-400">
               {m.shop_none_owned()}
             </p>
 
             <Button
               color="light"
-              class="bg-surface-2!"
+              class="bg-secondary-300! dark:bg-secondary-600!"
               onclick={() => createShop()}
             >
               {m.shop_create_first()}
@@ -69,7 +69,7 @@
 
           <Button
             color="light"
-            class="bg-surface-2!"
+            class="bg-secondary-300! dark:bg-secondary-600!"
             onclick={() => createShop()}
           >
             {m.shop_create()}

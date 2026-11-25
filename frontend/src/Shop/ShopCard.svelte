@@ -70,7 +70,7 @@
   </div>
 
   {#if !isOwner && owner.firstname && owner.name}
-    <div class="mt-1 text-sm text-text-1">
+    <div class="mt-1 text-sm text-secondary-900 dark:text-secondary-100">
       {m.shop_by()}
       {owner.firstname}
       {owner.name}
@@ -78,7 +78,7 @@
   {/if}
 
   {#if shop.description}
-    <div class="mt-1 text-sm text-text-1">
+    <div class="mt-1 text-sm text-secondary-900 dark:text-secondary-100">
       {shop.description}
     </div>
   {/if}
@@ -93,7 +93,7 @@
     </div>
   {/if}
 
-  <div class="mt-2 text-xs text-text-1">
+  <div class="mt-2 text-xs text-secondary-900 dark:text-secondary-100">
     {m.shop_created()}
     {new Date(shop.created_at).toLocaleDateString()}
   </div>
