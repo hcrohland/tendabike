@@ -31,7 +31,7 @@
 
 - **Runes mode**: `<script lang="ts">` blocks with runes (`$state`, `$derived`, `$effect`, `$props()`); module scope via the `<script module>` attribute (never the deprecated `context="module"` form).
 - **Widget wrappers**: use the shared `src/Widgets/` wrappers over raw flowbite components. The load-bearing three: `Card` (entity container), `Menu` (per-entity action dropdown of `DropdownItem`s), `Chip` (label + value metric).
-- **Button color**: a button's background is the surface tone opposite its container — the same flip as `Chip`'s `light` prop. On a card (`bg-surface-2`): `color="light"` (white / gray-800). On the page base: `color="light" class="bg-surface-2!"` (gray-300 / gray-600). `color="light"` carries the right text color in both modes; a bare `<Button>` (default indigo) breaks the scheme.
+- **Button color**: a button's background is the surface tone opposite its container — the same flip as `Chip`'s `light` prop. On a card (the darker tone, `bg-secondary-300 dark:bg-secondary-600`): `color="light"` (white / gray-800). On the page base: `color="light" class="bg-secondary-300! dark:bg-secondary-600!"` (secondary-300 / secondary-600). `color="light"` carries the right text color in both modes; a bare `<Button>` (default indigo) breaks the scheme.
 - **Entity list pages**: one `Card` per entity in a card-list container, per-entity actions in a `Menu` in the card header. Reference: [`src/Activity/ActList.svelte`](src/Activity/ActList.svelte) + [`src/Activity/ActCard.svelte`](src/Activity/ActCard.svelte).
 - **UI open/close state**: component-local — a lib state module never carries it; a child that must close the UI takes a `close` callback prop.
 

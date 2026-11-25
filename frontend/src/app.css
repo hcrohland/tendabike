@@ -15,9 +15,6 @@
    * the app pick the step per mode — a light-mode background lives at step 100
    * and a dark-mode background at step 900 — so the muted/gray values read
    * correctly in both modes.
-   *
-   * The legacy surface/border/text tokens are kept (expand step) so nothing
-   * breaks until they are retired.
    */
 
   /* Neutral tones — both gray. primary is the light tone, secondary the
@@ -108,25 +105,6 @@
   --color-blue-800: #2b445d;
   --color-blue-900: #1c2c3c;
   --color-blue-950: #15202c;
-
-  /* Legacy surface/border/text tokens (kept for the expand step). */
-  --color-surface-1: var(--color-gray-100);
-  --color-surface-2: var(--color-gray-300);
-  --color-surface-3: var(--color-gray-200);
-  --color-border-subtle: var(--color-gray-400);
-  --color-border-strong: var(--color-gray-600);
-  --color-text-1: var(--color-gray-600);
-  --color-text-2: var(--color-gray-900);
-}
-
-.dark {
-  --color-surface-1: var(--color-gray-800);
-  --color-surface-2: var(--color-gray-600);
-  --color-surface-3: var(--color-gray-500);
-  --color-border-subtle: var(--color-gray-600);
-  --color-border-strong: var(--color-gray-400);
-  --color-text-1: var(--color-gray-400);
-  --color-text-2: var(--color-gray-300);
 }
 
 @source "../../node_modules/flowbite-svelte/dist";
