@@ -21,6 +21,7 @@
 <script lang="ts">
   import { Spinner } from "flowbite-svelte";
   import type { Due } from "../lib/serviceplan";
+  import { bg, type Tone } from "./tone.js";
   import ServiceBadge from "./ServiceBadge.svelte";
 
   let {
@@ -43,15 +44,25 @@
     disabled?: boolean;
   } = $props();
 
-  let background = $derived(light ? "bg-surface-2" : "bg-surface-1");
+  // The Chip's tone. The `light` prop keeps its current direction (light ⇒ the
+  // darker tone, contrasting the light-tone surface it sits on; plain ⇒ the
+  // light tone), and the background comes from the flip's tone mapping.
+  const tone: Tone = $derived(light ? "secondary" : "primary");
+  let background = $derived(bg(tone));
   let isButton = $derived(!!onclick && !disabled);
   let isLinked = $derived(!!href);
 </script>
 
 {#snippet chipContent()}
   <ServiceBadge {due} pos="absolute -top-3 -right-0" />
-  <span class="font-semibold text-sm"> {value} </span>
-  <span class="font-normal text-xs uppercase tracking-wide text-text-1">
+  <span
+    class="font-semibold text-sm text-secondary-900 dark:text-secondary-100"
+  >
+    {value}
+  </span>
+  <span
+    class="font-normal text-xs uppercase tracking-wide text-secondary-600 dark:text-secondary-300"
+  >
     {label}
   </span>
   {#if indicator}
@@ -60,7 +71,11 @@
         <Spinner size="4" color="red" />
       </span>
     {:else}
-      <span class="text-xs font-bold text-primary"> {indicator} </span>
+      <span
+        class="text-xs font-bold text-secondary-900 dark:text-secondary-100"
+      >
+        {indicator}
+      </span>
     {/if}
   {/if}
 {/snippet}
@@ -69,7 +84,7 @@
   <button
     {onclick}
     {disabled}
-    class="cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary rounded-lg {background} shrink-0"
+    class="cursor-pointer focus:outline-none focus:ring-2 focus:ring-secondary-500 rounded-lg {background} shrink-0"
   >
     <a
       {href}
@@ -83,7 +98,7 @@
   <button
     {onclick}
     {disabled}
-    class="cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary rounded-lg {background} shrink-0"
+    class="cursor-pointer focus:outline-none focus:ring-2 focus:ring-secondary-500 rounded-lg {background} shrink-0"
   >
     <div
       class="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-2 w-full relative"

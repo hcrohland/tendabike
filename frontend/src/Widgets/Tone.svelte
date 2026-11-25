@@ -12,7 +12,9 @@
   // Content contrasts the enclosing Card: it renders in the opposite tone.
   // Read during init so `getContext` runs in the component's setup phase.
   const tone = currentTone();
-  const background = tone ? bg(opposite(tone)) : "bg-surface-2";
+  const background = tone
+    ? bg(opposite(tone))
+    : "bg-secondary-300 dark:bg-secondary-600";
 </script>
 
 <div class={"rounded-lg " + background + (extraClass ? " " + extraClass : "")}>

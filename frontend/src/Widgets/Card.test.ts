@@ -10,28 +10,28 @@ import CardHost from "./CardHost.svelte";
 describe("Card", () => {
   it("renders the darker tone by default", () => {
     render(CardHost, { mode: "default" });
-    const card = screen.getByText("hello").closest(".bg-surface-2");
+    const card = screen.getByText("hello").closest(".bg-secondary-300");
     expect(card).toBeTruthy();
   });
 
   it("renders the light tone when light is set (its direction is preserved)", () => {
     render(CardHost, { mode: "light" });
-    const card = screen.getByText("hello").closest(".bg-surface-1");
+    const card = screen.getByText("hello").closest(".bg-primary-100");
     expect(card).toBeTruthy();
   });
 
   it("flips a nested card to the opposite tone", () => {
     render(CardHost, { mode: "nested" });
-    const nested = screen.getByText("nested").closest(".bg-surface-1");
+    const nested = screen.getByText("nested").closest(".bg-primary-100");
     expect(nested).toBeTruthy();
     // the nested card is the light tone, not the darker one
-    expect(nested?.classList.contains("bg-surface-2")).toBe(false);
+    expect(nested?.classList.contains("bg-secondary-300")).toBe(false);
   });
 
   it("provides its tone to children, which contrast it", () => {
     render(CardHost, { mode: "tone" });
     // the Card renders the darker tone; the Tone child contrasts with the light tone
-    const tone = screen.getByText("content").closest(".bg-surface-1");
+    const tone = screen.getByText("content").closest(".bg-primary-100");
     expect(tone).toBeTruthy();
   });
 });

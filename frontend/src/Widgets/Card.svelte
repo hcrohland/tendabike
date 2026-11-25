@@ -58,7 +58,7 @@
 </script>
 
 <div
-  class={"rounded-lg border border-border-subtle p-1 sm:p-2 " +
+  class={"rounded-lg border border-secondary-400 dark:border-secondary-700 p-1 sm:p-2 " +
     background +
     (extraClass ? " " + extraClass : "")}
 >

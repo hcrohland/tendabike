@@ -2,10 +2,10 @@ import { getContext } from "svelte";
 
 /**
  * The surface/tone flip. The app's neutral system is two tones: `primary` is
- * the light tone (surface-1) and `secondary` the darker tone (surface-2). A
- * Card renders one tone and provides it to its children through a context; a
- * nested Card flips to the opposite tone, and content (text, buttons) contrasts
- * the Card by reading the current tone and using the opposite.
+ * the light tone and `secondary` the darker tone. A Card renders one tone and
+ * provides it to its children through a context; a nested Card flips to the
+ * opposite tone, and content (text, buttons) contrasts the Card by reading the
+ * current tone and using the opposite.
  */
 
 /** The two neutral tones a Card can render in. */
@@ -19,9 +19,13 @@ export function opposite(tone: Tone): Tone {
   return tone === "primary" ? "secondary" : "primary";
 }
 
-/** The surface background class for `tone`. */
+/** The surface background class for `tone`: the two neutral tones, each
+ * defined once with a light-mode step (100/300) and a dark-mode step
+ * (800/600), so the same class reads correctly in both modes. */
 export function bg(tone: Tone): string {
-  return tone === "primary" ? "bg-surface-1" : "bg-surface-2";
+  return tone === "primary"
+    ? "bg-primary-100 dark:bg-primary-800"
+    : "bg-secondary-300 dark:bg-secondary-600";
 }
 
 /** The tone the enclosing Card renders in, or `undefined` outside a Card. */
@@ -35,5 +39,5 @@ export function currentTone(): Tone | undefined {
  */
 export function contrastBg(): string {
   const tone = currentTone();
-  return tone ? bg(opposite(tone)) : "bg-surface-2";
+  return tone ? bg(opposite(tone)) : "bg-secondary-300 dark:bg-secondary-600";
 }

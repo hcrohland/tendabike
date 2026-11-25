@@ -6,7 +6,7 @@
   // percentage. The severity rule lives in the plan module.
   const verdict_color = {
     alert: "red",
-    warn: "yellow",
+    warn: "amber",
     ok: "green",
   } as const;
 
