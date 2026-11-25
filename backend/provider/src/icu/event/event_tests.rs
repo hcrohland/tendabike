@@ -69,7 +69,7 @@ async fn accept_unknown_athlete_is_bad_request() {
 
 /// Canned the `get_event` read of a single queued event: the event is both the
 /// "next" event and the only "later" event for its activity (the dedup no-ops).
-fn queue_event(store: &mut MockIcuDataStore, event: IcuEvent) {
+fn queue_event(store: &mut MockIcuStore, event: IcuEvent) {
     let next = event.clone();
     let later = event.clone();
     store
@@ -308,14 +308,14 @@ fn sync_uri(oldest: i64, newest: i64) -> String {
 
 /// The store fixture for the `SYNC` tests: the user lookup resolves the
 /// athlete id (the `insert_sync`'s `get_icu_id`).
-fn sync_user_fixture(store: &mut MockIcuDataStore) {
+fn sync_user_fixture(store: &mut MockIcuStore) {
     store
         .expect_user_get_by_tbid()
         .times(..)
         .returning(|_id| Ok(icu_user(UserId::from(1), "a1", true)));
 }
 
-type MockIcuDataStore = crate::test_support::MockStore<crate::icu::IcuSpec>;
+type MockIcuStore = crate::test_support::MockStore<crate::icu::IcuSpec>;
 
 /// `insert_sync` enqueues a `SYNC` event with the `oldest` bound and the `0`
 /// newest sentinel.

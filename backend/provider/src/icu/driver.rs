@@ -8,6 +8,8 @@
 //! and the remote revocation is the trait's default no-op (intervals.icu has
 //! no revocation API — the cleared token is the disable signal).
 
+use oauth2::AccessToken;
+
 use crate::driver::Provider;
 use crate::facade::{ActivityId, EntityFacade, Error, PartId, Session, Summary, TbResult, UserId};
 use crate::icu::{IcuId, IcuSpec, IcuUser};
@@ -28,7 +30,10 @@ impl Provider<IcuSpec> for IcuDriver {
         IcuUser {
             id,
             tendabike_id: tbid,
-            access_token: token,
+            // The normalized optional token string builds the native typed
+            // token (spec #1029's token model — symmetric with Strava's
+            // typed optional refresh token).
+            access_token: token.map(AccessToken::new),
         }
     }
 

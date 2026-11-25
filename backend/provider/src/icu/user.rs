@@ -13,7 +13,7 @@
 use anyhow::Context;
 use derive_more::{Display, From, Into};
 use log::{debug, info};
-use oauth2::{AuthorizationCode, PkceCodeVerifier, TokenResponse};
+use oauth2::{AccessToken, AuthorizationCode, PkceCodeVerifier, TokenResponse};
 use serde::{Deserialize, Serialize};
 
 use super::client::{HTTP_CLIENT, SCOPES, icu_client};
@@ -58,8 +58,10 @@ pub struct IcuUser {
     pub id: IcuId,
     /// The corresponding tendabike user id.
     pub tendabike_id: UserId,
-    /// The durable access token (intervals.icu tokens never refresh).
-    pub access_token: Option<String>,
+    /// The durable access token (intervals.icu tokens never refresh) — a
+    /// typed optional, symmetric with Strava's typed optional refresh token
+    /// (spec #1029's token model).
+    pub access_token: Option<AccessToken>,
 }
 
 impl IcuUser {
@@ -118,7 +120,7 @@ impl IcuUser {
         let user = IcuUser {
             id,
             tendabike_id,
-            access_token: Some(access_token.to_string()),
+            access_token: Some(AccessToken::new(access_token.to_string())),
         };
         info!("creating new icu user id {user:?}");
 

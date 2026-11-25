@@ -87,10 +87,11 @@ pub const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 /// suite's doubles in the tests) — the seam is injected at construction and
 /// every method uses it, so the presentation layer never names it.
 #[derive(Clone)]
-pub struct Registry<S, P, D>
+pub struct Registry<S, P, Q, D>
 where
     S: TxnSource + Clone + 'static,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    Q: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     source: S,
@@ -98,15 +99,20 @@ where
     /// Owned by the registry and handed to the core's spawn (a clone per
     /// executor).
     facade: D,
-    /// The provider lane: the narrow seam the loop calls through to probe
-    /// and process the provider's event queue. The registry owns it and
-    /// passes a clone to the core's spawn.
-    lane: P,
+    /// The Strava provider lane (selected for `Provider::Strava` users): the
+    /// narrow seam the loop calls through to probe and process the provider's
+    /// event queue. The registry owns it and passes a clone to the core's
+    /// spawn.
+    strava_lane: P,
+    /// The icu provider lane (selected for `Provider::Icu` users): the
+    /// second lane the registry drives, so an icu user's queued events are
+    /// processed through their own (marker, driver) lane.
+    icu_lane: Q,
     /// The lifecycle core: the per-user executor map, the per-shop
     /// frame-channel map, and the spawn/reap/wake/stop-all logic. Source-
     /// agnostic — the facade owns the [`TxnSource`] and the `Box<dyn
     /// FramePusher>` it passes to the core's spawn.
-    core: Core<P>,
+    core: Core,
 }
 
 /// The frame push surface the executor loop uses to route a completed
@@ -127,29 +133,34 @@ pub trait FramePusher: Send + Sync {
     async fn deliver(&self, context: DeliveryContext, summary: Summary);
 }
 
-impl<S, P, D> Registry<S, P, D>
+impl<S, P, Q, D> Registry<S, P, Q, D>
 where
     S: TxnSource + Clone + 'static,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    Q: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     /// The registry with an explicit idle cadence (test ergonomics: a
     /// short idle cadence makes the executor's lifecycle observable).
     /// The SSE heartbeat cadence is the crate constant
     /// [`HEARTBEAT_INTERVAL`] — the `KeepAlive` wiring uses it directly.
-    pub fn new(source: S, facade: D, lane: P, idle_timeout: Duration) -> Self {
+    /// `strava_lane` and `icu_lane` are the two provider lanes the registry
+    /// drives: the loop for a user runs the lane of the user's real provider
+    /// (a user has exactly one), selected per demand.
+    pub fn new(source: S, facade: D, strava_lane: P, icu_lane: Q, idle_timeout: Duration) -> Self {
         Self {
             source,
             facade,
-            lane,
+            strava_lane,
+            icu_lane,
             core: Core::new(idle_timeout),
         }
     }
 
     /// The registry with the production default (the 60s idle re-probe
     /// cadence).
-    pub fn with_defaults(source: S, facade: D, lane: P) -> Self {
-        Self::new(source, facade, lane, IDLE_TIMEOUT)
+    pub fn with_defaults(source: S, facade: D, strava_lane: P, icu_lane: Q) -> Self {
+        Self::new(source, facade, strava_lane, icu_lane, IDLE_TIMEOUT)
     }
 
     /// Fire the wake signal for the user's executor (spec §4.4/§4.6): a
@@ -204,22 +215,102 @@ where
     ) -> broadcast::Receiver<Summary> {
         self.core.install_executor_for_test(user_id, status).await
     }
+}
 
+/// The lane-selection surface (spec #1029, user story 13): `exec_field`
+/// selects the user's provider lane and `send_request` rides it — the
+/// registry's single home for "which (marker, driver) lane does this user
+/// run?". The selection reads the user's real provider in-transaction (the
+/// [`provider_of`](tb_provider::provider_of) lookup, ADR-0014), so this
+/// impl bounds on the two providers' `Store` over the connection.
+impl<S, P, Q, D> Registry<S, P, Q, D>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: tb_provider::Store<tb_provider::strava::StravaSpec>
+        + tb_provider::Store<tb_provider::icu::IcuSpec>
+        + Send
+        + Sync,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    Q: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
+{
     /// Lock the core, ensure the user's executor is live (spawning it if it
     /// is absent or settled), and pull one field from it: the shared shape
-    /// of `subscribe`, `events`, and `write`. The facade builds the
-    /// `Box<dyn FramePusher>` (from `self.clone()`, which shares the core's
-    /// maps) and passes it with the source to the core; the lock is dropped
-    /// when this returns, before the caller's next await.
-    async fn exec_field<R>(
+    /// of `subscribe`, `events`, and `write`. The selection reads the
+    /// user's real provider in-transaction (the
+    /// [`provider_of`](tb_provider::provider_of) lookup, ADR-0014) and
+    /// drives the core's spawn through the user's own (marker, driver)
+    /// lane — a user has exactly one provider (immutable). The facade
+    /// builds the `Box<dyn FramePusher>` (from `self.clone()`, which
+    /// shares the core's maps) and passes it with the source to the core;
+    /// the lock is dropped when this returns, before the caller's next
+    /// await.
+    async fn exec_field<R>(&self, user_id: UserId, f: impl FnOnce(&Executor) -> R) -> TbResult<R> {
+        let pusher: Box<dyn FramePusher> = Box::new(self.clone());
+        // Select the user's provider lane: a user has exactly one provider
+        // (immutable), derived from the provider-internal user data.
+        let mut store = self.source.begin().await?;
+        let provider = tb_provider::provider_of(&mut store, user_id).await?;
+        store.commit().await?;
+        match provider {
+            Provider::Strava => {
+                self.core
+                    .exec_field(
+                        &self.source,
+                        &self.facade,
+                        &self.strava_lane,
+                        user_id,
+                        pusher,
+                        f,
+                    )
+                    .await
+            }
+            Provider::Icu => {
+                self.core
+                    .exec_field(
+                        &self.source,
+                        &self.facade,
+                        &self.icu_lane,
+                        user_id,
+                        pusher,
+                        f,
+                    )
+                    .await
+            }
+        }
+    }
+
+    /// Enqueue a [`Request`] on the user's executor and await its oneshot
+    /// — the shared shape of the registry's `read`, `all_stats`, and
+    /// `write` (spec #558 §3): spawn-or-join the executor,
+    /// send the request on the user's request channel, and await the oneshot
+    /// (unbounded — the message is serialized behind any in-flight one,
+    /// spec #558 §3.7). `dropped` names the message in the reply-drop
+    /// error ("read", "stats read", "write"). `exec_field`
+    /// drops the registry lock on return, so the unbounded reply await
+    /// runs without it.
+    async fn send_request<Out>(
         &self,
         user_id: UserId,
-        f: impl FnOnce(&Executor<P>) -> R,
-    ) -> TbResult<R> {
-        let pusher: Box<dyn FramePusher> = Box::new(self.clone());
-        self.core
-            .exec_field(&self.source, &self.facade, &self.lane, user_id, pusher, f)
-            .await
+        request: Request,
+        reply: oneshot::Receiver<TbResult<Out>>,
+        dropped: &str,
+    ) -> TbResult<Out> {
+        let request_sender = self
+            .exec_field(user_id, |exec| exec.request_sender.clone())
+            .await?;
+        if request_sender.send(request).is_err() {
+            // The executor died between the liveness check and the send
+            // (spec §4.6): the message is lost, the client retries.
+            return Err(Error::AnyFailure(anyhow::anyhow!(
+                "the executor for user {user_id} is gone"
+            )));
+        }
+        reply.await.map_err(|_| {
+            Error::AnyFailure(anyhow::anyhow!(
+                "the executor for user {user_id} dropped the {dropped}"
+            ))
+        })?
     }
 }
 
@@ -227,11 +318,12 @@ where
 /// surface with the narrow `Txn` bound (the ownership check goes through
 /// the domain facade). The [`ServiceApi`] impl delegates
 /// to this; the web layer calls it through the trait.
-impl<S, P, D> Registry<S, P, D>
+impl<S, P, Q, D> Registry<S, P, Q, D>
 where
     S: TxnSource + Clone + 'static,
     S::Conn: Txn,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    Q: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     /// Register a shop stream for `shop_id` (spec #517): verify
@@ -267,10 +359,11 @@ where
 /// stream map, the executor map) — the two are independent, so a push never
 /// holds both locks.
 #[async_trait::async_trait]
-impl<S, P, D> FramePusher for Registry<S, P, D>
+impl<S, P, Q, D> FramePusher for Registry<S, P, Q, D>
 where
     S: TxnSource + Clone + 'static,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    Q: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     /// Delegate the routing to the core (the complete frame-routing policy).
@@ -283,7 +376,7 @@ where
 /// channel ops ride [`Self::send_request`] (spawn-or-join the executor,
 /// enqueue, await the oneshot).
 #[async_trait::async_trait]
-impl<S, P, D> ServiceApi for Registry<S, P, D>
+impl<S, P, Q, D> ServiceApi for Registry<S, P, Q, D>
 where
     // The generic channel ops (`read`/`write`/`subscribe`/
     // `all_stats`) ride the executor and need only `Txn` (their domain work
@@ -298,6 +391,7 @@ where
         + tb_provider::Store<tb_provider::icu::IcuSpec>
         + Txn,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    Q: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     /// Enqueue one [`ApiRead`] on the user's executor and await its data
@@ -422,7 +516,7 @@ where
 /// two providers' local data stores plus the provider-agnostic `Store` over
 /// each marker and takes the facade as a parameter.
 #[async_trait::async_trait]
-impl<S, P, D> crate::providerservice::ProviderService for Registry<S, P, D>
+impl<S, P, Q, D> crate::providerservice::ProviderService for Registry<S, P, Q, D>
 where
     S: TxnSource + Clone + 'static,
     S::Conn: tb_provider::Store<tb_provider::strava::StravaSpec>
@@ -431,6 +525,7 @@ where
         + Sync
         + 'static,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    Q: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
     /// The login (ADR-0014): one transaction — the provider layer's dispatch
@@ -450,7 +545,7 @@ where
             code,
             scope,
             verifier,
-            self.lane.facade(),
+            self.strava_lane.facade(),
             &mut store,
         )
         .await?;
@@ -486,7 +581,8 @@ where
         event_time: i64,
     ) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_provider::dispatch::sync(user_id, event_time, self.lane.facade(), &mut store).await?;
+        tb_provider::dispatch::sync(user_id, event_time, self.strava_lane.facade(), &mut store)
+            .await?;
         store.commit().await?;
         Ok(())
     }
@@ -506,8 +602,13 @@ where
     /// then deletes.
     async fn delete_user(&self, mut session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        tb_provider::dispatch::delete_user(&mut *session, tbid, self.lane.facade(), &mut store)
-            .await?;
+        tb_provider::dispatch::delete_user(
+            &mut *session,
+            tbid,
+            self.strava_lane.facade(),
+            &mut store,
+        )
+        .await?;
         store.commit().await?;
         Ok(())
     }
@@ -526,7 +627,7 @@ where
             provider,
             session,
             id,
-            self.lane.facade(),
+            self.strava_lane.facade(),
             &mut store,
         )
         .await?;
@@ -540,7 +641,8 @@ where
     async fn gear_url(&self, session: Box<dyn Session>, id: PartId) -> TbResult<Option<String>> {
         let mut store = self.source.begin().await?;
         let uri =
-            tb_provider::dispatch::gear_url(session, id, self.lane.facade(), &mut store).await?;
+            tb_provider::dispatch::gear_url(session, id, self.strava_lane.facade(), &mut store)
+                .await?;
         store.commit().await?;
         Ok(uri)
     }
@@ -570,45 +672,5 @@ where
     /// pure config read.
     fn enabled_providers(&self) -> Vec<Provider> {
         tb_provider::enabled_providers().to_vec()
-    }
-}
-
-/// Enqueue a [`Request`] on the user's executor and await its oneshot
-/// — the shared shape of the registry's `read`, `all_stats`, and `write`
-/// (spec #558 §3): spawn-or-join the executor,
-/// send the request on the user's request channel, and await the oneshot
-/// (unbounded — the message is serialized behind any in-flight one,
-/// spec #558 §3.7). `dropped` names the message in the reply-drop
-/// error ("read", "stats read", "write"). `exec_field`
-/// drops the registry lock on return, so the unbounded reply await
-/// runs without it.
-impl<S, P, D> Registry<S, P, D>
-where
-    S: TxnSource + Clone + 'static,
-    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
-    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
-{
-    async fn send_request<Out>(
-        &self,
-        user_id: UserId,
-        request: Request,
-        reply: oneshot::Receiver<TbResult<Out>>,
-        dropped: &str,
-    ) -> TbResult<Out> {
-        let request_sender = self
-            .exec_field(user_id, |exec| exec.request_sender.clone())
-            .await?;
-        if request_sender.send(request).is_err() {
-            // The executor died between the liveness check and the send
-            // (spec §4.6): the message is lost, the client retries.
-            return Err(Error::AnyFailure(anyhow::anyhow!(
-                "the executor for user {user_id} is gone"
-            )));
-        }
-        reply.await.map_err(|_| {
-            Error::AnyFailure(anyhow::anyhow!(
-                "the executor for user {user_id} dropped the {dropped}"
-            ))
-        })?
     }
 }

@@ -27,9 +27,9 @@ async fn access_token(
     let user = store.user_get_by_tbid(user_id).await?;
     let token = user
         .access_token
-        .clone()
+        .as_ref()
         .ok_or_else(|| Error::NotAuth(format!("no icu access token for user {user_id}")))?;
-    Ok((user.id, token))
+    Ok((user.id, token.secret().to_string()))
 }
 
 /// A bearer GET of `uri` for `user`, parsed as `T`.

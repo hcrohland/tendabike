@@ -9,6 +9,8 @@
 //! over [`IcuSpec`](super::IcuSpec) (spec #1029) — the per-provider data-store
 //! mock is gone.
 
+use oauth2::AccessToken;
+
 use super::{IcuId, IcuUser};
 use time::OffsetDateTime;
 
@@ -21,7 +23,7 @@ pub fn icu_user(tbid: UserId, icuathlete: &str, enabled: bool) -> IcuUser {
         tendabike_id: tbid,
         // `enabled` drives the token: a cleared token (None) is the disable
         // signal, so `IcuUser::disabled()` derives the flag from it.
-        access_token: enabled.then(|| "test-token".to_string()),
+        access_token: enabled.then(|| AccessToken::new("test-token".to_string())),
     }
 }
 

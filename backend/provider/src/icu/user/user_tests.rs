@@ -52,7 +52,10 @@ async fn upsert_creates_new_user() -> TbResult<()> {
         .expect("the icu row was created");
     assert_eq!(su.tendabike_id, UserId::from(1));
     assert_eq!(su.id, "ath-42".into());
-    assert_eq!(su.access_token.as_deref(), Some("durable-token"));
+    assert_eq!(
+        su.access_token.as_ref().map(|t| t.secret().to_string()),
+        Some("durable-token".to_string())
+    );
     Ok(())
 }
 

@@ -1,3 +1,4 @@
+use oauth2::AccessToken;
 use sqlx::FromRow;
 
 use crate::{SqlxConn, into_domain, option_into, vec_into};
@@ -26,7 +27,8 @@ impl From<IcuUser> for DbIcuUser {
             id: 0,
             tbid: tendabike_id.into(),
             icu_athlete_id: id.into(),
-            access_token,
+            // The typed token serializes to its secret string (the DB column).
+            access_token: access_token.map(|t| t.secret().to_string()),
         }
     }
 }
@@ -42,7 +44,8 @@ impl From<DbIcuUser> for IcuUser {
         Self {
             id: icu_athlete_id.into(),
             tendabike_id: tbid.into(),
-            access_token,
+            // The DB column's secret string builds the typed token.
+            access_token: access_token.map(AccessToken::new),
         }
     }
 }
@@ -321,7 +324,7 @@ mod tests {
         IcuUser {
             id: IcuId::from("ath-42"),
             tendabike_id: UserId::from(1),
-            access_token: token.map(|t| t.to_string()),
+            access_token: token.map(|t| AccessToken::new(t.to_string())),
         }
     }
 
@@ -335,7 +338,10 @@ mod tests {
         let back = IcuUser::from(db);
         assert_eq!(back.id, IcuId::from("ath-42"));
         assert_eq!(back.tendabike_id, UserId::from(1));
-        assert_eq!(back.access_token.as_deref(), Some("durable-token"));
+        assert_eq!(
+            back.access_token.as_ref().map(|t| t.secret().to_string()),
+            Some("durable-token".to_string())
+        );
     }
 
     #[test]
