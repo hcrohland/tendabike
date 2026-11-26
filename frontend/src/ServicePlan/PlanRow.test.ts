@@ -108,13 +108,13 @@ describe("PlanRow", () => {
     expect(snoozePlan).toHaveBeenCalledWith(pln, part);
   });
 
-  it("shows a snoozed indicator for a snoozed (part, plan)", () => {
+  it("shows a snoozed indicator with the percentage for a snoozed (part, plan)", () => {
     renderRow(plan({ snoozes: { 5: 0.5 } }), 98000);
-    expect(screen.getByText("snoozed")).toBeTruthy();
+    expect(screen.getByText("50%")).toBeTruthy();
   });
 
   it("shows no snoozed indicator when the (part, plan) is not snoozed", () => {
     renderRow(plan(), 98000);
-    expect(screen.queryByText("snoozed")).toBeNull();
+    expect(screen.queryByText("50%")).toBeNull();
   });
 });
