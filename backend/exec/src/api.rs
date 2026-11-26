@@ -51,12 +51,12 @@ use crate::facade::{
 };
 
 /// The app's presentation-agnostic service API (spec #558 §2): the generic
-/// channel ops (`read`, `write`, `subscribe`, `all_stats`)
-/// plus the provider-neutral direct ops (`rescan`, `subscribe_shop`,
-/// `trigger_processing`). Presentation layers depend on this trait, not the
-/// concrete [`crate::Registry`]. The provider-specific ops live in
-/// [`crate::providerservice::ProviderService`] — a second provider never
-/// reshapes this trait.
+/// channel ops (`read`, `write`, `subscribe`)
+/// plus the provider-neutral direct ops (`all_stats`, `rescan`,
+/// `subscribe_shop`, `trigger_processing`). Presentation layers depend on
+/// this trait, not the concrete [`crate::Registry`]. The provider-specific
+/// ops live in [`tb_provider::ProviderService`] — a second
+/// provider never reshapes this trait.
 ///
 /// Every method that takes a `session` parameter threads the acting
 /// [`Session`] through the executor to the downstream domain functions it
@@ -90,8 +90,10 @@ pub trait ServiceApi: Send + Sync {
         watch::Receiver<ExecutorStatus>,
     )>;
 
-    /// The admin `GET /user/all` read (spec #558 §3.3): `get_all_stats` in
-    /// the admin user's own channel, in the loop's own transaction.
+    /// The admin `GET /user/all` read (spec #558 §3.3): one transaction
+    /// (the provider-agnostic `all_stats` dispatch) — every enabled
+    /// provider's users, each row stamped with its provider's wire value.
+    /// Provider-neutral: the list is not the admin's own provider's.
     async fn all_stats(&self, session: Box<dyn Session>) -> TbResult<Vec<UserStat>>;
 
     /// The admin rescan (spec #558 §5.2): one transaction

@@ -38,8 +38,9 @@ use log::debug;
 use oauth2::{AccessToken, RefreshToken, TokenResponse};
 
 use super::client::{HTTP_CLIENT, strava_client};
-use super::{StravaDataStore, StravaId, StravaUser};
+use super::{StravaId, StravaSpec, StravaUser};
 use crate::facade::{Error, TbResult, UserId};
+use crate::store::Store;
 
 /// A one-line expiry check: a known expiry in the past is expired; an unknown
 /// expiry (`None`) is treated as not expired.
@@ -133,7 +134,7 @@ pub(crate) static TOKEN_CACHE: LazyLock<Mutex<HashMap<UserId, TokenState>>> =
 /// the lookup lock is scoped to its own block (cloned on a hit), and the miss
 /// path reads the `StravaUser` with no lock held, then locks again to insert
 /// the new state.
-async fn cached_state(user_id: UserId, store: &mut impl StravaDataStore) -> TbResult<TokenState> {
+async fn cached_state(user_id: UserId, store: &mut impl Store<StravaSpec>) -> TbResult<TokenState> {
     let cached = {
         let cache = TOKEN_CACHE.lock().expect("the token cache is not poisoned");
         cache.get(&user_id).cloned()
@@ -159,7 +160,7 @@ async fn cached_state(user_id: UserId, store: &mut impl StravaDataStore) -> TbRe
 /// stored. Returns `(strava_id, access)`.
 pub(crate) async fn get_token(
     user_id: UserId,
-    store: &mut impl StravaDataStore,
+    store: &mut impl Store<StravaSpec>,
 ) -> TbResult<(StravaId, AccessToken)> {
     let mut state = cached_state(user_id, store).await?;
     let (access, new_refresh) = state.get_token().await?;
@@ -183,7 +184,7 @@ pub(crate) async fn get_token(
 /// module boundary.
 pub(crate) async fn get_strava_id(
     user_id: UserId,
-    store: &mut impl StravaDataStore,
+    store: &mut impl Store<StravaSpec>,
 ) -> TbResult<StravaId> {
     let state = cached_state(user_id, store).await?;
     Ok(state.strava_id())

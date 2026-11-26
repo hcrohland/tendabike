@@ -1,6 +1,9 @@
-use super::{MockEventQueue, QueuedEvent, fail_event, get_event};
-use crate::facade::{Error, Summary};
+use super::{fail_event, get_event};
+use crate::Provider;
+use crate::ProviderSpec;
+use crate::facade::{Error, Summary, UserId};
 use crate::lane::QueueRead;
+use crate::test_support::MockStore;
 
 /// A queued event row for the queue-op tests: the identity the ops key on.
 #[derive(Debug, Clone, PartialEq)]
@@ -10,17 +13,46 @@ struct TestEvent {
     key: i64,
 }
 
-impl QueuedEvent for TestEvent {
+/// A test user row for the marker's user-row accessors: the TendaBike id and
+/// the provider owner the accessors read.
+#[derive(Debug, Clone)]
+struct TestUser {
+    tbid: UserId,
+    owner: i32,
+}
+
+/// The test marker (spec #1029, ticket #1031): the type-only carrier of the
+/// test event's wire shapes, so the queue's read and failure rules run over
+/// the single [`MockStore`] double (generic over the marker).
+struct TestSpec;
+
+impl ProviderSpec for TestSpec {
+    const PROVIDER: Provider = Provider::Icu;
+    type User = TestUser;
+    type Event = TestEvent;
     type Owner = i32;
     type Key = i64;
-    fn id(&self) -> Option<i32> {
-        self.id
+    fn make_sync(owner: i32, _time: i64) -> TestEvent {
+        TestEvent {
+            id: None,
+            owner,
+            key: 0,
+        }
     }
-    fn owner(&self) -> &i32 {
-        &self.owner
+    fn event_id(e: &TestEvent) -> Option<i32> {
+        e.id
     }
-    fn key(&self) -> &i64 {
-        &self.key
+    fn event_owner(e: &TestEvent) -> &i32 {
+        &e.owner
+    }
+    fn event_key(e: &TestEvent) -> &i64 {
+        &e.key
+    }
+    fn user_tbid(user: &TestUser) -> &UserId {
+        &user.tbid
+    }
+    fn user_owner(user: &TestUser) -> &i32 {
+        &user.owner
     }
 }
 
@@ -32,7 +64,7 @@ fn event(id: i32, owner: i32, key: i64) -> TestEvent {
     }
 }
 
-type MockQueue = MockEventQueue<TestEvent>;
+type MockQueue = MockStore<TestSpec>;
 
 // ─── get_event (the read-side rules) ────────────────────────────────────────
 
@@ -42,8 +74,8 @@ type MockQueue = MockEventQueue<TestEvent>;
 async fn get_event_limited_when_rate_limited() {
     let mut queue = MockQueue::new();
     queue.expect_limited_until().returning(|| Some(123));
-    // The gate fires first: no queue read.
-    queue.expect_get_next_for_user().times(0);
+    // The gate fires first: no store read.
+    queue.expect_event_get_next().times(0);
     let read = get_event(1, &mut queue).await.unwrap();
     assert!(matches!(read, QueueRead::Limited { until: 123 }));
 }
@@ -53,7 +85,7 @@ async fn get_event_limited_when_rate_limited() {
 async fn get_event_empty_when_no_events() {
     let mut queue = MockQueue::new();
     queue.expect_limited_until().returning(|| None);
-    queue.expect_get_next_for_user().returning(|_user| Ok(None));
+    queue.expect_event_get_next().returning(|_user| Ok(None));
     let read = get_event(1, &mut queue).await.unwrap();
     assert!(matches!(read, QueueRead::Empty));
 }
@@ -65,13 +97,13 @@ async fn get_event_returns_queued_event() {
     let mut queue = MockQueue::new();
     queue.expect_limited_until().returning(|| None);
     queue
-        .expect_get_next_for_user()
+        .expect_event_get_next()
         .returning(|_user| Ok(Some(event(1, 1, 10))));
     // The event is the only queued row for its key: the dedup no-ops.
     queue
-        .expect_get_later()
+        .expect_event_get_later()
         .returning(|_key, _owner| Ok(vec![event(1, 1, 10)]));
-    queue.expect_delete_batch().times(0);
+    queue.expect_event_delete_batch().times(0);
     let read = get_event(1, &mut queue).await.unwrap();
     assert!(matches!(read, QueueRead::Event(_)));
 }
@@ -86,15 +118,15 @@ async fn get_event_returns_latest_and_drops_older() {
     // Two events for the same key: the read returns the latest (id 2) and
     // drops the older (id 1).
     queue
-        .expect_get_next_for_user()
+        .expect_event_get_next()
         .returning(|_user| Ok(Some(event(1, 1, 10))));
     queue
-        .expect_get_later()
+        .expect_event_get_later()
         .returning(|_key, _owner| Ok(vec![event(1, 1, 10), event(2, 1, 10)]));
     let dropped: std::sync::Arc<std::sync::Mutex<Vec<Option<i32>>>> =
         std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let rec = dropped.clone();
-    queue.expect_delete_batch().returning(move |values| {
+    queue.expect_event_delete_batch().returning(move |values| {
         rec.lock().unwrap().extend(values);
         Ok(())
     });
@@ -122,14 +154,14 @@ async fn get_event_dedup_is_keyed_on_the_row() {
     // A sentinel-keyed row (the icu `SYNC` row's `"sync"` key, generalized):
     // the dedup query is keyed on the row's own key and owner.
     queue
-        .expect_get_next_for_user()
+        .expect_event_get_next()
         .returning(|_user| Ok(Some(event(7, 1, 999))));
-    queue.expect_get_later().returning(|key, owner| {
+    queue.expect_event_get_later().returning(|key, owner| {
         assert_eq!(key, 999, "keyed on the row's own key");
         assert_eq!(owner, 1, "keyed on the row's own owner");
         Ok(vec![event(7, 1, 999)])
     });
-    queue.expect_delete_batch().times(0);
+    queue.expect_event_delete_batch().times(0);
     let read = get_event(1, &mut queue).await.unwrap();
     assert!(
         matches!(read, QueueRead::Event(e) if e.id == Some(7)),
@@ -139,16 +171,13 @@ async fn get_event_dedup_is_keyed_on_the_row() {
 
 // ─── fail_event (the four-arm policy) ───────────────────────────────────────
 
-/// A rate limit (`TryAgain`) keeps the event queued: no queue-side effect, an
+/// A rate limit (`TryAgain`) keeps the event queued: no store-side effect, an
 /// empty summary (the next `get_event` probe reports `Limited`).
 #[tokio::test]
 async fn fail_event_keep_queued_is_a_noop() {
     let mut queue = MockQueue::new();
-    queue
-        .expect_provider_id()
-        .returning(|| crate::Provider::Icu);
-    queue.expect_disable_user().times(0);
-    queue.expect_delete_event().times(0);
+    queue.expect_user_disable().times(0);
+    queue.expect_event_delete().times(0);
     let res = fail_event(&event(1, 1, 10), Error::TryAgain("rate limit"), &mut queue)
         .await
         .unwrap();
@@ -156,21 +185,19 @@ async fn fail_event_keep_queued_is_a_noop() {
 }
 
 /// Dead auth (`NotAuth`) disables the user (which drops their queued events):
-/// the disable commits with the caller's transaction.
+/// the disable commits with the caller's transaction. The disable is a store
+/// user-lifecycle op (`Store::user_disable`) (spec #1029, ticket #1031).
 #[tokio::test]
 async fn fail_event_disable_user_disables() {
     let mut queue = MockQueue::new();
-    queue
-        .expect_provider_id()
-        .returning(|| crate::Provider::Icu);
     let disabled: std::sync::Arc<std::sync::Mutex<Option<i32>>> =
         std::sync::Arc::new(std::sync::Mutex::new(None));
     let rec = disabled.clone();
-    queue.expect_disable_user().returning(move |user| {
+    queue.expect_user_disable().returning(move |user| {
         rec.lock().unwrap().replace(user);
         Ok(())
     });
-    queue.expect_delete_event().times(0);
+    queue.expect_event_delete().times(0);
     let res = fail_event(
         &event(1, 42, 10),
         Error::NotAuth("token dead".into()),
@@ -187,15 +214,12 @@ async fn fail_event_disable_user_disables() {
 }
 
 /// A DB failure (`DatabaseFailure`) propagates: the caller rolls back and
-/// backs off (no queue-side effect).
+/// backs off (no store-side effect).
 #[tokio::test]
 async fn fail_event_propagate_bubbles_the_error() {
     let mut queue = MockQueue::new();
-    queue
-        .expect_provider_id()
-        .returning(|| crate::Provider::Icu);
-    queue.expect_disable_user().times(0);
-    queue.expect_delete_event().times(0);
+    queue.expect_user_disable().times(0);
+    queue.expect_event_delete().times(0);
     let res = fail_event(
         &event(1, 1, 10),
         Error::DatabaseFailure(anyhow::anyhow!("db down")),
@@ -210,17 +234,14 @@ async fn fail_event_propagate_bubbles_the_error() {
 #[tokio::test]
 async fn fail_event_drop_event_deletes() {
     let mut queue = MockQueue::new();
-    queue
-        .expect_provider_id()
-        .returning(|| crate::Provider::Icu);
     let deleted: std::sync::Arc<std::sync::Mutex<Option<Option<i32>>>> =
         std::sync::Arc::new(std::sync::Mutex::new(None));
     let rec = deleted.clone();
-    queue.expect_delete_event().returning(move |id| {
+    queue.expect_event_delete().returning(move |id| {
         rec.lock().unwrap().replace(id);
         Ok(())
     });
-    queue.expect_disable_user().times(0);
+    queue.expect_user_disable().times(0);
     let res = fail_event(&event(5, 1, 10), Error::NotFound("gone".into()), &mut queue)
         .await
         .unwrap();

@@ -5,14 +5,12 @@
 //! abstraction as the id prefixes under ADR-0013.
 //!
 //! The enum is the single home for the provider's string encodings: its wire
-//! value (the client's `user.provider` field), the activity id's prefix, the
-//! web route prefix, and the OAuth entry URL. A third provider is a variant
-//! carrying all four encodings at once.
+//! value (the client's `user.provider` field), with the activity id's prefix
+//! and the web route prefix derived from it. The OAuth authorize URL lives on
+//! the driver, not here. A third provider is a variant carrying the wire
+//! value; the prefixes derive from it.
 
 use crate::facade::{Error, TbResult, UserId};
-
-#[cfg(any(feature = "strava", feature = "icu"))]
-use oauth2::{CsrfToken, PkceCodeChallenge, PkceCodeVerifier, Scope};
 
 use crate::ProviderActivityId;
 
@@ -22,8 +20,9 @@ use crate::ProviderActivityId;
 /// from the provider-internal user data (ADR-0014).
 ///
 /// The enum is the single home for the provider's string encodings: its wire
-/// value (the client's `user.provider` field), the activity id's prefix, the
-/// web route prefix, and the OAuth entry URL.
+/// value (the client's `user.provider` field), with the activity id's prefix
+/// and the web route prefix derived from it. The OAuth authorize URL lives on
+/// the driver, not here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Provider {
     Strava,
@@ -41,59 +40,16 @@ impl Provider {
     }
 
     /// The activity id's prefix: the `strava:` / `icu:` the domain's opaque
-    /// `ActivityId` is prefixed with (the single home for the prefix
-    /// knowledge, ADR-0013).
-    pub fn activity_id_prefix(&self) -> &'static str {
-        match self {
-            Provider::Strava => "strava:",
-            Provider::Icu => "icu:",
-        }
+    /// `ActivityId` is prefixed with — derived from the wire value (the
+    /// single home for the prefix knowledge, ADR-0013).
+    pub fn activity_id_prefix(&self) -> String {
+        format!("{}:", self.wire_value())
     }
 
     /// The web route prefix: the axum nest site's path for the provider's
-    /// route table.
-    pub fn route_prefix(&self) -> &'static str {
-        match self {
-            Provider::Strava => "/strava",
-            Provider::Icu => "/icu",
-        }
-    }
-
-    /// The OAuth entry URL, assembled from the driver's client config and the
-    /// CSRF state the web shell generates. The web shell generates the state
-    /// (beside its other protocol secrets) and passes it here; the URL carries
-    /// the driver's client id, redirect URI, and scopes. `code_verifier` is
-    /// the opaque PKCE code verifier the state carries (intervals.icu-only —
-    /// the icu arm derives the authorize URL's S256 challenge from it; the
-    /// Strava flow is a plain authorization-code exchange and passes `None`).
-    #[cfg(any(feature = "strava", feature = "icu"))]
-    pub fn authorize_url(&self, state: &str, code_verifier: Option<&str>) -> String {
-        match self {
-            #[cfg(feature = "strava")]
-            Provider::Strava => {
-                let (auth_url, _) = crate::strava::client::strava_client()
-                    .authorize_url(|| CsrfToken::new(state.to_string()))
-                    .add_scope(Scope::new(crate::strava::client::SCOPES.to_string()))
-                    .url();
-                auth_url.to_string()
-            }
-            #[cfg(feature = "icu")]
-            Provider::Icu => {
-                let mut builder = crate::icu::client::icu_client()
-                    .authorize_url(|| CsrfToken::new(state.to_string()))
-                    .add_scope(Scope::new(crate::icu::client::SCOPES.to_string()));
-                if let Some(verifier) = code_verifier {
-                    let challenge = PkceCodeChallenge::from_code_verifier_sha256(
-                        &PkceCodeVerifier::new(verifier.to_string()),
-                    );
-                    builder = builder.set_pkce_challenge(challenge);
-                }
-                let (auth_url, _) = builder.url();
-                auth_url.to_string()
-            }
-            #[cfg(not(all(feature = "strava", feature = "icu")))]
-            _ => unreachable!("provider feature disabled"),
-        }
+    /// route table — derived from the wire value.
+    pub fn route_prefix(&self) -> String {
+        format!("/{}", self.wire_value())
     }
 }
 
@@ -120,16 +76,19 @@ impl TryFrom<ProviderActivityId> for Provider {
 /// either table is a `NotFound`; any other read failure is a DB failure the
 /// caller propagates.
 #[cfg(all(feature = "strava", feature = "icu"))]
-pub async fn provider_of<S>(store: &mut S, user_id: UserId) -> TbResult<Provider>
-where
-    S: crate::strava::StravaDataStore + crate::icu::IcuDataStore + Send + Sync,
-{
-    match store.stravauser_get_by_tbid(user_id).await {
+pub async fn provider_of<S: crate::ProviderStore>(
+    store: &mut S,
+    user_id: UserId,
+) -> TbResult<Provider> {
+    match crate::store::Store::<crate::strava::StravaSpec>::user_get_by_tbid(store, user_id).await {
         Ok(_) => Ok(Provider::Strava),
-        Err(Error::NotFound(_)) => match store.icuser_get_by_tbid(user_id).await {
-            Ok(_) => Ok(Provider::Icu),
-            Err(e) => Err(e),
-        },
+        Err(Error::NotFound(_)) => {
+            match crate::store::Store::<crate::icu::IcuSpec>::user_get_by_tbid(store, user_id).await
+            {
+                Ok(_) => Ok(Provider::Icu),
+                Err(e) => Err(e),
+            }
+        }
         Err(e) => Err(e),
     }
 }

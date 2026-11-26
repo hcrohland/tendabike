@@ -22,6 +22,7 @@ use std::collections::{HashMap, VecDeque};
 use crate::facade::{Error, TbResult};
 
 pub use crate::facade::MockEntityFacade;
+pub use crate::store::MockStore;
 
 /// The test process's shared webhook secret (the intake tests verify
 /// deliveries against it).

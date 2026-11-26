@@ -3,7 +3,7 @@
 //!
 //! The web shell keeps only the protocol (ADR-0014): the `/strava/login`
 //! redirect (the CSRF state is generated here, beside the other protocol
-//! secrets; the authorize URL is the `Provider` enum's `authorize_url`) and
+//! secrets; the authorize URL is the driver's `authorize_url`) and
 //! the `/strava/token` callback (the query values are extracted and
 //! forwarded opaquely to the provider service's `login` op — the scope
 //! check, the token exchange, and the wire-shape parsing are the provider
@@ -23,6 +23,8 @@ use crate::{
     oauth_common::{gentoken, getpath, login_and_redirect},
 };
 use tb_provider::Provider;
+use tb_provider::driver::Provider as _;
+use tb_provider::strava::StravaDriver;
 
 #[derive(Deserialize)]
 pub(crate) struct PathParam {
@@ -47,10 +49,10 @@ pub(crate) async fn strava_auth(
     }
     let path = path.inner.unwrap_or("/".to_owned());
     // The web shell generates the CSRF state (beside its other protocol
-    // secrets); the enum assembles the authorize URL from the driver's
-    // client config (ADR-0014). The Strava flow is a plain
+    // secrets); the driver assembles the authorize URL from its client
+    // config (ADR-0014). The Strava flow is a plain
     // authorization-code exchange: no PKCE challenge.
-    let url = Provider::Strava.authorize_url(gentoken(path).secret(), None);
+    let url = StravaDriver::authorize_url(gentoken(path).secret(), None);
 
     // Redirect to Strava's oauth service
     Ok(Redirect::to(&url))

@@ -36,12 +36,7 @@ use tb_domain::{
     UserState, WriteOutcome,
 };
 use tb_exec::{ExecutorStatus, MockServiceApi, ServiceApi};
-use tb_provider::Provider;
-// The provider-agnostic provider service (ADR-0014) — the web state's two
-// handles are `ServiceApi` and this trait. The trait itself is referenced by
-// its full path (`tb_exec::providerservice::ProviderService`) since a type
-// alias cannot stand in for a `dyn` trait.
-type MockProviderServiceNeutral = tb_exec::providerservice::MockProviderService;
+use tb_provider::{MockProviderService, Provider, ProviderService};
 use time::macros::datetime;
 use tower::ServiceExt;
 
@@ -77,7 +72,7 @@ fn init_test_config_once() {
 fn test_app(
     store: MemoryStore,
     api: Arc<dyn ServiceApi>,
-    provider: Arc<dyn tb_exec::providerservice::ProviderService>,
+    provider: Arc<dyn ProviderService>,
 ) -> Router {
     init_test_config_once();
     let session_layer = SessionManagerLayer::new(store);
@@ -469,23 +464,19 @@ fn user_state_reply() -> impl Fn(Box<dyn TbSession>, ApiRead) -> TbResult<ReadOu
 /// mock, and the provider-agnostic (neutral) provider mock. The test sets up
 /// expectations on the mocks, then calls [`build_app`] to get the production
 /// router.
-fn mock_ctx() -> (MemoryStore, MockServiceApi, MockProviderServiceNeutral) {
+fn mock_ctx() -> (MemoryStore, MockServiceApi, MockProviderService) {
     (
         MemoryStore::default(),
         MockServiceApi::new(),
-        MockProviderServiceNeutral::new(),
+        MockProviderService::new(),
     )
 }
 
 /// Build the production router over the mocks (call after setting up
 /// expectations).
-fn build_app(
-    store: &MemoryStore,
-    mock: MockServiceApi,
-    provider: MockProviderServiceNeutral,
-) -> Router {
+fn build_app(store: &MemoryStore, mock: MockServiceApi, provider: MockProviderService) -> Router {
     let api: Arc<dyn tb_exec::ServiceApi> = Arc::new(mock);
-    let provider: Arc<dyn tb_exec::providerservice::ProviderService> = Arc::new(provider);
+    let provider: Arc<dyn ProviderService> = Arc::new(provider);
     test_app(store.clone(), api, provider)
 }
 
@@ -1199,9 +1190,9 @@ async fn user_ping_returns_204() {
     assert!(body.is_empty());
 }
 
-/// `GET /api/user/all` (admin) rides the admin user's own channel as the
-/// exec-level `AllStats` read (spec #558 §3.3) and answers `200` with the
-/// per-user stats — empty for the mock's canned reply.
+/// `GET /api/user/all` (admin) runs the provider-agnostic `all_stats` read
+/// (spec #558 §3.3) and answers `200` with the per-user stats — empty for
+/// the mock's canned reply.
 #[tokio::test]
 async fn user_all_returns_200_and_stats() {
     let (store, mut mock, provider) = mock_ctx();
@@ -2737,10 +2728,7 @@ async fn redirect_activity_permains_to_strava_url() {
     provider
         .expect_activity_url()
         .times(1)
-        .withf(|provider, _session, _id| *provider == Provider::Strava)
-        .returning(
-            |_provider, _session, _id| Ok("https://www.strava.com/activities/8".to_string()),
-        );
+        .returning(|_session, _id| Ok("https://www.strava.com/activities/8".to_string()));
     let app = build_app(&store, mock, provider);
     let cookie = user_cookie(&store).await;
     let (status, headers, _body) = run(
@@ -2763,10 +2751,7 @@ async fn redirect_activity_icu_prefix_routes_to_icu() {
     provider
         .expect_activity_url()
         .times(1)
-        .withf(|provider, _session, _id| *provider == Provider::Icu)
-        .returning(|_provider, _session, _id| {
-            Ok("https://intervals.icu/activities/i55751783".to_string())
-        });
+        .returning(|_session, _id| Ok("https://intervals.icu/activities/i55751783".to_string()));
     let app = build_app(&store, mock, provider);
     let cookie = user_cookie(&store).await;
     let (status, headers, _body) = run(
@@ -3204,7 +3189,7 @@ async fn spa_fallback_serves_entry_document() {
     std::fs::write(content_dir.join("about.md"), "# About page").unwrap();
 
     let api: Arc<dyn ServiceApi> = Arc::new(mock);
-    let provider: Arc<dyn tb_exec::providerservice::ProviderService> = Arc::new(provider);
+    let provider: Arc<dyn ProviderService> = Arc::new(provider);
     let session_layer = SessionManagerLayer::new(store);
     let app = routes(
         AppState::new(api, provider, Duration::from_millis(100)),

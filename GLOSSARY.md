@@ -84,7 +84,7 @@ The `tb_provider` crate: the provider-agnostic seams (the `EntityFacade` entity-
 _Avoid_: provider (the external system a user syncs from — not the crate)
 
 **provider kit**:
-The shared scaffolding in `tb_provider` crate-root modules that every provider module depends on: the failure policy, the lane marker, the rate-limit shim, the HTTP classification, the client builder, the activity-type table, and the test-support machinery. A provider module carries only what is genuinely its own — the wire shapes, the token model, the queue semantics.
+The shared scaffolding in `tb_provider` crate-root modules that every provider module depends on: the failure policy, the lane marker, the rate-limit shim, the HTTP classification, the client builder, the activity-type table, the provider-spec marker, the store interface, the provider driver trait, and the test-support machinery. A provider module carries only what is genuinely its own — the wire shapes, the token model, the queue semantics.
 _Avoid_: provider layer (the whole crate, not just the shared scaffolding)
 
 **provider activity id**:

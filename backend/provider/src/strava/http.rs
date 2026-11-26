@@ -28,23 +28,23 @@
 //! revocation) and know nothing about refresh mechanics.
 
 use anyhow::Context;
-use log::{debug, trace};
+use log::trace;
 use oauth2::AccessToken;
 use serde::de::DeserializeOwned;
 
-use super::client::{HTTP_CLIENT, strava_client};
 use super::session::get_token;
-use super::{StravaDataStore, StravaId};
+use super::{StravaId, StravaSpec};
 use crate::facade::{TbResult, UserId};
+use crate::store::Store;
 
 const API: &str = "https://www.strava.com/api/v3";
 
 /// A valid access token for `user_id`: the `TokenCache`'s `get_token`, which
 /// owns the refresh exchange and persists the rotated refresh token to the
 /// DB when a refresh issues a new one.
-async fn access_token(
+pub(crate) async fn access_token(
     user_id: UserId,
-    store: &mut impl StravaDataStore,
+    store: &mut impl Store<StravaSpec>,
 ) -> TbResult<(StravaId, AccessToken)> {
     get_token(user_id, store).await
 }
@@ -63,7 +63,7 @@ async fn access_token(
 pub(crate) async fn request_json<T: DeserializeOwned>(
     user_id: UserId,
     uri: &str,
-    store: &mut impl StravaDataStore,
+    store: &mut impl Store<StravaSpec>,
 ) -> TbResult<T> {
     let (_strava_id, access) = access_token(user_id, store).await?;
 
@@ -98,36 +98,6 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
     .with_context(|| "Could not reach strava")?;
     trace!("{uri}:\n{r}");
     Ok(serde_json::from_str::<T>(&r).context("Could not parse response body")?)
-}
-
-/// Revoke `user_id`'s Strava token.
-///
-/// [`access_token`] (the `TokenCache`'s `get_token` → persist the refresh
-/// token to the DB if a refresh issued a new one) →
-/// `STRAVACLIENT.revoke_token`. Knows nothing about refresh mechanics.
-pub(crate) async fn deauthorize(user_id: UserId, store: &mut impl StravaDataStore) -> TbResult<()> {
-    let (strava_id, access) = access_token(user_id, store).await?;
-
-    // The offline seam (test-only): in test mode a deauthorization is recorded
-    // in the thread-local map instead of hitting the Strava API. The process-
-    // wide `CANNED_STRAVA` global does not cover the revocation — the seam
-    // suite's real session attempts the real (non-fatal) revocation.
-    #[cfg(any(test, feature = "test-support"))]
-    if crate::test_support::in_test_mode() {
-        super::test_support::record_deauthorize(strava_id);
-        debug!("user {} token revoked (test)", strava_id);
-        return Ok(());
-    }
-
-    strava_client()
-        .revoke_token(access.clone().into())
-        .context("revoke token config error")?
-        .add_extra_param("access_token", access.secret()) // Strava does not follow the standard.
-        .request_async(&*HTTP_CLIENT)
-        .await
-        .context("token exchange failed")?;
-    debug!("user {} token revoked", strava_id);
-    Ok(())
 }
 
 #[cfg(test)]

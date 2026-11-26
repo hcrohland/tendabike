@@ -38,15 +38,32 @@
 //! executor is generic over the lane it is given and never names a concrete
 //! provider.
 //!
-//! [`queue`] — [`QueuedEvent`] + [`EventQueue`], the provider-agnostic event
-//! queue: the queue's read-side rules and the failure policy, written once
-//! and generic over the event type (spec #1023).
+//! [`queue`] — the provider-agnostic event-queue kernel: the queue's
+//! read-side rules (the rate-limit gate, the latest-per-key dedup) and the
+//! four-arm failure policy, written once and generic over the
+//! [`ProviderSpec`](crate::ProviderSpec) marker, driven through the
+//! [`Store`](crate::store::Store) interface (spec #1029).
 //!
-//! [`unified`] — the unified lane (ADR-0014): the [`ProviderLane`] impl,
-//! keyed by the [`LaneEvent`] the two providers' event rows share. The lane
-//! the executor loop runs in production: it selects between the two
-//! providers per call, with a typed switch on [`Provider`], and calls the
-//! driver functions directly.
+//! [`driver`] — [`Provider`](crate::driver::Provider), the provider driver:
+//! the single driver interface, generic over the marker — the
+//! provider-specific core the author writes plus the shared user-lifecycle
+//! skeleton as default methods (spec #1029). Namespaced under `driver` (not
+//! re-exported at the crate root) beside the [`Provider`] enum.
+//!
+//! [`spec`] — [`ProviderSpec`], the provider marker: the type-only carrier of
+//! a provider's wire shapes (the user row, the event row, the owner id, the
+//! event key, the sync-event constructor, and the identity accessors).
+//!
+//! [`store`] — [`Store`], the provider-agnostic store: the single uniform
+//! store interface, generic over the marker, carrying the user-row and the
+//! event-row operations (spec #1029).
+//!
+//! [`unified`] — the provider lane: the [`ProviderLane`] impl the executor
+//! loop runs in production. The unified lane is the seam's single impl
+//! (ADR-0014): it resolves the user's provider internally, in `probe` (the
+//! [`provider_of`](crate::provider_of) lookup + a typed switch on the
+//! [`Provider`](crate::Provider) enum), and delegates to the per-provider
+//! lanes; the registry and the loop never name a concrete provider.
 
 mod config;
 pub use config::{ProviderConfig, disabled, enabled_providers, init};
@@ -83,7 +100,30 @@ mod failure;
 pub use failure::*;
 
 mod queue;
-pub use queue::{EventQueue, QueuedEvent};
+
+mod spec;
+pub use spec::ProviderSpec;
+
+mod store;
+#[cfg(all(feature = "strava", feature = "icu"))]
+pub use store::ProviderStore;
+pub use store::Store;
+
+/// The provider-agnostic provider service (ADR-0014): the direct-op seam a
+/// presentation layer drives the provider's user lifecycle and redirect URLs
+/// through. A public module (not re-exported at the crate root) so the name
+/// `ProviderService` stays unambiguous; the executor's `Registry` impls it,
+/// and the web layer imports it from here.
+mod providerservice;
+pub use providerservice::*;
+
+/// The provider driver trait (spec #1029, ticket #1032): the single driver
+/// interface, generic over the marker — the provider-specific core the author
+/// writes plus the shared user-lifecycle skeleton as default methods. A
+/// public module (not re-exported at the crate root) so the trait's name
+/// (`Provider`) stays namespaced under `driver` rather than colliding with
+/// the crate root's [`Provider`] enum.
+pub mod driver;
 
 mod http;
 pub use http::*;

@@ -12,8 +12,8 @@
 //!
 //! - `client`: the icu oauth client and its wire types (the token response
 //!   and the athlete info the login exchange parses).
-//! - `traits`: the `IcuDataStore` trait (the `icu_users` and `icu_events`
-//!   tables) and the `IcuStore` umbrella.
+//! - `traits`: the `IcuSpec` marker (the `icu_users` and `icu_events`
+//!   tables' provider spec).
 //! - `user`: the `IcuUser` and the login `upsert` op.
 //! - `event`: the `IcuEvent` queue row and the queue's read/process ops.
 //! - `http`: the thin icu HTTP calls (the bearer GET, the 401/429 mapping).
@@ -28,7 +28,7 @@
 //!
 
 use crate::OnBehalf;
-use crate::facade::{Error, PartId, Session, TbResult, UserId, UserStat};
+use crate::facade::{Error, Session, TbResult, UserId};
 
 mod traits;
 pub use traits::*;
@@ -45,9 +45,15 @@ pub use user::*;
 pub mod activity;
 pub mod gear;
 pub mod http;
+
+/// The intervals.icu driver type (spec #1029, ticket #1032): the
+/// [`Provider`](crate::driver::Provider) impl — a thin forward of the
+/// driver's free functions onto the shared skeleton.
+pub mod driver;
+pub use driver::IcuDriver;
 mod ratelimit;
-// The queue's read-side rate-limit gate, re-exported so the `EventQueue` impl
-// over the data store (the sqlx crate) can consult it (spec #1023).
+// The queue's read-side rate-limit gate, re-exported so the `Store` impl
+// over the data store (the sqlx crate) can consult it (spec #1029).
 pub use ratelimit::limited_until;
 
 #[cfg(any(test, feature = "test-support"))]

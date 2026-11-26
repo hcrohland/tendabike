@@ -28,7 +28,7 @@
 //! executor loop is generic over the source and names only the traits, never
 //! a concrete adapter. The connection is a complete store behind the domain
 //! and provider seams ([`DomainFacade`] and [`ProviderLane`] carry the
-//! `Store`/`StravaStore` bounds they need), so the transaction seam names
+//! `Store<Spec>` bounds they need), so the transaction seam names
 //! only the lifecycle.
 //!
 //! [`DomainFacade`]: crate::DomainFacade
@@ -49,7 +49,7 @@ pub trait TxnSource: Send + Sync {
     /// A connection with an open transaction: the [`Txn`] lifecycle (so the
     /// loop can close the transaction). The connection is a complete store —
     /// the domain and provider seams ([`DomainFacade`] and [`ProviderLane`])
-    /// carry the `Store`/`StravaStore` bounds they need, so the loop names
+    /// carry the `Store<Spec>` bounds they need, so the loop names
     /// only the transaction lifecycle here.
     type Conn: Txn;
 
@@ -61,7 +61,7 @@ pub trait TxnSource: Send + Sync {
 /// (ADR-0005, executable spec #446 §4.1).
 ///
 /// While the transaction is open, a connection is a complete store (the
-/// domain and provider seams carry the `Store`/`StravaStore` bounds they
+/// domain and provider seams carry the `Store<Spec>` bounds they
 /// need); `commit` and `rollback` close it. Both consume the connection,
 /// matching `SqlxConn`'s inherent methods (the Postgres adapter returns the
 /// connection to the pool).

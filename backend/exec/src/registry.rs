@@ -49,8 +49,8 @@ use tokio::sync::{broadcast, oneshot, watch};
 
 use tb_provider::Provider;
 use tb_provider::ProviderLane;
-use tb_provider::icu::IcuDataStore;
-use tb_provider::strava::StravaDataStore;
+use tb_provider::ProviderService;
+use tb_provider::ProviderStore;
 
 use crate::api::ServiceApi;
 use crate::facade::{
@@ -68,7 +68,7 @@ pub use core::{DeliveryContext, ExecutorStatus};
 /// The loop's queue re-probe cadence while it is idle with streams attached
 /// (spec §4.4, amended — #446): an attached stream keeps the executor alive
 /// (it is reaped only when no stream is attached), so the window sets how
-/// often the idle loop re-probes the `strava_events` queue. A stream-less
+/// often the idle loop re-probes the provider event queue. A stream-less
 /// executor (a write-only spawn) reaps immediately after its work.
 const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 /// The SSE heartbeat cadence (spec §4.5): a `: ping` comment keeps the
@@ -100,15 +100,17 @@ where
     /// Owned by the registry and handed to the core's spawn (a clone per
     /// executor).
     facade: D,
-    /// The provider lane: the narrow seam the loop calls through to probe
-    /// and process the provider's event queue. The registry owns it and
-    /// passes a clone to the core's spawn.
+    /// The unified provider lane (ADR-0014): the narrow seam the loop calls
+    /// through to probe and process the provider's event queue. The lane
+    /// resolves the user's provider and dispatches to the right driver
+    /// internally — the registry never names a concrete provider. The
+    /// registry owns it and passes a clone to the core's spawn.
     lane: P,
     /// The lifecycle core: the per-user executor map, the per-shop
     /// frame-channel map, and the spawn/reap/wake/stop-all logic. Source-
     /// agnostic — the facade owns the [`TxnSource`] and the `Box<dyn
     /// FramePusher>` it passes to the core's spawn.
-    core: Core<P>,
+    core: Core,
 }
 
 /// The frame push surface the executor loop uses to route a completed
@@ -139,6 +141,9 @@ where
     /// short idle cadence makes the executor's lifecycle observable).
     /// The SSE heartbeat cadence is the crate constant
     /// [`HEARTBEAT_INTERVAL`] — the `KeepAlive` wiring uses it directly.
+    /// `lane` is the unified provider lane (ADR-0014): the loop for a user
+    /// runs the lane, which resolves the user's provider and dispatches to
+    /// the right driver internally (a user has exactly one).
     pub fn new(source: S, facade: D, lane: P, idle_timeout: Duration) -> Self {
         Self {
             source,
@@ -156,7 +161,7 @@ where
 
     /// Fire the wake signal for the user's executor (spec §4.4/§4.6): a
     /// pure signal to a **running** executor — it interrupts the loop's
-    /// idle wait so a just-queued Strava event is processed at once. It
+    /// idle wait so a just-queued provider event is processed at once. It
     /// never spawns an executor: a reaped (or not-yet-spawned) executor
     /// picks the event up on its next spawn (an SSE connect or an API
     /// write) — the DB queue is the source of truth. Infallible by design:
@@ -195,7 +200,7 @@ where
     }
 
     /// Test helper: install a synthetic executor for `user_id` (bypassing
-    /// the core's `ensure_running`, which needs a Strava session the unit
+    /// the core's `ensure_running`, which needs a session the unit
     /// fakes don't have) and return a receiver on its frame channel. The
     /// executor's fate is `status`.
     #[cfg(test)]
@@ -206,22 +211,68 @@ where
     ) -> broadcast::Receiver<Summary> {
         self.core.install_executor_for_test(user_id, status).await
     }
+}
 
+/// The lane-selection surface (ADR-0014): `exec_field` hands the unified
+/// lane to the core's spawn and `send_request` rides it — the registry's
+/// single home for "which lane does this user run?". The selection (the
+/// user's real provider, the
+/// [`provider_of`](tb_provider::provider_of) lookup) lives **inside the
+/// unified lane's** `probe`/`process`, not here — the registry is
+/// provider-ignorant (no `match provider`, no per-provider `Store` bound).
+impl<S, P, D> Registry<S, P, D>
+where
+    S: TxnSource + Clone + 'static,
+    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
+    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
+{
     /// Lock the core, ensure the user's executor is live (spawning it if it
     /// is absent or settled), and pull one field from it: the shared shape
-    /// of `subscribe`, `events`, and `write`. The facade builds the
-    /// `Box<dyn FramePusher>` (from `self.clone()`, which shares the core's
-    /// maps) and passes it with the source to the core; the lock is dropped
-    /// when this returns, before the caller's next await.
-    async fn exec_field<R>(
-        &self,
-        user_id: UserId,
-        f: impl FnOnce(&Executor<P>) -> R,
-    ) -> TbResult<R> {
+    /// of `subscribe`, `events`, and `write`. The unified lane (ADR-0014)
+    /// resolves the user's provider and dispatches to the right driver
+    /// internally — the registry never names a concrete provider. The
+    /// facade builds the `Box<dyn FramePusher>` (from `self.clone()`, which
+    /// shares the core's maps) and passes it with the source to the core;
+    /// the lock is dropped when this returns, before the caller's next
+    /// await.
+    async fn exec_field<R>(&self, user_id: UserId, f: impl FnOnce(&Executor) -> R) -> TbResult<R> {
         let pusher: Box<dyn FramePusher> = Box::new(self.clone());
         self.core
             .exec_field(&self.source, &self.facade, &self.lane, user_id, pusher, f)
             .await
+    }
+
+    /// Enqueue a [`Request`] on the user's executor and await its oneshot
+    /// — the shared shape of the registry's `read` and `write` (spec
+    /// #558 §3): spawn-or-join the executor,
+    /// send the request on the user's request channel, and await the oneshot
+    /// (unbounded — the message is serialized behind any in-flight one,
+    /// spec #558 §3.7). `dropped` names the message in the reply-drop
+    /// error ("read", "write"). `exec_field`
+    /// drops the registry lock on return, so the unbounded reply await
+    /// runs without it.
+    async fn send_request<Out>(
+        &self,
+        user_id: UserId,
+        request: Request,
+        reply: oneshot::Receiver<TbResult<Out>>,
+        dropped: &str,
+    ) -> TbResult<Out> {
+        let request_sender = self
+            .exec_field(user_id, |exec| exec.request_sender.clone())
+            .await?;
+        if request_sender.send(request).is_err() {
+            // The executor died between the liveness check and the send
+            // (spec §4.6): the message is lost, the client retries.
+            return Err(Error::AnyFailure(anyhow::anyhow!(
+                "the executor for user {user_id} is gone"
+            )));
+        }
+        reply.await.map_err(|_| {
+            Error::AnyFailure(anyhow::anyhow!(
+                "the executor for user {user_id} dropped the {dropped}"
+            ))
+        })?
     }
 }
 
@@ -287,16 +338,17 @@ where
 #[async_trait::async_trait]
 impl<S, P, D> ServiceApi for Registry<S, P, D>
 where
-    // The generic channel ops (`read`/`write`/`subscribe`/
-    // `all_stats`) ride the executor and need only `Txn` (their domain work
-    // rides the facade and the lane). The three provider-neutral direct ops
-    // (`rescan`, `subscribe_shop`, `trigger_processing`, ADR-0014) own their
-    // own transactions — the rescan's `rescan_all` and the shop-ownership
-    // check ride the domain facade (no store bound), and the `sync_users`
-    // queue op rides the two providers' local data stores — so this impl
-    // carries the `StravaDataStore + IcuDataStore + Txn` bound.
+    // The generic channel ops (`read`/`write`/`subscribe`) ride the executor
+    // and need only `Txn` (their domain work rides the facade and the lane).
+    // The four provider-neutral direct ops (`all_stats`, `rescan`,
+    // `subscribe_shop`, `trigger_processing`, ADR-0014) own their own
+    // transactions — the rescan's `rescan_all` and the shop-ownership check
+    // ride the domain facade (no store bound), and the `all_stats` and
+    // `sync_users` ops ride the provider-agnostic [`ProviderStore`] supertrait
+    // (the single home for the "all provider stores" bound) — so this impl
+    // carries the `ProviderStore + Txn` bound.
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaDataStore + IcuDataStore + Txn,
+    S::Conn: ProviderStore + Txn,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
@@ -341,17 +393,18 @@ where
         .await
     }
 
-    /// Enqueue the admin [`AllStats`](Request::AllStats) read on the user's
-    /// executor and await its stats (spec #558 §3.3): the admin's `GET
-    /// /user/all` rides the admin user's own channel — `get_all_stats` is a
-    /// `tb_provider::strava` op, so it is an exec-level variant, dispatched loop-side
-    /// in the loop's own transaction. The oneshot wait is unbounded, like a
-    /// read's (spec #558 §3.7).
-    async fn all_stats(&self, session: Box<dyn Session>) -> TbResult<Vec<UserStat>> {
-        let user_id = session.user_id();
-        let (request, reply) = Request::new_all_stats(session);
-        self.send_request(user_id, request, reply, "stats read")
-            .await
+    /// The admin all-user stat read (spec #558 §3.3): one transaction (the
+    /// provider-agnostic `all_stats` dispatch) — the list is
+    /// provider-agnostic (an admin of one provider sees the other
+    /// providers' users too), so it
+    /// reads every enabled provider's users in its own transaction, not
+    /// through the admin's own provider lane (the direct-op shape, like
+    /// `rescan` and `trigger_processing`).
+    async fn all_stats(&self, _session: Box<dyn Session>) -> TbResult<Vec<UserStat>> {
+        let mut store = self.source.begin().await?;
+        let stats = tb_provider::dispatch::all_stats(self.lane.facade(), &mut store).await?;
+        store.commit().await?;
+        Ok(stats)
     }
 
     /// The admin rescan (spec #558 §5.2): one transaction
@@ -385,8 +438,8 @@ where
     /// Trigger processing for all (or one) users (spec #558 §5.2): admin-only
     /// (the acting `session` must be an admin — `Forbidden` otherwise). One
     /// transaction (`sync_users`) queuing a sync per (non-disabled) user on
-    /// their own provider's lane (a pure activity re-sync — a Strava `Sync`
-    /// event, the icu `SYNC` event; no gear import), then — per queued user —
+    /// their own provider's lane (a pure activity re-sync — a sync event; no
+    /// gear import), then — per queued user —
     /// spawn the executor (a no-op if it is already running) and wake it.
     /// `user_id` narrows the trigger to one user, regardless of provider (the
     /// route's `?user_id=` query).
@@ -418,17 +471,14 @@ where
 /// the connection (and the concrete entity-op facade) to the provider
 /// layer's dispatch free function (the single `match provider`), and commits.
 /// No provider dispatch and no driver naming in this crate. The registry owns
-/// the store (the transaction boundary, ADR-0014); the dispatch bounds on the
-/// two providers' local data stores and takes the facade as a parameter.
+/// the store (the transaction boundary, ADR-0012); the impl bounds on the
+/// [`ProviderStore`] supertrait (the "all provider stores" bound) and takes
+/// the facade as a parameter.
 #[async_trait::async_trait]
-impl<S, P, D> crate::providerservice::ProviderService for Registry<S, P, D>
+impl<S, P, D> ProviderService for Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: tb_provider::strava::StravaDataStore
-        + tb_provider::icu::IcuDataStore
-        + Send
-        + Sync
-        + 'static,
+    S::Conn: ProviderStore + 'static,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
@@ -512,30 +562,21 @@ where
     }
 
     /// The activity redirect URL (ADR-0014): one transaction — the provider
-    /// layer's `activity_url` op (which checks the activity's ownership), then
-    /// the provider URL.
-    async fn activity_url(
-        &self,
-        provider: Provider,
-        session: Box<dyn Session>,
-        id: ActivityId,
-    ) -> TbResult<String> {
+    /// layer's `activity_url` op (keyed by the provider parsed from the
+    /// activity id's prefix, which checks the activity's ownership), then the
+    /// provider URL.
+    async fn activity_url(&self, session: Box<dyn Session>, id: ActivityId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let uri = tb_provider::dispatch::activity_url(
-            provider,
-            session,
-            id,
-            self.lane.facade(),
-            &mut store,
-        )
-        .await?;
+        let uri = tb_provider::dispatch::activity_url(session, id, self.lane.facade(), &mut store)
+            .await?;
         store.commit().await?;
         Ok(uri)
     }
 
     /// The gear redirect URL (ADR-0014): one transaction — the provider
     /// layer's `gear_url` op (which checks the part's ownership). The one
-    /// non-total op: the icu arm is the typed absence (`None`).
+    /// non-total op: the provider without a gear URL is the typed absence
+    /// (`None`).
     async fn gear_url(&self, session: Box<dyn Session>, id: PartId) -> TbResult<Option<String>> {
         let mut store = self.source.begin().await?;
         let uri =
@@ -545,8 +586,8 @@ where
     }
 
     /// The user redirect URL (ADR-0014): one transaction — the provider
-    /// layer's `user_url` op for the target's tbid (no session). The icu arm
-    /// builds the public athlete profile page.
+    /// layer's `user_url` op for the target's tbid (no session); each
+    /// provider builds its own public profile page.
     async fn user_url(&self, id: UserId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
         let uri = tb_provider::dispatch::user_url(id, &mut store).await?;
@@ -569,45 +610,5 @@ where
     /// pure config read.
     fn enabled_providers(&self) -> Vec<Provider> {
         tb_provider::enabled_providers().to_vec()
-    }
-}
-
-/// Enqueue a [`Request`] on the user's executor and await its oneshot
-/// — the shared shape of the registry's `read`, `all_stats`, and `write`
-/// (spec #558 §3): spawn-or-join the executor,
-/// send the request on the user's request channel, and await the oneshot
-/// (unbounded — the message is serialized behind any in-flight one,
-/// spec #558 §3.7). `dropped` names the message in the reply-drop
-/// error ("read", "stats read", "write"). `exec_field`
-/// drops the registry lock on return, so the unbounded reply await
-/// runs without it.
-impl<S, P, D> Registry<S, P, D>
-where
-    S: TxnSource + Clone + 'static,
-    P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
-    D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
-{
-    async fn send_request<Out>(
-        &self,
-        user_id: UserId,
-        request: Request,
-        reply: oneshot::Receiver<TbResult<Out>>,
-        dropped: &str,
-    ) -> TbResult<Out> {
-        let request_sender = self
-            .exec_field(user_id, |exec| exec.request_sender.clone())
-            .await?;
-        if request_sender.send(request).is_err() {
-            // The executor died between the liveness check and the send
-            // (spec §4.6): the message is lost, the client retries.
-            return Err(Error::AnyFailure(anyhow::anyhow!(
-                "the executor for user {user_id} is gone"
-            )));
-        }
-        reply.await.map_err(|_| {
-            Error::AnyFailure(anyhow::anyhow!(
-                "the executor for user {user_id} dropped the {dropped}"
-            ))
-        })?
     }
 }

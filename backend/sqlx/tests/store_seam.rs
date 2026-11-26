@@ -79,7 +79,9 @@ use tb_domain::{
     NotificationStore, Part, PartId, PartStore, PartTypeId, ServicePlan, ServicePlanId,
     ServicePlanStore, UsageId, UsageStore, UserId, UserStore,
 };
-use tb_provider::icu::{IcuDataStore, IcuEvent, IcuId, IcuObjectType};
+use tb_provider::Store;
+use tb_provider::icu::{IcuEvent, IcuId, IcuObjectType, IcuSpec};
+use tb_sqlx::SqlxConn;
 use tb_sqlx::{SNAPSHOT_JSON, StoreSnapshot};
 use time::{OffsetDateTime, macros::datetime};
 use tokio::sync::MutexGuard;
@@ -1152,10 +1154,9 @@ async fn icu_event_sync_oldest_roundtrips() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let icu_id = IcuId::from("seam-athlete");
         let event = IcuEvent::new_sync(icu_id.clone(), 1_700_000_000);
-        store.icu_event_create(event).await?;
+        <SqlxConn as Store<IcuSpec>>::event_create(&mut store, event).await?;
 
-        let stored = store
-            .icu_event_get_next_for_user(icu_id)
+        let stored = <SqlxConn as Store<IcuSpec>>::event_get_next(&mut store, icu_id)
             .await?
             .expect("the SYNC row is queued");
         assert_eq!(stored.object_type, IcuObjectType::Sync);
@@ -1180,10 +1181,9 @@ async fn icu_event_activity_has_no_oldest() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let icu_id = IcuId::from("seam-athlete");
         let event = IcuEvent::new(icu_id.clone(), "act-1", 1_700_000_000, "ACTIVITY_UPLOADED");
-        store.icu_event_create(event).await?;
+        <SqlxConn as Store<IcuSpec>>::event_create(&mut store, event).await?;
 
-        let stored = store
-            .icu_event_get_next_for_user(icu_id)
+        let stored = <SqlxConn as Store<IcuSpec>>::event_get_next(&mut store, icu_id)
             .await?
             .expect("the ACTIVITY row is queued");
         assert_eq!(stored.object_type, IcuObjectType::Activity);
@@ -1203,32 +1203,33 @@ async fn icu_event_sync_replace_keeps_one() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let icu_id = IcuId::from("seam-athlete");
         // An `ACTIVITY` row and a `SYNC` row for the user.
-        store
-            .icu_event_create(IcuEvent::new(
-                icu_id.clone(),
-                "act-1",
-                1_700_000_000,
-                "ACTIVITY_UPLOADED",
-            ))
-            .await?;
-        store
-            .icu_event_create(IcuEvent::new_sync(icu_id.clone(), 0))
-            .await?;
+        <SqlxConn as Store<IcuSpec>>::event_create(
+            &mut store,
+            IcuEvent::new(icu_id.clone(), "act-1", 1_700_000_000, "ACTIVITY_UPLOADED"),
+        )
+        .await?;
+        <SqlxConn as Store<IcuSpec>>::event_create(
+            &mut store,
+            IcuEvent::new_sync(icu_id.clone(), 0),
+        )
+        .await?;
 
         // The REPLACE drops only the `SYNC` row.
-        let deleted = store.icu_events_delete_sync_for_user(&icu_id).await?;
+        let deleted = <SqlxConn as Store<IcuSpec>>::event_delete_sync(&mut store, &icu_id).await?;
         assert_eq!(deleted, 1, "the SYNC row is dropped");
 
         // The `ACTIVITY` row survives; re-enqueue the `SYNC`.
-        store
-            .icu_event_create(IcuEvent::new_sync(icu_id.clone(), 1_700_000_000))
-            .await?;
+        <SqlxConn as Store<IcuSpec>>::event_create(
+            &mut store,
+            IcuEvent::new_sync(icu_id.clone(), 1_700_000_000),
+        )
+        .await?;
 
-        let count = store.icu_events_get_count_for_user(&icu_id).await?;
+        let count = <SqlxConn as Store<IcuSpec>>::user_event_count(&mut store, &icu_id).await?;
         assert_eq!(count, 2, "the ACTIVITY row plus one SYNC row");
         // Exactly one `SYNC` row remains (the re-enqueued one). The `SYNC`
         // row's cursor is `0` (the sentinel), so it is the oldest queued row.
-        let next = store.icu_event_get_next_for_user(icu_id).await?;
+        let next = <SqlxConn as Store<IcuSpec>>::event_get_next(&mut store, icu_id).await?;
         assert!(
             next.is_some() && next.as_ref().unwrap().object_type == IcuObjectType::Sync,
             "the re-enqueued SYNC row is queued"
@@ -1247,17 +1248,15 @@ async fn icu_event_set_time_advances_cursor() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let icu_id = IcuId::from("seam-athlete");
         let event = IcuEvent::new_sync(icu_id.clone(), 0);
-        store.icu_event_create(event).await?;
+        <SqlxConn as Store<IcuSpec>>::event_create(&mut store, event).await?;
 
         // Advance the cursor (the `newest` bound) to a stored value.
-        let row = store
-            .icu_event_get_next_for_user(icu_id.clone())
+        let row = <SqlxConn as Store<IcuSpec>>::event_get_next(&mut store, icu_id.clone())
             .await?
             .expect("the SYNC row is queued");
-        store.icu_event_set_time(row.id, 1_690_000_000).await?;
+        <SqlxConn as Store<IcuSpec>>::event_set_time(&mut store, row.id, 1_690_000_000).await?;
 
-        let stored = store
-            .icu_event_get_next_for_user(icu_id)
+        let stored = <SqlxConn as Store<IcuSpec>>::event_get_next(&mut store, icu_id)
             .await?
             .expect("the SYNC row is still queued");
         assert_eq!(
@@ -1282,35 +1281,30 @@ async fn icu_event_get_later_groups_by_activity() -> tb_domain::TbResult<()> {
         let icu_id = IcuId::from("seam-athlete");
         // Two rows for `act-1` (out of order, to check the ASC sort), one
         // for `act-2`, and the `SYNC` sentinel row.
-        store
-            .icu_event_create(IcuEvent::new(
-                icu_id.clone(),
-                "act-1",
-                1_700_000_001,
-                "ACTIVITY_UPDATED",
-            ))
-            .await?;
-        store
-            .icu_event_create(IcuEvent::new(
-                icu_id.clone(),
-                "act-1",
-                1_700_000_000,
-                "ACTIVITY_UPLOADED",
-            ))
-            .await?;
-        store
-            .icu_event_create(IcuEvent::new(
-                icu_id.clone(),
-                "act-2",
-                1_600_000_000,
-                "ACTIVITY_UPLOADED",
-            ))
-            .await?;
-        store
-            .icu_event_create(IcuEvent::new_sync(icu_id.clone(), 0))
-            .await?;
+        <SqlxConn as Store<IcuSpec>>::event_create(
+            &mut store,
+            IcuEvent::new(icu_id.clone(), "act-1", 1_700_000_001, "ACTIVITY_UPDATED"),
+        )
+        .await?;
+        <SqlxConn as Store<IcuSpec>>::event_create(
+            &mut store,
+            IcuEvent::new(icu_id.clone(), "act-1", 1_700_000_000, "ACTIVITY_UPLOADED"),
+        )
+        .await?;
+        <SqlxConn as Store<IcuSpec>>::event_create(
+            &mut store,
+            IcuEvent::new(icu_id.clone(), "act-2", 1_600_000_000, "ACTIVITY_UPLOADED"),
+        )
+        .await?;
+        <SqlxConn as Store<IcuSpec>>::event_create(
+            &mut store,
+            IcuEvent::new_sync(icu_id.clone(), 0),
+        )
+        .await?;
 
-        let later = store.icu_event_get_later("act-1", &icu_id).await?;
+        let later =
+            <SqlxConn as Store<IcuSpec>>::event_get_later(&mut store, "act-1".into(), icu_id)
+                .await?;
         assert_eq!(
             later.len(),
             2,
@@ -1335,30 +1329,36 @@ async fn icu_event_get_later_groups_by_activity() -> tb_domain::TbResult<()> {
 async fn icu_events_delete_batch_deletes_named_rows() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let icu_id = IcuId::from("seam-athlete");
-        store
-            .icu_event_create(IcuEvent::new(
-                icu_id.clone(),
-                "act-1",
-                1_700_000_000,
-                "ACTIVITY_UPLOADED",
-            ))
-            .await?;
-        store
-            .icu_event_create(IcuEvent::new(
-                icu_id.clone(),
-                "act-2",
-                1_700_000_001,
-                "ACTIVITY_UPLOADED",
-            ))
-            .await?;
+        <SqlxConn as Store<IcuSpec>>::event_create(
+            &mut store,
+            IcuEvent::new(icu_id.clone(), "act-1", 1_700_000_000, "ACTIVITY_UPLOADED"),
+        )
+        .await?;
+        <SqlxConn as Store<IcuSpec>>::event_create(
+            &mut store,
+            IcuEvent::new(icu_id.clone(), "act-2", 1_700_000_001, "ACTIVITY_UPLOADED"),
+        )
+        .await?;
 
-        let drop = store.icu_event_get_later("act-1", &icu_id).await?;
-        let keep = store.icu_event_get_later("act-2", &icu_id).await?;
-        store.icu_events_delete_batch(vec![drop[0].id]).await?;
+        let drop = <SqlxConn as Store<IcuSpec>>::event_get_later(
+            &mut store,
+            "act-1".into(),
+            icu_id.clone(),
+        )
+        .await?;
+        let keep = <SqlxConn as Store<IcuSpec>>::event_get_later(
+            &mut store,
+            "act-2".into(),
+            icu_id.clone(),
+        )
+        .await?;
+        <SqlxConn as Store<IcuSpec>>::event_delete_batch(&mut store, vec![drop[0].id]).await?;
 
-        let count = store.icu_events_get_count_for_user(&icu_id).await?;
+        let count = <SqlxConn as Store<IcuSpec>>::user_event_count(&mut store, &icu_id).await?;
         assert_eq!(count, 1, "only the named row is deleted");
-        let remaining = store.icu_event_get_later("act-2", &icu_id).await?;
+        let remaining =
+            <SqlxConn as Store<IcuSpec>>::event_get_later(&mut store, "act-2".into(), icu_id)
+                .await?;
         assert_eq!(remaining.len(), 1);
         assert_eq!(
             remaining[0].id, keep[0].id,

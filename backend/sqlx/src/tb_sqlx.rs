@@ -89,6 +89,12 @@ impl<'c> Txn for SqlxConn<'c> {
     }
 }
 
+/// The "all provider stores" bound (ADR-0014): `SqlxConn` carries the
+/// per-provider [`Store`](tb_provider::Store) markers (the Strava and icu
+/// table stores, both always compiled in this crate), so it implements the
+/// [`ProviderStore`](tb_provider::ProviderStore) supertrait with an empty body.
+impl<'c> tb_provider::ProviderStore for SqlxConn<'c> {}
+
 #[derive(Clone)]
 pub struct DbPool(PgPool);
 

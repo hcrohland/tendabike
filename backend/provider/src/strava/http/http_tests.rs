@@ -2,22 +2,23 @@
 //! the `TokenCache` (spec #602), so the free functions are tested at the seam
 //! with a warm token seeded into the `TokenCache`. A warm token returns `None`
 //! for the new refresh token, so no refresh-token persistence happens: the
-//! store witness is a bare `MockStravaDataStore` with no `stravauser_update_token`
-//! expectation set — a refresh would call an unprogrammed mock method and
-//! panic.
+//! store witness is a bare [`MockStore<StravaSpec>`] with no
+//! `user_update_token` expectation set — a refresh would call an unprogrammed
+//! mock method and panic.
 
 use super::super::StravaId;
-use super::super::test_support::{MockStravaDataStore, begin_test, deauthorizes, seed_token_cache};
+use super::super::test_support::{begin_test, deauthorizes, seed_token_cache};
 use super::*;
 use crate::facade::UserId;
-use crate::test_support::queue;
+use crate::strava::StravaSpec;
+use crate::test_support::{MockStore, queue};
 
 /// `request_json` uses the `TokenCache`'s warm token and persists nothing
 /// (a warm token returns `None` for the new refresh token): the store witness
 /// has no `stravauser_update_token` expectation, so a refresh would panic.
 #[tokio::test]
 async fn request_json_uses_the_token_cache_warm_token() -> TbResult<()> {
-    let mut store = MockStravaDataStore::new();
+    let mut store = MockStore::<StravaSpec>::new();
     begin_test();
     seed_token_cache(UserId::from(1), StravaId::from(42), "test-access-token");
     queue("/athlete", r#"{"bikes":[],"shoes":[]}"#);
@@ -30,10 +31,11 @@ async fn request_json_uses_the_token_cache_warm_token() -> TbResult<()> {
 /// `TokenCache`'s warm token (persists nothing).
 #[tokio::test]
 async fn deauthorize_records_with_a_warm_token() -> TbResult<()> {
-    let mut store = MockStravaDataStore::new();
+    let mut store = MockStore::<StravaSpec>::new();
     begin_test();
     seed_token_cache(UserId::from(1), StravaId::from(42), "test-access-token");
-    deauthorize(UserId::from(1), &mut store).await?;
+    use crate::driver::Provider;
+    super::super::driver::StravaDriver::revoke(UserId::from(1), &mut store).await?;
     assert_eq!(deauthorizes(), vec![StravaId::from(42)]);
     Ok(())
 }
@@ -42,7 +44,7 @@ async fn deauthorize_records_with_a_warm_token() -> TbResult<()> {
 /// (a warm token returns `None` for the new refresh token).
 #[tokio::test]
 async fn access_token_uses_the_token_cache_warm_token() -> TbResult<()> {
-    let mut store = MockStravaDataStore::new();
+    let mut store = MockStore::<StravaSpec>::new();
     begin_test();
     seed_token_cache(UserId::from(1), StravaId::from(42), "test-access-token");
     let (_strava_id, access) = access_token(UserId::from(1), &mut store).await?;

@@ -45,10 +45,9 @@ use crate::facade::{
     ApiRead, ApiWrite, CHAIN, Error, GearItem, Notification, NotificationId, NotificationKind,
     NotificationLifecycle, NotificationState, NotificationSubject, OnboardingStatus, Part, PartId,
     PartTypeId, ReadOutcome, Service, ServiceId, Shop, ShopId, SubscriptionId, Summary, TbResult,
-    Usage, UsageId, User, UserId, UserStat, UserState, WriteOutcome, mock_session,
-    mock_session_with_shop, sample_purchase_date, sole_live,
+    Usage, UsageId, User, UserId, UserState, WriteOutcome, mock_session, mock_session_with_shop,
+    sample_purchase_date, sole_live,
 };
-use tb_provider::strava::event::Event;
 use tb_provider::{Probe, ProviderLane};
 use time::OffsetDateTime;
 use tokio::sync::{broadcast, oneshot};
@@ -74,7 +73,7 @@ use crate::{
 //
 // [`MockLane`] is the `mockall` `mock!` witness for the [`ProviderLane`]
 // seam: the executor's door into the provider ops (`probe`, `process`,
-// `insert_sync`, `update_gear`, `all_stats`). Its `Store` is [`MockConn`]
+// `insert_sync`, `update_gear`). Its `Store` is [`MockConn`]
 // (the `FakeSource`'s connection), so the loop's transaction ties to it.
 //
 // `#[async_trait]` on each impl block is the trick that makes the `async fn`
@@ -99,11 +98,11 @@ mockall::mock! {
 
     #[async_trait::async_trait]
     impl ProviderLane for Lane {
-        type Event = Event;
+        type Event = ();
         type Store = MockConn;
         type Facade = tb_provider::MockEntityFacade<MockConn>;
         fn facade(&self) -> &tb_provider::MockEntityFacade<MockConn>;
-        async fn probe(&self, user_id: UserId, store: &mut MockConn) -> Probe<Event>;
+        async fn probe(&self, user_id: UserId, store: &mut MockConn) -> Probe<()>;
         async fn process(&self, user_id: UserId, store: &mut MockConn) -> Option<Summary>;
         async fn import_gear(
             &self,
@@ -116,7 +115,6 @@ mockall::mock! {
             time: i64,
             store: &mut MockConn,
         ) -> TbResult<()>;
-        async fn all_stats(&self, store: &mut MockConn) -> TbResult<Vec<UserStat>>;
     }
 }
 
@@ -192,13 +190,13 @@ impl TxnSource for FakeSource {
     }
 }
 
-/// A future that never resolves: stands in for the Strava queue probe being
+/// A future that never resolves: stands in for the queue probe being
 /// blocked (a slow or busy queue), so the select has a second, non-ready
 /// branch without a store.
 struct Never;
 
 impl Future for Never {
-    type Output = Option<Probe<Event>>;
+    type Output = Option<Probe<()>>;
 
     fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
         Poll::Pending
@@ -206,7 +204,7 @@ impl Future for Never {
 }
 
 /// A future that immediately resolves with a ready probe outcome.
-async fn ready_probe(probe: Probe<Event>) -> Option<Probe<Event>> {
+async fn ready_probe(probe: Probe<()>) -> Option<Probe<()>> {
     Some(probe)
 }
 
@@ -252,8 +250,8 @@ fn next_action_prefer_write_over_everything() {
 }
 
 #[test]
-fn next_action_strava_when_no_write() {
-    assert_eq!(next_action(false, true, 0), Action::ProcessStrava);
+fn next_action_event_when_no_write() {
+    assert_eq!(next_action(false, true, 0), Action::ProcessEvent);
 }
 
 #[test]
@@ -275,19 +273,14 @@ fn next_action_sleep_while_streams_listen() {
 // --- `select_message`: the biased select ---
 
 #[tokio::test]
-async fn select_api_write_wins_over_ready_strava() {
+async fn select_api_write_wins_over_ready_event() {
     // Both ready at the same instant: the write branch is polled first.
     let (_tx, mut rx) = request_channel();
     let (req, _reply) = request();
     let _ = _tx.send(req);
     let wake = tokio::sync::Notify::new();
     let mut wake_fut = Box::pin(wake.notified());
-    let sel = select_message(
-        rx.recv(),
-        ready_probe(Probe::Event(Event::default())),
-        &mut wake_fut,
-    )
-    .await;
+    let sel = select_message(rx.recv(), ready_probe(Probe::Event(())), &mut wake_fut).await;
     assert!(
         matches!(
             sel,
@@ -303,21 +296,16 @@ async fn select_api_write_wins_over_ready_strava() {
 }
 
 #[tokio::test]
-async fn select_strava_when_no_write_pending() {
-    // An empty-but-open channel parks the write branch; the ready Strava
+async fn select_event_when_no_write_pending() {
+    // An empty-but-open channel parks the write branch; the ready event
     // branch is then taken.
     let (_tx, mut rx) = request_channel();
     let wake = tokio::sync::Notify::new();
     let mut wake_fut = Box::pin(wake.notified());
-    let sel = select_message(
-        rx.recv(),
-        ready_probe(Probe::Event(Event::default())),
-        &mut wake_fut,
-    )
-    .await;
+    let sel = select_message(rx.recv(), ready_probe(Probe::Event(())), &mut wake_fut).await;
     assert!(
-        matches!(sel, Select::Strava(ref e) if *e == Event::default()),
-        "a ready Strava event is taken when no write is pending, got {sel:?}"
+        matches!(sel, Select::Event(())),
+        "a ready provider event is taken when no write is pending, got {sel:?}"
     );
 }
 
@@ -352,7 +340,7 @@ async fn select_idle_when_channel_closed_and_queue_empty() {
 }
 
 #[tokio::test]
-async fn select_strava_error_is_its_own_state() {
+async fn select_probe_error_is_its_own_state() {
     // A failed probe is reported, not silently read as "empty": the loop
     // pauses instead of deciding the queue drained.
     let (_tx, mut rx) = request_channel();
@@ -360,8 +348,8 @@ async fn select_strava_error_is_its_own_state() {
     let mut wake_fut = Box::pin(wake.notified());
     let sel = select_message(rx.recv(), ready_probe(Probe::Error), &mut wake_fut).await;
     assert!(
-        matches!(sel, Select::StravaError),
-        "a failed probe is StravaError, got {sel:?}"
+        matches!(sel, Select::ProbeError),
+        "a failed probe is ProbeError, got {sel:?}"
     );
 }
 
@@ -509,10 +497,7 @@ async fn select_wake_firing_while_parked_is_wake() {
 fn message_carries_both_sources() {
     let write = ApiWrite::UserOnboardingPostpone;
     assert_eq!(Message::ApiWrite(write.clone()), Message::ApiWrite(write));
-    assert_eq!(
-        Message::Strava(Event::default()),
-        Message::Strava(Event::default())
-    );
+    assert_eq!(Message::Event(()), Message::Event(()));
 }
 
 #[test]
@@ -664,8 +649,8 @@ pub(crate) fn part_owned_by(owner: UserId) -> Part {
     }
 }
 
-/// The canned Strava-imported bike the gear test's store returns: one part
-/// carrying the Strava source `b123`.
+/// The canned imported bike the gear test's store returns: one part
+/// carrying the provider source `b123`.
 fn part_test_bike() -> Part {
     Part {
         id: PartId::from(1),
@@ -781,9 +766,9 @@ pub(crate) fn notification_part_registered(recipient: UserId) -> Notification {
 // --- `select_message` and the sleep: the read's select discipline ---
 
 #[tokio::test]
-async fn select_read_wins_over_ready_strava() {
+async fn select_read_wins_over_ready_event() {
     // Both ready at the same instant: the request branch (a read) is polled
-    // first — a read is never delayed by the Strava side (spec #558 §3.7).
+    // first — a read is never delayed by the provider side (spec #558 §3.7).
     let (tx, mut rx) = request_channel();
     let (req, _reply) = Request::new_read(
         Box::new(mock_session(UserId::from(1))),
@@ -792,12 +777,7 @@ async fn select_read_wins_over_ready_strava() {
     let _ = tx.send(req);
     let wake = tokio::sync::Notify::new();
     let mut wake_fut = Box::pin(wake.notified());
-    let sel = select_message(
-        rx.recv(),
-        ready_probe(Probe::Event(Event::default())),
-        &mut wake_fut,
-    )
-    .await;
+    let sel = select_message(rx.recv(), ready_probe(Probe::Event(())), &mut wake_fut).await;
     assert!(
         matches!(sel, Select::Request(ref req) if matches!(req, Request::Read { .. })),
         "the ready read must win the biased select, got {sel:?}"
@@ -808,7 +788,7 @@ async fn select_read_wins_over_ready_strava() {
 async fn read_arriving_during_a_sleep_is_taken_immediately() {
     // A read enqueued while the loop is in a Stop/DbBackoff sleep is taken
     // the moment it is ready (spec #558 §3.7: a read is never delayed by
-    // the Strava `Stop` nor by the `DbBackoff`), not at the sleep's expiry.
+    // the provider `Stop` nor by the `DbBackoff`), not at the sleep's expiry.
     let (tx, mut rx) = request_channel();
     let wake = std::sync::Arc::new(tokio::sync::Notify::new());
     let wake_in_task = wake.clone();
@@ -969,42 +949,6 @@ async fn cleanly_committed_read_resets_the_backoff() {
         Duration::from_secs(1),
         "a cleanly committed read resets the backoff"
     );
-}
-
-// --- The loop-side Strava dispatches (spec #558 §3.3/§4) ---
-
-#[tokio::test]
-async fn all_stats_round_trips_through_the_loop_transaction() {
-    // The admin stats read is dispatched loop-side in the loop's own
-    // transaction (spec #558 §3.3): the oneshot resolves with the stats
-    // after the commit. The canned store has no Strava users, so the stats are
-    // empty.
-    let mut conn = MockConn::new();
-    conn.expect_commit().returning(|| Ok(()));
-    let source = FakeSource::with(conn);
-    let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_all_stats(Box::new(mock_session(UserId::from(1))));
-    // The canned lane has no Strava users, so the stats are empty.
-    let mut lane = MockLane::new();
-    lane.expect_all_stats().returning(|_st| Ok(Vec::new()));
-    let pusher = RecordingPusher::new();
-    let mut ctx = test_context(
-        source,
-        MockDomainFacade::new(),
-        lane,
-        frames,
-        Box::new(pusher),
-    );
-    let result = run_request(&mut ctx, request).await;
-    assert!(
-        result.is_ok(),
-        "a committed stats read must not end the loop"
-    );
-    let stats = reply
-        .await
-        .expect("the oneshot resolves")
-        .expect("the stats read succeeds");
-    assert!(stats.is_empty(), "the canned store has no Strava users");
 }
 
 // --- The onboarding's provider side (spec #829) ---

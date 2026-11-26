@@ -37,8 +37,9 @@ use anyhow::Context;
 use axum::{Router, routing::get};
 use sqlx::PgPool;
 use tb_domain::TbResult;
-use tb_exec::{HEARTBEAT_INTERVAL, ServiceApi, providerservice::ProviderService};
+use tb_exec::{HEARTBEAT_INTERVAL, ServiceApi};
 use tb_provider::Provider;
+use tb_provider::ProviderService;
 use tower_sessions::{ExpiredDeletion, SessionManagerLayer};
 use tower_sessions_sqlx_store::PostgresStore;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -112,8 +113,8 @@ fn routes(app_state: AppState, static_path: Option<std::path::PathBuf>) -> Route
         .nest("/admin", admin::router())
         .nest("/source", source::router())
         .route("/logout", get(oauth_common::logout))
-        .nest(Provider::Strava.route_prefix(), strava::router())
-        .nest(Provider::Icu.route_prefix(), icu::router())
+        .nest(Provider::Strava.route_prefix().as_str(), strava::router())
+        .nest(Provider::Icu.route_prefix().as_str(), icu::router())
         .with_state(app_state);
 
     if let Some(path) = static_path {

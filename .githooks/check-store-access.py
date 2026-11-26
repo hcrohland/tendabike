@@ -2,13 +2,15 @@
 """Enforce ADR-0012: the entity owns its store.
 
 A store method (`<entity>_<op>`, defined in the store traits in
-`backend/domain/src/traits/` and `backend/strava/src/traits.rs`) may be called
+`backend/domain/src/traits/`, `backend/strava/src/traits.rs`, and the
+provider-agnostic `Store` in `backend/provider/src/store.rs`) may be called
 only from its owning entity's code. A cross-entity need goes through the
 callee's entity method, never its store. This check collects every store
 method name and greps the backend for calls to it, failing if a call appears
 outside the owning entity's file (plus the exempted locations: the sqlx store
 impls, the `MockStore`/`MockStravaConn` doubles, the test and seam suites, and
-the `build_snapshot.rs` seed tool).
+the `build_snapshot.rs` seed tool). The provider-agnostic `Store` is owned by
+the whole provider driver tree (`backend/provider/src/`).
 
 A call is a store-variable call (`store.method(`) or a store-trait
 qualification (`PartStore::method(`). Entity qualifications (`Part::method(`)
@@ -87,6 +89,14 @@ def trait_sources():
             os.path.join(BACKEND, "strava", "src", "user.rs"),
             os.path.join(BACKEND, "strava", "src", "event.rs"),
         ]
+    # The provider-agnostic `Store` (spec #1029): owned by the whole provider
+    # driver tree (the driver is the provider user row's entity).
+    provider_tf = os.path.join(BACKEND, "provider", "src", "store.rs")
+    if os.path.exists(provider_tf):
+        yield provider_tf, glob.glob(
+            os.path.join(BACKEND, "provider", "src", "**", "*.rs"),
+            recursive=True,
+        )
 
 
 def method_names(trait_file: str):

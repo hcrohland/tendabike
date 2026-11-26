@@ -86,18 +86,23 @@ use tb_domain::test_support::{
 use tb_domain::{
     ApiRead, ApiWrite, Part, PartId, ReadOutcome, ShopId, Summary, UsageId, UserId, WriteOutcome,
 };
-use tb_exec::providerservice::ProviderService;
 use tb_exec::{
     DeliveryContext, DetachedBegin, DomainFacadeImpl, ExecutorStatus, FramePusher, LoopContext,
     Registry, Request, RequestReceiver, ServiceApi, request_channel,
 };
 use tb_provider::Provider;
 use tb_provider::ProviderLane;
+use tb_provider::ProviderService;
+use tb_provider::icu::IcuSpec;
+use tb_provider::icu::driver::IcuDriver;
+use tb_provider::strava::StravaSpec;
+use tb_provider::strava::driver::StravaDriver;
+use tb_provider::strava::event::Event as StravaEvent;
 use tb_provider::strava::{
     StravaId,
     test_support::{canned_strava, seed_token_cache},
 };
-use tb_provider::{EntityFacadeImpl, LaneEvent, UnifiedLane};
+use tb_provider::{EntityFacadeImpl, ProviderLaneImpl, UnifiedLaneImpl};
 use tb_sqlx::{DbPool, SNAPSHOT_JSON, SqlxConn};
 use time::macros::datetime;
 use tokio::sync::{MutexGuard, Notify, broadcast};
@@ -158,7 +163,7 @@ const IDLE_TIMEOUT: Duration = Duration::from_millis(300);
 fn loop_ctx(
     pool: DbPool,
     frames: broadcast::Sender<Summary>,
-    events: broadcast::Sender<LaneEvent>,
+    events: broadcast::Sender<StravaEvent>,
     rx: RequestReceiver,
 ) -> impl std::future::Future<Output = tb_domain::TbResult<()>> {
     LoopContext::new(
@@ -167,7 +172,7 @@ fn loop_ctx(
         UserId::from(1),
         frames,
         Box::new(NoopPusher),
-        UnifiedLane::new(EntityFacadeImpl),
+        ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
         events,
         IDLE_TIMEOUT,
         Arc::new(Notify::new()),
@@ -931,7 +936,10 @@ async fn sync_enqueues() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        UnifiedLane::new(EntityFacadeImpl),
+        UnifiedLaneImpl::<_>::new(
+            ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+        ),
         Duration::from_secs(3600),
     );
 
@@ -996,7 +1004,10 @@ async fn trigger_processing_drains_each_queued_user() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        UnifiedLane::new(EntityFacadeImpl),
+        UnifiedLaneImpl::<_>::new(
+            ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+        ),
         Duration::from_secs(3600),
     );
     // Both executors running and idle-waiting (streams attached keep them
@@ -1075,16 +1086,51 @@ async fn seed_strava_user(pool: &DbPool, queue_event: bool) {
     conn.commit().await.expect("committing the seed");
 }
 
+/// Seed the fixture user's icu row (the user is icu-only: no Strava row) —
+/// the icu-lane regression's setup shape.
+async fn seed_icu_user(pool: &DbPool) {
+    let user = UserId::from(1);
+    let mut conn = pool.begin().await.expect("a transaction");
+    sqlx::query(
+        "INSERT INTO icu_users (tbid, icu_athlete_id, access_token) \
+         VALUES ($1, 'ath-42', 'tok')",
+    )
+    .bind(i32::from(user))
+    .execute(&mut **conn)
+    .await
+    .expect("seeding the icu user");
+    conn.commit().await.expect("committing the seed");
+}
+
+/// Queue one icu `ACTIVITY` event for the fixture user's icu athlete — the
+/// icu-lane regression's queued event (the lane must read it from the icu
+/// queue, not the Strava queue).
+async fn queue_icu_event(pool: &DbPool) {
+    let mut conn = pool.begin().await.expect("a transaction");
+    sqlx::query(
+        "INSERT INTO icu_events \
+         (icu_athlete_id, activity_id, event_time, object_type, event_type) \
+         VALUES ('ath-42', 'act-1', 100, 'ACTIVITY', 'ACTIVITY_UPLOADED')",
+    )
+    .execute(&mut **conn)
+    .await
+    .expect("seeding the queued icu event");
+    conn.commit().await.expect("committing the seed");
+}
+
 /// One test's registry over the live pool (the direct ops' shape): the
 /// suite's short idle cadence; the ops under test never rely on the
 /// re-probe.
 fn registry(
     pool: &DbPool,
-) -> Registry<DetachedBegin<DbPool>, UnifiedLane<SqlxConn<'static>>, DomainFacadeImpl> {
+) -> Registry<DetachedBegin<DbPool>, UnifiedLaneImpl<SqlxConn<'static>>, DomainFacadeImpl> {
     Registry::new(
         DetachedBegin::new(pool.clone()),
         DomainFacadeImpl,
-        UnifiedLane::new(EntityFacadeImpl),
+        UnifiedLaneImpl::<_>::new(
+            ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+        ),
         IDLE_TIMEOUT,
     )
 }
@@ -1148,6 +1194,63 @@ async fn rescan_stops_the_executors() {
         .await
         .expect("the close must be observed in time");
     assert!(recv.is_err(), "the rescan must close the frame channel");
+}
+
+/// The admin all-user stat read (spec #558 §3.3): the read is
+/// provider-agnostic — the list carries every enabled provider's users, each
+/// row stamped with its provider's wire value. Regression: the read used to
+/// ride the admin's own provider lane, so a Strava admin never saw the icu
+/// users.
+#[tokio::test]
+#[ignore]
+async fn all_stats_lists_users_of_both_providers() {
+    let seam = ready().await;
+    // The admin (user 1, the fixture user) is a Strava user.
+    seed_strava_user(&seam.pool, false).await;
+    // The icu user (user 2: the users row plus the icu row).
+    let user2 = UserId::from(2);
+    {
+        let mut conn = seam.pool.begin().await.expect("a transaction");
+        sqlx::query(
+            "INSERT INTO users (id, name, firstname, is_admin) VALUES (2, 'Seam Two', 'Seam', false)",
+        )
+        .execute(&mut **conn)
+        .await
+        .expect("seeding the second user");
+        sqlx::query(
+            "INSERT INTO icu_users (tbid, icu_athlete_id, access_token) \
+             VALUES ($1, 'ath-43', 'tok')",
+        )
+        .bind(i32::from(user2))
+        .execute(&mut **conn)
+        .await
+        .expect("seeding the icu user");
+        conn.commit().await.expect("committing the seed");
+    }
+    let reg = registry(&seam.pool);
+
+    let stats = tokio::time::timeout(
+        TEST_TIMEOUT,
+        ServiceApi::all_stats(&reg, Box::new(mock_session_admin(UserId::from(1)))),
+    )
+    .await
+    .expect("the stats read must return in time")
+    .expect("the stats read must succeed");
+
+    assert_eq!(stats.len(), 2, "both providers' users appear");
+    let strava_stat = stats
+        .iter()
+        .find(|s| s.stat.user.id == UserId::from(1))
+        .expect("the Strava user appears");
+    assert_eq!(
+        strava_stat.provider, "strava",
+        "the Strava row is stamped strava"
+    );
+    let icu_stat = stats
+        .iter()
+        .find(|s| s.stat.user.id == user2)
+        .expect("the icu user appears");
+    assert_eq!(icu_stat.provider, "icu", "the icu row is stamped icu");
 }
 
 /// The webhook accept direct op (spec #558 §5.2/§8): one transaction — the
@@ -1480,7 +1583,10 @@ async fn shop_subscribe_policy() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        UnifiedLane::new(EntityFacadeImpl),
+        UnifiedLaneImpl::<_>::new(
+            ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+        ),
         Duration::from_secs(3600),
     );
 
@@ -1582,7 +1688,10 @@ async fn attached_stream_keeps_the_executor_alive() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        UnifiedLane::new(EntityFacadeImpl),
+        UnifiedLaneImpl::<_>::new(
+            ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+        ),
         Duration::from_millis(300),
     );
 
@@ -1635,7 +1744,10 @@ async fn stream_survives_executor_reap() {
     let registry = Registry::new(
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
-        UnifiedLane::new(EntityFacadeImpl),
+        UnifiedLaneImpl::<_>::new(
+            ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+        ),
         Duration::from_millis(300),
     );
 
@@ -1665,6 +1777,42 @@ async fn stream_survives_executor_reap() {
         .expect("the stream must stay open after the respawn")
         .expect("the stream must not end while a stream is attached");
     assert_eq!(frame, Summary::default());
+}
+
+/// The icu-lane regression (spec #1029, user story 13): an icu user's queued
+/// event must be driven through the lane. The user is icu-only (no Strava
+/// row) with a queued icu `ACTIVITY` event; the registry's lane must select
+/// the icu (marker, driver) for the user, so the probe reads the **icu**
+/// queue (not the Strava queue). A single-Strava-lane registry probes the
+/// Strava store → `NotFound` → `Probe::UserGone` → the loop exits cleanly
+/// (`Reaped`), and the icu event is never processed. With both lanes driven,
+/// the icu lane's probe finds the event and the executor stays alive
+/// (`Running` — the attached stream keeps it up).
+#[tokio::test]
+#[ignore]
+async fn icu_users_queued_events_are_driven() {
+    let seam = ready().await;
+    let user = UserId::from(1);
+    // The user is icu-only: an icu row and a queued icu event, no Strava row.
+    seed_icu_user(&seam.pool).await;
+    queue_icu_event(&seam.pool).await;
+    let reg = registry(&seam.pool);
+    // Subscribe: spawns the executor and attaches a stream.
+    let (_frames, status) = reg
+        .subscribe(Box::new(mock_session(user)))
+        .await
+        .expect("subscribing");
+    // Give the executor time to probe the queue (its first cycle).
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    // The executor must still be `Running`: the icu lane's probe reads the icu
+    // queue (the user's real provider), so the user is not `UserGone` and the
+    // loop does not exit. A single-Strava-lane registry would probe the Strava
+    // store → `NotFound` → `UserGone` → a clean exit (`Reaped`).
+    assert_eq!(
+        *status.borrow(),
+        ExecutorStatus::Running,
+        "the icu user's executor must stay alive: its lane reads the icu queue, not the Strava queue"
+    );
 }
 
 /// A burst of user reads — the `GET /api/user/summary` shape (the frontend

@@ -8,8 +8,8 @@ use crate::test_support::{begin_test, queue, requests};
 #[tokio::test]
 async fn request_json_replays_canned_response() -> TbResult<()> {
     begin_test();
-    let mut store = super::super::traits::MockIcuDataStore::new();
-    store.expect_icuser_get_by_tbid().returning(|_id| {
+    let mut store = crate::test_support::MockStore::<crate::icu::IcuSpec>::new();
+    store.expect_user_get_by_tbid().returning(|_id| {
         Ok(super::super::test_support::icu_user(
             UserId::from(1),
             "a1",

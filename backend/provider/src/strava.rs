@@ -15,14 +15,11 @@
 //!
 
 use crate::OnBehalf;
+#[cfg(test)]
+use crate::facade::ActivityId;
 #[cfg(any(test, feature = "test-support"))]
 use crate::facade::Part;
-#[cfg(test)]
-use crate::facade::Stat;
-use crate::facade::{
-    ActTypeId, Activity, ActivityId, Error, PartId, PartTypeId, Session, Summary, TbResult, UserId,
-    UserStat,
-};
+use crate::facade::{ActTypeId, Activity, Error, PartId, PartTypeId, Summary, TbResult, UserId};
 
 mod traits;
 pub use traits::*;
@@ -38,12 +35,18 @@ pub mod activity;
 pub mod event;
 pub mod gear;
 mod ratelimit;
-// The queue's read-side rate-limit gate, re-exported so the `EventQueue` impl
-// over the data store (the sqlx crate) can consult it (spec #1023).
+// The queue's read-side rate-limit gate, re-exported so the `Store` impl
+// over the data store (the sqlx crate) can consult it (spec #1029).
 pub use ratelimit::limited_until;
 
 mod user;
 pub use user::*;
+
+/// The Strava driver type (spec #1029, ticket #1032): the
+/// [`Provider`](crate::driver::Provider) impl — a thin forward of the
+/// driver's free functions onto the shared skeleton.
+pub mod driver;
+pub use driver::StravaDriver;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;

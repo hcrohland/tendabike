@@ -3,7 +3,11 @@ use std::sync::{Arc, Mutex};
 use super::super::test_support::{activity_json, setup, strava_user};
 use super::*;
 use super::{AspectType, Event, ObjectType};
-use crate::test_support::{queue, queue_error};
+use crate::driver::Provider;
+use crate::strava::StravaSpec;
+use crate::test_support::{MockStore, queue, queue_error};
+
+type StravaStoreMock = MockStore<StravaSpec>;
 
 /// Sets this thread's rate-limiter override to "no data" (allows all
 /// requests), so the queue read dequeues normally.
@@ -53,14 +57,14 @@ fn event_with_id(
 
 /// Canned the `get_event` read of a single queued event: the event is both the
 /// "next" event and the only "later" event for its object.
-fn queue_event(store: &mut MockStravaDataStore, event: Event) {
+fn queue_event(store: &mut StravaStoreMock, event: Event) {
     let next = event.clone();
     let later = event.clone();
     store
-        .expect_strava_event_get_next_for_user()
+        .expect_event_get_next()
         .returning(move |_user| Ok(Some(next.clone())));
     store
-        .expect_strava_event_get_later()
+        .expect_event_get_later()
         .returning(move |_obj_id, _oid| Ok(vec![later.clone()]));
 }
 
@@ -69,7 +73,7 @@ async fn into_event_maps_fields() -> TbResult<()> {
     let (mut store, _facade, _) = setup();
     // The owner (42) is a known strava user: the event maps cleanly.
     store
-        .expect_stravauser_get_by_stravaid()
+        .expect_user_get_by_provider_id()
         .returning(|_id| Ok(Some(strava_user(UserId::from(1), 42, true))));
     let event = in_event("activity", 10, "create", 42, serde_json::Map::new())
         .into_event(&mut store)
@@ -89,7 +93,7 @@ async fn into_event_rejects_unknown_owner() {
     let (mut store, _facade, _) = setup();
     // An unknown owner (99) is a `BadRequest`.
     store
-        .expect_stravauser_get_by_stravaid()
+        .expect_user_get_by_provider_id()
         .returning(|_id| Ok(None));
     let res = in_event("activity", 10, "create", 99, serde_json::Map::new())
         .into_event(&mut store)
@@ -102,7 +106,7 @@ async fn into_event_rejects_unknown_types() {
     let (mut store, _facade, _) = setup();
     // The owner is known; the object/aspect types are not.
     store
-        .expect_stravauser_get_by_stravaid()
+        .expect_user_get_by_provider_id()
         .returning(|_id| Ok(Some(strava_user(UserId::from(1), 42, true))));
     let bad_object = in_event("flying", 10, "create", 42, serde_json::Map::new());
     assert!(matches!(
@@ -124,9 +128,9 @@ async fn accept_stores_activity_event() -> TbResult<()> {
     let created = Arc::new(Mutex::new(None));
     let created_rec = created.clone();
     store
-        .expect_stravauser_get_by_stravaid()
+        .expect_user_get_by_provider_id()
         .returning(|_id| Ok(Some(strava_user(UserId::from(1), 42, true))));
-    store.expect_strava_event_create().returning(move |e| {
+    store.expect_event_create().returning(move |e| {
         created_rec.lock().unwrap().replace(e.clone());
         Ok(())
     });
@@ -157,9 +161,9 @@ async fn accept_stores_a_64bit_owner() -> TbResult<()> {
     let created = Arc::new(Mutex::new(None));
     let created_rec = created.clone();
     store
-        .expect_stravauser_get_by_stravaid()
+        .expect_user_get_by_provider_id()
         .returning(move |_id| Ok(Some(strava_user(UserId::from(1), owner, true))));
-    store.expect_strava_event_create().returning(move |e| {
+    store.expect_event_create().returning(move |e| {
         created_rec.lock().unwrap().replace(e.clone());
         Ok(())
     });
@@ -184,24 +188,19 @@ async fn accept_athlete_deauth_disables_user() -> TbResult<()> {
     // An athlete deauth (`authorized: false`) disables the user: drops their
     // events and clears their token. Nothing is queued.
     store
-        .expect_stravauser_get_by_stravaid()
+        .expect_user_get_by_provider_id()
         .returning(|_id| Ok(Some(strava_user(UserId::from(1), 42, true))));
     let events_deleted = Arc::new(Mutex::new(0));
     let events_deleted_rec = events_deleted.clone();
-    let token_refresh = Arc::new(Mutex::new(Vec::new()));
+    let token_refresh: Arc<Mutex<Vec<Option<String>>>> = Arc::new(Mutex::new(Vec::new()));
     let token_refresh_rec = token_refresh.clone();
-    store
-        .expect_strava_events_delete_for_user()
-        .returning(move |_user| {
-            *events_deleted_rec.lock().unwrap() = 1;
-            Ok(1)
-        });
-    store
-        .expect_stravauser_update_token()
-        .returning(move |_id, refresh| {
-            token_refresh_rec.lock().unwrap().push(refresh);
-            Ok(strava_user(UserId::from(1), 42, false))
-        });
+    // `user_disable` is the store's single disable op (drop the queued events,
+    // clear the token): the canned store records both side effects.
+    store.expect_user_disable().returning(move |_owner| {
+        *events_deleted_rec.lock().unwrap() = 1;
+        token_refresh_rec.lock().unwrap().push(None);
+        Ok(())
+    });
     let mut updates = serde_json::Map::new();
     updates.insert("authorized".into(), serde_json::json!("false"));
     assert_eq!(
@@ -230,7 +229,7 @@ async fn insert_sync_stores_event() -> TbResult<()> {
     // id (42, from the warm token cache).
     let created = Arc::new(Mutex::new(None));
     let created_rec = created.clone();
-    store.expect_strava_event_create().returning(move |e| {
+    store.expect_event_create().returning(move |e| {
         created_rec.lock().unwrap().replace(e.clone());
         Ok(())
     });
@@ -254,10 +253,9 @@ async fn insert_sync_rejects_future() {
 async fn process_no_events() -> TbResult<()> {
     let (mut store, facade, _) = setup();
     // An empty queue: nothing to process.
-    store
-        .expect_strava_event_get_next_for_user()
-        .returning(|_user| Ok(None));
-    let summary = process(UserId::from(1), &facade, &mut store).await?;
+    store.expect_event_get_next().returning(|_user| Ok(None));
+    let summary =
+        super::super::driver::StravaDriver::process(UserId::from(1), &facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     Ok(())
 }
@@ -280,11 +278,12 @@ async fn process_activity_create_imports() -> TbResult<()> {
         });
     let deleted = Arc::new(Mutex::new(None));
     let deleted_rec = deleted.clone();
-    store.expect_strava_event_delete().returning(move |id| {
+    store.expect_event_delete().returning(move |id| {
         deleted_rec.lock().unwrap().replace(id);
         Ok(())
     });
-    let summary = process(UserId::from(1), &facade, &mut store).await?;
+    let summary =
+        super::super::driver::StravaDriver::process(UserId::from(1), &facade, &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
     assert!(
         summary
@@ -311,8 +310,9 @@ async fn process_activity_delete_missing_ignores() -> TbResult<()> {
     facade
         .expect_delete_activity()
         .returning(|_id, _user, _store| Err(Error::NotFound("".to_string())));
-    store.expect_strava_event_delete().returning(|_id| Ok(()));
-    let summary = process(UserId::from(1), &facade, &mut store).await?;
+    store.expect_event_delete().returning(|_id| Ok(()));
+    let summary =
+        super::super::driver::StravaDriver::process(UserId::from(1), &facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     Ok(())
 }
@@ -329,9 +329,10 @@ async fn process_try_again_keeps_event_queued() -> TbResult<()> {
         event_with_id(1, ObjectType::Activity, 10, AspectType::Create, 100),
     );
     // The 429 keeps the event queued: it is NOT deleted.
-    store.expect_strava_event_delete().times(0);
+    store.expect_event_delete().times(0);
     queue_error("/activities/10", Error::TryAgain("rate limit"));
-    let summary = process(UserId::from(1), &_facade, &mut store).await?;
+    let summary =
+        super::super::driver::StravaDriver::process(UserId::from(1), &_facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     Ok(())
 }
@@ -348,7 +349,7 @@ async fn process_activity_nontransient_drops_event() -> TbResult<()> {
     );
     let deleted = Arc::new(Mutex::new(None));
     let deleted_rec = deleted.clone();
-    store.expect_strava_event_delete().returning(move |id| {
+    store.expect_event_delete().returning(move |id| {
         deleted_rec.lock().unwrap().replace(id);
         Ok(())
     });
@@ -356,7 +357,8 @@ async fn process_activity_nontransient_drops_event() -> TbResult<()> {
         "/activities/10",
         Error::AnyFailure(anyhow::anyhow!("parse boom")),
     );
-    let summary = process(UserId::from(1), &_facade, &mut store).await?;
+    let summary =
+        super::super::driver::StravaDriver::process(UserId::from(1), &_facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     assert_eq!(
         deleted.lock().unwrap().take(),
@@ -376,19 +378,17 @@ async fn process_activity_not_auth_disables_user() -> TbResult<()> {
         &mut store,
         event_with_id(1, ObjectType::Activity, 10, AspectType::Create, 100),
     );
-    let token_refresh = Arc::new(Mutex::new(Vec::new()));
+    let token_refresh: Arc<Mutex<Vec<Option<String>>>> = Arc::new(Mutex::new(Vec::new()));
     let token_refresh_rec = token_refresh.clone();
-    store
-        .expect_strava_events_delete_for_user()
-        .returning(|_user| Ok(1));
-    store
-        .expect_stravauser_update_token()
-        .returning(move |_id, refresh| {
-            token_refresh_rec.lock().unwrap().push(refresh);
-            Ok(strava_user(UserId::from(1), 42, false))
-        });
+    // `user_disable` is the store's single disable op (drop the queued events,
+    // clear the token): the canned store records the cleared token.
+    store.expect_user_disable().returning(move |_owner| {
+        token_refresh_rec.lock().unwrap().push(None);
+        Ok(())
+    });
     queue_error("/activities/10", Error::NotAuth(String::from("token dead")));
-    let summary = process(UserId::from(1), &_facade, &mut store).await?;
+    let summary =
+        super::super::driver::StravaDriver::process(UserId::from(1), &_facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     assert_eq!(
         token_refresh.lock().unwrap().as_slice(),
@@ -405,22 +405,20 @@ async fn process_sync_not_auth_disables_user() -> TbResult<()> {
         &mut store,
         event_with_id(1, ObjectType::Sync, 0, AspectType::Create, 0),
     );
-    let token_refresh = Arc::new(Mutex::new(Vec::new()));
+    let token_refresh: Arc<Mutex<Vec<Option<String>>>> = Arc::new(Mutex::new(Vec::new()));
     let token_refresh_rec = token_refresh.clone();
-    store
-        .expect_strava_events_delete_for_user()
-        .returning(|_user| Ok(1));
-    store
-        .expect_stravauser_update_token()
-        .returning(move |_id, refresh| {
-            token_refresh_rec.lock().unwrap().push(refresh);
-            Ok(strava_user(UserId::from(1), 42, false))
-        });
+    // `user_disable` is the store's single disable op (drop the queued events,
+    // clear the token): the canned store records the cleared token.
+    store.expect_user_disable().returning(move |_owner| {
+        token_refresh_rec.lock().unwrap().push(None);
+        Ok(())
+    });
     queue_error(
         "/activities?after=0&per_page=25",
         Error::NotAuth(String::from("token dead")),
     );
-    let summary = process(UserId::from(1), &_facade, &mut store).await?;
+    let summary =
+        super::super::driver::StravaDriver::process(UserId::from(1), &_facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     assert_eq!(
         token_refresh.lock().unwrap().as_slice(),
@@ -440,12 +438,13 @@ async fn process_sync_empty_list_removes_event() -> TbResult<()> {
     // An empty activity list: the sync event is consumed.
     let deleted = Arc::new(Mutex::new(None));
     let deleted_rec = deleted.clone();
-    store.expect_strava_event_delete().returning(move |id| {
+    store.expect_event_delete().returning(move |id| {
         deleted_rec.lock().unwrap().replace(id);
         Ok(())
     });
     queue("/activities?after=0&per_page=25", "[]");
-    let summary = process(UserId::from(1), &_facade, &mut store).await?;
+    let summary =
+        super::super::driver::StravaDriver::process(UserId::from(1), &_facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     assert_eq!(
         deleted.lock().unwrap().take(),
@@ -477,13 +476,12 @@ async fn process_sync_imports_activities() -> TbResult<()> {
         });
     let cursor = Arc::new(Mutex::new(0));
     let cursor_rec = cursor.clone();
-    store
-        .expect_strava_event_set_time()
-        .returning(move |_id, e_time| {
-            *cursor_rec.lock().unwrap() = e_time;
-            Ok(())
-        });
-    let summary = process(UserId::from(1), &facade, &mut store).await?;
+    store.expect_event_set_time().returning(move |_id, e_time| {
+        *cursor_rec.lock().unwrap() = e_time;
+        Ok(())
+    });
+    let summary =
+        super::super::driver::StravaDriver::process(UserId::from(1), &facade, &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
     assert_eq!(
         *cursor.lock().unwrap(),
@@ -529,17 +527,16 @@ async fn process_sync_bad_activity_skips_and_advances_cursor() -> TbResult<()> {
         .returning(|_s, _store| Ok(None));
     let cursor = Arc::new(Mutex::new(0));
     let cursor_rec = cursor.clone();
-    store
-        .expect_strava_event_set_time()
-        .returning(move |_id, e_time| {
-            *cursor_rec.lock().unwrap() = e_time;
-            Ok(())
-        });
+    store.expect_event_set_time().returning(move |_id, e_time| {
+        *cursor_rec.lock().unwrap() = e_time;
+        Ok(())
+    });
     queue_error(
         "/gear/g11",
         Error::AnyFailure(anyhow::anyhow!("parse boom")),
     );
-    let summary = process(UserId::from(1), &facade, &mut store).await?;
+    let summary =
+        super::super::driver::StravaDriver::process(UserId::from(1), &facade, &mut store).await?;
     assert_eq!(summary.activities.len(), 1, "the good activity imports");
     assert_eq!(
         *cursor.lock().unwrap(),
@@ -558,9 +555,10 @@ async fn process_sync_try_again_keeps_event_queued() -> TbResult<()> {
         event_with_id(1, ObjectType::Sync, 0, AspectType::Create, 0),
     );
     // The 429 keeps the sync event queued: it is NOT deleted.
-    store.expect_strava_event_delete().times(0);
+    store.expect_event_delete().times(0);
     queue_error("/activities?after=0&per_page=25", Error::TryAgain("nope"));
-    let summary = process(UserId::from(1), &_facade, &mut store).await?;
+    let summary =
+        super::super::driver::StravaDriver::process(UserId::from(1), &_facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     Ok(())
 }
@@ -573,8 +571,9 @@ async fn process_skips_athlete_event() -> TbResult<()> {
         event_with_id(1, ObjectType::Athlete, 42, AspectType::Update, 100),
     );
     // An athlete event is not processed: it is dropped (consumed).
-    store.expect_strava_event_delete().returning(|_id| Ok(()));
-    let summary = process(UserId::from(1), &_facade, &mut store).await?;
+    store.expect_event_delete().returning(|_id| Ok(()));
+    let summary =
+        super::super::driver::StravaDriver::process(UserId::from(1), &_facade, &mut store).await?;
     assert_eq!(summary, Summary::default());
     Ok(())
 }

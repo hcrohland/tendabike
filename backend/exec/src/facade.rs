@@ -43,8 +43,8 @@ pub(crate) use tb_domain::{
 /// `cfg(test)` — the gate of the in-crate `*_tests` modules — so that test
 /// code funnels through the facade too (ADR-0015): the sole-importer rule
 /// holds with no test exemption. No `test-support` consumer names these
-/// (the feature's consumers are the `api.rs` / `providerservice.rs`
-/// automocks, which use only the re-exports above). The names already
+/// (the feature's only consumer is the `api.rs` `ServiceApi` automock,
+/// which uses only the re-exports above). The names already
 /// re-exported above reach the tests through this same door.
 #[cfg(test)]
 pub(crate) use tb_domain::{

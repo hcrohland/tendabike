@@ -11,9 +11,10 @@ use time::OffsetDateTime;
 use log::debug;
 use serde::{Deserialize, Serialize};
 
-use super::{IcuDataStore, OnBehalf};
+use super::{IcuSpec, OnBehalf};
 use crate::EntityFacade;
 use crate::facade::{PartId, PartTypeId, TbResult, UserId};
+use crate::store::Store;
 
 /// The intervals.icu wire shape of a gear (`GET /athlete/{id}/gear`).
 ///
@@ -55,7 +56,7 @@ impl IcuGear {
 /// Maps an icu gear to a Tendabike [`PartId`]: reuses the part carrying the
 /// namespaced `icu:{id}` source, or creates it (vendor and model left empty).
 /// `None` for unsupported types (the gear is skipped).
-pub(crate) async fn into_partid<D: EntityFacade<S>, S: IcuDataStore>(
+pub(crate) async fn into_partid<D: EntityFacade<S>, S: Store<IcuSpec>>(
     gear: &IcuGear,
     user_id: UserId,
     facade: &D,
@@ -96,7 +97,7 @@ pub(crate) async fn into_partid<D: EntityFacade<S>, S: IcuDataStore>(
 /// Skips the icu call silently when the rate limiter reports no budget:
 /// hydration is best-effort and must not be blocked by a non-essential API
 /// call (mirrors the Strava driver's `update_gear`).
-pub async fn update_gear<D: EntityFacade<S>, S: IcuDataStore>(
+pub(crate) async fn update_gear<D: EntityFacade<S>, S: Store<IcuSpec>>(
     user_id: UserId,
     facade: &D,
     store: &mut S,

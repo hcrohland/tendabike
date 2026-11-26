@@ -90,8 +90,8 @@ pub enum ExecutorStatus {
 /// One live per-user executor: the shared fate channel, the send half of the
 /// user's request channel (the write and read handlers enqueue here,
 /// spec #558 §3.2), the SSE frame sink the stream tasks subscribe to, the
-/// consumed-Strava-event channel the admin sync awaits (spec §6.4), the
-/// in-memory wake signal the webhook fires after queueing a Strava event
+/// consumed-provider-event channel the admin sync awaits (spec §6.4), the
+/// in-memory wake signal the webhook fires after queueing a provider event
 /// (spec §4.4/§4.6), and the task's abort handle (the core's `stop_all`
 /// tears the executor down — rescan). The `AbortHandle` (not
 /// the `JoinHandle`) is stored: the watchdog keeps the original handle to
@@ -100,10 +100,7 @@ pub enum ExecutorStatus {
 /// (`status`, `request_sender`, `frames`) are `pub(super)` so the
 /// facade can pull them; the rest stay private to the core.
 #[derive(Clone)]
-pub(super) struct Executor<P>
-where
-    P: ProviderLane + Clone + Send + Sync + 'static,
-{
+pub(super) struct Executor {
     pub(super) status: watch::Receiver<ExecutorStatus>,
     /// The request handlers' door into this user's loop (spec #558 §3.2):
     /// enqueue a `Request` here and await its oneshot.
@@ -116,8 +113,6 @@ where
     /// Aborts the executor task (`stop_all`): the watchdog records `Dead`
     /// on the abort `JoinError`, like a panic.
     task: tokio::task::AbortHandle,
-    /// Marks the lane type (the loop's event type is `P::Event`).
-    _lane: std::marker::PhantomData<P>,
 }
 
 /// The per-shop frame channel with its owner (the shop stream is owner-only).
@@ -158,11 +153,8 @@ pub struct DeliveryContext {
 /// (and the `Box<dyn FramePusher>` it hands the loop) and passes both to the
 /// spawn. Its methods are `pub(super)` so the facade can delegate to them.
 #[derive(Clone)]
-pub(super) struct Core<P>
-where
-    P: ProviderLane + Clone + Send + Sync + 'static,
-{
-    executors: Arc<Mutex<HashMap<UserId, Executor<P>>>>,
+pub(super) struct Core {
+    executors: Arc<Mutex<HashMap<UserId, Executor>>>,
     /// The per-shop frame channels (spec #517): a standalone
     /// `broadcast` channel per shop, created on demand by `subscribe_shop`
     /// and reaped when its last receiver disconnects (the "open shop" check
@@ -174,10 +166,7 @@ where
     idle_timeout: Duration,
 }
 
-impl<P> Core<P>
-where
-    P: ProviderLane + Clone + Send + Sync + 'static,
-{
+impl Core {
     /// The core with an explicit idle cadence (the construction site is the
     /// facade's `new`/`with_defaults`; the maps start empty). The SSE
     /// heartbeat cadence is the crate constant [`super::HEARTBEAT_INTERVAL`]
@@ -192,7 +181,7 @@ where
 
     /// Fire the wake signal for the user's executor (spec §4.4/§4.6): a
     /// pure signal to a **running** executor — it interrupts the loop's
-    /// idle wait so a just-queued Strava event is processed at once. It
+    /// idle wait so a just-queued provider event is processed at once. It
     /// never spawns an executor: a reaped (or not-yet-spawned) executor
     /// picks the event up on its next spawn (an SSE connect or an API
     /// write) — the DB queue is the source of truth. Infallible by design:
@@ -253,7 +242,7 @@ where
     }
 
     /// Test helper: install a synthetic executor for `user_id` (bypassing
-    /// [`Self::ensure_running`], which needs a Strava session the unit fakes
+    /// [`Self::ensure_running`], which needs a session the unit fakes
     /// don't have) and return a receiver on its frame channel. The
     /// executor's fate is `status`. The task handle is a completed task (its
     /// `AbortHandle` is valid; `abort` on it is a no-op), so no task leaks.
@@ -270,13 +259,12 @@ where
         let task = tokio::spawn(async {}).abort_handle();
         // The stored receiver keeps the watch channel open; drop the sender.
         drop(status_tx);
-        let exec = Executor::<P> {
+        let exec = Executor {
             status: status_rx,
             request_sender,
             frames,
             wake,
             task,
-            _lane: std::marker::PhantomData,
         };
         self.executors.lock().await.insert(user_id, exec);
         frame_rx
@@ -449,19 +437,19 @@ where
     /// `Box<dyn FramePusher>` the loop routes committed `Summary`s through
     /// are the facade's (the core is source-agnostic and does not own a
     /// pusher).
-    pub(super) async fn exec_field<S, D, R>(
+    pub(super) async fn exec_field<S, D, P, R>(
         &self,
         source: &S,
         facade: &D,
         lane: &P,
         user_id: UserId,
         pusher: Box<dyn FramePusher>,
-        f: impl FnOnce(&Executor<P>) -> R,
+        f: impl FnOnce(&Executor) -> R,
     ) -> TbResult<R>
     where
         S: TxnSource + Clone + 'static,
         D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
-        P: ProviderLane<Store = S::Conn>,
+        P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     {
         let mut map = self.executors.lock().await;
         let exec = Self::ensure_running(
@@ -482,19 +470,19 @@ where
     /// shop is irrelevant — the per-request shop rides on each request), open
     /// a fresh request channel and frame channel, and spawn the `tb_exec`
     /// loop.
-    async fn ensure_running<S, D>(
-        map: &mut HashMap<UserId, Executor<P>>,
+    async fn ensure_running<S, D, P>(
+        map: &mut HashMap<UserId, Executor>,
         source: &S,
         facade: &D,
         lane: &P,
         user_id: UserId,
         idle_timeout: Duration,
         pusher: Box<dyn FramePusher>,
-    ) -> TbResult<Executor<P>>
+    ) -> TbResult<Executor>
     where
         S: TxnSource + Clone + 'static,
         D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
-        P: ProviderLane<Store = S::Conn>,
+        P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     {
         if let Some(exec) = map.get(&user_id)
             && *exec.status.borrow() == ExecutorStatus::Running
@@ -565,7 +553,6 @@ where
             frames,
             wake,
             task,
-            _lane: std::marker::PhantomData,
         };
         map.insert(user_id, exec.clone());
         Ok(exec)
@@ -616,7 +603,7 @@ mod tests {
     /// without a real database).
     #[tokio::test]
     async fn exec_field_spawns_the_executor_on_first_demand() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let source = FakeSource::failing();
         let facade = MockDomainFacade::<MockConn>::new();
@@ -638,7 +625,7 @@ mod tests {
     /// (`status` → `None`); a fresh `exec_field` brings it back `Running`.
     #[tokio::test]
     async fn stop_all_tears_down_and_the_next_demand_respawns() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let facade = MockDomainFacade::<MockConn>::new();
 
@@ -683,7 +670,7 @@ mod tests {
     /// core with no live executor leaves the map empty.
     #[tokio::test]
     async fn wake_never_spawns_an_executor() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
 
         core.wake(user_id).await;
@@ -701,7 +688,7 @@ mod tests {
     /// once) but never spawns a second executor nor changes the fate.
     #[tokio::test]
     async fn wake_on_a_running_executor_is_a_pure_signal() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let source = FakeSource::failing();
         let facade = MockDomainFacade::<MockConn>::new();
@@ -724,7 +711,7 @@ mod tests {
     /// facade — so the source is never `begin`-ed.
     #[tokio::test]
     async fn push_to_shop_delivers_to_an_open_shop_stream() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
 
         let mut rx = core.subscribe_shop(shop_id, UserId::from(1)).await;
@@ -744,7 +731,7 @@ mod tests {
     /// shop stream.
     #[tokio::test]
     async fn push_to_shop_is_a_noop_without_a_subscriber() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
 
         core.push_to_shop(shop_id, non_empty_summary()).await;
@@ -761,7 +748,7 @@ mod tests {
     /// installer stands in for a live executor, and no store is involved.
     #[tokio::test]
     async fn push_to_user_delivers_to_a_running_executor() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let mut frame_rx = core
             .install_executor_for_test(user_id, ExecutorStatus::Running)
@@ -781,7 +768,7 @@ mod tests {
     /// channel is not fed (spec #517).
     #[tokio::test]
     async fn push_to_user_is_a_noop_for_a_reaped_executor() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let mut frame_rx = core
             .install_executor_for_test(user_id, ExecutorStatus::Reaped)
@@ -824,7 +811,7 @@ mod tests {
     /// stream — and nothing else.
     #[tokio::test]
     async fn deliver_user_context_to_personal_stream() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let mut acting_rx = core
             .install_executor_for_test(user_id, ExecutorStatus::Running)
@@ -844,7 +831,7 @@ mod tests {
     /// A shop context delivers to the shop stream.
     #[tokio::test]
     async fn deliver_shop_context_to_shop_stream() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
         let mut shop_rx = core.subscribe_shop(shop_id, UserId::from(1)).await;
         let summary = summary_owned_by(UserId::from(2));
@@ -865,7 +852,7 @@ mod tests {
     /// A shop context delivers to the part owner's personal stream.
     #[tokio::test]
     async fn deliver_shop_context_to_part_owner() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
         let part_owner = UserId::from(2);
         let mut owner_rx = core
@@ -892,7 +879,7 @@ mod tests {
     /// owner, and the part owner is (2).
     #[tokio::test]
     async fn deliver_shop_context_not_to_shop_owner() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
         let shop_owner = UserId::from(1);
         let part_owner = UserId::from(2);
@@ -927,7 +914,7 @@ mod tests {
     /// shop owner IS the part owner.
     #[tokio::test]
     async fn deliver_shop_context_to_shop_owner_when_part_owner() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
         let shop_owner = UserId::from(2);
         let mut shop_owner_rx = core
@@ -954,7 +941,7 @@ mod tests {
     /// alone does not carry it.
     #[tokio::test]
     async fn deliver_shop_context_service_summary_to_part_owner() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
         let part_owner = UserId::from(2);
         let mut shop_rx = core.subscribe_shop(shop_id, UserId::from(1)).await;
@@ -985,7 +972,7 @@ mod tests {
     /// notifications ride the normal frame).
     #[tokio::test]
     async fn deliver_cross_recipient_notification_to_user_stream() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let recipient = UserId::from(3);
         let mut acting_rx = core
@@ -1019,7 +1006,7 @@ mod tests {
     #[tokio::test]
     async fn deliver_cross_recipient_notification_to_shop_stream_without_shop_context()
     -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let shop_owner = UserId::from(2);
         let shop_id = ShopId::from(7);
@@ -1056,7 +1043,7 @@ mod tests {
     /// skipped).
     #[tokio::test]
     async fn deliver_shop_context_no_duplicate_shop_push() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let shop_id = ShopId::from(7);
         let part_owner = UserId::from(2);
         let mut shop_rx = core.subscribe_shop(shop_id, UserId::from(1)).await;
@@ -1085,7 +1072,7 @@ mod tests {
     /// rides the normal frame).
     #[tokio::test]
     async fn deliver_no_cross_recipient_for_acting_user() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let mut acting_rx = core
             .install_executor_for_test(acting_user, ExecutorStatus::Running)
@@ -1114,7 +1101,7 @@ mod tests {
     /// stream).
     #[tokio::test]
     async fn deliver_no_cross_recipient_for_part_owner_in_shop_context() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let part_owner = UserId::from(2);
         let shop_id = ShopId::from(7);
@@ -1154,7 +1141,7 @@ mod tests {
     /// receives it).
     #[tokio::test]
     async fn deliver_cross_recipient_third_party_in_shop_context() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let part_owner = UserId::from(2);
         let third_party = UserId::from(5);
@@ -1198,7 +1185,7 @@ mod tests {
     /// tabs.
     #[tokio::test]
     async fn deliver_shop_context_transient_read_to_personal_stream() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let session_shop = ShopId::from(7);
         let other_shop = ShopId::from(8);
@@ -1237,7 +1224,7 @@ mod tests {
     /// open shop streams (the ones other than the session's shop).
     #[tokio::test]
     async fn deliver_shop_context_persistent_read_to_personal_stream() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let session_shop = ShopId::from(7);
         let other_shop = ShopId::from(8);
@@ -1270,7 +1257,7 @@ mod tests {
     /// gets the frame via the normal user-context delivery.
     #[tokio::test]
     async fn deliver_user_context_read_fans_out_to_shop_streams() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let shop_id = ShopId::from(8);
         let mut acting_rx = core
@@ -1301,7 +1288,7 @@ mod tests {
     /// hydration. The fan-out frame carries only the notifications.
     #[tokio::test]
     async fn deliver_creation_fans_out_to_recipient_shop_streams() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let acting_user = UserId::from(1);
         let shop_owner = UserId::from(2);
         let registered_shop = ShopId::from(7);
@@ -1335,7 +1322,7 @@ mod tests {
     /// An empty `Summary` pushes nothing, to any stream (spec §4.5).
     #[tokio::test]
     async fn deliver_empty_summary_is_a_noop() -> TbResult<()> {
-        let core = Core::<Lane>::new(Duration::from_secs(60));
+        let core = Core::new(Duration::from_secs(60));
         let user_id = UserId::from(1);
         let mut acting_rx = core
             .install_executor_for_test(user_id, ExecutorStatus::Running)

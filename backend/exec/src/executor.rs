@@ -21,16 +21,16 @@
 //! The per-user executor loop (ADR-0005, executable spec #446 §4.3–4.5;
 //! ADR-0007, executable spec #558 §3): one long-lived task per user that
 //! consumes the two message sources (the user's request channel — writes,
-//! reads, the hydration write, the admin stats read — then the
-//! `strava_events` queue), runs each message in one transaction, and pushes
+//! reads, the hydration write — then the provider event queue), runs each
+//! message in one transaction, and pushes
 //! the resulting `Summary` to the user's SSE streams.
 //!
 //! The loop is generic over the transaction source ([`TxnSource`]; the
 //! production `DbPool` is injected at the composition root — `DbPool` is
 //! `Clone` + `Send` + `Sync`, so no `Arc` wrapper is needed) and over the
 //! user's [`Session`]. It computes no domain state of its own: it
-//! drives the existing `ApiWrite` dispatch and `tb_provider::strava` event processing
-//! inside transactions it owns.
+//! drives the existing `ApiWrite` dispatch and the provider lane's event
+//! processing inside transactions it owns.
 
 use std::future::Future;
 use std::time::Duration;
@@ -41,13 +41,13 @@ use tokio::sync::{broadcast, oneshot};
 
 use crate::facade::{
     ApiRead, ApiWrite, Error, GearItem, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
-    UserStat, WriteOutcome,
+    WriteOutcome,
 };
 use crate::message::{Request, RequestReceiver};
 use crate::{DeliveryContext, DomainFacade, FramePusher, Txn, TxnSource};
 
 /// The per-executor in-memory backoff for database failures (spec #446
-/// §4.6): exponential, capped at 30s, no `Stop` row (that is the Strava
+/// §4.6): exponential, capped at 30s, no `Stop` row (that is the provider
 /// rate limit's, global in the DB). A broken database must not hot-spin the
 /// loop, and a recovering one is probed at human pace. Pure, so the state
 /// machine is unit-testable without a store.
@@ -90,9 +90,9 @@ fn stop_remaining(until_unix: i64, now_unix: i64) -> Duration {
     Duration::from_secs(secs as u64)
 }
 
-/// The current unix time in seconds (the clock `Stop` deadlines are written
-/// in — `tb_provider::strava`'s `get_time`): saturating at zero, since the deadline
-/// arithmetic is what matters, not a pre-1970 clock.
+/// The current unix time in seconds (the clock the `Stop` deadlines are
+/// written in): saturating at zero, since the deadline arithmetic is what
+/// matters, not a pre-1970 clock.
 fn now_unix() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -107,8 +107,8 @@ fn now_unix() -> i64 {
 enum Action {
     /// Process a pending API write first (a client action never waits).
     ProcessWrite,
-    /// No write, but a Strava event is queued.
-    ProcessStrava,
+    /// No write, but a provider event is queued.
+    ProcessEvent,
     /// No work; stay alive (streams still attached).
     Sleep,
     /// Reap: exit cleanly with `Ok(())` (spec §4.4 — the next write or SSE
@@ -121,11 +121,11 @@ enum Action {
 /// executor alive), isolated from the async machinery:
 ///
 /// - a pending API write always wins (the bias of the select);
-/// - else a queued Strava event;
+/// - else a queued provider event;
 /// - else (nothing pending) the loop is reaped **only when there is no
 ///   active stream**. An attached stream keeps the loop alive: the idle
 ///   window (`idle_timeout`) is the cadence at which the idle loop
-///   re-probes the `strava_events` queue, not a reap trigger — the stream's
+///   re-probes the provider event queue, not a reap trigger — the stream's
 ///   TCP death is what ends it (its heartbeat write fails, the receiver
 ///   drops, and the no-streams rule reaps the loop).
 fn next_action(pending_write: bool, queued_event: bool, active_streams: usize) -> Action {
@@ -133,7 +133,7 @@ fn next_action(pending_write: bool, queued_event: bool, active_streams: usize) -
         return Action::ProcessWrite;
     }
     if queued_event {
-        return Action::ProcessStrava;
+        return Action::ProcessEvent;
     }
     if active_streams == 0 {
         Action::Reap
@@ -150,7 +150,7 @@ enum Select<E> {
     /// channel.
     Request(Request),
     /// A provider event was queued.
-    Strava(E),
+    Event(E),
     /// The global rate-limit `Stop` is active until this unix time.
     Limited(i64),
     /// Both idle: no pending write and no queued event.
@@ -161,7 +161,7 @@ enum Select<E> {
     /// executor that has a just-queued event to process).
     Wake,
     /// The provider probe failed (the queue's state is unknown).
-    StravaError,
+    ProbeError,
     /// The user no longer exists (deleted): the loop exits cleanly.
     UserGone,
 }
@@ -170,11 +170,11 @@ impl<E: std::fmt::Debug> std::fmt::Debug for Select<E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Request(req) => f.debug_tuple("Select::Request").field(req).finish(),
-            Self::Strava(event) => f.debug_tuple("Select::Strava").field(event).finish(),
+            Self::Event(event) => f.debug_tuple("Select::Event").field(event).finish(),
             Self::Limited(until) => f.debug_tuple("Select::Limited").field(until).finish(),
             Self::Idle => f.write_str("Select::Idle"),
             Self::Wake => f.write_str("Select::Wake"),
-            Self::StravaError => f.write_str("Select::StravaError"),
+            Self::ProbeError => f.write_str("Select::ProbeError"),
             Self::UserGone => f.write_str("Select::UserGone"),
         }
     }
@@ -182,7 +182,7 @@ impl<E: std::fmt::Debug> std::fmt::Debug for Select<E> {
 
 /// One iteration of the biased select (spec §4.3): the API-write branch is
 /// polled **first** (a client action must not wait behind a batch sync or a
-/// backoff), then the Strava queue probe, then the wake signal; neither
+/// backoff), then the provider queue probe, then the wake signal; neither
 /// resolving with work is the idle state the reclaim policy
 /// ([`next_action`]) decides on.
 ///
@@ -209,11 +209,11 @@ async fn select_message<E>(
             None => Select::Idle,
         },
         probe = lane => match probe {
-            Some(Probe::Event(event)) => Select::Strava(event),
+            Some(Probe::Event(event)) => Select::Event(event),
             Some(Probe::Limited(until)) => Select::Limited(until),
             Some(Probe::Empty) => Select::Idle,
             Some(Probe::UserGone) => Select::UserGone,
-            Some(Probe::Error) => Select::StravaError,
+            Some(Probe::Error) => Select::ProbeError,
             None => Select::Idle,
         },
         // A fired wake is a signal only (spec §4.4/§4.6): the loop falls
@@ -247,7 +247,7 @@ async fn select_message<E>(
 ///   shop context alike (spec #517, spec #706): the implementation owns the
 ///   complete routing policy (the `DeliveryContext` carries the routing
 ///   inputs — the session's shop and the resolved part owner).
-/// - `events` — the user's completed-Strava-event channel (`broadcast`):
+/// - `events` — the user's completed-provider-event channel (`broadcast`):
 ///   every event the loop consumed (its processing transaction committed)
 ///   is sent on it, even with an empty summary. The web layer's admin sync
 ///   awaits its own queued event on this channel (spec §6.4) — the event's
@@ -255,12 +255,12 @@ async fn select_message<E>(
 /// - `idle_timeout` — the queue re-probe cadence while the loop is idle
 ///   with streams attached (spec §4.4, amended — #446): the loop is reaped
 ///   only when no stream is attached, so an attached stream keeps it alive
-///   and the window sets how often the idle loop re-probes the
-///   `strava_events` queue. A stream-less loop reaps immediately after its
+///   and the window sets how often the idle loop re-probes the provider
+///   event queue. A stream-less loop reaps immediately after its
 ///   work; the window never reaps it later.
 /// - `wake` — the in-memory wake signal (spec §4.4/§4.6): the web layer's
-///   `Registry` fires it after a Strava event is queued, so the loop's idle
-///   wait is interrupted and the queue re-probed at once. The loop selects
+///   `Registry` fires it after a provider event is queued, so the loop's
+///   idle wait is interrupted and the queue re-probed at once. The loop selects
 ///   on a `notified()` future created before each select (the permit
 ///   semantics: a notify that fires just before the future is created is
 ///   not lost); the same future serves both parking spots (the top-level
@@ -366,7 +366,7 @@ where
     /// queue re-probe cadence (spec §4.4, amended — #446).
     ///
     /// One transaction per message (spec §4.3): `begin` → dispatch (`exec` for
-    /// an API write, `process` for a Strava event) → `commit` on success,
+    /// an API write, `process` for a provider event) → `commit` on success,
     /// `rollback` on any failure (this is the caller the `Txn` seam exists for).
     /// After a successful commit, the `Summary` is delivered through the
     /// pusher ([`FramePusher::deliver`]) — the pusher's empty-`Summary` guard
@@ -374,7 +374,7 @@ where
     ///
     /// API writes fail fast: the oneshot resolves with the error and the message
     /// is consumed (spec §6.2 — the client is the retry layer); the loop never
-    /// ends for a message failure. Strava-side failures are classified inside
+    /// ends for a message failure. Provider-side failures are classified inside
     /// `process` (spec §4.6 — the `Stop` for `TryAgain`, the disable for
     /// `NotAuth`, the delete for a permanent failure); DB failures — a failed
     /// `begin`/`commit`, a failed probe — pause the loop on the in-memory
@@ -385,7 +385,7 @@ where
     /// # Arguments
     ///
     /// * `rx` — the receive half of the user's request channel (writes, reads,
-    ///   the hydration write, and the admin stats read — spec #558 §3.2). The
+    ///   and the hydration write — spec #558 §3.2). The
     ///   rest of the loop's wiring is the context's ([`LoopContext`]).
     ///
     /// # Failure semantics (spec §4.6)
@@ -407,7 +407,7 @@ where
     ///   after a domain error) resets the backoff, like any healthy
     ///   transaction. A read pushes no SSE frame (read-only within its
     ///   transaction by spec).
-    /// - **A failed Strava message** — classified inside `process` (spec §4.6):
+    /// - **A failed provider message** — classified inside `process` (spec §4.6):
     ///   `TryAgain` inserts the global `Stop` (the probe then reports it and the
     ///   loop sleeps until its deadline); `NotAuth` disables the user and drops
     ///   their events; a permanent failure deletes the event; all of those commit
@@ -459,7 +459,7 @@ where
                     }
                 }
 
-                Select::Strava(event) => {
+                Select::Event(event) => {
                     if let Err(err) = run_event(&mut self, &event).await {
                         error!(
                             "user {}: the executor loop is ending: {err:?}",
@@ -473,7 +473,7 @@ where
                     // The global rate-limit `Stop` is active (spec §4.6): sleep
                     // until its deadline as a branch of the biased select — an
                     // API write arriving mid-sleep is taken the moment it is
-                    // ready, so the backoff delays only Strava events. The
+                    // ready, so the backoff delays only provider events. The
                     // deadline is absolute: after an interrupting write the loop
                     // re-probes and sleeps the *remaining* time, not a fresh one.
                     let remaining = stop_remaining(until, now_unix());
@@ -497,7 +497,7 @@ where
                     // just-queued event to process).
                 }
 
-                Select::StravaError => {
+                Select::ProbeError => {
                     // The probe failed; the queue's state is unknown. A DB
                     // failure (spec §4.6): the in-memory backoff pauses the
                     // re-probe (exponential, capped at 30s, biased so a write
@@ -572,10 +572,10 @@ where
                                 return Err(err);
                             }
                         }
-                        // `next_action` hands out `ProcessWrite`/`ProcessStrava`
+                        // `next_action` hands out `ProcessWrite`/`ProcessEvent`
                         // only for inputs this branch never has (it already
                         // checked both). `Sleep` and `Reap` are exhaustive here.
-                        Action::ProcessWrite | Action::ProcessStrava => {}
+                        Action::ProcessWrite | Action::ProcessEvent => {}
                     }
                 }
             }
@@ -585,9 +585,9 @@ where
 
 /// Sleep for `remaining` as a branch of the biased select (spec §4.6;
 /// #558 §3.7): a request (write, read, hydration, admin stats) arriving
-/// mid-sleep is returned the moment it is ready (a backoff delays Strava
+/// mid-sleep is returned the moment it is ready (a backoff delays provider
 /// events, never the user's requests — a read is never delayed by the
-/// Strava `Stop` nor by the `DbBackoff`); a fired wake (spec
+/// provider `Stop` nor by the `DbBackoff`); a fired wake (spec
 /// §4.4/§4.6) interrupts the sleep with `None`, so the loop falls through
 /// to the top and re-probes the queue at once; the sleep expiring (or the
 /// channel closing — `None`, the shutdown corner) resolves with `None`.
@@ -607,11 +607,11 @@ async fn sleep_or_take_request(
     }
 }
 
-/// One Strava probe (the loop's select branch, one transaction): read the
-/// queue with [`get_event`] (the read-side dedup lives on the Strava side) and
-/// commit its housekeeping — the expired `Stop` and the dropped older
+/// One provider probe (the loop's select branch, one transaction): read the
+/// queue through the lane (the read-side dedup lives on the provider side)
+/// and commit its housekeeping — the expired `Stop` and the dropped older
 /// duplicates. The event that comes back is **not** deleted by the probe; the
-/// work transaction's [`process`] read deletes it as part of the processing.
+/// work transaction's `process` read deletes it as part of the processing.
 ///
 /// The probe is a health check as well as a queue read (spec §4.6): a
 /// successful commit resets the DB backoff; a `begin`/read/commit failure is
@@ -663,11 +663,11 @@ where
 
 /// One in-memory request in the loop's own transaction (spec #558 §3.2):
 /// the variant decides the work — the write's `exec` dispatch, the read's
-/// `apiread` dispatch, the hydration write, the admin stats read — and the
-/// backoff discipline (the writes and the hydration record DB failures;
-/// the reads never arm the backoff, spec #558 §3.7). The oneshot always
-/// resolves and the message is consumed; only a failed `rollback` ends the
-/// loop (the sub-dispatchers' `Err` return).
+/// `apiread` dispatch, the hydration write — and the backoff discipline
+/// (the writes and the hydration record DB failures; the reads never arm the
+/// backoff, spec #558 §3.7). The oneshot always resolves and the message is
+/// consumed; only a failed `rollback` ends the loop (the sub-dispatchers'
+/// `Err` return).
 async fn run_request<T, P, D>(ctx: &mut LoopContext<T, P, D>, request: Request) -> Result<(), Error>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
@@ -685,7 +685,6 @@ where
             session,
             reply,
         } => run_read(ctx, session, read, reply).await,
-        Request::AllStats { session, reply } => run_all_stats(ctx, session, reply).await,
     }
 }
 
@@ -707,8 +706,8 @@ where
 ///   delivers nothing (a read produces no `Summary`, spec #558 §3.6).
 ///
 /// `noun` names the variant in the transaction log lines ("write", "read",
-/// "hydration", "stats read"); `what` names it in the final failure line
-/// ("API write", "API read", "hydration write", "all-user stats read").
+/// "hydration"); `what` names it in the final failure line ("API write",
+/// "API read", "hydration write").
 ///
 /// `work` takes the connection by value and yields it back with the
 /// outcome, so the commit/rollback (which consume the connection) stay in
@@ -924,7 +923,7 @@ where
 /// no `Summary`).
 ///
 /// The backoff discipline is the lane's, not a gate (spec #558 §3.7): a
-/// read is never *delayed* by the Strava `Stop` nor the `DbBackoff` (both
+/// read is never *delayed* by the provider `Stop` nor the `DbBackoff` (both
 /// sleeps are biased-select branches the read interrupts, like a write),
 /// and a failed read **never arms** the backoff — a `begin`/transaction
 /// failure resolves the oneshot with the `Err` (the route maps it to a
@@ -964,43 +963,6 @@ where
     .await
 }
 
-/// The admin `AllStats` read in the loop's own transaction (spec #558
-/// §3.3): `begin` → [`get_all_stats`] → `commit`, read-only within it by
-/// spec. `get_all_stats` is a `tb_provider::strava` op, so it is dispatched loop-side
-/// — the same home the Strava events' `process`
-/// gets — riding the admin user's channel. The backoff discipline is the
-/// read's (spec #558 §3.7): a failure resolves the oneshot with the `Err`
-/// and never arms the backoff; a cleanly committed read resets it.
-async fn run_all_stats<T, P, D>(
-    ctx: &mut LoopContext<T, P, D>,
-    session: Box<dyn Session>,
-    reply: oneshot::Sender<TbResult<Vec<UserStat>>>,
-) -> Result<(), Error>
-where
-    T: TxnSource + Clone + Send + Sync + 'static,
-    P: ProviderLane<Store = T::Conn> + Send + Sync + 'static,
-    D: DomainFacade<T::Conn> + Send + Sync + 'static,
-{
-    debug!("user {}: Reading the all-user stats", session.user_id());
-    let shop = session.shop();
-    run_message(
-        ctx,
-        "stats read",
-        "all-user stats read",
-        reply,
-        false, // a failed read never arms the backoff (spec #558 §3.7)
-        shop,
-        |_| None, // the stats read pushes no frame (spec #558 §3.7)
-        |mut conn, _facade, lane| {
-            Box::pin(async move {
-                let outcome = lane.all_stats(&mut conn).await;
-                (outcome, conn, None)
-            })
-        },
-    )
-    .await
-}
-
 /// The `Err` value `run` returns when a message's transaction lifecycle
 /// fails: a marker distinct from any domain error of the message itself. The
 /// original error was already handed to the message's reply (a failed write
@@ -1011,20 +973,20 @@ fn lifecycle_error(what: impl std::fmt::Display) -> Error {
     Error::AnyFailure(anyhow::anyhow!("the executor loop's transaction: {what}"))
 }
 
-/// One Strava event in one transaction (spec §4.3): `begin` → [`process`]
+/// One provider event in one transaction (spec §4.3): `begin` → `process`
 /// → `commit`, or `rollback` on failure; a successful, non-empty `Summary`
 /// pushes one frame to the user's SSE streams, and the consumed event is
 /// announced on the completion channel (spec §6.4 — fired even for an empty
 /// summary, which pushes no frame).
 ///
-/// [`process`] re-reads the queue with `get_event` inside the work
+/// `process` re-reads the queue through the lane inside the work
 /// transaction — the accepted double read of the loop: the probe and the work
 /// transaction are the same loop's two steps, and the queue is serialized per
 /// user by that loop, so the re-read deterministically finds the same event
 /// (the probe's committed housekeeping only removes rows `process` would
 /// remove anyway).
 ///
-/// `process` classifies the Strava-side failures itself (spec §4.6 — the
+/// `process` classifies the provider-side failures itself (spec §4.6 — the
 /// `Stop` for `TryAgain`, the disable for `NotAuth`, the delete for a
 /// permanent failure), so the only `Err` it returns is a **DB failure**:
 /// the transaction rolls back (the event stays queued), the backoff records

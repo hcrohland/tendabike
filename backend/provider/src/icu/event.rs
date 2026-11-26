@@ -17,12 +17,11 @@ use time::format_description::well_known::Rfc3339;
 
 use super::activity::IcuActivity;
 use super::http::request_json;
-use super::{IcuDataStore, IcuId};
+use super::{IcuId, IcuSpec};
 use crate::EntityFacade;
-use crate::EventQueue;
 use crate::facade::{Error, Summary, TbResult, UserId};
 use crate::lane::QueueRead;
-use crate::queue::QueuedEvent;
+use crate::store::Store;
 
 /// The `activity_id` sentinel a `SYNC` row carries (the column is `NOT NULL`,
 /// but a `SYNC` refers to no single activity).
@@ -130,30 +129,12 @@ impl IcuEvent {
     /// Accepts a webhook event (spec #764): validates the athlete (mapping it
     /// to a TendaBike user), then queues the event. Returns the owner's
     /// TendaBike [`UserId`] (so the caller can wake that user).
-    pub async fn accept(self, store: &mut impl IcuDataStore) -> TbResult<UserId> {
+    pub async fn accept(self, store: &mut impl Store<IcuSpec>) -> TbResult<UserId> {
         let user = self.icu_athlete_id.read(store).await?.ok_or_else(|| {
             Error::BadRequest(format!("Unknown icu athlete: {}", self.icu_athlete_id))
         })?;
-        store.icu_event_create(self).await?;
+        store.event_create(self).await?;
         Ok(user.tendabike_id)
-    }
-}
-
-/// The queue's identity for an icu event row (spec #1023): the owner is the
-/// `icu_athlete_id` (the queue's partition key), and the dedup key is the
-/// `activity_id` (only the latest event per activity is interesting — a
-/// `SYNC` row's `"sync"` sentinel groups with nothing else).
-impl QueuedEvent for IcuEvent {
-    type Owner = IcuId;
-    type Key = String;
-    fn id(&self) -> Option<i32> {
-        self.id
-    }
-    fn owner(&self) -> &IcuId {
-        &self.icu_athlete_id
-    }
-    fn key(&self) -> &String {
-        &self.activity_id
     }
 }
 
@@ -269,7 +250,7 @@ fn parse_timestamp(timestamp: &str) -> TbResult<i64> {
 /// parse, and the queue insert. `body` is the raw webhook body the
 /// presentation layer forwards (no driver wire type crosses the seam).
 /// Returns the TendaBike users a row was queued for (the caller's wake list).
-pub async fn accept_event(body: &str, store: &mut impl IcuDataStore) -> TbResult<Vec<UserId>> {
+pub async fn accept_event(body: &str, store: &mut impl Store<IcuSpec>) -> TbResult<Vec<UserId>> {
     let envelope: IcuWebhook = serde_json::from_str(body)
         .map_err(|e| Error::BadRequest(format!("invalid icu webhook envelope: {e}")))?;
     trace!("Received icu webhook with {} events", envelope.events.len());
@@ -312,7 +293,7 @@ pub async fn accept_event(body: &str, store: &mut impl IcuDataStore) -> TbResult
 /// process.
 async fn handle_scope_change(
     event: &IcuWebhookEvent,
-    store: &mut impl IcuDataStore,
+    store: &mut impl Store<IcuSpec>,
 ) -> TbResult<()> {
     let icu_id = IcuId::from(event.athlete_id.as_str());
     match icu_id.read(store).await? {
@@ -334,8 +315,11 @@ async fn handle_scope_change(
 }
 
 /// The icu athlete id for a TendaBike user (the `icu_events` queue's key).
-pub(crate) async fn get_icu_id(user_id: UserId, store: &mut impl IcuDataStore) -> TbResult<IcuId> {
-    let user = store.icuser_get_by_tbid(user_id).await?;
+pub(crate) async fn get_icu_id(
+    user_id: UserId,
+    store: &mut impl Store<IcuSpec>,
+) -> TbResult<IcuId> {
+    let user = store.user_get_by_tbid(user_id).await?;
     Ok(user.id)
 }
 
@@ -347,12 +331,12 @@ pub(crate) async fn get_icu_id(user_id: UserId, store: &mut impl IcuDataStore) -
 pub(crate) async fn insert_sync(
     user_id: UserId,
     oldest: i64,
-    store: &mut impl IcuDataStore,
+    store: &mut impl Store<IcuSpec>,
 ) -> TbResult<()> {
     let icu_id = get_icu_id(user_id, store).await?;
-    store.icu_events_delete_sync_for_user(&icu_id).await?;
+    store.event_delete_sync(&icu_id).await?;
     let event = IcuEvent::new_sync(icu_id, oldest);
-    store.icu_event_create(event).await?;
+    store.event_create(event).await?;
     Ok(())
 }
 
@@ -361,7 +345,7 @@ pub(crate) async fn insert_sync(
 /// imports it. Returns `Ok(None)` for a skipped stub (the import path only — a
 /// delete is never a stub); errors (a 401, a 429, a DB failure) bubble up for
 /// the batch to classify.
-async fn dispatch_event<D: EntityFacade<S>, S: IcuDataStore>(
+async fn dispatch_event<D: EntityFacade<S>, S: Store<IcuSpec>>(
     event: &IcuEvent,
     user_id: UserId,
     facade: &D,
@@ -387,7 +371,7 @@ async fn dispatch_event<D: EntityFacade<S>, S: IcuDataStore>(
 /// event queued, a 401 disables the user, a permanent error drops the event,
 /// a DB failure propagates) are the kit's — the event is deleted in exactly
 /// one place per path (no double-delete).
-pub(crate) async fn process<D: EntityFacade<S>, S: IcuDataStore + EventQueue<IcuEvent>>(
+pub(crate) async fn process<D: EntityFacade<S>, S: Store<IcuSpec>>(
     user_id: UserId,
     facade: &D,
     store: &mut S,
@@ -411,7 +395,7 @@ pub(crate) async fn process<D: EntityFacade<S>, S: IcuDataStore + EventQueue<Icu
             match dispatch_event(&event, user_id, facade, store).await {
                 // A real activity: imported; the event is consumed.
                 Ok(Some(summary)) => {
-                    store.delete_event(event.id()).await?;
+                    store.event_delete(event.id).await?;
                     Ok(summary)
                 }
                 // A stub (both `distance` and `moving_time` null-or-zero):
@@ -420,7 +404,7 @@ pub(crate) async fn process<D: EntityFacade<S>, S: IcuDataStore + EventQueue<Icu
                 // per-event).
                 Ok(None) => {
                     let notice = super::activity::stub_notice(user_id, 1, facade, store).await?;
-                    store.delete_event(event.id()).await?;
+                    store.event_delete(event.id).await?;
                     let mut summary = Summary::default();
                     summary.notifications.upsert(notice);
                     Ok(summary)
@@ -465,7 +449,7 @@ const FIELDS: &str = "id,type,name,start_date,distance,moving_time,elapsed_time,
 ///   crate::queue::fail_event) policy (the 429 keeps the row queued at the
 ///   last persisted cursor — the cursor is *not* advanced past a 429 — the
 ///   401 disables the user, the DB failure propagates).
-async fn process_sync<D: EntityFacade<S>, S: IcuDataStore + EventQueue<IcuEvent>>(
+async fn process_sync<D: EntityFacade<S>, S: Store<IcuSpec>>(
     event: IcuEvent,
     user_id: UserId,
     facade: &D,
@@ -485,7 +469,7 @@ async fn process_sync<D: EntityFacade<S>, S: IcuDataStore + EventQueue<IcuEvent>
 /// the row's fate (delete on end-of-history, advance the persisted cursor on
 /// a full batch). A 429 / dead-auth / DB failure bubbles up for
 /// [`process_sync`] to classify.
-async fn sync_batch<D: EntityFacade<S>, S: IcuDataStore + EventQueue<IcuEvent>>(
+async fn sync_batch<D: EntityFacade<S>, S: Store<IcuSpec>>(
     mut event: IcuEvent,
     user_id: UserId,
     facade: &D,
@@ -497,11 +481,11 @@ async fn sync_batch<D: EntityFacade<S>, S: IcuDataStore + EventQueue<IcuEvent>>(
     if cursor == 0 {
         cursor = OffsetDateTime::now_utc().unix_timestamp();
         event.event_time = cursor;
-        store.icu_event_set_time(event.id, cursor).await?;
+        store.event_set_time(event.id, cursor).await?;
     }
     // The cursor reached the lower bound: end of history (the row is done).
     if cursor <= oldest {
-        store.delete_event(event.id()).await?;
+        store.event_delete(event.id).await?;
         return Ok(Summary::default());
     }
     // The proactive rate-limit gate: budget exhausted → do not even make the
@@ -525,7 +509,7 @@ async fn sync_batch<D: EntityFacade<S>, S: IcuDataStore + EventQueue<IcuEvent>>(
     .await?;
     if activities.is_empty() {
         // No activities in the window: end of history (the row is done).
-        store.delete_event(event.id()).await?;
+        store.event_delete(event.id).await?;
         return Ok(Summary::default());
     }
     info!(
@@ -544,7 +528,7 @@ async fn sync_batch<D: EntityFacade<S>, S: IcuDataStore + EventQueue<IcuEvent>>(
     }
     if count < LIMIT as usize {
         // A short batch: end of history (the row is done).
-        store.delete_event(event.id()).await?;
+        store.event_delete(event.id).await?;
         return Ok(summary);
     }
     // A full batch: advance the persisted cursor to the batch's oldest
@@ -564,11 +548,11 @@ async fn sync_batch<D: EntityFacade<S>, S: IcuDataStore + EventQueue<IcuEvent>>(
     if next <= oldest {
         // The advanced cursor reached the lower bound: end of history (the
         // row is done).
-        store.delete_event(event.id()).await?;
+        store.event_delete(event.id).await?;
     } else {
         // The row stays queued: the next `process` resumes from the cursor.
         event.event_time = next;
-        store.icu_event_set_time(event.id, next).await?;
+        store.event_set_time(event.id, next).await?;
     }
     Ok(summary)
 }

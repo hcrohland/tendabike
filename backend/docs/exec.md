@@ -111,9 +111,12 @@ two groups:
 
 The provider-specific direct ops (login, webhook intake, sync,
 deauthorize, delete, the redirect URLs) live in
-**`ProviderService`** (`providerservice.rs`) — the provider-agnostic
-surface (ADR-0014) that the `Registry` implements as a thin forward to the
-provider layer's dispatch.
+**`ProviderService`** — the provider-agnostic surface (ADR-0014) that the
+`Registry` implements as a thin forward to the provider layer's dispatch.
+The trait lives in the provider layer (`tb_provider::ProviderService` — a
+provider concept, not an executor concept); the `Registry`'s impl bounds on
+the provider layer's `ProviderStore` supertrait, so a third provider changes
+the provider layer only.
 
 The inclusion rule is *only what a presentation layer calls*: lifecycle
 internals (`wake`, `stop_all`, …) stay off the trait.
