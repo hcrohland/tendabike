@@ -53,10 +53,13 @@ describe("Chip", () => {
     expect(badge).toBeTruthy();
   });
 
-  it("applies the darker-tone class when light is set (its direction is preserved)", () => {
-    render(Chip, { label: "L", value: "V", light: true });
-    const el = screen.getByText("V").closest(".bg-secondary-100");
-    expect(el).toBeTruthy();
+  it("renders the secondary fill by default (the page-base fallback)", () => {
+    render(Chip, { label: "L", value: "V" });
+    const el = screen.getByText("V");
+    expect(el.closest(".bg-secondary-700")).toBeTruthy();
+    // a fill is dark-step with white text, not a light surface
+    expect(el.closest(".bg-secondary-100")).toBeNull();
+    expect(el.classList.contains("text-white")).toBe(true);
   });
 
   it("renders a filled background with white text when color is primary", () => {

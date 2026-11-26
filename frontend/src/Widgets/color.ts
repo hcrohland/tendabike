@@ -38,7 +38,7 @@ export const colorClasses: Record<Color, ColorClasses> = {
 /**
  * The neutral text classes, shared by both colors (text contrast does not
  * depend on the card's color, so these are plain constants, not part of the
- * per-color mapping). They replace the tone module's text helpers.
+ * per-color mapping).
  */
 
 /** The main (high-contrast) text class. */

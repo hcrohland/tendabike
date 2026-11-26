@@ -1,5 +1,6 @@
-<!-- Test host: renders a Card in a given configuration so a .ts test (which
-     cannot build snippet children) can observe the tone flip and context. -->
+<!-- Test host: renders a Card (and a nested Card / Tone block) in a given
+     configuration so a .ts test (which cannot build snippet children) can
+     observe the rendered surface/fill classes. -->
 <script lang="ts">
   import Card from "./Card.svelte";
   import Tone from "./Tone.svelte";
@@ -9,9 +10,7 @@
   }: {
     mode?:
       | "default"
-      | "light"
       | "nested"
-      | "tone"
       | "color-primary"
       | "color-secondary"
       | "tone-color-primary"
@@ -23,19 +22,11 @@
   <Card>
     <span>hello</span>
   </Card>
-{:else if mode === "light"}
-  <Card light>
-    <span>hello</span>
-  </Card>
 {:else if mode === "nested"}
   <Card>
-    <Card>
+    <Card color="primary">
       <span>nested</span>
     </Card>
-  </Card>
-{:else if mode === "tone"}
-  <Card>
-    <Tone>content</Tone>
   </Card>
 {:else if mode === "color-primary"}
   <Card color="primary">

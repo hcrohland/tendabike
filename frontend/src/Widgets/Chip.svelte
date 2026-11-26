@@ -22,15 +22,13 @@
   import { Spinner } from "flowbite-svelte";
   import type { Due } from "../lib/serviceplan";
   import { colorClasses, type Color } from "./color.js";
-  import { bg, mainText, mutedText, type Tone } from "./tone.js";
   import ServiceBadge from "./ServiceBadge.svelte";
 
   let {
     label,
     value,
     href = undefined,
-    light = false,
-    color = undefined,
+    color = "secondary",
     due = undefined,
     onclick = undefined,
     indicator = undefined,
@@ -39,7 +37,6 @@
     label: string;
     value: string;
     href?: string;
-    light?: boolean;
     color?: Color;
     due?: Due;
     onclick?: () => void;
@@ -47,26 +44,21 @@
     disabled?: boolean;
   } = $props();
 
-  // The Chip's tone. The `light` prop keeps its current direction (light ⇒ the
-  // darker tone, contrasting the light-tone surface it sits on; plain ⇒ the
-  // light tone), and the background comes from the flip's tone mapping.
-  const tone: Tone = $derived(light ? "secondary" : "primary");
-  // A `color` renders the chip as a fill (dark-step background + white text),
-  // like a button; without a color it keeps the old tone surface.
-  const isFill = $derived(color !== undefined);
-  let background = $derived(color ? colorClasses[color].fill : bg(tone));
-  let valueText = $derived(isFill ? "text-white" : mainText());
-  let labelText = $derived(isFill ? "text-white" : mutedText());
+  // A Chip renders a fill (dark-step background + white text), like a button.
+  // A chip inside a card is authored with that card's color by its caller
+  // (widgets match their card); a standalone chip on the page base falls
+  // back to the darker tone.
+  const background = $derived(colorClasses[color].fill);
   let isButton = $derived(!!onclick && !disabled);
   let isLinked = $derived(!!href);
 </script>
 
 {#snippet chipContent()}
   <ServiceBadge {due} pos="absolute -top-3 -right-0" />
-  <span class="font-semibold text-sm {valueText}">
+  <span class="font-semibold text-sm text-white">
     {value}
   </span>
-  <span class="font-normal text-xs uppercase tracking-wide {labelText}">
+  <span class="font-normal text-xs uppercase tracking-wide text-white">
     {label}
   </span>
   {#if indicator}
@@ -75,7 +67,7 @@
         <Spinner size="4" color="red" />
       </span>
     {:else}
-      <span class="text-xs font-bold {valueText}">
+      <span class="text-xs font-bold text-white">
         {indicator}
       </span>
     {/if}

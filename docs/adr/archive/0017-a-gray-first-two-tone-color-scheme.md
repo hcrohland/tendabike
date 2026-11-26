@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. The app's color is a single unified scheme defined once in the frontend theme: a gray-first neutral system of two tones that form a card/content flip; status colors use the standard (vivid) Tailwind hue scales, with the due-soon state on yellow. It replaces the ad-hoc color application that preceded it — scattered flowbite `color` props, raw hue utilities, and the separate `surface`/`border`/`text` tokens — and resolves the state divergences that came with it.
+**Superseded by [ADR-0018](../0018-a-uniform-explicit-color-prop.md).** The surface/tone flip (the context-based card/content contrast) is superseded by ADR-0018's uniform explicit `color` prop. ADR-0017's other accepted decisions stand and are recorded in ADR-0018: the gray-first two-tone palette (primary light, secondary darker) and the vivid status-hue mapping (danger=red, warning/due-soon=yellow, success=green, info/unread=blue). Retained here for history.
 
 ## Context
 
