@@ -472,9 +472,8 @@ where
 /// layer's dispatch free function (the single `match provider`), and commits.
 /// No provider dispatch and no driver naming in this crate. The registry owns
 /// the store (the transaction boundary, ADR-0012); the impl bounds on the
-/// [`ProviderStore`] supertrait (the single home for the "all provider
-/// stores" bound — a third provider changes it in the provider layer, and
-/// nothing in this crate moves) and takes the facade as a parameter.
+/// [`ProviderStore`] supertrait (the "all provider stores" bound) and takes
+/// the facade as a parameter.
 #[async_trait::async_trait]
 impl<S, P, D> ProviderService for Registry<S, P, D>
 where

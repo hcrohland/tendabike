@@ -94,11 +94,10 @@ pub trait Store<P: ProviderSpec>: Send + Sync {
 
 /// The "all provider stores" bound (ADR-0014): the single home for the
 /// composition of every provider's [`Store`] marker —
-/// `Store<StravaSpec> + Store<IcuSpec> + Send + Sync`. A third provider adds
-/// its `Store` marker here (in the provider layer only); the direct-op
-/// dispatch fns, [`provider_of`](crate::provider_of), and the executor's
-/// `ProviderService` impl all bound on this one stable trait, so the executor
-/// crate is untouched by a new provider.
+/// `Store<StravaSpec> + Store<IcuSpec> + Send + Sync`. The direct-op dispatch
+/// fns, [`provider_of`](crate::provider_of), and the executor's
+/// `ProviderService` impl all bound on this one stable trait; a new provider
+/// is a marker added here, in this layer only.
 ///
 /// A supertrait: any type carrying the per-provider [`Store`] markers and the
 /// `Send + Sync` liveness implements it with an empty body (the composite

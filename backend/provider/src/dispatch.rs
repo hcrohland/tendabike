@@ -237,14 +237,17 @@ where
     Ok(queued)
 }
 
-/// The provider-agnostic `all_stats` dispatch (spec #558 §3.3): every
-/// enabled provider's users as provider-neutral [`UserStat`]s — each row
-/// stamped with its provider's wire value by the driver's `all_stats`. The
-/// admin's list is provider-agnostic (an admin of one provider sees the
-/// other provider's users too), so the two lanes are driven in one
-/// transaction and the results concatenated, in the `Provider` enum's
-/// definition order. A disabled provider's lane is skipped (ADR-0016: its
-/// users are frozen on this server, not listed).
+/// The provider-agnostic `all_stats` dispatch (spec #558 §3.3): the canonical
+/// global direct-op (all users, all providers) — every enabled provider's
+/// users as provider-neutral [`UserStat`]s, each row stamped with its
+/// provider's wire value by the driver's `all_stats`. The admin's list is
+/// provider-agnostic (an admin of one provider sees the other provider's
+/// users too), so the two lanes are driven in one transaction and the results
+/// concatenated, in the `Provider` enum's definition order. A disabled
+/// provider's lane is skipped (ADR-0016: its users are frozen on this server,
+/// not listed). It is deliberately not a per-user
+/// [`ProviderLane`](crate::ProviderLane) op: the lane seam is the executor's
+/// per-user loop, and a global admin read does not fit it.
 pub async fn all_stats<S, D: EntityFacade<S>>(facade: &D, store: &mut S) -> TbResult<Vec<UserStat>>
 where
     S: ProviderStore,

@@ -45,7 +45,7 @@
 
 use crate::ProviderSpec;
 use crate::driver::Provider;
-use crate::facade::{Error, PartId, Summary, TbResult, UserId, UserStat};
+use crate::facade::{Error, PartId, Summary, TbResult, UserId};
 use crate::store::Store;
 
 use crate::EntityFacade;
@@ -85,9 +85,9 @@ pub enum UnifiedEvent {
 /// `import_gear`/`queue_sync` by doing the
 /// [`provider_of`](crate::provider_of) lookup + a typed switch on the
 /// [`Provider`](crate::Provider) enum, delegating to the appropriate
-/// per-provider lane. It is the seam's single impl (ADR-0014): a third
-/// provider costs a variant in the [`UnifiedEvent`] enum and an arm in this
-/// lane's switch — `tb_exec` is untouched.
+/// per-provider lane. It is the seam's single impl (ADR-0014); a third
+/// provider is a [`UnifiedEvent`] variant and a switch arm (see the module
+/// doc).
 ///
 /// The lane is generic over the store type `S` (the transaction's connection)
 /// and its entity-op facade `F` ([`EntityFacade`] — the provider's door into
@@ -110,28 +110,6 @@ impl<S, F, D1, D2> UnifiedLane<S, F, D1, D2> {
             strava_lane,
             icu_lane,
         }
-    }
-
-    /// The admin all-user stat read (the `ServiceApi`'s `all_stats`): every
-    /// enabled provider's users as provider-neutral [`UserStat`]s — the two
-    /// lanes are driven in one transaction and the results concatenated, in
-    /// the `Provider` enum's definition order. A disabled provider's lane is
-    /// skipped (ADR-0016: its users are frozen on this server, not listed).
-    pub async fn all_stats(&self, store: &mut S) -> TbResult<Vec<UserStat>>
-    where
-        S: crate::ProviderStore + 'static,
-        F: EntityFacade<S> + Clone + Send + Sync + 'static,
-        D1: Provider<crate::strava::StravaSpec> + Send + Sync + 'static,
-        D2: Provider<crate::icu::IcuSpec> + Send + Sync + 'static,
-    {
-        let mut stats = Vec::new();
-        if crate::enabled_providers().contains(&crate::Provider::Strava) {
-            stats.extend(D1::all_stats(self.facade(), store).await?);
-        }
-        if crate::enabled_providers().contains(&crate::Provider::Icu) {
-            stats.extend(D2::all_stats(self.facade(), store).await?);
-        }
-        Ok(stats)
     }
 }
 

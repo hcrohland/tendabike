@@ -42,9 +42,7 @@
 //! The trait carries no `Store<…>` bound (the `DomainFacade` precedent): the
 //! seam is provider-agnostic, and the concrete bound rides on the impl (the
 //! executor's `Registry` impls it over the
-//! [`ProviderStore`](crate::ProviderStore) supertrait — a third provider
-//! changes that supertrait in this layer, and nothing in the executor crate
-//! moves).
+//! [`ProviderStore`](crate::ProviderStore) supertrait).
 
 use crate::Provider;
 use crate::facade::{ActivityId, PartId, Session, TbResult, UserId};
@@ -60,10 +58,8 @@ use crate::facade::{ActivityId, PartId, Session, TbResult, UserId};
 /// provider layer's dispatch free function, and commits — no provider
 /// dispatch in the executor crate).
 ///
-/// The trait carries no `Store<…>` bound: the seam is provider-agnostic, and
-/// the concrete bound rides on the impl (the `Registry`'s impl bounds on the
-/// [`ProviderStore`](crate::ProviderStore) supertrait, imported from this
-/// layer).
+/// The trait carries no `Store<…>` bound (the `DomainFacade` precedent): the
+/// seam is provider-agnostic, and the concrete bound rides on the impl.
 #[cfg_attr(feature = "test-support", mockall::automock)]
 #[async_trait::async_trait]
 pub trait ProviderService: Send + Sync {
