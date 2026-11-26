@@ -34,15 +34,16 @@
 //! route: a per-provider route acting on a target of the other provider
 //! follows the stated identity rule instead of failing on a missing lookup.
 //!
-//! The store is the single [`Store`](crate::store::Store) interface over each
-//! marker (`Store<StravaSpec> + Store<IcuSpec>`): each arm bounds on its own
-//! driver's `Store` marker and drives the [`Provider`](crate::driver::Provider)
-//! interface, and the switch is exhaustive over the enum. Domain work goes
+//! The store is the [`ProviderStore`](crate::ProviderStore) supertrait — the
+//! single home for the "all provider stores" bound: each arm drives its own
+//! driver's [`Provider`](crate::driver::Provider) interface through the
+//! per-provider [`Store`](crate::store::Store) marker the supertrait
+//! composes, and the switch is exhaustive over the enum. Domain work goes
 //! through the entity-op facade (a parameter — the registry passes the
 //! concrete one); the pure queue-intake ops (`accept_event`, `user_url`)
 //! need no facade.
 //!
-//! [`ProviderService`]: crate (re-exported in `tb_exec`)
+//! [`ProviderService`]: crate::ProviderService
 
 use log::{info, warn};
 
@@ -50,7 +51,9 @@ use crate::facade::{ActivityId, Error, PartId, Session, TbResult, UserId, UserSt
 
 use crate::EntityFacade;
 use crate::Provider;
+use crate::ProviderActivityId;
 use crate::ProviderSpec;
+use crate::ProviderStore;
 use crate::driver::Provider as Driver;
 use crate::icu::{IcuDriver, IcuSpec};
 use crate::store::Store;
@@ -74,7 +77,7 @@ pub async fn login<S, D: EntityFacade<S>>(
     store: &mut S,
 ) -> TbResult<(UserId, bool)>
 where
-    S: Store<StravaSpec> + Store<IcuSpec>,
+    S: ProviderStore,
 {
     // A disabled provider is a graceful freeze (ADR-0016): no OAuth without
     // credentials — a clear "unavailable", not a token exchange.
@@ -94,7 +97,7 @@ where
 /// op: it drives no domain work, so it takes no facade.
 pub async fn accept_event<S>(provider: Provider, body: &str, store: &mut S) -> TbResult<Vec<UserId>>
 where
-    S: Store<StravaSpec> + Store<IcuSpec>,
+    S: ProviderStore,
 {
     // A disabled provider's webhook is declined (ADR-0016): the clear
     // `Unavailable` error answers a non-2xx, so the sender retries and
@@ -123,7 +126,7 @@ pub(crate) async fn sync_user<S, D: EntityFacade<S>>(
     store: &mut S,
 ) -> TbResult<Vec<PartId>>
 where
-    S: Store<StravaSpec> + Store<IcuSpec>,
+    S: ProviderStore,
 {
     let provider = crate::provider_of(store, user_id).await?;
     // A disabled provider's sync fails loudly (ADR-0016): the graceful
@@ -146,7 +149,7 @@ pub async fn sync<S, D: EntityFacade<S>>(
     store: &mut S,
 ) -> TbResult<()>
 where
-    S: Store<StravaSpec> + Store<IcuSpec>,
+    S: ProviderStore,
 {
     sync_user(user_id, event_time, facade, store)
         .await
@@ -168,7 +171,7 @@ pub async fn sync_users<S>(
     store: &mut S,
 ) -> TbResult<Vec<UserId>>
 where
-    S: Store<StravaSpec> + Store<IcuSpec>,
+    S: ProviderStore,
 {
     if !session.is_admin() {
         return Err(Error::Forbidden(
@@ -244,7 +247,7 @@ where
 /// users are frozen on this server, not listed).
 pub async fn all_stats<S, D: EntityFacade<S>>(facade: &D, store: &mut S) -> TbResult<Vec<UserStat>>
 where
-    S: Store<StravaSpec> + Store<IcuSpec>,
+    S: ProviderStore,
 {
     let mut stats = Vec::new();
 
@@ -268,7 +271,7 @@ where
 /// data.
 pub async fn deauthorize<S>(session: &mut dyn Session, tbid: UserId, store: &mut S) -> TbResult<()>
 where
-    S: Store<StravaSpec> + Store<IcuSpec>,
+    S: ProviderStore,
 {
     let provider = crate::provider_of(store, tbid).await?;
     match provider {
@@ -287,7 +290,7 @@ pub async fn delete_user<S, D: EntityFacade<S>>(
     store: &mut S,
 ) -> TbResult<()>
 where
-    S: Store<StravaSpec> + Store<IcuSpec>,
+    S: ProviderStore,
 {
     let provider = crate::provider_of(store, tbid).await?;
     match provider {
@@ -298,17 +301,18 @@ where
 
 /// The provider-agnostic `activity_url` dispatch (ADR-0014): the provider's
 /// URL for `id`, gated on the acting session's ownership (the read is the
-/// ownership check). The driver extracts the activity id's prefix.
+/// ownership check). The provider is the activity id's own — parsed from its
+/// prefix (the single home for the prefix knowledge, ADR-0013), not the route.
 pub async fn activity_url<S, D: EntityFacade<S>>(
-    provider: Provider,
     session: Box<dyn Session>,
     id: ActivityId,
     facade: &D,
     store: &mut S,
 ) -> TbResult<String>
 where
-    S: Store<StravaSpec> + Store<IcuSpec>,
+    S: ProviderStore,
 {
+    let provider = Provider::try_from(ProviderActivityId::try_from(id.clone())?)?;
     match provider {
         Provider::Strava => StravaDriver::activity_url(session, id, facade, store).await,
         Provider::Icu => IcuDriver::activity_url(session, id, facade, store).await,
@@ -328,7 +332,7 @@ pub async fn gear_url<S, D: EntityFacade<S>>(
     store: &mut S,
 ) -> TbResult<Option<String>>
 where
-    S: Store<StravaSpec> + Store<IcuSpec>,
+    S: ProviderStore,
 {
     // The part read is the ownership check; the provider is the part
     // owner's real one (the domain stores no provider). The arms drive the
@@ -351,7 +355,7 @@ where
 /// takes no facade.
 pub async fn user_url<S>(id: UserId, store: &mut S) -> TbResult<String>
 where
-    S: Store<StravaSpec> + Store<IcuSpec>,
+    S: ProviderStore,
 {
     let provider = crate::provider_of(store, id).await?;
     match provider {

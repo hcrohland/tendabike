@@ -57,8 +57,8 @@ async fn main() -> anyhow::Result<()> {
         ),
     );
     let api = std::sync::Arc::new(registry.clone()) as std::sync::Arc<dyn tb_exec::ServiceApi>;
-    let provider = std::sync::Arc::new(registry)
-        as std::sync::Arc<dyn tb_exec::providerservice::ProviderService>;
+    let provider =
+        std::sync::Arc::new(registry) as std::sync::Arc<dyn tb_provider::ProviderService>;
 
     Ok(tb_axum::start(api, provider, config.axum, pool.clone()).await?)
 }

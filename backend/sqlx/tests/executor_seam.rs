@@ -86,13 +86,13 @@ use tb_domain::test_support::{
 use tb_domain::{
     ApiRead, ApiWrite, Part, PartId, ReadOutcome, ShopId, Summary, UsageId, UserId, WriteOutcome,
 };
-use tb_exec::providerservice::ProviderService;
 use tb_exec::{
     DeliveryContext, DetachedBegin, DomainFacadeImpl, ExecutorStatus, FramePusher, LoopContext,
     Registry, Request, RequestReceiver, ServiceApi, request_channel,
 };
 use tb_provider::Provider;
 use tb_provider::ProviderLane;
+use tb_provider::ProviderService;
 use tb_provider::icu::IcuSpec;
 use tb_provider::icu::driver::IcuDriver;
 use tb_provider::strava::StravaSpec;

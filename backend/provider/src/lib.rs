@@ -105,7 +105,17 @@ mod spec;
 pub use spec::ProviderSpec;
 
 mod store;
+#[cfg(all(feature = "strava", feature = "icu"))]
+pub use store::ProviderStore;
 pub use store::Store;
+
+/// The provider-agnostic provider service (ADR-0014): the direct-op seam a
+/// presentation layer drives the provider's user lifecycle and redirect URLs
+/// through. A public module (not re-exported at the crate root) so the name
+/// `ProviderService` stays unambiguous; the executor's `Registry` impls it,
+/// and the web layer imports it from here.
+mod providerservice;
+pub use providerservice::*;
 
 /// The provider driver trait (spec #1029, ticket #1032): the single driver
 /// interface, generic over the marker — the provider-specific core the author

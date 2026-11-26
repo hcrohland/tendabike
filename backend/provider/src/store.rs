@@ -92,6 +92,24 @@ pub trait Store<P: ProviderSpec>: Send + Sync {
     fn limited_until(&self) -> Option<i64>;
 }
 
+/// The "all provider stores" bound (ADR-0014): the single home for the
+/// composition of every provider's [`Store`] marker —
+/// `Store<StravaSpec> + Store<IcuSpec> + Send + Sync`. A third provider adds
+/// its `Store` marker here (in the provider layer only); the direct-op
+/// dispatch fns, [`provider_of`](crate::provider_of), and the executor's
+/// `ProviderService` impl all bound on this one stable trait, so the executor
+/// crate is untouched by a new provider.
+///
+/// A supertrait: any type carrying the per-provider [`Store`] markers and the
+/// `Send + Sync` liveness implements it with an empty body (the composite
+/// test doubles already do — the executor's `ProviderService` impl is testable
+/// with such a mock store).
+#[cfg(all(feature = "strava", feature = "icu"))]
+pub trait ProviderStore:
+    Store<crate::strava::StravaSpec> + Store<crate::icu::IcuSpec> + Send + Sync
+{
+}
+
 #[cfg(test)]
 mod tests {
     use super::Store;

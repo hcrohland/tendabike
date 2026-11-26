@@ -53,12 +53,6 @@ mod message;
 mod registry;
 mod txn;
 
-/// The provider-agnostic provider service (ADR-0014): the direct-op
-/// surface. It is a public module (not re-exported at the crate root) so
-/// that the name `ProviderService` is unambiguous — the web layer imports
-/// it as [`tb_exec::providerservice::ProviderService`].
-pub mod providerservice;
-
 pub use api::*;
 pub use executor::*;
 pub use facade::*;

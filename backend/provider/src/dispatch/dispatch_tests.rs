@@ -14,6 +14,7 @@
 use std::sync::{Arc, Mutex};
 
 use crate::Provider;
+use crate::ProviderStore;
 use crate::facade::{
     Error, OnboardingStatus, PartId, PartTypeId, Stat, TbResult, User, UserId, mock_session,
     mock_session_admin,
@@ -160,6 +161,12 @@ impl Store<IcuSpec> for DispatchStore {
         self.icu.limited_until()
     }
 }
+
+/// The composite double satisfies the [`ProviderStore`] supertrait (the
+/// "all provider stores" bound the dispatch fns and `provider_of` carry) with
+/// an empty body — the per-provider [`MockStore`] halves already carry the
+/// `Store` markers and the `Send + Sync` liveness.
+impl ProviderStore for DispatchStore {}
 
 // ─── Fixtures ───────────────────────────────────────────────────────────────
 

@@ -18,7 +18,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use tb_exec::{ServiceApi, providerservice::ProviderService};
+use tb_exec::ServiceApi;
+use tb_provider::ProviderService;
 
 #[derive(Clone)]
 pub(crate) struct AppState {

@@ -117,7 +117,7 @@ impl<S, F, D1, D2> UnifiedLane<S, F, D1, D2> {
     /// skipped (ADR-0016: its users are frozen on this server, not listed).
     pub async fn all_stats(&self, store: &mut S) -> TbResult<Vec<UserStat>>
     where
-        S: Store<crate::strava::StravaSpec> + Store<crate::icu::IcuSpec> + Send + Sync + 'static,
+        S: crate::ProviderStore + 'static,
         F: EntityFacade<S> + Clone + Send + Sync + 'static,
         D1: Provider<crate::strava::StravaSpec> + Send + Sync + 'static,
         D2: Provider<crate::icu::IcuSpec> + Send + Sync + 'static,
@@ -154,7 +154,7 @@ impl<S, F, D1, D2> std::fmt::Debug for UnifiedLane<S, F, D1, D2> {
 #[async_trait::async_trait]
 impl<S, F, D1, D2> ProviderLane for UnifiedLane<S, F, D1, D2>
 where
-    S: Store<crate::strava::StravaSpec> + Store<crate::icu::IcuSpec> + Send + Sync + 'static,
+    S: crate::ProviderStore + 'static,
     F: EntityFacade<S> + Clone + Send + Sync + 'static,
     D1: Provider<crate::strava::StravaSpec> + Send + Sync + 'static,
     D2: Provider<crate::icu::IcuSpec> + Send + Sync + 'static,

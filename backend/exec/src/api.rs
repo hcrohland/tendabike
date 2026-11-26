@@ -55,7 +55,7 @@ use crate::facade::{
 /// plus the provider-neutral direct ops (`all_stats`, `rescan`,
 /// `subscribe_shop`, `trigger_processing`). Presentation layers depend on
 /// this trait, not the concrete [`crate::Registry`]. The provider-specific
-/// ops live in [`crate::providerservice::ProviderService`] — a second
+/// ops live in [`tb_provider::ProviderService`] — a second
 /// provider never reshapes this trait.
 ///
 /// Every method that takes a `session` parameter threads the acting

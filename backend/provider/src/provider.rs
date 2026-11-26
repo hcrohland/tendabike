@@ -76,13 +76,10 @@ impl TryFrom<ProviderActivityId> for Provider {
 /// either table is a `NotFound`; any other read failure is a DB failure the
 /// caller propagates.
 #[cfg(all(feature = "strava", feature = "icu"))]
-pub async fn provider_of<S>(store: &mut S, user_id: UserId) -> TbResult<Provider>
-where
-    S: crate::store::Store<crate::strava::StravaSpec>
-        + crate::store::Store<crate::icu::IcuSpec>
-        + Send
-        + Sync,
-{
+pub async fn provider_of<S: crate::ProviderStore>(
+    store: &mut S,
+    user_id: UserId,
+) -> TbResult<Provider> {
     match crate::store::Store::<crate::strava::StravaSpec>::user_get_by_tbid(store, user_id).await {
         Ok(_) => Ok(Provider::Strava),
         Err(Error::NotFound(_)) => {

@@ -1,28 +1,28 @@
 /*
-   tendabike - the bike maintenance tracker
+  tendabike - the bike maintenance tracker
 
-   Copyright (C) 2023  Christoph Rohland
+  Copyright (C) 2023  Christoph Rohland
 
-   This program is free software: you can redistribute it and/or modify
-   it under the terms of the GNU Affero General Public License as published
-   by the Free Software Foundation, either version 3 of the License, or
-   (at your option) any later version.
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published
+  by the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU Affero General Public License for more details.
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Affero General Public License for more details.
 
-   You should have received a copy of the GNU Affero General Public License
-   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+  You should have received a copy of the GNU Affero General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 */
 
 //! The provider-agnostic provider service (ADR-0014): the direct ops a
 //! presentation layer drives the provider's user lifecycle and redirect URLs
-//! through. The [`Registry`] implements it as a thin forward — each op opens
-//! the transaction, hands the connection to the provider layer's dispatch
-//! free function (the single `match provider`), and commits.
+//! through. The executor's `Registry` implements it as a thin forward — each
+//! op opens the transaction, hands the connection to the provider layer's
+//! dispatch free function (the single `match provider`), and commits.
 //!
 //! The in-transaction ops. The target-keyed ops (`sync`, `deauthorize`,
 //! `delete_user`, `gear_url`, `user_url`) dispatch on the target's real
@@ -39,10 +39,14 @@
 //! `#[async_trait]`; object-safe for `Arc<dyn ProviderService>`, which keeps
 //! a presentation layer's state non-generic.
 //!
-//! [`Registry`]: crate::Registry
+//! The trait carries no `Store<…>` bound (the `DomainFacade` precedent): the
+//! seam is provider-agnostic, and the concrete bound rides on the impl (the
+//! executor's `Registry` impls it over the
+//! [`ProviderStore`](crate::ProviderStore) supertrait — a third provider
+//! changes that supertrait in this layer, and nothing in the executor crate
+//! moves).
 
-use tb_provider::Provider;
-
+use crate::Provider;
 use crate::facade::{ActivityId, PartId, Session, TbResult, UserId};
 
 /// The provider-agnostic provider service (ADR-0014): the direct ops a
@@ -51,12 +55,15 @@ use crate::facade::{ActivityId, PartId, Session, TbResult, UserId};
 /// the target's real provider, derived in-transaction from the
 /// provider-internal data; the route-keyed ops (`login`, `accept_event`) take
 /// the typed [`Provider`] as a parameter, and `activity_url` is keyed by the
-/// provider parsed from the activity id's prefix. The [`Registry`] implements
-/// it as a thin forward (each op opens the transaction, calls the provider
-/// layer's dispatch free function, and commits — no provider dispatch in this
-/// crate).
+/// provider parsed from the activity id's prefix. The executor's `Registry`
+/// implements it as a thin forward (each op opens the transaction, calls the
+/// provider layer's dispatch free function, and commits — no provider
+/// dispatch in the executor crate).
 ///
-/// [`Registry`]: crate::Registry
+/// The trait carries no `Store<…>` bound: the seam is provider-agnostic, and
+/// the concrete bound rides on the impl (the `Registry`'s impl bounds on the
+/// [`ProviderStore`](crate::ProviderStore) supertrait, imported from this
+/// layer).
 #[cfg_attr(feature = "test-support", mockall::automock)]
 #[async_trait::async_trait]
 pub trait ProviderService: Send + Sync {
@@ -107,14 +114,10 @@ pub trait ProviderService: Send + Sync {
     async fn delete_user(&self, session: Box<dyn Session>, tbid: UserId) -> TbResult<()>;
 
     /// The activity redirect URL (ADR-0014): one transaction — the provider
-    /// layer's `activity_url` op for `id` (gated on the acting session's
-    /// ownership), then the provider URL.
-    async fn activity_url(
-        &self,
-        provider: Provider,
-        session: Box<dyn Session>,
-        id: ActivityId,
-    ) -> TbResult<String>;
+    /// layer's `activity_url` op for `id`, keyed by the provider parsed from
+    /// the activity id's prefix (gated on the acting session's ownership),
+    /// then the provider URL.
+    async fn activity_url(&self, session: Box<dyn Session>, id: ActivityId) -> TbResult<String>;
 
     /// The gear redirect URL (ADR-0014): one transaction — the provider
     /// layer's `gear_url` op for `id` (gated on the acting session's

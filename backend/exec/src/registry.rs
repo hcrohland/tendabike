@@ -49,6 +49,8 @@ use tokio::sync::{broadcast, oneshot, watch};
 
 use tb_provider::Provider;
 use tb_provider::ProviderLane;
+use tb_provider::ProviderService;
+use tb_provider::ProviderStore;
 
 use crate::api::ServiceApi;
 use crate::facade::{
@@ -342,12 +344,11 @@ where
     // `subscribe_shop`, `trigger_processing`, ADR-0014) own their own
     // transactions — the rescan's `rescan_all` and the shop-ownership check
     // ride the domain facade (no store bound), and the `all_stats` and
-    // `sync_users` ops ride the provider-agnostic `Store` over each marker —
-    // so this impl carries the `Store<Spec> + Txn` bound.
+    // `sync_users` ops ride the provider-agnostic [`ProviderStore`] supertrait
+    // (the single home for the "all provider stores" bound) — so this impl
+    // carries the `ProviderStore + Txn` bound.
     S: TxnSource + Clone + 'static,
-    S::Conn: tb_provider::Store<tb_provider::strava::StravaSpec>
-        + tb_provider::Store<tb_provider::icu::IcuSpec>
-        + Txn,
+    S::Conn: ProviderStore + Txn,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
@@ -469,18 +470,15 @@ where
 /// the connection (and the concrete entity-op facade) to the provider
 /// layer's dispatch free function (the single `match provider`), and commits.
 /// No provider dispatch and no driver naming in this crate. The registry owns
-/// the store (the transaction boundary, ADR-0014); the dispatch bounds on the
-/// two providers' local data stores plus the provider-agnostic `Store` over
-/// each marker and takes the facade as a parameter.
+/// the store (the transaction boundary, ADR-0012); the impl bounds on the
+/// [`ProviderStore`] supertrait (the single home for the "all provider
+/// stores" bound — a third provider changes it in the provider layer, and
+/// nothing in this crate moves) and takes the facade as a parameter.
 #[async_trait::async_trait]
-impl<S, P, D> crate::providerservice::ProviderService for Registry<S, P, D>
+impl<S, P, D> ProviderService for Registry<S, P, D>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: tb_provider::Store<tb_provider::strava::StravaSpec>
-        + tb_provider::Store<tb_provider::icu::IcuSpec>
-        + Send
-        + Sync
-        + 'static,
+    S::Conn: ProviderStore + 'static,
     P: ProviderLane<Store = S::Conn> + Clone + Send + Sync + 'static,
     D: DomainFacade<S::Conn> + Clone + Send + Sync + 'static,
 {
@@ -564,23 +562,13 @@ where
     }
 
     /// The activity redirect URL (ADR-0014): one transaction — the provider
-    /// layer's `activity_url` op (which checks the activity's ownership), then
-    /// the provider URL.
-    async fn activity_url(
-        &self,
-        provider: Provider,
-        session: Box<dyn Session>,
-        id: ActivityId,
-    ) -> TbResult<String> {
+    /// layer's `activity_url` op (keyed by the provider parsed from the
+    /// activity id's prefix, which checks the activity's ownership), then the
+    /// provider URL.
+    async fn activity_url(&self, session: Box<dyn Session>, id: ActivityId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let uri = tb_provider::dispatch::activity_url(
-            provider,
-            session,
-            id,
-            self.lane.facade(),
-            &mut store,
-        )
-        .await?;
+        let uri = tb_provider::dispatch::activity_url(session, id, self.lane.facade(), &mut store)
+            .await?;
         store.commit().await?;
         Ok(uri)
     }

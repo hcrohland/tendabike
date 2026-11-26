@@ -18,7 +18,6 @@ use axum::{
     routing::get,
 };
 use tb_domain::{ActivityId, PartId, UserId};
-use tb_provider::{Provider, ProviderActivityId};
 
 use crate::{RequestSession, appstate::AppState, error::AppError};
 
@@ -35,19 +34,14 @@ async fn redirect_act(
     State(state): State<AppState>,
 ) -> Result<Redirect, AppError> {
     // The redirect direct op (ADR-0014): the neutral `provider` handle's
-    // `activity_url` op, keyed by the provider parsed from the id's prefix
-    // (the single home for the prefix knowledge, ADR-0013), which checks
+    // `activity_url` op, which keys on the provider parsed from the id's
+    // prefix (the single home for the prefix knowledge, ADR-0013) and checks
     // ownership. The handler maps `Err` (and an unparseable prefix) → a
     // permanent redirect to "/".
     let activity_id = ActivityId::from(id);
-    let Ok(provider) =
-        ProviderActivityId::try_from(activity_id.clone()).and_then(Provider::try_from)
-    else {
-        return Ok(Redirect::permanent("/"));
-    };
     let uri = state
         .provider
-        .activity_url(provider, Box::new(user), activity_id)
+        .activity_url(Box::new(user), activity_id)
         .await
         .unwrap_or_else(|_| "/".to_string());
     Ok(Redirect::permanent(&uri))
