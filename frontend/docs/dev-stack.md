@@ -64,6 +64,8 @@ is written into the repo, and no real provider credentials are needed.
 
 ## Teardown
 
-Kill the backend with `pkill -f target/debug/tendabike`. The Vite server's
-process line does not contain "vite dev" — kill the pid listening on `:5173`
-(`ss -ltnp | grep 5173`). Done when: both ports refuse connections.
+Kill the backend by the pid listening on `:8000` (`ss -ltnp | grep 8000`)
+— a `pkill -f` on the binary path also matches the shell that runs it.
+The Vite server's process line does not contain "vite dev" — kill the pid
+listening on `:5173` (`ss -ltnp | grep 5173`). Done when: both ports
+refuse connections.
