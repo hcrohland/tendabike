@@ -3,6 +3,22 @@
   import { Service, services } from "../src/lib/service";
   import { ServicePlan, plans } from "../src/lib/serviceplan";
   import { Usage, usages } from "../src/lib/usage";
+  import { Type } from "../src/lib/types.svelte";
+  import { Shop, shops } from "../src/lib/shop.svelte";
+
+  // The harness has no backend: stub the app's /api/* fetches with empty
+  // JSON so components that load data (shop parts, the offline banner's
+  // providers) settle to a renderable state.
+  const realFetch = window.fetch;
+  window.fetch = (async (input: any, init?: any) => {
+    if (String(input).includes("/api/")) {
+      return new Response("[]", {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return realFetch(input, init);
+  }) as typeof fetch;
 
   // Seed the state objects the migrated components read, so the harness
   // renders real Part/Service/ServicePlan components without the full stack.
@@ -18,7 +34,38 @@
       last_used: "2024-01-01T00:00:00Z",
       usage: "u1",
     }),
+    // A disposed spare: the spare-type selector renders it on the secondary
+    // surface with the secondary chip fill (behind the show-more toggle).
+    new Part({
+      id: 6,
+      owner: 1,
+      what: 10,
+      name: "Old Wheel",
+      vendor: "Rider",
+      model: "700c",
+      purchase: "2022-01-01T00:00:00Z",
+      last_used: "2023-01-01T00:00:00Z",
+      usage: "u1",
+      disposed_at: "2024-06-01T00:00:00Z",
+    }),
   ]);
+  // The spare-type selector reads its parts through the `parts` map (seeded
+  // above); the type instance itself needs no module state.
+  const spareType = new Type({
+    id: 10,
+    name: "Wheel",
+    main: 1,
+    hooks: [1],
+    order: 1,
+  });
+  shops[10] = new Shop({
+    id: 10,
+    owner: 1,
+    name: "Velo Shop",
+    description: "Local shop",
+    auto_approve: true,
+    created_at: "2023-01-01T00:00:00Z",
+  });
   usages.setMap([
     new Usage({
       id: "u1",
@@ -73,7 +120,40 @@
   import Chip from "../src/Widgets/Chip.svelte";
   import PlanBlock from "../src/ServicePlan/PlanBlock.svelte";
   import ServiceHist from "../src/Service/ServiceHist.svelte";
+  import ShopCard from "../src/Shop/ShopCard.svelte";
+  import SpareType from "../src/Spares/SpareType.svelte";
+  import AdminCard from "../src/Admin/AdminCard.svelte";
+  import OfflineBanner from "../src/OfflineBanner.svelte";
   import { stateValues } from "../src/lib/mapable.svelte";
+  import { loadProviders } from "../src/lib/provider.svelte";
+  import type { AdminRow } from "../src/lib/user.svelte";
+
+  const shop = shops[10] as Shop;
+  const users = {
+    1: { id: 1, firstname: "Max", name: "Mustermann", avatar: undefined },
+  };
+  const adminRow: AdminRow = {
+    user: {
+      id: 3,
+      firstname: "Max",
+      name: "Mustermann",
+      avatar: undefined,
+      is_admin: false,
+      onboarding_status: "completed",
+      provider: "strava",
+    },
+    parts: 2,
+    activities: 7,
+    events: 11,
+    disabled: false,
+    provider: "strava",
+  };
+
+  // The offline banner shows once the (stubbed) providers fetch settles
+  // with an empty enabled set.
+  $effect(() => {
+    loadProviders();
+  });
 </script>
 
 <!--
@@ -81,8 +161,9 @@
   card/chip/fill scenarios, plus the real migrated Part/Service/ServicePlan
   components (a plan block: secondary card + nested primary row + matching
   button; a service history card: secondary card + nested primary history
-  block) — with class anchors the real-browser check reads computed styles
-  from.
+  block), the migrated Shop/Spares/Admin/top-level call sites (a shop card,
+  the spare-type selector, an admin card, the offline banner) — with class
+  anchors the real-browser check reads computed styles from.
 -->
 <div class="p-6 max-w-md space-y-6">
   <section data-testid="scenario-card">
@@ -130,5 +211,38 @@
         <ServiceHist {service} />
       {/if}
     {/each}
+  </section>
+
+  <section data-testid="scenario-shopcard">
+    <p class="text-sm font-semibold mb-2">
+      migrated ShopCard (secondary card, secondary chip fill)
+    </p>
+    <ShopCard {shop} {users} isOwner={true} />
+  </section>
+
+  <section data-testid="scenario-sparetype">
+    <p class="text-sm font-semibold mb-2">
+      migrated SpareType (secondary block, primary part card, primary chip fill)
+    </p>
+    <SpareType type={spareType} update={() => {}} attachee={0} />
+  </section>
+
+  <section data-testid="scenario-admincard">
+    <p class="text-sm font-semibold mb-2">
+      migrated AdminCard (secondary card, secondary chip fill)
+    </p>
+    <AdminCard
+      row={adminRow}
+      refresh={() => {}}
+      createSync={() => {}}
+      deleteUser={() => {}}
+    />
+  </section>
+
+  <section data-testid="scenario-offline">
+    <p class="text-sm font-semibold mb-2">
+      migrated OfflineBanner (secondary surface)
+    </p>
+    <OfflineBanner />
   </section>
 </div>

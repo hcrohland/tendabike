@@ -1,4 +1,5 @@
 import { fireEvent, render } from "@testing-library/svelte";
+import { flushSync } from "svelte";
 import { beforeEach, describe, expect, it } from "vitest";
 import { Part, parts } from "../lib/part";
 import { Service, services } from "../lib/service";
@@ -76,6 +77,8 @@ describe("ServiceHist", () => {
     const showMore = container.querySelector("button.rounded-full");
     expect(showMore).toBeTruthy();
     fireEvent.click(showMore!);
+    flushSync();
+    // the nested history block takes the contrasting primary surface
     const block = container.querySelector(".bg-primary-100");
     expect(block).toBeTruthy();
   });

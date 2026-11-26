@@ -48,6 +48,20 @@ describe("OfflineBanner", () => {
     expect(screen.getByText(BANNER_TEXT)).toBeTruthy();
   });
 
+  // The banner is a migrated call site: it renders the secondary surface
+  // (background + border) from the shared color mapping. We assert only the
+  // rendered surface class, never the mechanism.
+  it("renders the banner on the secondary surface", async () => {
+    stubProviders([]);
+    await loadProviders();
+    const { container } = render(OfflineBanner);
+    const banner = screen.getByText(BANNER_TEXT);
+    expect(banner.classList.contains("bg-secondary-100")).toBe(true);
+    expect(banner.classList.contains("bg-primary-100")).toBe(false);
+    expect(banner.classList.contains("border-secondary-400")).toBe(true);
+    expect(container.firstChild).toBeTruthy();
+  });
+
   it("is hidden with a non-empty provider set", async () => {
     stubProviders(["strava"]);
     await loadProviders();

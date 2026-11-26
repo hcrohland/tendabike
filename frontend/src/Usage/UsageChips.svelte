@@ -4,19 +4,20 @@
   import { fmtNumber, fmtSeconds } from "../lib/utils";
   import { Usage, usages } from "../lib/usage";
   import Chip from "../Widgets/Chip.svelte";
+  import { type Color } from "../Widgets/color.js";
 
   let {
     id,
     usage = $bindable(),
     ref,
-    light = false,
+    color = "secondary",
     gridclass = "md:grid-cols-6 grid-cols-3",
     due_list,
   }: {
     id?: string;
     usage?: Usage;
     ref?: string | number;
-    light?: boolean;
+    color?: Color;
     gridclass?: string;
     due_list?: Partial<Record<limit_keys, Due>>;
   } = $props();
@@ -35,38 +36,38 @@
     value={fmtNumber(currentUsage.count)}
     label={m.usage_rides()}
     href={ridesHref}
-    {light}
+    {color}
     due={due_list?.rides}
   />
   <Chip
     value={fmtSeconds(currentUsage.time)}
     label="h"
-    {light}
+    {color}
     due={due_list?.hours}
   />
   <Chip
     value={fmtNumber(Math.round((currentUsage.distance || 0) / 1000))}
     label="km"
-    {light}
+    {color}
     due={due_list?.km}
   />
   <Chip
     value={fmtNumber(currentUsage.climb)}
     label="↑m"
-    {light}
+    {color}
     due={due_list?.climb}
   />
   <Chip
     value={fmtNumber(currentUsage.descend)}
     label="↓m"
-    {light}
+    {color}
     due={due_list?.descend}
   />
   {#if currentUsage.energy > 0}
     <Chip
       value={fmtNumber(currentUsage.energy)}
       label="kJ"
-      {light}
+      {color}
       due={due_list?.kJ}
     />
   {/if}

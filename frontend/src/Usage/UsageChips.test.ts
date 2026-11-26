@@ -95,4 +95,38 @@ describe("UsageChips", () => {
     const link = screen.getByRole("link");
     expect((link as HTMLAnchorElement).href).toContain("/activities/99");
   });
+
+  // The chips render a fill of their color (dark-step background + white
+  // text), matching the surface they sit on. We assert only the rendered
+  // fill class, never the mechanism.
+  function usageData() {
+    return new Usage({
+      id: "1",
+      count: 42,
+      climb: 0,
+      descend: 0,
+      distance: 1000,
+      time: 60,
+      duration: 60,
+      energy: 0,
+    });
+  }
+
+  it("renders a primary fill when color is primary", () => {
+    render(UsageChips, { usage: usageData(), color: "primary" });
+    const chip = screen.getByText("42");
+    expect(chip.closest(".bg-primary-700")).toBeTruthy();
+    // a fill is dark-step with white text, not a light surface
+    expect(chip.closest(".bg-primary-100")).toBeNull();
+    expect(chip.classList.contains("text-white")).toBe(true);
+  });
+
+  it("renders a secondary fill by default (the page-base fallback)", () => {
+    render(UsageChips, { usage: usageData() });
+    const chip = screen.getByText("42");
+    expect(chip.closest(".bg-secondary-700")).toBeTruthy();
+    // a fill is dark-step with white text, not a light surface
+    expect(chip.closest(".bg-secondary-100")).toBeNull();
+    expect(chip.classList.contains("text-white")).toBe(true);
+  });
 });

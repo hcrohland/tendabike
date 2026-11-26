@@ -29,7 +29,7 @@
     >
       <div class="flex flex-col gap-2 mt-2">
         {#each service.history(1) as s (s.service?.id + "-" + s.successor?.id)}
-          <ServiceRow {part} {...s} light />
+          <ServiceRow {part} {...s} color="primary" />
         {/each}
       </div>
     </div>

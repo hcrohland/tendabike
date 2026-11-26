@@ -32,7 +32,7 @@
   import { getLocale, setLocale, locales } from "../paraglide/runtime";
   import { onDestroy } from "svelte";
   import NotificationBell from "./Widgets/NotificationBell.svelte";
-  import { mainText } from "./Widgets/tone.js";
+  import { mainText } from "./Widgets/color.js";
 
   let openGarmin = $state(false);
 
@@ -86,7 +86,7 @@
   }
 </script>
 
-<Navbar class={mainText()}>
+<Navbar class={mainText}>
   <NavBrand href="/cat">
     <img
       src="/favicon.png"
@@ -200,7 +200,9 @@
          already there, so it only shows elsewhere. -->
     <div class="flex items-center md:order-2">
       {#if activeUrl !== "/about"}
-        <Button color="gray" href="/about#connect">{m.header_connect()}</Button>
+        <Button color="secondary" href="/about#connect"
+          >{m.header_connect()}</Button
+        >
       {/if}
     </div>
   {/if}

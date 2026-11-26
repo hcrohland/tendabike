@@ -8,7 +8,7 @@
   import type { Shop } from "../lib/shop.svelte";
   import { type UserPublic } from "../lib/user.svelte";
   import { type Map } from "../lib/mapable.svelte";
-  import { mainText } from "../Widgets/tone.js";
+  import { mainText } from "../Widgets/color.js";
 
   interface Props {
     shop: Shop;
@@ -53,7 +53,7 @@
   });
 </script>
 
-<Card>
+<Card color="secondary">
   <!-- Header: name + per-entity action (owner menu, non-owner request button) -->
   <div class="flex items-center justify-between gap-1 sm:gap-2">
     <span class="font-bold text-base sm:text-lg wrap-break-word min-w-0">
@@ -71,7 +71,7 @@
   </div>
 
   {#if !isOwner && owner.firstname && owner.name}
-    <div class={"mt-1 text-sm " + mainText()}>
+    <div class={"mt-1 text-sm " + mainText}>
       {m.shop_by()}
       {owner.firstname}
       {owner.name}
@@ -79,7 +79,7 @@
   {/if}
 
   {#if shop.description}
-    <div class={"mt-1 text-sm " + mainText()}>
+    <div class={"mt-1 text-sm " + mainText}>
       {shop.description}
     </div>
   {/if}
@@ -89,12 +89,13 @@
       <Chip
         value={String(partsCount)}
         label={partsCount === 1 ? m.shop_part() : m.shop_parts()}
+        color="secondary"
       />
-      <Chip value={m.shop_owner()} label="" />
+      <Chip value={m.shop_owner()} label="" color="secondary" />
     </div>
   {/if}
 
-  <div class={"mt-2 text-xs " + mainText()}>
+  <div class={"mt-2 text-xs " + mainText}>
     {m.shop_created()}
     {new Date(shop.created_at).toLocaleDateString()}
   </div>

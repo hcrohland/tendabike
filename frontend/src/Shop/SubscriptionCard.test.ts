@@ -47,4 +47,21 @@ describe("SubscriptionCard", () => {
     expect(screen.queryByText("Please let me subscribe!")).toBeNull();
     expect(screen.queryByText("Sure, approved.")).toBeNull();
   });
+
+  // The subscription card is a migrated call site: it renders an explicit
+  // secondary surface and its status chip is a secondary fill. We assert only
+  // the rendered surface/fill classes, never the mechanism.
+  it("renders the card's secondary surface and its chip as a secondary fill", () => {
+    const { container } = render(SubscriptionCard, {
+      subscription: new ShopSubscription(subscriptionData()),
+    });
+    const card = container.querySelector(".rounded-lg");
+    expect(card?.classList.contains("bg-secondary-100")).toBe(true);
+    expect(card?.classList.contains("bg-primary-100")).toBe(false);
+    const chip = screen.getByText("Pending");
+    const chipRoot = chip.closest(".shrink-0");
+    expect(chipRoot?.classList.contains("bg-secondary-700")).toBe(true);
+    expect(chipRoot?.classList.contains("bg-secondary-100")).toBe(false);
+    expect(chip.classList.contains("text-white")).toBe(true);
+  });
 });
