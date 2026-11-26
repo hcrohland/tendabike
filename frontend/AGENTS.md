@@ -13,7 +13,7 @@
 
 ## Verification
 
-- **Browser:** Playwright + Chromium is available system-wide. Use it for real-browser verification when a spec's acceptance criteria require it (e.g., confirming a page renders without console errors), or when a change alters what the user sees (color, contrast, layout) — a rendered result is not inferable from theme tokens, so render and look. The full local stack — database, backend, dev server, Playwright setup, teardown — is in [`docs/dev-stack.md`](docs/dev-stack.md).
+- **Browser:** Playwright + Chromium is available system-wide. Use it for real-browser verification when a spec's acceptance criteria require it (e.g., confirming a page renders without console errors), or when a change alters what the user sees (color, contrast, layout) — a rendered result is not inferable from theme tokens, so render and look. A component's rendered output without the full stack (color, layout, computed styles) is verified with the component harness in [`docs/component-verify.md`](docs/component-verify.md); the full local stack — database, backend, dev server, Playwright setup, teardown — is in [`docs/dev-stack.md`](docs/dev-stack.md).
 - **jsdom's blind spot:** jsdom does not model flowbite's async popper wiring. For changes to `Menu`/Dropdown open-close behaviour — or any shared widget's interaction — a passing jsdom test is not sufficient: verify open, close, and keyboard reachability in a real browser before shipping.
 
 ## Architecture
