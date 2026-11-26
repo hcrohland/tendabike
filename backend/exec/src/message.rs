@@ -28,8 +28,8 @@
 //!   reply) and awaits the reply; within the channel, requests process in
 //!   **FIFO total order per user** (spec #558 §3.2: a read enqueued after a
 //!   write sees that write — the ordering contract a second driver gets).
-//! - **Strava events** — the existing `strava_events` database queue, read
-//!   latest-per-object (`tb_provider::strava::event::get_event`).
+//! - **Provider events** — the provider's event database queue, read
+//!   latest-per-object through the lane's `probe`.
 //!
 //! The loop also owns the SSE push sink: a `broadcast` channel of
 //! [`Summary`] frames, one frame per **non-empty** completed message
@@ -38,8 +38,6 @@
 
 #[cfg(test)]
 use crate::facade::Summary;
-#[cfg(test)]
-use tb_provider::strava::event::Event;
 #[cfg(test)]
 use tokio::sync::broadcast;
 use tokio::sync::{mpsc, oneshot};
@@ -54,8 +52,8 @@ use crate::facade::{ApiRead, ApiWrite, ReadOutcome, Session, TbResult, WriteOutc
 pub(crate) enum Message {
     /// An in-memory write from the user's API channel.
     ApiWrite(ApiWrite),
-    /// An event read from the user's `strava_events` queue.
-    Strava(Event),
+    /// An event read from the user's provider event queue.
+    Event(()),
 }
 
 /// One API request as the executor receives it: the unified per-user

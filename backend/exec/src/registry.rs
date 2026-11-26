@@ -68,7 +68,7 @@ pub use core::{DeliveryContext, ExecutorStatus};
 /// The loop's queue re-probe cadence while it is idle with streams attached
 /// (spec §4.4, amended — #446): an attached stream keeps the executor alive
 /// (it is reaped only when no stream is attached), so the window sets how
-/// often the idle loop re-probes the `strava_events` queue. A stream-less
+/// often the idle loop re-probes the provider event queue. A stream-less
 /// executor (a write-only spawn) reaps immediately after its work.
 const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 /// The SSE heartbeat cadence (spec §4.5): a `: ping` comment keeps the
@@ -161,7 +161,7 @@ where
 
     /// Fire the wake signal for the user's executor (spec §4.4/§4.6): a
     /// pure signal to a **running** executor — it interrupts the loop's
-    /// idle wait so a just-queued Strava event is processed at once. It
+    /// idle wait so a just-queued provider event is processed at once. It
     /// never spawns an executor: a reaped (or not-yet-spawned) executor
     /// picks the event up on its next spawn (an SSE connect or an API
     /// write) — the DB queue is the source of truth. Infallible by design:
@@ -200,7 +200,7 @@ where
     }
 
     /// Test helper: install a synthetic executor for `user_id` (bypassing
-    /// the core's `ensure_running`, which needs a Strava session the unit
+    /// the core's `ensure_running`, which needs a session the unit
     /// fakes don't have) and return a receiver on its frame channel. The
     /// executor's fate is `status`.
     #[cfg(test)]
@@ -395,7 +395,8 @@ where
 
     /// The admin all-user stat read (spec #558 §3.3): one transaction (the
     /// provider-agnostic `all_stats` dispatch) — the list is
-    /// provider-agnostic (a Strava admin sees the icu users too), so it
+    /// provider-agnostic (an admin of one provider sees the other
+    /// providers' users too), so it
     /// reads every enabled provider's users in its own transaction, not
     /// through the admin's own provider lane (the direct-op shape, like
     /// `rescan` and `trigger_processing`).
@@ -437,8 +438,8 @@ where
     /// Trigger processing for all (or one) users (spec #558 §5.2): admin-only
     /// (the acting `session` must be an admin — `Forbidden` otherwise). One
     /// transaction (`sync_users`) queuing a sync per (non-disabled) user on
-    /// their own provider's lane (a pure activity re-sync — a Strava `Sync`
-    /// event, the icu `SYNC` event; no gear import), then — per queued user —
+    /// their own provider's lane (a pure activity re-sync — a sync event; no
+    /// gear import), then — per queued user —
     /// spawn the executor (a no-op if it is already running) and wake it.
     /// `user_id` narrows the trigger to one user, regardless of provider (the
     /// route's `?user_id=` query).
@@ -575,7 +576,8 @@ where
 
     /// The gear redirect URL (ADR-0014): one transaction — the provider
     /// layer's `gear_url` op (which checks the part's ownership). The one
-    /// non-total op: the icu arm is the typed absence (`None`).
+    /// non-total op: the provider without a gear URL is the typed absence
+    /// (`None`).
     async fn gear_url(&self, session: Box<dyn Session>, id: PartId) -> TbResult<Option<String>> {
         let mut store = self.source.begin().await?;
         let uri =
@@ -585,8 +587,8 @@ where
     }
 
     /// The user redirect URL (ADR-0014): one transaction — the provider
-    /// layer's `user_url` op for the target's tbid (no session). The icu arm
-    /// builds the public athlete profile page.
+    /// layer's `user_url` op for the target's tbid (no session); each
+    /// provider builds its own public profile page.
     async fn user_url(&self, id: UserId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
         let uri = tb_provider::dispatch::user_url(id, &mut store).await?;

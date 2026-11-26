@@ -24,7 +24,7 @@
 //! The per-user executor crate (ADR-0005, executable spec #446 §4).
 //!
 //! One long-lived task per user drives the domain: it consumes the user's
-//! API-write channel (in-memory, one per user) and the `strava_events`
+//! API-write channel (in-memory, one per user) and the provider event
 //! database queue, runs each message in one transaction through the
 //! [`TxnSource`]/[`Txn`] seam, and pushes the resulting `Summary` to the
 //! user's SSE streams.
@@ -39,7 +39,7 @@
 //!   message, and the reclaim-on-idle policy.
 //!
 //! The loop computes no domain state of its own: it drives the existing
-//! `ApiWrite` dispatch and `tb_provider::strava` event processing inside transactions
+//! `ApiWrite` dispatch and the provider lane's event processing inside transactions
 //! it owns. The seam's Postgres half lives in `tb_sqlx`, and the transaction
 //! integration is verified against real Postgres in `tb_sqlx`'s
 //! `tests/executor_seam.rs`; the unit tests stand in for the seam with a

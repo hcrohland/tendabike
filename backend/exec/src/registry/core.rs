@@ -90,8 +90,8 @@ pub enum ExecutorStatus {
 /// One live per-user executor: the shared fate channel, the send half of the
 /// user's request channel (the write and read handlers enqueue here,
 /// spec #558 §3.2), the SSE frame sink the stream tasks subscribe to, the
-/// consumed-Strava-event channel the admin sync awaits (spec §6.4), the
-/// in-memory wake signal the webhook fires after queueing a Strava event
+/// consumed-provider-event channel the admin sync awaits (spec §6.4), the
+/// in-memory wake signal the webhook fires after queueing a provider event
 /// (spec §4.4/§4.6), and the task's abort handle (the core's `stop_all`
 /// tears the executor down — rescan). The `AbortHandle` (not
 /// the `JoinHandle`) is stored: the watchdog keeps the original handle to
@@ -181,7 +181,7 @@ impl Core {
 
     /// Fire the wake signal for the user's executor (spec §4.4/§4.6): a
     /// pure signal to a **running** executor — it interrupts the loop's
-    /// idle wait so a just-queued Strava event is processed at once. It
+    /// idle wait so a just-queued provider event is processed at once. It
     /// never spawns an executor: a reaped (or not-yet-spawned) executor
     /// picks the event up on its next spawn (an SSE connect or an API
     /// write) — the DB queue is the source of truth. Infallible by design:
@@ -242,7 +242,7 @@ impl Core {
     }
 
     /// Test helper: install a synthetic executor for `user_id` (bypassing
-    /// [`Self::ensure_running`], which needs a Strava session the unit fakes
+    /// [`Self::ensure_running`], which needs a session the unit fakes
     /// don't have) and return a receiver on its frame channel. The
     /// executor's fate is `status`. The task handle is a completed task (its
     /// `AbortHandle` is valid; `abort` on it is a no-op), so no task leaks.
