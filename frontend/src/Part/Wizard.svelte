@@ -6,7 +6,7 @@
   import Card from "../Widgets/Card.svelte";
   import Switch from "../Widgets/Switch.svelte";
   import { Part } from "../lib/part";
-  import { mainText } from "../Widgets/tone.js";
+  import { mainText } from "../Widgets/color.js";
   import { m } from "../../paraglide/messages";
 
   let { gear, attachees }: { gear: Part; attachees: Attachment[] } = $props();
@@ -105,19 +105,19 @@
   <div>
     {#if show_button}
       <Button
-        color="primary"
+        color="secondary"
         class="mt-8"
         onclick={() => (show_button = false)}
       >
         {m.wizard_add_more_groups()}
       </Button>
     {:else}
-      <p class={"mb-2 text-sm font-semibold " + mainText()}>
+      <p class={"mb-2 text-sm font-semibold " + mainText}>
         {m.wizard_add_groups()}
       </p>
       <div class="flex flex-col gap-1 sm:gap-2">
         {#each groups as g}
-          <Card>
+          <Card color="secondary">
             <div class="flex items-center gap-2 p-1 sm:p-2">
               <Switch bind:checked={g.enabled}>
                 {localizeGroupName(g.group)}:
@@ -142,7 +142,9 @@
           </Card>
         {/each}
       </div>
-      <Button {disabled} class="mt-2" onclick={save}>{m.action_set()}</Button>
+      <Button color="secondary" {disabled} class="mt-2" onclick={save}>
+        {m.action_set()}
+      </Button>
     {/if}
   </div>
 {/if}

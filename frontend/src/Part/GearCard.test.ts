@@ -127,6 +127,18 @@ describe("GearCard", () => {
     expect(container.querySelector("a[href^='/source/gear/']")).toBeNull();
   });
 
+  it("renders the header on the secondary surface and the body on the contrasting (primary) surface", () => {
+    users.setMap([
+      { id: 5, firstname: "Max", name: "Mustermann", avatar: undefined },
+    ]);
+    const { container } = render(GearCard, { part });
+    const header = container.querySelector(".text-xl");
+    expect(header?.classList.contains("bg-secondary-100")).toBe(true);
+    expect(header?.classList.contains("bg-primary-100")).toBe(false);
+    const body = container.querySelector(".bg-primary-100");
+    expect(body).toBeTruthy();
+  });
+
   it("centers the provider mark in the meta line (no baseline hang)", () => {
     users.setMap([
       { id: 5, firstname: "Max", name: "Mustermann", avatar: undefined },

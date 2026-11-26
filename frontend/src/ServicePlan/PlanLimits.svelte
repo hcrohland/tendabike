@@ -39,7 +39,7 @@
         />
         <InputAddon>{localizeLimitKey(key)}</InputAddon>
         <Button
-          color="light"
+          color="secondary"
           onclick={() => {
             select[key] = null;
             selected = selected.filter((k) => k != key);
@@ -51,7 +51,7 @@
     </div>
   {/each}
 </div>
-<Button color="alternative">
+<Button color="secondary">
   <CirclePlusOutline class="shrink-0 h-6 w-6 justify-end" />
 </Button>
 <Dropdown>

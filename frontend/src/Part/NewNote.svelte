@@ -207,13 +207,13 @@
 
   {#snippet footer()}
     <div class="flex justify-end w-full gap-2">
-      <Button color="alternative" onclick={() => (modal.open = false)}>
+      <Button color="secondary" onclick={() => (modal.open = false)}>
         {m.action_cancel()}
       </Button>
       <Button
         type="submit"
         value="commit"
-        color="gray"
+        color="secondary"
         disabled={!modal.removeFile &&
           !(modal.name.trim().length > 0 || modal.file !== null)}
       >

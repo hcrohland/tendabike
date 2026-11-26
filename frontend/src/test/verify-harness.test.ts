@@ -25,5 +25,15 @@ describe("verify harness", () => {
     // The fill buttons render.
     expect(screen.getByTestId("fill-primary")).toBeTruthy();
     expect(screen.getByTestId("fill-secondary")).toBeTruthy();
+
+    // The migrated plan block renders its secondary card with the nested
+    // primary row inside.
+    const planblock = screen.getByTestId("scenario-planblock");
+    expect(planblock.querySelector(".bg-secondary-100")).toBeTruthy();
+    expect(planblock.querySelector(".bg-primary-100")).toBeTruthy();
+
+    // The migrated service history card renders its secondary surface.
+    const servicehist = screen.getByTestId("scenario-servicehist");
+    expect(servicehist.querySelector(".bg-secondary-100")).toBeTruthy();
   });
 });

@@ -8,7 +8,7 @@
   import { updatePlan } from "./PlanModal.svelte";
   import { deletePlan } from "./DeletePlan.svelte";
   import Card from "../Widgets/Card.svelte";
-  import { mutedText } from "../Widgets/tone.js";
+  import { mutedText } from "../Widgets/color.js";
 
   interface Props {
     plan: ServicePlan;
@@ -19,7 +19,7 @@
   let gears = $derived(gearsForPlan(plan));
 </script>
 
-<Card>
+<Card color="secondary">
   <!-- Template header -->
   <div class="flex items-center justify-between gap-1 md:gap-2 p-1">
     <span class="font-medium text-sm"><PlanName {plan} /></span>
@@ -41,7 +41,7 @@
       {/each}
     </div>
   {:else}
-    <p class={"text-xs " + mutedText()}>
+    <p class={"text-xs " + mutedText}>
       {m.planblock_no_bikes()}
     </p>
   {/if}

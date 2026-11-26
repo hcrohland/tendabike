@@ -1,7 +1,7 @@
 <script lang="ts">
   import { DropdownItem } from "flowbite-svelte";
   import Card from "../Widgets/Card.svelte";
-  import { bg, mutedText, opposite } from "../Widgets/tone.js";
+  import { colorClasses, mutedText, type Color } from "../Widgets/color.js";
   import Menu from "../Widgets/Menu.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import UsageChips from "../Usage/UsageChips.svelte";
@@ -29,17 +29,20 @@
     attachments = $bindable([]),
     type,
     children = $bindable([]),
-    light = $bindable(false),
+    color = "secondary",
   }: {
     attachments: Attachment[];
     type: Type;
     children: TreeNode[];
-    light?: boolean;
+    color?: Color;
   } = $props();
 
-  // The nested history cards contrast the Card's tone (the `light` prop sets
-  // the Card's tone directly).
-  let background2 = $derived(bg(opposite(light ? "primary" : "secondary")));
+  // Nested blocks (history entries, child cards) contrast the card: they take
+  // the opposite color's surface.
+  let oppositeColor: Color = $derived(
+    color === "primary" ? "secondary" : "primary",
+  );
+  let background2 = $derived(colorClasses[oppositeColor].surface);
   let show_more = $state(false);
 
   let { list, att, part, due_list } = $derived.by(() => {
@@ -54,11 +57,11 @@
 {#if att}
   <!-- PartCard responsive spacing: mobile (default) uses compact padding, sm: breakpoint applies larger spacing -->
   <!-- Pattern: p-1→p-2, p-2→p-3, gap-1→gap-2, gap-2→gap-3 across all sections -->
-  <Card {light} class="relative">
+  <Card {color} class="relative">
     <!-- Header row: type · name · menu -->
     <div class="flex items-center justify-between gap-1 sm:gap-2">
       <div class="flex items-center gap-1 sm:gap-2 p-1 sm:p-2 min-w-0">
-        <span class={"text-xs uppercase " + mutedText() + " shrink-0 truncate"}>
+        <span class={"text-xs uppercase " + mutedText + " shrink-0 truncate"}>
           {type.localizedName()}
         </span>
         {#if att.isAttached()}
@@ -70,14 +73,14 @@
             {/if}
           </span>
           ·
-          <span class={"text-xs " + mutedText()}>
+          <span class={"text-xs " + mutedText}>
             {m.time_since()}
             {att.fmtTime()}
           </span>
           <ServiceBadge due={due_list?.days} />
         {/if}
         {#if attachments.length > 1 || (part && usages[part.usage].count != usages[att.usage].count)}
-          <ShowMore bind:show_more title={m.partcard_history()} />
+          <ShowMore bind:show_more title={m.partcard_history()} {color} />
         {/if}
       </div>
       <div class="flex items-center gap-1 sm:gap-2 shrink-0">
@@ -95,7 +98,7 @@
             </DropdownItem>
           </Menu>
         {:else}
-          <XsButton onclick={() => replacePart(att)}>
+          <XsButton {color} onclick={() => replacePart(att)}>
             {m.partcard_add()}
           </XsButton>
         {/if}
@@ -104,7 +107,12 @@
 
     <!-- Current stats -->
     {#if att.isAttached()}
-      <UsageChips id={part.usage} ref={part.id} {light} {due_list} />
+      <UsageChips
+        id={part.usage}
+        ref={part.id}
+        light={color === "primary"}
+        {due_list}
+      />
     {/if}
 
     <!-- History cards -->
@@ -112,10 +120,7 @@
       <div class="mt-3 flex flex-col gap-1 sm:gap-2 p-2 sm:p-3">
         <!-- History: compact padding on mobile -->
         {#each list as { att: a, part: p } (a.idx)}
-          <div
-            class={"rounded-lg border border-secondary-600 dark:border-secondary-400 opacity-70 p-1 sm:p-2 " +
-              background2}
-          >
+          <div class={"rounded-lg border opacity-70 p-1 sm:p-2 " + background2}>
             <div class="flex items-center justify-between gap-1 sm:gap-2">
               <!-- History card header: compact spacing -->
               <div class="flex items-center gap-1 sm:gap-2 min-w-0">
@@ -126,7 +131,7 @@
                     {a.name}
                   {/if}
                 </span>
-                <span class={"text-xs " + mutedText() + " shrink-0"}>
+                <span class={"text-xs " + mutedText + " shrink-0"}>
                   {a.fmtTime()}
                 </span>
               </div>
@@ -146,7 +151,11 @@
                 </div>
               {/if}
             </div>
-            <UsageChips id={a.usage} ref={a.idx} light={!light} />
+            <UsageChips
+              id={a.usage}
+              ref={a.idx}
+              light={color === "secondary"}
+            />
           </div>
         {/each}
       </div>
@@ -157,7 +166,7 @@
       <div class="mt-3 flex flex-col gap-1 sm:gap-2">
         <!-- Children: compact gap on mobile -->
         {#each children as child (child.type.id)}
-          <PartCard {...child} light={!light} />
+          <PartCard {...child} color={oppositeColor} />
         {/each}
       </div>
     {/if}

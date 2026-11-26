@@ -61,7 +61,7 @@
     />
     <InputAddon>%</InputAddon>
     {#each presets as p}
-      <Button color="alternative" onclick={() => snooze(p / 100)}>
+      <Button color="secondary" onclick={() => snooze(p / 100)}>
         {p}%
       </Button>
     {/each}

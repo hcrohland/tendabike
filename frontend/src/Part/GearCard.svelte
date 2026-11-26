@@ -7,7 +7,7 @@
   import { getUser, users } from "../lib/user.svelte";
   import UsageChips from "../Usage/UsageChips.svelte";
   import ProviderMark from "../Widgets/ProviderMark.svelte";
-  import { bg, mutedText } from "../Widgets/tone.js";
+  import { colorClasses, mutedText } from "../Widgets/color.js";
   import { providerOfActivityId, providerMeta } from "../lib/provider.svelte";
   import * as m from "../../paraglide/messages";
 
@@ -49,7 +49,7 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class={"text-xl " +
-      bg("secondary") +
+      colorClasses["secondary"].surface +
       " p-2 sm:p-4" +
       (summary
         ? " hover:bg-gray-300 dark:hover:bg-gray-500 cursor-pointer"
@@ -74,7 +74,7 @@
     {@render children?.()}
   </div>
 
-  <div class={"p-2 sm:p-4 " + bg("primary")}>
+  <div class={"p-2 sm:p-4 " + colorClasses["primary"].surface}>
     <!-- Meta line: model · type · date range -->
     <p class="text-sm mb-3 flex flex-wrap items-center gap-x-1.5">
       <span>
@@ -92,7 +92,7 @@
           <ProviderMark provider={gearProvider} size="sm" />
         </a>
       {/if}
-      <span class={mutedText()}>
+      <span class={mutedText}>
         ·
         {#if !part.disposed_at}
           {m.time_since()} {fmtDate(part.purchase)}
