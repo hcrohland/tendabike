@@ -48,6 +48,11 @@ if [ "$run_rust" -eq 1 ]; then
     # (caller, callee) edge, at most one non-test module imports directly
     # (plus the grandfathered crossings in the script's exemption list).
     python3 .githooks/check-facade-access.py
+    # ADR-0014: tb_exec is provider-ignorant — the executor crate names no
+    # provider-specific concept (the markers, the enum variants, the lane
+    # fields); the `Provider` enum and the `provider_of` seam are the allowed
+    # stable interface. A third provider leaves tb_exec untouched.
+    python3 .githooks/check-exec-provider-access.py
     cargo fmt --check
     # Live cache-vs-DB tripwire — only when a dev DB is available.
     if [ -n "${DATABASE_URL:-}" ]; then

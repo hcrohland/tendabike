@@ -73,6 +73,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Format check
         run: cargo fmt --check
+      # Layering ADRs (mirror the pre-commit hook so the gate holds on PRs, not
+      # just for hook-enabled devs): the entity owns its store (ADR-0012), the
+      # facade is the sole importer (ADR-0015), tb_exec is provider-ignorant
+      # (ADR-0014).
+      - name: Layering checks
+        run: |
+          python3 .githooks/check-store-access.py
+          python3 .githooks/check-facade-access.py
+          python3 .githooks/check-exec-provider-access.py
       # Mirrors the pre-commit hook so the lint gate (incl. the workspace
       # todo!/unimplemented! deny) holds on PRs, not just for hook-enabled devs.
       - name: Clippy
