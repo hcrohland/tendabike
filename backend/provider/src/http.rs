@@ -1,13 +1,17 @@
-//! HTTP status classification and the shared bearer-GET shape for provider
-//! API calls, owned by the provider kit: the kit classifies a non-success
-//! status into a decision — a pure function, testable without a client — and
+//! HTTP status classification and the shared request shape for provider API
+//! calls, owned by the provider kit: the kit classifies a non-success status
+//! into a decision — a pure function, testable without a client — and
 //! [`bearer_get`] applies the decision to the provider's `Error` variant and
-//! message. The [`bearer_get`] shape owns the one HTTP call both providers
-//! make (a bearer GET of the provider's base URL), over the kit's shared
-//! no-redirect client.
+//! message. [`request_json`] is the shared provider request both drivers
+//! make: the shared per-thread canned-response seam (test-only), the one
+//! bearer GET of the provider's base URL over the kit's shared no-redirect
+//! client, and the JSON parse.
 
 use anyhow::Context;
 use http::{HeaderMap, StatusCode};
+use log::trace;
+use oauth2::AccessToken;
+use serde::de::DeserializeOwned;
 
 use crate::client::HTTP_CLIENT;
 use crate::facade::{Error, TbResult};
@@ -44,6 +48,49 @@ pub fn classify_status(status: StatusCode) -> StatusDecision {
         StatusCode::UNAUTHORIZED => StatusDecision::NotAuth,
         _ => StatusDecision::Permanent,
     }
+}
+
+/// The shared provider request: a bearer GET of `{base}{uri}` parsed as
+/// `T`, with the kit's shared per-thread canned-response seam (test-only) in
+/// front of the one [`bearer_get`] call.
+///
+/// `token` is the provider's typed access token (the secret is read here, so
+/// no bare-string token crosses the driver seam); `on_headers` is the
+/// provider's rate-limit header update (a `fn(&HeaderMap)`), so the shared
+/// shape feeds the provider's own limiter; `provider` is the driver's label
+/// (the `Error` messages and the seam's "unexpected request" error). The
+/// `Sync` bound keeps the shape's future `Send` (the executor loop drives it
+/// across threads).
+///
+/// The offline seam (test-only): the kit's thread-local canned response
+/// (per-test isolation: each test runs on its own thread). A driver keeps
+/// only its own extra offline seam (Strava's process-wide canned-response
+/// global) in its thin wrapper, ahead of this call.
+pub(crate) async fn request_json<T: DeserializeOwned>(
+    base: &str,
+    token: &AccessToken,
+    uri: &str,
+    on_headers: impl Fn(&HeaderMap) + Sync,
+    provider: &str,
+) -> TbResult<T> {
+    // The shared offline seam (test-only): the kit's thread-local canned
+    // response (per-test isolation: each test runs on its own thread). A
+    // test-support build has no real provider API: an unscripted URI yields
+    // the seam's "unexpected request" error rather than pretend.
+    #[cfg(any(test, feature = "test-support"))]
+    if let Some(body) = crate::test_support::pop_test_canned(uri, provider) {
+        let body = body?;
+        return Ok(serde_json::from_str(&body).context("Could not parse response body")?);
+    }
+
+    // The real-HTTP path: the one bearer GET, context-wrapped for the
+    // provider (the offline seam above returns before this, so a canned
+    // error — a `NotAuth`, a `TryAgain` — propagates typed, unwrapped).
+    let r = bearer_get(base, token.secret(), uri, on_headers, provider)
+        .await
+        .with_context(|| format!("Could not reach {provider}"))?;
+    trace!("{uri}:\n{r}");
+    Ok(serde_json::from_str::<T>(&r).context("Could not parse response body")?)
 }
 
 /// The shared bearer-GET shape: a bearer GET of `{base}{uri}` over the kit's
