@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 
 use crate::{
-    Error, IdKeyed, PartId, PartStore, PartTypeId, Service, ServicePlanStore, ServiceStore,
-    Session, ShopStore, Summary, TbResult, UserId,
+    Attachment, AttachmentStore, Error, IdKeyed, PartId, PartStore, PartTypeId, Service,
+    ServicePlanStore, ServiceStore, Session, ShopStore, Summary, TbResult, UserId,
 };
 #[cfg(test)]
 use crate::{Part, ServiceId, Shop, ShopId, UsageId};
 use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 #[derive(
@@ -48,16 +49,18 @@ impl ServicePlanId {
     /// to the plan's accumulated snooze fraction for the part, so snoozes
     /// stack and the fraction is unbounded above. The (part, plan) pair must
     /// cohere — a specific plan is snoozed only by its own part, a generic
-    /// plan by a part of its type — an incoherent pair is rejected. The floor
-    /// is 0; a fraction of 0 is a no-op (no write, an empty `Summary`).
-    /// Snoozing records no work: no service is created or modified. Returns
-    /// the `Summary` carrying the updated plan.
+    /// plan by a part of its type, and a gear-scoped generic plan only by a
+    /// part of its type mounted on that gear at the plan's hook — an
+    /// incoherent pair is rejected. The floor is 0; a fraction of 0 is a
+    /// no-op (no write, an empty `Summary`). Snoozing records no work: no
+    /// service is created or modified. Returns the `Summary` carrying the
+    /// updated plan.
     pub(crate) async fn snooze(
         self,
         part: PartId,
         fraction: f64,
         user: &dyn Session,
-        store: &mut (impl PartStore + ServicePlanStore + ShopStore),
+        store: &mut (impl PartStore + ServicePlanStore + ShopStore + AttachmentStore),
     ) -> TbResult<Summary> {
         // Non-finite fractions (NaN, ±inf) are rejected as well: the
         // store cannot serialize them.
@@ -68,12 +71,24 @@ impl ServicePlanId {
         }
         let mut plan = self.get(store).await?;
         plan.checkuser(user, store).await?;
-        // The (part, plan) pair must cohere: a specific plan is snoozed only
-        // by its own part, a generic plan by a part of its type. An incoherent
-        // pair would store an inert entry the plan never applies.
-        let coherent = match plan.part {
-            Some(plan_part) => part == plan_part,
-            None => part.read(store).await?.what == plan.what,
+        // The (part, plan) pair must cohere: a specific plan (no hook) is
+        // snoozed only by its own part; a generic plan (for a hook) by a part
+        // of its type — and, when scoped to a gear, a part mounted on that
+        // gear at the hook. An incoherent pair would store an inert entry the
+        // plan never applies.
+        let coherent = match plan.hook {
+            None => plan.part.is_some_and(|plan_part| plan_part == part),
+            Some(hook) => {
+                let p = part.read(store).await?;
+                if p.what != plan.what {
+                    false
+                } else if let Some(gear) = plan.part {
+                    Attachment::attached_at(part, gear, hook, OffsetDateTime::now_utc(), store)
+                        .await?
+                } else {
+                    true
+                }
+            }
         };
         if !coherent {
             return Err(Error::BadRequest(format!(

@@ -291,6 +291,22 @@ impl Attachment {
         Ok((attachments, usages))
     }
 
+    /// Whether `part` is mounted on `gear` at `hook` at `time` — the
+    /// attachment's mount point, not just that it is attached at all. A part
+    /// with no attachment at `time` is not mounted on any gear.
+    pub(crate) async fn attached_at(
+        part: PartId,
+        gear: PartId,
+        hook: PartTypeId,
+        time: OffsetDateTime,
+        store: &mut impl AttachmentStore,
+    ) -> TbResult<bool> {
+        Ok(store
+            .attachment_get_by_part_and_time(part, time)
+            .await?
+            .is_some_and(|a| a.gear == gear && a.hook == hook))
+    }
+
     pub(crate) async fn register_activity(
         gear: Option<PartId>,
         start: OffsetDateTime,
