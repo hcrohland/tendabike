@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use super::*;
+use crate::MAX_TIME;
 use crate::test_support::{MockStore, fixtures, mock_session, mock_session_with_shop, sole_live};
 
 use fixtures::{sample_purchase_date, test_session, test_user};
@@ -585,7 +586,9 @@ async fn service_plan_create_ignores_snoozes() -> TbResult<()> {
 async fn service_plan_snooze_generic_coherent_part() -> TbResult<()> {
     let part = PartId::from(1);
     let mut stored = sample_plan(None, "Generic Coherent", Some(test_user()));
-    // the plan's type matches the part's type, so the pair coheres
+    // a generic plan names a hook; the plan's type matches the part's type,
+    // so the pair coheres
+    stored.hook = Some(PartTypeId::from(1));
     stored.what = PartTypeId::from(4);
     let plan_id = stored.id;
 
@@ -639,9 +642,10 @@ async fn service_plan_snooze_specific_incoherent_part_rejected() -> TbResult<()>
 #[tokio::test]
 async fn service_plan_snooze_generic_incoherent_part_rejected() -> TbResult<()> {
     let part = PartId::from(1);
-    let stored = sample_plan(None, "Generic Plan", Some(test_user()));
-    // the plan's type (1) differs from the part's type (4), so the pair is
-    // incoherent
+    let mut stored = sample_plan(None, "Generic Plan", Some(test_user()));
+    // a generic plan names a hook; the plan's type (1) differs from the
+    // part's type (4), so the pair is incoherent
+    stored.hook = Some(PartTypeId::from(1));
     let plan_id = stored.id;
 
     let mut store = MockStore::new();
@@ -651,6 +655,89 @@ async fn service_plan_snooze_generic_incoherent_part_rejected() -> TbResult<()> 
     store
         .expect_partid_get_part()
         .returning(move |_| Ok(part_row(part, test_user())));
+
+    let result = plan_id.snooze(part, 0.5, &test_session(), &mut store).await;
+    assert!(matches!(result, Err(Error::BadRequest(_))));
+    Ok(())
+}
+
+/// SP-30: snoozing a gear-scoped generic plan by a part of its type mounted on
+/// the plan's gear at the plan's hook is coherent and records the fraction —
+/// the bike-specific counterpart of the fully-generic case.
+#[tokio::test]
+async fn service_plan_snooze_gear_scoped_generic_coherent_part() -> TbResult<()> {
+    let part = PartId::from(1);
+    let gear = PartId::from(10);
+    let hook = PartTypeId::from(7);
+    let mut stored = sample_plan(Some(gear), "Gear Scoped", None);
+    // the plan is scoped to the gear at the hook, for the part's type
+    stored.hook = Some(hook);
+    stored.what = PartTypeId::from(4);
+    let plan_id = stored.id;
+
+    let gear_row = part_row(gear, test_user());
+    let part_value = part_row(part, test_user());
+    let att = Attachment::new(part, sample_purchase_date(), gear, hook, MAX_TIME);
+
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(stored.clone()));
+    // the ownership check reads the gear; the coherence check reads the part
+    store.expect_partid_get_part().returning(move |id| {
+        if id == gear {
+            Ok(gear_row.clone())
+        } else {
+            Ok(part_value.clone())
+        }
+    });
+    store
+        .expect_attachment_get_by_part_and_time()
+        .returning(move |_, _| Ok(Some(att)));
+    store.expect_serviceplan_update().returning(Ok);
+
+    let summary = plan_id
+        .snooze(part, 0.5, &test_session(), &mut store)
+        .await?;
+
+    let plan = sole_live(&summary.plans);
+    assert_eq!(plan.snoozes.get(&part), Some(&0.5));
+    Ok(())
+}
+
+/// SP-31: snoozing a gear-scoped generic plan by a part of its type mounted on
+/// a different gear is rejected: the plan applies only to parts on its gear,
+/// so an incoherent pair stores no inert entry.
+#[tokio::test]
+async fn service_plan_snooze_gear_scoped_generic_wrong_gear_rejected() -> TbResult<()> {
+    let part = PartId::from(1);
+    let gear = PartId::from(10);
+    let other_gear = PartId::from(20);
+    let hook = PartTypeId::from(7);
+    let mut stored = sample_plan(Some(gear), "Gear Scoped", None);
+    stored.hook = Some(hook);
+    stored.what = PartTypeId::from(4);
+    let plan_id = stored.id;
+
+    let gear_row = part_row(gear, test_user());
+    let part_value = part_row(part, test_user());
+    // the part is mounted on a different gear than the plan's
+    let att = Attachment::new(part, sample_purchase_date(), other_gear, hook, MAX_TIME);
+
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(stored.clone()));
+    store.expect_partid_get_part().returning(move |id| {
+        if id == gear {
+            Ok(gear_row.clone())
+        } else {
+            Ok(part_value.clone())
+        }
+    });
+    store
+        .expect_attachment_get_by_part_and_time()
+        .returning(move |_, _| Ok(Some(att)));
 
     let result = plan_id.snooze(part, 0.5, &test_session(), &mut store).await;
     assert!(matches!(result, Err(Error::BadRequest(_))));
