@@ -20,14 +20,17 @@
 
 <script lang="ts">
   import { getContext, setContext, untrack } from "svelte";
-  import { ToneContext, bg, border, opposite, type Tone } from "./tone.js";
+  import { colorClasses, type Color } from "./color.js";
+  import { ToneContext, opposite, type Tone } from "./tone.js";
 
   let {
     light = undefined,
+    color = undefined,
     class: extraClass = "",
     children,
   }: {
     light?: boolean;
+    color?: Color;
     class?: string;
     children: import("svelte").Snippet;
   } = $props();
@@ -54,14 +57,15 @@
     untrack(() => tone),
   );
 
-  const background = $derived(bg(tone));
+  // The surface: the uniform `color` prop wins when set; otherwise it is the
+  // tone's surface (background + border), which preserves the old
+  // light-prop/flip behavior exactly.
+  const surface = $derived(colorClasses[color ?? tone].surface);
 </script>
 
 <div
-  class={"rounded-lg border " +
-    border() +
-    " p-1 sm:p-2 " +
-    background +
+  class={"rounded-lg border p-1 sm:p-2 " +
+    surface +
     (extraClass ? " " + extraClass : "")}
 >
   {@render children()}

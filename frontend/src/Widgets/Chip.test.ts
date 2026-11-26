@@ -58,4 +58,22 @@ describe("Chip", () => {
     const el = screen.getByText("V").closest(".bg-secondary-100");
     expect(el).toBeTruthy();
   });
+
+  it("renders a filled background with white text when color is primary", () => {
+    render(Chip, { label: "L", value: "V", color: "primary" });
+    const el = screen.getByText("V");
+    expect(el.closest(".bg-primary-700")).toBeTruthy();
+    // a fill is dark-step with white text, not a light surface
+    expect(el.closest(".bg-primary-100")).toBeNull();
+    expect(el.classList.contains("text-white")).toBe(true);
+  });
+
+  it("renders a filled background with white text when color is secondary", () => {
+    render(Chip, { label: "L", value: "V", color: "secondary" });
+    const el = screen.getByText("V");
+    expect(el.closest(".bg-secondary-700")).toBeTruthy();
+    // a fill is dark-step with white text, not a light surface
+    expect(el.closest(".bg-secondary-100")).toBeNull();
+    expect(el.classList.contains("text-white")).toBe(true);
+  });
 });

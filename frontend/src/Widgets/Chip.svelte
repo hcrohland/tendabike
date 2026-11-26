@@ -21,6 +21,7 @@
 <script lang="ts">
   import { Spinner } from "flowbite-svelte";
   import type { Due } from "../lib/serviceplan";
+  import { colorClasses, type Color } from "./color.js";
   import { bg, mainText, mutedText, type Tone } from "./tone.js";
   import ServiceBadge from "./ServiceBadge.svelte";
 
@@ -29,6 +30,7 @@
     value,
     href = undefined,
     light = false,
+    color = undefined,
     due = undefined,
     onclick = undefined,
     indicator = undefined,
@@ -38,6 +40,7 @@
     value: string;
     href?: string;
     light?: boolean;
+    color?: Color;
     due?: Due;
     onclick?: () => void;
     indicator?: string;
@@ -48,17 +51,22 @@
   // darker tone, contrasting the light-tone surface it sits on; plain ⇒ the
   // light tone), and the background comes from the flip's tone mapping.
   const tone: Tone = $derived(light ? "secondary" : "primary");
-  let background = $derived(bg(tone));
+  // A `color` renders the chip as a fill (dark-step background + white text),
+  // like a button; without a color it keeps the old tone surface.
+  const isFill = $derived(color !== undefined);
+  let background = $derived(color ? colorClasses[color].fill : bg(tone));
+  let valueText = $derived(isFill ? "text-white" : mainText());
+  let labelText = $derived(isFill ? "text-white" : mutedText());
   let isButton = $derived(!!onclick && !disabled);
   let isLinked = $derived(!!href);
 </script>
 
 {#snippet chipContent()}
   <ServiceBadge {due} pos="absolute -top-3 -right-0" />
-  <span class="font-semibold text-sm {mainText()}">
+  <span class="font-semibold text-sm {valueText}">
     {value}
   </span>
-  <span class="font-normal text-xs uppercase tracking-wide {mutedText()}">
+  <span class="font-normal text-xs uppercase tracking-wide {labelText}">
     {label}
   </span>
   {#if indicator}
@@ -67,7 +75,7 @@
         <Spinner size="4" color="red" />
       </span>
     {:else}
-      <span class="text-xs font-bold {mainText()}">
+      <span class="text-xs font-bold {valueText}">
         {indicator}
       </span>
     {/if}

@@ -7,7 +7,15 @@
   let {
     mode = "default",
   }: {
-    mode?: "default" | "light" | "nested" | "tone";
+    mode?:
+      | "default"
+      | "light"
+      | "nested"
+      | "tone"
+      | "color-primary"
+      | "color-secondary"
+      | "tone-color-primary"
+      | "tone-color-secondary";
   } = $props();
 </script>
 
@@ -28,5 +36,21 @@
 {:else if mode === "tone"}
   <Card>
     <Tone>content</Tone>
+  </Card>
+{:else if mode === "color-primary"}
+  <Card color="primary">
+    <span>hello</span>
+  </Card>
+{:else if mode === "color-secondary"}
+  <Card color="secondary">
+    <span>hello</span>
+  </Card>
+{:else if mode === "tone-color-primary"}
+  <Card>
+    <Tone color="primary">content</Tone>
+  </Card>
+{:else if mode === "tone-color-secondary"}
+  <Card>
+    <Tone color="secondary">content</Tone>
   </Card>
 {/if}
