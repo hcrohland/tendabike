@@ -50,8 +50,8 @@
         </span>
 
         {#if snoozed}
-          <Badge color="violet" class="shrink-0">
-            {m.planrow_snoozed()}
+          <Badge color="blue" class="shrink-0">
+            {Math.round((plan.snoozes[part.id!] ?? 0) * 100)}%
           </Badge>
         {/if}
 
