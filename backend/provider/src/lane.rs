@@ -26,9 +26,12 @@
 //! over the provider marker [`ProviderSpec`](crate::ProviderSpec) and the
 //! [`Provider`](crate::driver::Provider) driver: it is bounded on the single
 //! [`Store`](crate::store::Store) interface and drives the `Provider` trait
-//! methods, so it is provider-agnostic. Provider selection happens at the
-//! call site (the dispatch), not in the lane. The [`Probe`] outcome is
-//! generic over the lane's event type.
+//! methods, so it is provider-agnostic. The unified lane — the seam's single
+//! impl (ADR-0014) — resolves the user's provider internally, in `probe`
+//! (the [`provider_of`](crate::provider_of) lookup + a typed switch on the
+//! [`Provider`](crate::Provider) enum); the registry and the loop never name
+//! a concrete provider. The [`Probe`] outcome is generic over the lane's
+//! event type.
 
 use std::marker::PhantomData;
 
@@ -150,8 +153,11 @@ impl<E> QueueRead<E> {
 /// The lane is generic over the provider marker and driver: it is bounded on
 /// the single [`Store<P>`](crate::store::Store) interface and drives the
 /// [`Provider<P>`](crate::driver::Provider) trait methods, so it is
-/// provider-agnostic. Provider selection happens at the call site (the
-/// dispatch), not in the lane. The lane carries its entity-op facade
+/// provider-agnostic. The unified lane — the seam's single impl (ADR-0014) —
+/// resolves the user's provider internally, in `probe` (the
+/// [`provider_of`](crate::provider_of) lookup + a typed switch on the
+/// [`Provider`](crate::Provider) enum); the registry and the loop never name
+/// a concrete provider. The lane carries its entity-op facade
 /// ([`Facade`](ProviderLane::Facade) — the provider's door into the domain,
 /// ADR-0013), which its ops forward domain work through, so the impl bounds
 /// on the single store interface, not the full domain store.

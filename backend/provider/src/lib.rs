@@ -59,11 +59,11 @@
 //! event-row operations (spec #1029).
 //!
 //! [`unified`] — the provider lane: the [`ProviderLane`] impl the executor
-//! loop runs in production. Generic over the provider marker and driver, it
-//! is bounded on the single [`Store`](crate::store::Store) interface and
-//! drives the [`Provider`](crate::driver::Provider) trait methods, so it is
-//! provider-agnostic. Provider selection happens at the call site (the
-//! dispatch), not in the lane.
+//! loop runs in production. The unified lane is the seam's single impl
+//! (ADR-0014): it resolves the user's provider internally, in `probe` (the
+//! [`provider_of`](crate::provider_of) lookup + a typed switch on the
+//! [`Provider`](crate::Provider) enum), and delegates to the per-provider
+//! lanes; the registry and the loop never name a concrete provider.
 
 mod config;
 pub use config::{ProviderConfig, disabled, enabled_providers, init};

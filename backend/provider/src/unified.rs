@@ -51,12 +51,14 @@ use crate::store::Store;
 use crate::EntityFacade;
 use crate::{Lane, Probe, ProviderLane};
 
-/// The provider lane: [`Lane<P, S, F, D>`](Lane) — the [`ProviderLane`] impl
-/// the executor loop runs. It is generic over the provider marker `P`, the
+/// The provider lane: [`Lane<P, S, F, D>`](Lane) — the per-provider
+/// [`ProviderLane`] impl. It is generic over the provider marker `P`, the
 /// store `S`, the entity-op facade `F`, and the driver `D`: it is bounded on
 /// the single [`Store<P>`] interface and drives the [`Provider<P>`] trait
-/// methods, so it is provider-agnostic. Provider selection happens at the
-/// call site (the dispatch), not in the lane.
+/// methods, so it is provider-agnostic. The seam's single impl is the
+/// unified lane ([`UnifiedLane`], ADR-0014), which resolves the user's
+/// provider internally, in `probe`, and delegates to a per-provider lane
+/// like this one; the registry and the loop never name a concrete provider.
 ///
 /// The production alias is concrete over the concrete facade
 /// ([`EntityFacadeImpl`]).
