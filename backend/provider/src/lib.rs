@@ -94,7 +94,7 @@ pub use unified::*;
 pub mod dispatch;
 
 mod ratelimit;
-pub(crate) use ratelimit::{Cadence, RateLimitShim, RateLimiter, UsageKind, WindowSpec};
+pub(crate) use ratelimit::{Cadence, RateLimitHandle, UsageKind, WindowSpec};
 
 mod failure;
 pub use failure::*;
