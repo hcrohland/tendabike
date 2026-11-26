@@ -37,11 +37,6 @@ use tb_domain::{
 };
 use tb_exec::{ExecutorStatus, MockServiceApi, ServiceApi};
 use tb_provider::{MockProviderService, Provider, ProviderService};
-// The provider-agnostic provider service (ADR-0014) — the web state's two
-// handles are `ServiceApi` and this trait. The trait itself is referenced by
-// its full path (`tb_provider::ProviderService`) since a type alias cannot
-// stand in for a `dyn` trait.
-type MockProviderServiceNeutral = MockProviderService;
 use time::macros::datetime;
 use tower::ServiceExt;
 
@@ -469,21 +464,17 @@ fn user_state_reply() -> impl Fn(Box<dyn TbSession>, ApiRead) -> TbResult<ReadOu
 /// mock, and the provider-agnostic (neutral) provider mock. The test sets up
 /// expectations on the mocks, then calls [`build_app`] to get the production
 /// router.
-fn mock_ctx() -> (MemoryStore, MockServiceApi, MockProviderServiceNeutral) {
+fn mock_ctx() -> (MemoryStore, MockServiceApi, MockProviderService) {
     (
         MemoryStore::default(),
         MockServiceApi::new(),
-        MockProviderServiceNeutral::new(),
+        MockProviderService::new(),
     )
 }
 
 /// Build the production router over the mocks (call after setting up
 /// expectations).
-fn build_app(
-    store: &MemoryStore,
-    mock: MockServiceApi,
-    provider: MockProviderServiceNeutral,
-) -> Router {
+fn build_app(store: &MemoryStore, mock: MockServiceApi, provider: MockProviderService) -> Router {
     let api: Arc<dyn tb_exec::ServiceApi> = Arc::new(mock);
     let provider: Arc<dyn ProviderService> = Arc::new(provider);
     test_app(store.clone(), api, provider)
