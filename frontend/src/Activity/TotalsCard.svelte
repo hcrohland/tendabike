@@ -25,7 +25,7 @@
   import { DAY, fmtNumber, fmtSeconds } from "../lib/utils";
   import RangeSlider from "svelte-range-slider-pips";
   import { tick } from "svelte";
-  import { bg, border, mainText } from "../Widgets/tone.js";
+  import { colorClasses, mainText } from "../Widgets/color.js";
   import * as m from "../../paraglide/messages";
 
   type FilterOption = {
@@ -128,11 +128,11 @@
   }
 </script>
 
-<div class={"rounded-lg border " + border() + " p-4 " + bg("secondary")}>
+<div class={"rounded-lg border " + colorClasses["secondary"].surface + " p-4"}>
   <!-- Top line: title + gear filter + search -->
   <div class="mb-3">
     <div class="flex items-center justify-between gap-2 mb-2">
-      <div class={"text-sm font-bold uppercase " + mainText()}>
+      <div class={"text-sm font-bold uppercase " + mainText}>
         {title}
       </div>
       <div class="flex items-center gap-2">
@@ -145,9 +145,7 @@
               gearFilter = v === "" ? undefined : Number(v);
             }}
             class={"text-sm p-1 rounded border " +
-              border() +
-              " " +
-              bg("primary")}
+              colorClasses["primary"].surface}
           >
             <option value={undefined}>{m.filter_all()}</option>
             {#each filterOptions as opt}
@@ -159,10 +157,8 @@
         <input
           type="text"
           bind:value={searchText}
-          class={"text-sm p-1 rounded border " +
-            border() +
-            " w-24 sm:w-48 " +
-            bg("primary")}
+          class={"text-sm p-1 rounded border w-24 sm:w-48 " +
+            colorClasses["primary"].surface}
           placeholder="Search..."
         />
       </div>
@@ -175,6 +171,7 @@
         onclick={() => toggleSort("rides")}
         indicator={sortIndicator("rides")}
         disabled={sorting}
+        color="secondary"
       />
       <Chip
         value={fmtSeconds(totals.time)}
@@ -182,6 +179,7 @@
         onclick={() => toggleSort("time")}
         indicator={sortIndicator("time")}
         disabled={sorting}
+        color="secondary"
       />
       <Chip
         value={fmtNumber(Math.round((totals.distance || 0) / 1000))}
@@ -189,6 +187,7 @@
         onclick={() => toggleSort("distance")}
         indicator={sortIndicator("distance")}
         disabled={sorting}
+        color="secondary"
       />
       <Chip
         value={fmtNumber(totals.climb)}
@@ -196,6 +195,7 @@
         onclick={() => toggleSort("climb")}
         indicator={sortIndicator("climb")}
         disabled={sorting}
+        color="secondary"
       />
       <Chip
         value={fmtNumber(totals.descend)}
@@ -203,6 +203,7 @@
         onclick={() => toggleSort("descend")}
         indicator={sortIndicator("descend")}
         disabled={sorting}
+        color="secondary"
       />
       {#if totals.energy > 0}
         <Chip
@@ -211,6 +212,7 @@
           onclick={() => toggleSort("energy")}
           indicator={sortIndicator("energy")}
           disabled={sorting}
+          color="secondary"
         />
       {/if}
     </div>

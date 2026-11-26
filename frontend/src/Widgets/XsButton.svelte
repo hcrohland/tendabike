@@ -6,7 +6,7 @@
 
 <Button
   size="xs"
-  color="alternative"
+  color="secondary"
   class="py-0 px-1 ms-2 rounded-xs cursor-pointer"
   {...rest}
 >

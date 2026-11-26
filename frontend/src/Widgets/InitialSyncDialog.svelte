@@ -29,7 +29,7 @@
     type Provider,
   } from "../lib/provider.svelte";
   import ProviderMark from "./ProviderMark.svelte";
-  import { bg, border, mainText } from "./tone.js";
+  import { colorClasses, mainText } from "./color.js";
   import { m } from "../../paraglide/messages";
 
   /// A gear item the onboarding gear import discovered (spec #829): the
@@ -142,29 +142,29 @@
         {m.initialsync_header({ provider: meta.name })}
       </span>
     </div>
-    <div class={"p-4 sm:p-6 " + bg("primary")}>
+    <div class={"p-4 sm:p-6 " + colorClasses["primary"].surface}>
       <div class="text-center">
-        <Heading tag="h3" class={"mb-5 text-lg font-normal " + mainText()}>
+        <Heading tag="h3" class={"mb-5 text-lg font-normal " + mainText}>
           {m.initialsync_welcome()}
         </Heading>
         <P class="mb-4 text-left">
           {m.initialsync_question({ provider: meta.name })}
         </P>
-        <P class={"mb-6 text-left text-sm " + mainText()}>
+        <P class={"mb-6 text-left text-sm " + mainText}>
           {m.initialsync_desc1()}
         </P>
-        <P class={"mb-6 text-left text-sm " + mainText()}>
+        <P class={"mb-6 text-left text-sm " + mainText}>
           {m.initialsync_desc2()}
         </P>
         {#if provider === "strava"}
-          <P class={"mb-6 text-left text-sm " + mainText()}>
+          <P class={"mb-6 text-left text-sm " + mainText}>
             {m.initialsync_desc3({
               sync: m.header_sync(),
               historic: m.header_import_historic(),
             })}
           </P>
         {/if}
-        <P class={"mb-6 text-left text-sm " + mainText()}>
+        <P class={"mb-6 text-left text-sm " + mainText}>
           {m.initialsync_desc4()} <br />
         </P>
         {#if gear.length > 0}
@@ -173,7 +173,7 @@
           <div class="mb-6 text-left">
             <div
               class={"text-xs font-medium " +
-                mainText() +
+                mainText +
                 " uppercase tracking-wide mb-2"}
             >
               {m.initialsync_gear()}
@@ -182,11 +182,9 @@
               {#each gear as item (item.name)}
                 <span
                   class={"inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border " +
-                    border() +
+                    colorClasses["secondary"].surface +
                     " " +
-                    mainText() +
-                    " " +
-                    bg("secondary")}
+                    mainText}
                 >
                   <!-- The part type's flaticon (mountain-bike for a bike,
                        run for a shoe, ...) via the shared icons map. -->
@@ -209,7 +207,7 @@
           >
             {loading ? m.action_importing() : m.header_import_activities()}
           </Button>
-          <Button color="alternative" disabled={loading} onclick={skipSync}>
+          <Button color="primary" disabled={loading} onclick={skipSync}>
             {m.initialsync_skip()}
           </Button>
         </div>

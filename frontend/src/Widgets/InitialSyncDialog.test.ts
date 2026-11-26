@@ -193,4 +193,16 @@ describe("InitialSyncDialog", () => {
     const shoeChip = screen.getByText("Shimano S-Phyre RC2").closest("span");
     expect(shoeChip?.querySelector("i")?.className).toBe("flaticon-run");
   });
+
+  it("renders the dialog body on the primary surface and gear chips on the secondary surface", async () => {
+    setUser(pendingUser("strava"));
+    render(InitialSyncDialog);
+    const chip = await screen.findByText("Canyon Aeroad");
+    // the gear chip is a secondary (darker) surface…
+    expect(chip.closest(".bg-secondary-100")).toBeTruthy();
+    // …sitting in the primary (light) dialog body
+    const body = chip.closest(".bg-primary-100");
+    expect(body).toBeTruthy();
+    expect(body?.classList.contains("bg-secondary-100")).toBe(false);
+  });
 });

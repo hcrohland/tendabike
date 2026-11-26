@@ -34,3 +34,15 @@ export const colorClasses: Record<Color, ColorClasses> = {
     fill: "bg-secondary-700 dark:bg-secondary-600 text-white",
   },
 };
+
+/**
+ * The neutral text classes, shared by both colors (text contrast does not
+ * depend on the card's color, so these are plain constants, not part of the
+ * per-color mapping). They replace the tone module's text helpers.
+ */
+
+/** The main (high-contrast) text class. */
+export const mainText = "text-secondary-900 dark:text-secondary-100";
+
+/** The muted (secondary) text class. */
+export const mutedText = "text-secondary-600 dark:text-secondary-300";

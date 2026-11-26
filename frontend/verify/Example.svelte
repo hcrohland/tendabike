@@ -1,39 +1,40 @@
 <script lang="ts">
-  import { Badge, Button } from "flowbite-svelte";
+  import { Button } from "flowbite-svelte";
   import Card from "../src/Widgets/Card.svelte";
-  import Tone from "../src/Widgets/Tone.svelte";
+  import Chip from "../src/Widgets/Chip.svelte";
 </script>
 
 <!--
-  The harness example. Swap in the component under test, and keep a
-  data-testid anchor on whatever you will assert. Import real app
-  components across the boundary, as here.
+  The harness example. Renders the migrated neutral components — a card and a
+  nested card (surfaces), a chip matching its card (a fill), and primary vs
+  secondary fill buttons — with class anchors the real-browser check reads
+  computed styles from.
 -->
 <div class="p-6 max-w-md space-y-6">
-  <section data-testid="scenario-default">
-    <p class="text-sm font-semibold mb-2">card + tone content</p>
-    <Card>
-      <Tone>content on the contrasting tone</Tone>
+  <section data-testid="scenario-card">
+    <p class="text-sm font-semibold mb-2">card (secondary) + matching chip</p>
+    <Card color="secondary">
+      <div class="p-2">
+        <Chip value="5" label="Rides" color="secondary" />
+      </div>
     </Card>
   </section>
 
   <section data-testid="scenario-nested">
     <p class="text-sm font-semibold mb-2">nested card flip</p>
-    <Card>
-      <p>outer card (darker tone)</p>
-      <Card>
-        <p>inner card (flipped to the light tone)</p>
+    <Card color="secondary">
+      <p>outer card (secondary surface)</p>
+      <Card color="primary">
+        <p>inner card (primary surface)</p>
       </Card>
     </Card>
   </section>
 
-  <section data-testid="scenario-status">
-    <p class="text-sm font-semibold mb-2">status + neutral components</p>
+  <section data-testid="scenario-fills">
+    <p class="text-sm font-semibold mb-2">primary vs secondary fill</p>
     <div class="flex flex-wrap gap-2">
-      <Badge color="red">danger</Badge>
-      <Badge color="yellow">warning</Badge>
-      <Badge color="blue">info</Badge>
-      <Button color="light">neutral</Button>
+      <Button color="primary" data-testid="fill-primary">primary</Button>
+      <Button color="secondary" data-testid="fill-secondary">secondary</Button>
     </div>
   </section>
 </div>

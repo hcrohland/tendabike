@@ -72,12 +72,16 @@
   {#snippet footer()}
     <div class="flex justify-end w-full gap-2">
       {#if !result}
-        <Button onclick={sendFile} color="dark" class="border" {disabled}>
+        <Button onclick={sendFile} color="secondary" class="border" {disabled}>
           {m.action_synchronize()}
         </Button>
-        <Button onclick={reset} color="alternative">{m.action_cancel()}</Button>
+        <Button onclick={reset} color="secondary">
+          {m.action_cancel()}
+        </Button>
       {:else}
-        <Button onclick={reset}>{m.action_ok()}</Button>
+        <Button onclick={reset} color="secondary">
+          {m.action_ok()}
+        </Button>
       {/if}
     </div>
   {/snippet}
