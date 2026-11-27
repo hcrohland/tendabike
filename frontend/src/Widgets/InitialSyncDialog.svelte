@@ -201,7 +201,7 @@
              provider-agnostic (spec #974). -->
         <div class="flex justify-center gap-4">
           <Button
-            color={provider === "strava" ? "orange" : "gray"}
+            color={provider === "strava" ? "orange" : "primary"}
             disabled={loading}
             onclick={importActivities}
           >

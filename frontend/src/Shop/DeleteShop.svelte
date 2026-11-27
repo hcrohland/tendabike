@@ -50,7 +50,7 @@
   </div>
 
   {#snippet footer()}
-    <Button color="alternative" onclick={() => (modal.open = false)}>
+    <Button color="secondary" onclick={() => (modal.open = false)}>
       {m.action_cancel()}
     </Button>
     <Button color="red" onclick={onaction}>

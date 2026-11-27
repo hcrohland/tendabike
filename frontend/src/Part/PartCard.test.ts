@@ -5,28 +5,19 @@ import { Attachment } from "../lib/attachment";
 import { Part, parts } from "../lib/part";
 import { getTypes, types } from "../lib/types.svelte";
 import { usages } from "../lib/usage";
-import { resp, usage } from "../test/helpers";
+import {
+  expectSurface,
+  partData,
+  standardUsage,
+  typesFetch,
+} from "../test/helpers";
 import PartCard from "./PartCard.svelte";
 
-// The part card is a migrated call site: its surface is an explicit `color`
-// (default secondary), and its nested blocks — the history entries and the
-// child cards — take the opposite color. We assert only the rendered surface
-// classes, never the mechanism.
 describe("PartCard", () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
+  let fetchMock: ReturnType<typeof typesFetch>;
 
   beforeEach(async () => {
-    fetchMock = vi.fn().mockImplementation((url: string) => {
-      if (url.includes("/api/types/part")) {
-        return Promise.resolve(
-          resp([{ id: 10, name: "Wheel", main: 1, hooks: [1], order: 1 }]),
-        );
-      }
-      if (url.includes("/api/types/activity")) {
-        return Promise.resolve(resp([]));
-      }
-      return Promise.resolve(resp(null));
-    });
+    fetchMock = typesFetch();
     vi.stubGlobal("fetch", fetchMock);
     await getTypes();
     parts.setMap([]);
@@ -53,34 +44,10 @@ describe("PartCard", () => {
   }
 
   function seed() {
-    const part = new Part({
-      id: 7,
-      owner: 1,
-      what: 10,
-      name: "Wheel",
-      purchase: "2023-01-01T00:00:00Z",
-      last_used: "2024-01-01T00:00:00Z",
-      usage: "u1",
-    });
-    const child = new Part({
-      id: 8,
-      owner: 1,
-      what: 10,
-      name: "Inner Wheel",
-      purchase: "2023-01-01T00:00:00Z",
-      last_used: "2024-01-01T00:00:00Z",
-      usage: "u1",
-    });
+    const part = new Part(partData());
+    const child = new Part(partData({ id: 8, name: "Inner Wheel" }));
     parts.setMap([part, child]);
-    usages.setMap([
-      usage("u1", {
-        count: 1,
-        distance: 1000,
-        time: 3600,
-        duration: 3600,
-        energy: 100,
-      }),
-    ]);
+    usages.setMap([standardUsage()]);
     return { part, child };
   }
 
@@ -91,9 +58,7 @@ describe("PartCard", () => {
       type: types[10],
       children: [],
     });
-    const card = container.querySelector(".rounded-lg");
-    expect(card?.classList.contains("bg-secondary-100")).toBe(true);
-    expect(card?.classList.contains("bg-primary-100")).toBe(false);
+    expectSurface(container.querySelector(".rounded-lg"), "secondary");
   });
 
   it("renders a nested child card on the contrasting (primary) surface", () => {
@@ -109,9 +74,7 @@ describe("PartCard", () => {
         },
       ],
     });
-    const childCard = container.querySelector(".mt-3 .rounded-lg");
-    expect(childCard?.classList.contains("bg-primary-100")).toBe(true);
-    expect(childCard?.classList.contains("bg-secondary-100")).toBe(false);
+    expectSurface(container.querySelector(".mt-3 .rounded-lg"), "primary");
   });
 
   it("renders the primary surface with a secondary child when given color=primary", () => {
@@ -128,11 +91,8 @@ describe("PartCard", () => {
       ],
       color: "primary",
     });
-    const card = container.querySelector(".rounded-lg");
-    expect(card?.classList.contains("bg-primary-100")).toBe(true);
-    const childCard = container.querySelector(".mt-3 .rounded-lg");
-    expect(childCard?.classList.contains("bg-secondary-100")).toBe(true);
-    expect(childCard?.classList.contains("bg-primary-100")).toBe(false);
+    expectSurface(container.querySelector(".rounded-lg"), "primary");
+    expectSurface(container.querySelector(".mt-3 .rounded-lg"), "secondary");
   });
 
   it("renders the part history block on the contrasting (primary) surface", () => {
@@ -149,8 +109,6 @@ describe("PartCard", () => {
     expect(showMore).toBeTruthy();
     fireEvent.click(showMore!);
     flushSync();
-    const block = container.querySelector(".opacity-70");
-    expect(block?.classList.contains("bg-primary-100")).toBe(true);
-    expect(block?.classList.contains("bg-secondary-100")).toBe(false);
+    expectSurface(container.querySelector(".opacity-70"), "primary");
   });
 });

@@ -67,10 +67,10 @@
     <div
       class={"rounded-lg border p-3 " +
         (part.disposed_at
-          ? colorClasses["secondary"].surface +
+          ? colorClasses["secondary"].surfaceBg +
             " opacity-70 border-secondary-600 dark:border-secondary-400"
           : mounted_on(part.id, date)
-            ? colorClasses["secondary"].surface +
+            ? colorClasses["secondary"].surfaceBg +
               " border-secondary-600 dark:border-secondary-400"
             : colorClasses["primary"].surface)}
     >

@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/svelte";
 import { flushSync } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AdminRow, User } from "../lib/user.svelte";
-import { resp } from "../test/helpers";
+import { expectSurface, resp } from "../test/helpers";
 import AdminCard from "./AdminCard.svelte";
 
 const user: User = {
@@ -56,14 +56,9 @@ describe("AdminCard", () => {
     expect(screen.getByText("Disabled")).toBeTruthy();
   });
 
-  // The admin card is a migrated call site: it renders an explicit secondary
-  // surface and its count chips are secondary fills. We assert only the
-  // rendered surface/fill classes, never the mechanism.
   it("renders the card's secondary surface and its chips as secondary fills", () => {
     const { utils } = renderCard();
-    const card = utils.container.querySelector(".rounded-lg");
-    expect(card?.classList.contains("bg-secondary-100")).toBe(true);
-    expect(card?.classList.contains("bg-primary-100")).toBe(false);
+    expectSurface(utils.container.querySelector(".rounded-lg"), "secondary");
     // the parts-count chip is a fill: dark-step background + white text
     const chip = screen.getByText("2");
     const chipRoot = chip.closest(".shrink-0");

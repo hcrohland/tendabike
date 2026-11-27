@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Shop } from "../lib/shop.svelte";
-import { resp } from "../test/helpers";
+import { expectSurface, resp } from "../test/helpers";
 import ShopCard from "./ShopCard.svelte";
 
 const owner = {
@@ -23,9 +23,6 @@ function shopData(overrides: Partial<any> = {}): any {
   };
 }
 
-// The shop card is a migrated call site: it renders an explicit secondary
-// surface and its chips are secondary fills. We assert only the rendered
-// surface/fill classes, never the mechanism.
 describe("ShopCard", () => {
   beforeEach(() => {
     vi.stubGlobal(
@@ -40,9 +37,7 @@ describe("ShopCard", () => {
       users: { 1: owner },
       isOwner: true,
     });
-    const card = container.querySelector(".rounded-lg");
-    expect(card?.classList.contains("bg-secondary-100")).toBe(true);
-    expect(card?.classList.contains("bg-primary-100")).toBe(false);
+    expectSurface(container.querySelector(".rounded-lg"), "secondary");
     // the owner chip is a fill: dark-step background + white text
     const chip = screen.getByText("Owner");
     const chipRoot = chip.closest(".shrink-0");

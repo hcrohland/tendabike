@@ -13,9 +13,17 @@
 /** The two neutral colors a card, chip, or Tone block can render in. */
 export type Color = "primary" | "secondary";
 
-/** The class pairs a color renders as, per component role. */
-export interface ColorClasses {
-  /** Surface classes (background + border): for cards and the Tone block. */
+/** The standard surface border, shared by both colors. */
+const surfaceBorder = "border-secondary-400 dark:border-secondary-700";
+
+/** The per-color surface background (no border). */
+const primarySurfaceBg = "bg-primary-100 dark:bg-primary-900";
+const secondarySurfaceBg = "bg-secondary-100 dark:bg-secondary-900";
+
+interface ColorClasses {
+  /** Surface background classes (no border): for a call site composing its own border. */
+  surfaceBg: string;
+  /** Surface classes (background + standard border): for cards and the Tone block. */
   surface: string;
   /** Fill classes (dark-step background + white text): for chips. */
   fill: string;
@@ -24,13 +32,13 @@ export interface ColorClasses {
 /** The shared color → classes mapping. */
 export const colorClasses: Record<Color, ColorClasses> = {
   primary: {
-    surface:
-      "bg-primary-100 dark:bg-primary-900 border-secondary-400 dark:border-secondary-700",
+    surfaceBg: primarySurfaceBg,
+    surface: `${primarySurfaceBg} ${surfaceBorder}`,
     fill: "bg-primary-700 dark:bg-primary-600 text-white",
   },
   secondary: {
-    surface:
-      "bg-secondary-100 dark:bg-secondary-900 border-secondary-400 dark:border-secondary-700",
+    surfaceBg: secondarySurfaceBg,
+    surface: `${secondarySurfaceBg} ${surfaceBorder}`,
     fill: "bg-secondary-700 dark:bg-secondary-600 text-white",
   },
 };

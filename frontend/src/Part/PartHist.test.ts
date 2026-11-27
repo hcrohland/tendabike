@@ -4,28 +4,19 @@ import { Attachment, attachments } from "../lib/attachment";
 import { Part, parts } from "../lib/part";
 import { getTypes } from "../lib/types.svelte";
 import { usages } from "../lib/usage";
-import { resp, usage } from "../test/helpers";
+import {
+  expectSurface,
+  partData,
+  standardUsage,
+  typesFetch,
+} from "../test/helpers";
 import PartHist from "./PartHist.svelte";
 
-// The part history section is a migrated call site: its outer block renders
-// the primary surface and the nested attachment cards take the contrasting
-// secondary surface. We assert only the rendered surface classes, never the
-// mechanism.
 describe("PartHist", () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
+  let fetchMock: ReturnType<typeof typesFetch>;
 
   beforeEach(async () => {
-    fetchMock = vi.fn().mockImplementation((url: string) => {
-      if (url.includes("/api/types/part")) {
-        return Promise.resolve(
-          resp([{ id: 10, name: "Wheel", main: 1, hooks: [1], order: 1 }]),
-        );
-      }
-      if (url.includes("/api/types/activity")) {
-        return Promise.resolve(resp([]));
-      }
-      return Promise.resolve(resp(null));
-    });
+    fetchMock = typesFetch();
     vi.stubGlobal("fetch", fetchMock);
     await getTypes();
     parts.setMap([]);
@@ -34,25 +25,9 @@ describe("PartHist", () => {
   });
 
   function seed() {
-    const part = new Part({
-      id: 7,
-      owner: 1,
-      what: 10,
-      name: "Wheel",
-      purchase: "2023-01-01T00:00:00Z",
-      last_used: "2024-01-01T00:00:00Z",
-      usage: "u1",
-    });
+    const part = new Part(partData());
     parts.setMap([part]);
-    usages.setMap([
-      usage("u1", {
-        count: 1,
-        distance: 1000,
-        time: 3600,
-        duration: 3600,
-        energy: 100,
-      }),
-    ]);
+    usages.setMap([standardUsage()]);
     attachments.setMap([
       new Attachment({
         part_id: 7,
@@ -81,16 +56,12 @@ describe("PartHist", () => {
   it("renders the history section on the primary surface", () => {
     seed();
     const { container } = render(PartHist, { id: 7 });
-    const outer = container.querySelector(".m-2");
-    expect(outer?.classList.contains("bg-primary-100")).toBe(true);
-    expect(outer?.classList.contains("bg-secondary-100")).toBe(false);
+    expectSurface(container.querySelector(".m-2"), "primary");
   });
 
   it("renders the nested attachment cards on the contrasting (secondary) surface", () => {
     seed();
     const { container } = render(PartHist, { id: 7 });
-    const inner = container.querySelector(".m-2 .rounded-lg");
-    expect(inner?.classList.contains("bg-secondary-100")).toBe(true);
-    expect(inner?.classList.contains("bg-primary-100")).toBe(false);
+    expectSurface(container.querySelector(".m-2 .rounded-lg"), "secondary");
   });
 });

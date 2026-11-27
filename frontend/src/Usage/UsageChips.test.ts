@@ -96,9 +96,6 @@ describe("UsageChips", () => {
     expect((link as HTMLAnchorElement).href).toContain("/activities/99");
   });
 
-  // The chips render a fill of their color (dark-step background + white
-  // text), matching the surface they sit on. We assert only the rendered
-  // fill class, never the mechanism.
   function usageData() {
     return new Usage({
       id: "1",

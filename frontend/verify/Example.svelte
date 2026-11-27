@@ -5,6 +5,8 @@
   import { Usage, usages } from "../src/lib/usage";
   import { Type } from "../src/lib/types.svelte";
   import { Shop, shops } from "../src/lib/shop.svelte";
+  import { setUser } from "../src/lib/user.svelte";
+  import { deleteShop } from "../src/Shop/DeleteShop.svelte";
 
   // The harness has no backend: stub the app's /api/* fetches with empty
   // JSON so components that load data (shop parts, the offline banner's
@@ -20,8 +22,8 @@
     return realFetch(input, init);
   }) as typeof fetch;
 
-  // Seed the state objects the migrated components read, so the harness
-  // renders real Part/Service/ServicePlan components without the full stack.
+  // Seed the state objects the components read, so the harness renders real
+  // Part/Service/ServicePlan components without the full stack.
   parts.setMap([
     new Part({
       id: 5,
@@ -66,6 +68,18 @@
     auto_approve: true,
     created_at: "2023-01-01T00:00:00Z",
   });
+  // A pending icu user: the initial-sync dialog opens for them on mount.
+  setUser({
+    id: 1,
+    firstname: "Max",
+    name: "Max Mustermann",
+    avatar: undefined,
+    is_admin: false,
+    onboarding_status: "pending",
+    provider: "icu",
+  });
+  // Open the shop-delete modal so its footer buttons render.
+  deleteShop(shops[10] as Shop);
   usages.setMap([
     new Usage({
       id: "u1",
@@ -116,8 +130,11 @@
 
 <script lang="ts">
   import { Button } from "flowbite-svelte";
+  import Admin from "../src/Admin/Admin.svelte";
+  import DeleteShopModal from "../src/Shop/DeleteShop.svelte";
   import Card from "../src/Widgets/Card.svelte";
   import Chip from "../src/Widgets/Chip.svelte";
+  import InitialSyncDialog from "../src/Widgets/InitialSyncDialog.svelte";
   import PlanBlock from "../src/ServicePlan/PlanBlock.svelte";
   import ServiceHist from "../src/Service/ServiceHist.svelte";
   import ShopCard from "../src/Shop/ShopCard.svelte";
@@ -157,13 +174,15 @@
 </script>
 
 <!--
-  The harness example. Renders the migrated neutral components — the wrapper
-  card/chip/fill scenarios, plus the real migrated Part/Service/ServicePlan
+  The harness example. Renders the neutral components — the wrapper
+  card/chip/fill scenarios, plus the real Part/Service/ServicePlan
   components (a plan block: secondary card + nested primary row + matching
   button; a service history card: secondary card + nested primary history
-  block), the migrated Shop/Spares/Admin/top-level call sites (a shop card,
-  the spare-type selector, an admin card, the offline banner) — with class
-  anchors the real-browser check reads computed styles from.
+  block), the Shop/Spares/Admin/top-level call sites (a shop card, the
+  spare-type selector, an admin card, the offline banner), the admin
+  page-base buttons, the shop-delete modal footer, and the initial-sync
+  dialog on the icu branch — with class anchors the real-browser check reads
+  computed styles from.
 -->
 <div class="p-6 max-w-md space-y-6">
   <section data-testid="scenario-card">
@@ -195,7 +214,7 @@
 
   <section data-testid="scenario-planblock">
     <p class="text-sm font-semibold mb-2">
-      migrated PlanBlock (secondary card, nested primary row)
+      PlanBlock (secondary card, nested primary row)
     </p>
     {#each stateValues(plans) as plan (plan.id)}
       <PlanBlock {plan} />
@@ -203,9 +222,7 @@
   </section>
 
   <section data-testid="scenario-servicehist">
-    <p class="text-sm font-semibold mb-2">
-      migrated ServiceHist (secondary card)
-    </p>
+    <p class="text-sm font-semibold mb-2">ServiceHist (secondary card)</p>
     {#each stateValues(services) as service (service.id)}
       {#if service.successor == null}
         <ServiceHist {service} />
@@ -215,21 +232,21 @@
 
   <section data-testid="scenario-shopcard">
     <p class="text-sm font-semibold mb-2">
-      migrated ShopCard (secondary card, secondary chip fill)
+      ShopCard (secondary card, secondary chip fill)
     </p>
     <ShopCard {shop} {users} isOwner={true} />
   </section>
 
   <section data-testid="scenario-sparetype">
     <p class="text-sm font-semibold mb-2">
-      migrated SpareType (secondary block, primary part card, primary chip fill)
+      SpareType (secondary block, primary part card, primary chip fill)
     </p>
     <SpareType type={spareType} update={() => {}} attachee={0} />
   </section>
 
   <section data-testid="scenario-admincard">
     <p class="text-sm font-semibold mb-2">
-      migrated AdminCard (secondary card, secondary chip fill)
+      AdminCard (secondary card, secondary chip fill)
     </p>
     <AdminCard
       row={adminRow}
@@ -240,9 +257,28 @@
   </section>
 
   <section data-testid="scenario-offline">
-    <p class="text-sm font-semibold mb-2">
-      migrated OfflineBanner (secondary surface)
-    </p>
+    <p class="text-sm font-semibold mb-2">OfflineBanner (secondary surface)</p>
     <OfflineBanner />
+  </section>
+
+  <section data-testid="scenario-admin">
+    <p class="text-sm font-semibold mb-2">
+      admin page-base buttons (secondary fill)
+    </p>
+    <Admin />
+  </section>
+
+  <section data-testid="scenario-deleteshop">
+    <p class="text-sm font-semibold mb-2">
+      shop-delete modal footer (cancel: secondary fill)
+    </p>
+    <DeleteShopModal />
+  </section>
+
+  <section data-testid="scenario-icudialog">
+    <p class="text-sm font-semibold mb-2">
+      initial-sync dialog, icu branch (import: primary fill)
+    </p>
+    <InitialSyncDialog />
   </section>
 </div>

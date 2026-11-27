@@ -1,37 +1,17 @@
 import { render, screen } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Activity } from "../lib/activity";
+import { activity } from "../test/helpers";
 import TotalsCard from "./TotalsCard.svelte";
 
-// The totals card is a migrated call site: its surface is an explicit
-// `secondary` color, its nested controls (search input) take the contrasting
-// `primary` surface, and its metric chips are `secondary` fills. We assert
-// only the rendered surface/fill classes, never the mechanism.
 class ResizeObserverStub {
   observe() {}
   unobserve() {}
   disconnect() {}
 }
 
-function act() {
-  return new Activity({
-    id: "icu:100",
-    user_id: 1,
-    what: 301,
-    name: "Ride",
-    start: "2024-05-01T08:00:00Z",
-    distance: 20000,
-    time: 3600,
-    duration: 3600,
-    climb: 100,
-    descend: 80,
-    energy: 50,
-  });
-}
-
 const props = {
   title: "Activity Totals",
-  activities: [act()],
+  activities: [activity()],
   filterOptions: undefined,
   dateValues: [0, 1],
   min: 0,

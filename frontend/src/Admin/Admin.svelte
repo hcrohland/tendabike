@@ -40,10 +40,10 @@
     {/each}
   </div>
   <ButtonGroup class="p-6">
-    <Button onclick={() => createSync.start()}
+    <Button color="secondary" onclick={() => createSync.start()}
       >{m.admin_add_sync_event_all()}</Button
     >
-    <Button onclick={rescan}>
+    <Button color="secondary" onclick={rescan}>
       {#await promise}
         <Spinner />
       {:then}
@@ -51,7 +51,7 @@
       {/await}
     </Button>
   </ButtonGroup>
-  <Button onclick={refresh}>{m.action_refresh()}</Button>
+  <Button color="secondary" onclick={refresh}>{m.action_refresh()}</Button>
 {/await}
 <CreateSync {refresh} bind:this={createSync} />
 <DeleteUser bind:this={deleteuser} {refresh} />
