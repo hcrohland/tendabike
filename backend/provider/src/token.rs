@@ -8,8 +8,8 @@
 //! rotated-token persist (through the store's generic
 //! [`user_update_token`](Store::user_update_token) op). The driver supplies
 //! only its refresh exchange and its refresh-token accessor, as
-//! [`Provider`](crate::driver::Provider) associated functions with default
-//! no-ops — a durable-token provider needs no refresh impl at all.
+//! [`TokenRefresh`] associated functions with default no-ops — a
+//! durable-token provider needs no refresh impl at all.
 //!
 //! The generic types are state-free: a provider keeps a named `static`
 //! [`TokenCache`] and the kit reaches it by borrowing a reference (the same
@@ -26,17 +26,48 @@ use log::debug;
 use oauth2::AccessToken;
 
 use crate::ProviderSpec;
-use crate::driver::Provider;
 use crate::facade::{Error, TbResult, UserId};
 use crate::store::Store;
+
+/// The driver's token-refresh hooks (spec #1056): the exchange and the
+/// refresh-token accessor the kit's generic refresh flow reaches through the
+/// marker's `Driver` bound. A dedicated, narrow trait — the kit's token
+/// machinery uses only these two functions, so a `ProviderSpec`'s `Driver`
+/// bound names this trait rather than the full driver, and a durable-token
+/// provider (or a test stub) implements nothing at all (both default).
+#[async_trait::async_trait]
+pub trait TokenRefresh<P: ProviderSpec>: Send + Sync {
+    /// Refresh the user's access token (spec #1056): take the current
+    /// refresh token, perform the exchange using the driver's client, and
+    /// return the kit's [`RefreshedToken`] (the new access token, the
+    /// optional expiry duration, and the optional rotated refresh token —
+    /// the signal for whether a persist is needed).
+    ///
+    /// Default: an error (a provider whose tokens are durable has no
+    /// refresh; the kit's refresh flow never reaches it).
+    async fn refresh(_refresh_token: String) -> TbResult<RefreshedToken> {
+        Err(Error::NotAuth(
+            "no token refresh for this provider".to_string(),
+        ))
+    }
+
+    /// Read the refresh token out of the user row (spec #1056) — the durable
+    /// fallback the token cache's miss builds from.
+    ///
+    /// Default: `None` (a provider whose tokens are durable has no refresh
+    /// token).
+    fn refresh_token(_user: &P::User) -> Option<String> {
+        None
+    }
+}
 
 /// The result of a token refresh (spec #1056): the new access token, the
 /// optional expiry duration, and the optional rotated refresh token — the
 /// signal for whether a persist is needed.
 ///
 /// `pub` (the fields `pub(crate)`): it is the return type of the
-/// [`Provider::refresh`](crate::driver::Provider::refresh) associated
-/// function on the public driver trait.
+/// [`TokenRefresh::refresh`] associated function on the public driver
+/// trait.
 #[derive(Debug, Clone)]
 pub struct RefreshedToken {
     /// The new access token.
@@ -84,8 +115,8 @@ impl<P: ProviderSpec> TokenState<P> {
     /// Build the token state from a stored user row: an empty access token
     /// with a past expiry, so the first request forces a token refresh
     /// (spec #1056). The refresh token is read out of the row by the
-    /// driver's [`refresh_token`](crate::driver::Provider::refresh_token)
-    /// accessor (the durable fallback).
+    /// driver's [`TokenRefresh::refresh_token`] accessor (the durable
+    /// fallback).
     fn from_user(user: &P::User) -> Self {
         Self {
             owner: P::user_owner(user).clone(),
@@ -118,10 +149,9 @@ impl<P: ProviderSpec> TokenState<P> {
     }
 
     /// Ensure a valid access token, refreshing in place if expired (the
-    /// driver's
-    /// [`refresh`](crate::driver::Provider::refresh) exchange). Returns the
-    /// *new* refresh token only when a refresh issued a new rotating token
-    /// (the signal for whether a persist is needed).
+    /// driver's [`TokenRefresh::refresh`] exchange). Returns the *new*
+    /// refresh token only when a refresh issued a new rotating token (the
+    /// signal for whether a persist is needed).
     async fn refresh_if_expired(&mut self) -> TbResult<Option<String>> {
         if !is_expired(&self.expires_at) {
             return Ok(None);

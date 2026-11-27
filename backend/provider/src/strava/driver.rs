@@ -9,6 +9,7 @@ use crate::driver::Provider;
 use crate::facade::{ActivityId, EntityFacade, Part, PartId, Session, Summary, TbResult, UserId};
 use crate::store::Store;
 use crate::strava::{StravaId, StravaSpec, StravaUser};
+use crate::token::TokenRefresh;
 use oauth2::RefreshToken;
 
 /// The Strava driver type (spec #1029, ticket #1032): the
@@ -79,30 +80,6 @@ impl Provider<StravaSpec> for StravaDriver {
             .context("token exchange failed")?;
         debug!("user {} token revoked", strava_id);
         Ok(())
-    }
-
-    async fn refresh(refresh_token: String) -> TbResult<RefreshedToken> {
-        use super::client::strava_client;
-        use crate::client::HTTP_CLIENT;
-        use crate::facade::Error;
-        use oauth2::TokenResponse;
-
-        let current = RefreshToken::new(refresh_token);
-        let token = strava_client()
-            .exchange_refresh_token(&current)
-            .request_async(&*HTTP_CLIENT)
-            .await
-            .map_err(|err| Error::NotAuth(err.to_string()))?;
-
-        Ok(RefreshedToken {
-            access_token: token.access_token().clone(),
-            expires_in: token.expires_in(),
-            refresh_token: token.refresh_token().map(|t| t.secret().to_string()),
-        })
-    }
-
-    fn refresh_token(user: &StravaUser) -> Option<String> {
-        user.refresh_token().map(|t| t.secret().to_string())
     }
 
     fn authorize_url(state: &str, _code_verifier: Option<&str>) -> String {
@@ -235,5 +212,32 @@ impl Provider<StravaSpec> for StravaDriver {
     async fn user_url<S: Store<StravaSpec>>(id: UserId, store: &mut S) -> TbResult<String> {
         let user = store.user_get_by_tbid(id).await?;
         Ok(format!("https://strava.com/athletes/{}", user.strava_id()))
+    }
+}
+
+#[async_trait::async_trait]
+impl TokenRefresh<StravaSpec> for StravaDriver {
+    async fn refresh(refresh_token: String) -> TbResult<RefreshedToken> {
+        use super::client::strava_client;
+        use crate::client::HTTP_CLIENT;
+        use crate::facade::Error;
+        use oauth2::TokenResponse;
+
+        let current = RefreshToken::new(refresh_token);
+        let token = strava_client()
+            .exchange_refresh_token(&current)
+            .request_async(&*HTTP_CLIENT)
+            .await
+            .map_err(|err| Error::NotAuth(err.to_string()))?;
+
+        Ok(RefreshedToken {
+            access_token: token.access_token().clone(),
+            expires_in: token.expires_in(),
+            refresh_token: token.refresh_token().map(|t| t.secret().to_string()),
+        })
+    }
+
+    fn refresh_token(user: &StravaUser) -> Option<String> {
+        user.refresh_token().map(|t| t.secret().to_string())
     }
 }

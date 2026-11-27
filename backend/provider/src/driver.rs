@@ -4,10 +4,10 @@
 //! [`Provider`] is the driver a provider author implements. It splits into
 //! the genuinely provider-specific operations the author writes (the OAuth
 //! login, the webhook intake, the gear import, the processing loop body, the
-//! activity/gear/user URL operations, the authorize URL, the row/token hooks,
-//! and the refresh hooks) and the shared user-lifecycle skeleton the author
-//! gets free as default methods (upsert, deauthorize, delete, all-stats,
-//! onboard, and insert-sync).
+//! activity/gear/user URL operations, the authorize URL, and the row/token
+//! hooks) and the shared user-lifecycle skeleton the author gets free as
+//! default methods (upsert, deauthorize, delete, all-stats, onboard, and
+//! insert-sync).
 //!
 //! The split rule: a method is on the trait only if it has a genuinely
 //! provider-specific core the author must write (an OAuth exchange, a wire
@@ -28,19 +28,16 @@ use crate::facade::{
     ActivityId, EntityFacade, Error, Part, PartId, Session, Summary, TbResult, UserId, UserStat,
 };
 use crate::store::Store;
-use crate::token::RefreshedToken;
 
 /// The provider driver (spec #1029): the single driver interface, generic
 /// over the [`ProviderSpec`](crate::ProviderSpec) marker.
 ///
 /// The author writes the provider-specific core: the OAuth login, the webhook
 /// intake, the gear import, the processing loop body, the activity/gear/user
-/// URL operations, the authorize URL, the row/token hooks (construct a user
-/// row from a normalized optional token, the disabled check, and the remote
-/// token revocation — a default no-op for a provider whose tokens are
-/// durable), and the refresh hooks (the token refresh exchange and the
-/// refresh-token accessor — default no-ops for a provider whose tokens are
-/// durable, spec #1056).
+/// URL operations, the authorize URL, and the row/token hooks (construct a
+/// user row from a normalized optional token, the disabled check, and the
+/// remote token revocation — a default no-op for a provider whose tokens are
+/// durable).
 ///
 /// The author gets the shared user-lifecycle skeleton free as default
 /// methods: `upsert`, `user_deauthorize`, `user_delete`, `all_stats`,
@@ -48,7 +45,7 @@ use crate::token::RefreshedToken;
 /// store's `event_create`).
 #[async_trait::async_trait]
 pub trait Provider<P: ProviderSpec>: Send + Sync {
-    // ── the author writes: the row/token + refresh hooks ───────────────────
+    // ── the author writes: the row/token hooks ──────────────────────────────
 
     /// Construct the provider's user row from the provider id, the
     /// TendaBike user id, and the normalized optional token (the provider's
@@ -64,29 +61,6 @@ pub trait Provider<P: ProviderSpec>: Send + Sync {
     /// revocation API).
     async fn revoke<S: Store<P>>(_id: UserId, _store: &mut S) -> TbResult<()> {
         Ok(())
-    }
-
-    /// Refresh the user's access token (spec #1056): take the current
-    /// refresh token, perform the exchange using the driver's client, and
-    /// return the kit's [`RefreshedToken`] (the new access token, the
-    /// optional expiry duration, and the optional rotated refresh token —
-    /// the signal for whether a persist is needed).
-    ///
-    /// Default: an error (a provider whose tokens are durable has no
-    /// refresh; the kit's refresh flow never reaches it).
-    async fn refresh(_refresh_token: String) -> TbResult<RefreshedToken> {
-        Err(Error::NotAuth(
-            "no token refresh for this provider".to_string(),
-        ))
-    }
-
-    /// Read the refresh token out of the user row (spec #1056) — the durable
-    /// fallback the token cache's miss builds from.
-    ///
-    /// Default: `None` (a provider whose tokens are durable has no refresh
-    /// token).
-    fn refresh_token(_user: &P::User) -> Option<String> {
-        None
     }
 
     /// The OAuth authorize URL (the driver's client id, redirect URI, and

@@ -25,8 +25,9 @@ use crate::facade::UserId;
 /// A provider driver declares its wire shapes by implementing [`ProviderSpec`]:
 /// the user row type, the event row type, the owner id type (the queue's
 /// partition key), the event's dedup key type, and the driver type (the unit
-/// struct that implements [`Provider<Self>`](crate::driver::Provider), so the
-/// kit's generic token refresh can reach the driver's associated functions).
+/// struct that implements [`TokenRefresh<Self>`](crate::token::TokenRefresh),
+/// so the kit's generic token refresh can reach the driver's associated
+/// functions).
 /// The marker also carries the provider's enum value as a constant (the
 /// marker → enum direction), the type-level constructor for the sync event
 /// (how this event type represents a sync), and the event-identity accessors
@@ -58,10 +59,10 @@ pub trait ProviderSpec: Send + Sync + Sized {
     type Key: Clone + Debug + Send + Sync + 'static;
 
     /// The driver type: the unit struct that implements
-    /// [`Provider<Self>`](crate::driver::Provider) — so the kit's generic
-    /// token refresh can reach the driver's associated functions (the
+    /// [`TokenRefresh<Self>`](crate::token::TokenRefresh) — so the kit's
+    /// generic token refresh can reach the driver's associated functions (the
     /// refresh exchange and the refresh-token accessor, spec #1056).
-    type Driver: crate::driver::Provider<Self>;
+    type Driver: crate::token::TokenRefresh<Self>;
 
     /// The type-level constructor for the sync event: how this event type
     /// represents a sync (the durable backfill cursor). `owner` is the
