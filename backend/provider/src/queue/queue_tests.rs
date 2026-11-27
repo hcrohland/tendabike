@@ -1,9 +1,11 @@
 use super::{fail_event, get_event};
 use crate::Provider;
 use crate::ProviderSpec;
-use crate::facade::{Error, Summary, UserId};
+use crate::RefreshedToken;
+use crate::facade::{Error, Summary, TbResult, UserId};
 use crate::lane::QueueRead;
 use crate::test_support::MockStore;
+use oauth2::RefreshToken;
 
 /// A queued event row for the queue-op tests: the identity the ops key on.
 #[derive(Debug, Clone, PartialEq)]
@@ -32,6 +34,7 @@ impl ProviderSpec for TestSpec {
     type Event = TestEvent;
     type Owner = i32;
     type Key = i64;
+    type Driver = TestDriver;
     fn make_sync(owner: i32, _time: i64) -> TestEvent {
         TestEvent {
             id: None,
@@ -53,6 +56,20 @@ impl ProviderSpec for TestSpec {
     }
     fn user_owner(user: &TestUser) -> &i32 {
         &user.owner
+    }
+}
+
+/// A test driver stub for the marker's `Driver` associated type: the queue
+/// ops never touch the driver's token refresh, so the `TokenRefresh` impl is
+/// a no-op `refresh` (the durable default) and the default `None` accessor.
+struct TestDriver;
+
+#[async_trait::async_trait]
+impl crate::token::TokenRefresh<TestSpec> for TestDriver {
+    async fn refresh(_refresh_token: RefreshToken) -> TbResult<RefreshedToken> {
+        Err(Error::NotAuth(
+            "no token refresh for this provider".to_string(),
+        ))
     }
 }
 

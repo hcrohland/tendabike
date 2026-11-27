@@ -5,17 +5,21 @@
 //! call site (the lane, the dispatch) drives through.
 //!
 //! The token model is the durable access token: `new_user` stores it as-is,
-//! and the remote revocation is the trait's default no-op (intervals.icu has
-//! no revocation API — the cleared token is the disable signal).
+//! the remote revocation is the trait's default no-op, and the
+//! [`TokenRefresh`](crate::token::TokenRefresh) impl is a no-op `refresh`
+//! override (no refresh logic, no token cache — intervals.icu has no
+//! revocation API, and the cleared token is the disable signal).
 
-use oauth2::AccessToken;
+use oauth2::{AccessToken, RefreshToken};
 
+use crate::RefreshedToken;
 use crate::driver::Provider;
 use crate::facade::{
     ActivityId, EntityFacade, Error, Part, PartId, Session, Summary, TbResult, UserId,
 };
 use crate::icu::{IcuId, IcuSpec, IcuUser};
 use crate::store::Store;
+use crate::token::TokenRefresh;
 
 /// The intervals.icu driver type (spec #1029, ticket #1032): the
 /// [`Provider`](crate::driver::Provider) impl for intervals.icu — a thin
@@ -113,5 +117,17 @@ impl Provider<IcuSpec> for IcuDriver {
 
     async fn user_url<S: Store<IcuSpec>>(id: UserId, store: &mut S) -> TbResult<String> {
         super::user_url(id, store).await
+    }
+}
+
+/// The durable-token provider's refresh hooks: a no-op `refresh` (intervals.icu
+/// tokens are durable — no refresh logic, no token cache) plus the default
+/// `None` refresh-token accessor.
+#[async_trait::async_trait]
+impl TokenRefresh<IcuSpec> for IcuDriver {
+    async fn refresh(_refresh_token: RefreshToken) -> TbResult<RefreshedToken> {
+        Err(Error::NotAuth(
+            "no token refresh for this provider".to_string(),
+        ))
     }
 }

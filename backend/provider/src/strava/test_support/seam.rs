@@ -53,13 +53,10 @@ pub fn begin_test() {
 /// the `get_token` free function from forcing a (network) refresh on the first
 /// request.
 pub fn seed_token_cache(user_id: UserId, strava_id: StravaId, access_token: &str) {
-    super::super::session::TOKEN_CACHE
-        .lock()
-        .expect("the token cache is not poisoned")
-        .insert(
-            user_id,
-            super::super::session::TokenState::warm(strava_id, access_token),
-        );
+    super::super::session::TOKEN_CACHE.put(
+        user_id,
+        crate::token::TokenState::warm(strava_id, access_token),
+    );
 }
 
 /// Record a deauthorization in the thread-local map (the free function's

@@ -2,11 +2,11 @@
 //! provider's wire shapes.
 //!
 //! [`ProviderSpec`] is the marker a provider driver declares: its associated
-//! types (the user row, the event row, the owner id, the event key), the
-//! provider's enum value as a constant (the marker → enum direction), the
-//! type-level constructor for the sync event (how this event type represents a
-//! sync), and the identity accessors (the event's id/owner/key, the user
-//! row's tbid/owner) as type-level functions.
+//! types (the user row, the event row, the owner id, the event key, the
+//! driver type), the provider's enum value as a constant (the marker → enum
+//! direction), the type-level constructor for the sync event (how this event
+//! type represents a sync), and the identity accessors (the event's
+//! id/owner/key, the user row's tbid/owner) as type-level functions.
 //!
 //! It is plumbing, not an interface: the author implements it to declare their
 //! wire shapes, and the kit's generic traits ([`Store`](crate::store::Store))
@@ -24,11 +24,14 @@ use crate::facade::UserId;
 ///
 /// A provider driver declares its wire shapes by implementing [`ProviderSpec`]:
 /// the user row type, the event row type, the owner id type (the queue's
-/// partition key), and the event's dedup key type. The marker also carries the
-/// provider's enum value as a constant (the marker → enum direction), the
-/// type-level constructor for the sync event (how this event type represents a
-/// sync), and the event-identity accessors (id, owner, key) as type-level
-/// functions.
+/// partition key), the event's dedup key type, and the driver type (the unit
+/// struct that implements [`TokenRefresh<Self>`](crate::token::TokenRefresh),
+/// so the kit's generic token refresh can reach the driver's associated
+/// functions).
+/// The marker also carries the provider's enum value as a constant (the
+/// marker → enum direction), the type-level constructor for the sync event
+/// (how this event type represents a sync), and the event-identity accessors
+/// (id, owner, key) as type-level functions.
 ///
 /// This is plumbing, not an interface: the author implements it to declare
 /// their wire shapes, and the kit's generic traits are generic over it. The
@@ -36,7 +39,7 @@ use crate::facade::UserId;
 /// [`Store`](crate::store::Store) trait (the database crate implements the thin
 /// forwards); the event-identity trait's accessors live here as the marker's
 /// type-level functions.
-pub trait ProviderSpec: Send + Sync {
+pub trait ProviderSpec: Send + Sync + Sized {
     /// The provider's enum value (the marker → enum direction).
     const PROVIDER: Provider;
 
@@ -54,6 +57,12 @@ pub trait ProviderSpec: Send + Sync {
     /// `object_id`, the icu `activity_id`). Only the latest event per key is
     /// interesting.
     type Key: Clone + Debug + Send + Sync + 'static;
+
+    /// The driver type: the unit struct that implements
+    /// [`TokenRefresh<Self>`](crate::token::TokenRefresh) — so the kit's
+    /// generic token refresh can reach the driver's associated functions (the
+    /// refresh exchange and the refresh-token accessor, spec #1056).
+    type Driver: crate::token::TokenRefresh<Self>;
 
     /// The type-level constructor for the sync event: how this event type
     /// represents a sync (the durable backfill cursor). `owner` is the
