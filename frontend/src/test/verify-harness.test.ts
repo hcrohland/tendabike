@@ -11,10 +11,10 @@ describe("verify harness", () => {
   it("mounts the harness example with its surface/fill classes", async () => {
     render(Example);
 
-    // A card renders its color's surface; its chip is a fill of the same color.
+    // A card renders its color's surface; its chip is the single uniform fill.
     const card = screen.getByTestId("scenario-card");
     expect(card.querySelector(".bg-secondary-100")).toBeTruthy();
-    expect(card.querySelector(".bg-secondary-700")).toBeTruthy();
+    expect(card.querySelector(".bg-primary-500")).toBeTruthy();
 
     // A nested card flips: the outer is the secondary surface, the inner the
     // primary surface.
@@ -36,25 +36,25 @@ describe("verify harness", () => {
     const servicehist = screen.getByTestId("scenario-servicehist");
     expect(servicehist.querySelector(".bg-secondary-100")).toBeTruthy();
 
-    // The shop card renders its secondary surface with the secondary
+    // The shop card renders its secondary surface with the uniform
     // chip fill.
     const shopcard = screen.getByTestId("scenario-shopcard");
     expect(shopcard.querySelector(".bg-secondary-100")).toBeTruthy();
-    expect(shopcard.querySelector(".bg-secondary-700")).toBeTruthy();
+    expect(shopcard.querySelector(".bg-primary-500")).toBeTruthy();
 
     // The spare-type selector renders its secondary outer surface
     // with the active part card on the contrasting primary surface and the
-    // primary chip fill.
+    // uniform chip fill.
     const sparetype = screen.getByTestId("scenario-sparetype");
     expect(sparetype.querySelector(".bg-secondary-100")).toBeTruthy();
     expect(sparetype.querySelector(".bg-primary-100")).toBeTruthy();
-    expect(sparetype.querySelector(".bg-primary-700")).toBeTruthy();
+    expect(sparetype.querySelector(".bg-primary-500")).toBeTruthy();
 
     // The admin card renders its secondary surface with the
-    // secondary chip fill.
+    // uniform chip fill.
     const admincard = screen.getByTestId("scenario-admincard");
     expect(admincard.querySelector(".bg-secondary-100")).toBeTruthy();
-    expect(admincard.querySelector(".bg-secondary-700")).toBeTruthy();
+    expect(admincard.querySelector(".bg-primary-500")).toBeTruthy();
 
     // The offline banner renders its secondary surface once the (stubbed)
     // providers fetch settles with an empty enabled set.

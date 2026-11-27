@@ -53,30 +53,11 @@ describe("Chip", () => {
     expect(badge).toBeTruthy();
   });
 
-  it("renders the secondary fill by default (the page-base fallback)", () => {
+  it("renders the single uniform fill (dark-step background + white text)", () => {
     render(Chip, { label: "L", value: "V" });
     const el = screen.getByText("V");
-    expect(el.closest(".bg-secondary-700")).toBeTruthy();
-    // a fill is dark-step with white text, not a light surface
-    expect(el.closest(".bg-secondary-100")).toBeNull();
-    expect(el.classList.contains("text-white")).toBe(true);
-  });
-
-  it("renders a filled background with white text when color is primary", () => {
-    render(Chip, { label: "L", value: "V", color: "primary" });
-    const el = screen.getByText("V");
-    expect(el.closest(".bg-primary-700")).toBeTruthy();
-    // a fill is dark-step with white text, not a light surface
-    expect(el.closest(".bg-primary-100")).toBeNull();
-    expect(el.classList.contains("text-white")).toBe(true);
-  });
-
-  it("renders a filled background with white text when color is secondary", () => {
-    render(Chip, { label: "L", value: "V", color: "secondary" });
-    const el = screen.getByText("V");
-    expect(el.closest(".bg-secondary-700")).toBeTruthy();
-    // a fill is dark-step with white text, not a light surface
-    expect(el.closest(".bg-secondary-100")).toBeNull();
+    // the uniform fill is one value, not per-color: primary-500 in light mode
+    expect(el.closest(".bg-primary-500")).toBeTruthy();
     expect(el.classList.contains("text-white")).toBe(true);
   });
 });

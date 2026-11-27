@@ -93,16 +93,8 @@
 
   <!-- Counts -->
   <div class="flex flex-wrap items-center gap-1 sm:gap-2">
-    <Chip value={String(parts)} label={m.nav_parts()} color="secondary" />
-    <Chip
-      value={String(activities)}
-      label={m.nav_activities()}
-      color="secondary"
-    />
-    <Chip
-      value={String(events)}
-      label={m.admin_col_events()}
-      color="secondary"
-    />
+    <Chip value={String(parts)} label={m.nav_parts()} />
+    <Chip value={String(activities)} label={m.nav_activities()} />
+    <Chip value={String(events)} label={m.admin_col_events()} />
   </div>
 </Card>

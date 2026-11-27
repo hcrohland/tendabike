@@ -6,14 +6,13 @@
   import ServiceMenu from "./ServiceMenu.svelte";
   import ServiceBadge from "../Widgets/ServiceBadge.svelte";
   import type { Due, limit_keys } from "../lib/serviceplan";
-  import { mutedText, type Color } from "../Widgets/color.js";
+  import { mutedText } from "../Widgets/color.js";
   import { m } from "../../paraglide/messages";
 
   interface Props {
     service?: Service | undefined;
     successor?: Service | null;
     part: Part;
-    color?: Color;
     due_list?: Partial<Record<limit_keys, Due>>;
     children?: import("svelte").Snippet;
   }
@@ -22,7 +21,6 @@
     service = undefined,
     successor = null,
     part,
-    color = "secondary",
     due_list,
     children,
   }: Props = $props();
@@ -38,7 +36,7 @@
 
 {@render children?.()}
 
-<UsageChips {usage} {color} {due_list} />
+<UsageChips {usage} {due_list} />
 
 <div class="flex items-start justify-between gap-2">
   <div class="min-w-0">

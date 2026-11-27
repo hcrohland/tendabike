@@ -171,7 +171,6 @@
         onclick={() => toggleSort("rides")}
         indicator={sortIndicator("rides")}
         disabled={sorting}
-        color="secondary"
       />
       <Chip
         value={fmtSeconds(totals.time)}
@@ -179,7 +178,6 @@
         onclick={() => toggleSort("time")}
         indicator={sortIndicator("time")}
         disabled={sorting}
-        color="secondary"
       />
       <Chip
         value={fmtNumber(Math.round((totals.distance || 0) / 1000))}
@@ -187,7 +185,6 @@
         onclick={() => toggleSort("distance")}
         indicator={sortIndicator("distance")}
         disabled={sorting}
-        color="secondary"
       />
       <Chip
         value={fmtNumber(totals.climb)}
@@ -195,7 +192,6 @@
         onclick={() => toggleSort("climb")}
         indicator={sortIndicator("climb")}
         disabled={sorting}
-        color="secondary"
       />
       <Chip
         value={fmtNumber(totals.descend)}
@@ -203,7 +199,6 @@
         onclick={() => toggleSort("descend")}
         indicator={sortIndicator("descend")}
         disabled={sorting}
-        color="secondary"
       />
       {#if totals.energy > 0}
         <Chip
@@ -212,7 +207,6 @@
           onclick={() => toggleSort("energy")}
           indicator={sortIndicator("energy")}
           disabled={sorting}
-          color="secondary"
         />
       {/if}
     </div>

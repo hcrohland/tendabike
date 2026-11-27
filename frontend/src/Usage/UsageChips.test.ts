@@ -109,21 +109,11 @@ describe("UsageChips", () => {
     });
   }
 
-  it("renders a primary fill when color is primary", () => {
-    render(UsageChips, { usage: usageData(), color: "primary" });
-    const chip = screen.getByText("42");
-    expect(chip.closest(".bg-primary-700")).toBeTruthy();
-    // a fill is dark-step with white text, not a light surface
-    expect(chip.closest(".bg-primary-100")).toBeNull();
-    expect(chip.classList.contains("text-white")).toBe(true);
-  });
-
-  it("renders a secondary fill by default (the page-base fallback)", () => {
+  it("renders its chips with the single uniform fill", () => {
     render(UsageChips, { usage: usageData() });
     const chip = screen.getByText("42");
-    expect(chip.closest(".bg-secondary-700")).toBeTruthy();
-    // a fill is dark-step with white text, not a light surface
-    expect(chip.closest(".bg-secondary-100")).toBeNull();
+    // the uniform fill is one value, not per-color: primary-500 in light mode
+    expect(chip.closest(".bg-primary-500")).toBeTruthy();
     expect(chip.classList.contains("text-white")).toBe(true);
   });
 });

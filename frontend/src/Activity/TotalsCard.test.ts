@@ -37,11 +37,11 @@ describe("TotalsCard", () => {
     expect(card?.classList.contains("bg-primary-100")).toBe(false);
   });
 
-  it("renders its metric chips as secondary fills (dark step + white text)", () => {
+  it("renders its metric chips with the single uniform fill", () => {
     render(TotalsCard, props);
     const time = screen.getByText("1:00");
-    // a fill is the dark step with white text
-    expect(time.closest(".bg-secondary-700")).toBeTruthy();
+    // the uniform fill is one value, not per-color: primary-500 in light mode
+    expect(time.closest(".bg-primary-500")).toBeTruthy();
     expect(time.classList.contains("text-white")).toBe(true);
   });
 

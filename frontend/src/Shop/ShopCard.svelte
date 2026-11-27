@@ -89,9 +89,8 @@
       <Chip
         value={String(partsCount)}
         label={partsCount === 1 ? m.shop_part() : m.shop_parts()}
-        color="secondary"
       />
-      <Chip value={m.shop_owner()} label="" color="secondary" />
+      <Chip value={m.shop_owner()} label="" />
     </div>
   {/if}
 

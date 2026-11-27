@@ -36,7 +36,7 @@ describe("SpareType", () => {
     });
   }
 
-  it("renders the outer block on the secondary surface and the active part card on the primary surface with a primary chip fill", () => {
+  it("renders the outer block on the secondary surface and the active part card on the primary surface, with the uniform chip fill", () => {
     seedPart();
     const { container } = renderSpareType();
     expectSurface(container.querySelector(".flex.flex-col"), "secondary");
@@ -45,13 +45,13 @@ describe("SpareType", () => {
       container.querySelector("div.flex.flex-col > div.rounded-lg"),
       "primary",
     );
-    // the usage chips are primary fills: dark-step background + white text
+    // the usage chip uses the single uniform fill, not a per-color one
     const chip = container.querySelector(".relative.rounded-lg")!;
-    expect(chip.classList.contains("bg-primary-700")).toBe(true);
+    expect(chip.classList.contains("bg-primary-500")).toBe(true);
     expect(chip.classList.contains("bg-primary-100")).toBe(false);
   });
 
-  it("renders the disposed part card on the secondary surface with a secondary chip fill", () => {
+  it("renders the disposed part card on the secondary surface with the uniform chip fill", () => {
     seedPart({ disposed_at: "2025-01-01T00:00:00Z" });
     const { container } = renderSpareType();
     // a disposed part is hidden until show-more is on
@@ -63,8 +63,9 @@ describe("SpareType", () => {
       "div.flex.flex-col > div.rounded-lg",
     );
     expectSurface(partCard, "secondary");
+    // the chip is the uniform fill regardless of the card's surface color
     const chip = partCard!.querySelector(".relative.rounded-lg")!;
-    expect(chip.classList.contains("bg-secondary-700")).toBe(true);
+    expect(chip.classList.contains("bg-primary-500")).toBe(true);
     expect(chip.classList.contains("bg-secondary-100")).toBe(false);
   });
 });

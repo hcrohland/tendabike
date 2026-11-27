@@ -31,17 +31,17 @@ describe("ShopCard", () => {
     );
   });
 
-  it("renders the card's secondary surface and its chips as secondary fills", () => {
+  it("renders the card's secondary surface and its chips with the uniform fill", () => {
     const { container } = render(ShopCard, {
       shop: new Shop(shopData()),
       users: { 1: owner },
       isOwner: true,
     });
     expectSurface(container.querySelector(".rounded-lg"), "secondary");
-    // the owner chip is a fill: dark-step background + white text
+    // the owner chip uses the single uniform fill, not a per-color one
     const chip = screen.getByText("Owner");
     const chipRoot = chip.closest(".shrink-0");
-    expect(chipRoot?.classList.contains("bg-secondary-700")).toBe(true);
+    expect(chipRoot?.classList.contains("bg-primary-500")).toBe(true);
     expect(chipRoot?.classList.contains("bg-secondary-100")).toBe(false);
     expect(chip.classList.contains("text-white")).toBe(true);
   });

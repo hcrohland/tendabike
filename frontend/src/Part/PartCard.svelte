@@ -107,7 +107,7 @@
 
     <!-- Current stats -->
     {#if att.isAttached()}
-      <UsageChips id={part.usage} ref={part.id} {color} {due_list} />
+      <UsageChips id={part.usage} ref={part.id} {due_list} />
     {/if}
 
     <!-- History cards -->
@@ -146,7 +146,7 @@
                 </div>
               {/if}
             </div>
-            <UsageChips id={a.usage} ref={a.idx} color={oppositeColor} />
+            <UsageChips id={a.usage} ref={a.idx} />
           </div>
         {/each}
       </div>

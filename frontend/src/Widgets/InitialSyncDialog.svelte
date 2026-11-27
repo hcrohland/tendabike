@@ -29,7 +29,7 @@
     type Provider,
   } from "../lib/provider.svelte";
   import ProviderMark from "./ProviderMark.svelte";
-  import { colorClasses, mainText } from "./color.js";
+  import { colorClasses, mainText, fillBg } from "./color.js";
   import { m } from "../../paraglide/messages";
 
   /// A gear item the onboarding gear import discovered (spec #829): the
@@ -202,12 +202,18 @@
         <div class="flex justify-center gap-4">
           <Button
             color={provider === "strava" ? "orange" : "primary"}
+            class={provider === "strava" ? "" : fillBg}
             disabled={loading}
             onclick={importActivities}
           >
             {loading ? m.action_importing() : m.header_import_activities()}
           </Button>
-          <Button color="primary" disabled={loading} onclick={skipSync}>
+          <Button
+            color="primary"
+            class={fillBg}
+            disabled={loading}
+            onclick={skipSync}
+          >
             {m.initialsync_skip()}
           </Button>
         </div>

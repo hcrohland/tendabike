@@ -141,6 +141,7 @@
   import SpareType from "../src/Spares/SpareType.svelte";
   import AdminCard from "../src/Admin/AdminCard.svelte";
   import OfflineBanner from "../src/OfflineBanner.svelte";
+  import { fillBg } from "../src/Widgets/color.js";
   import { stateValues } from "../src/lib/mapable.svelte";
   import { loadProviders } from "../src/lib/provider.svelte";
   import type { AdminRow } from "../src/lib/user.svelte";
@@ -186,10 +187,12 @@
 -->
 <div class="p-6 max-w-md space-y-6">
   <section data-testid="scenario-card">
-    <p class="text-sm font-semibold mb-2">card (secondary) + matching chip</p>
+    <p class="text-sm font-semibold mb-2">
+      card (secondary) + uniform-fill chip
+    </p>
     <Card color="secondary">
       <div class="p-2">
-        <Chip value="5" label="Rides" color="secondary" />
+        <Chip value="5" label="Rides" />
       </div>
     </Card>
   </section>
@@ -205,10 +208,16 @@
   </section>
 
   <section data-testid="scenario-fills">
-    <p class="text-sm font-semibold mb-2">primary vs secondary fill</p>
+    <p class="text-sm font-semibold mb-2">
+      uniform fill (identical for primary & secondary)
+    </p>
     <div class="flex flex-wrap gap-2">
-      <Button color="primary" data-testid="fill-primary">primary</Button>
-      <Button color="secondary" data-testid="fill-secondary">secondary</Button>
+      <Button color="primary" class={fillBg} data-testid="fill-primary"
+        >primary</Button
+      >
+      <Button color="secondary" class={fillBg} data-testid="fill-secondary"
+        >secondary</Button
+      >
     </div>
   </section>
 
@@ -232,21 +241,21 @@
 
   <section data-testid="scenario-shopcard">
     <p class="text-sm font-semibold mb-2">
-      ShopCard (secondary card, secondary chip fill)
+      ShopCard (secondary card, uniform-fill chip)
     </p>
     <ShopCard {shop} {users} isOwner={true} />
   </section>
 
   <section data-testid="scenario-sparetype">
     <p class="text-sm font-semibold mb-2">
-      SpareType (secondary block, primary part card, primary chip fill)
+      SpareType (secondary block, primary part card, uniform-fill chip)
     </p>
     <SpareType type={spareType} update={() => {}} attachee={0} />
   </section>
 
   <section data-testid="scenario-admincard">
     <p class="text-sm font-semibold mb-2">
-      AdminCard (secondary card, secondary chip fill)
+      AdminCard (secondary card, uniform-fill chip)
     </p>
     <AdminCard
       row={adminRow}
@@ -263,21 +272,21 @@
 
   <section data-testid="scenario-admin">
     <p class="text-sm font-semibold mb-2">
-      admin page-base buttons (secondary fill)
+      admin page-base buttons (uniform fill)
     </p>
     <Admin />
   </section>
 
   <section data-testid="scenario-deleteshop">
     <p class="text-sm font-semibold mb-2">
-      shop-delete modal footer (cancel: secondary fill)
+      shop-delete modal footer (cancel: uniform fill)
     </p>
     <DeleteShopModal />
   </section>
 
   <section data-testid="scenario-icudialog">
     <p class="text-sm font-semibold mb-2">
-      initial-sync dialog, icu branch (import: primary fill)
+      initial-sync dialog, icu branch (import: uniform fill)
     </p>
     <InitialSyncDialog />
   </section>

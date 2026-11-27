@@ -101,39 +101,27 @@
   <!-- Metrics Grid: Gear | Time | Distance | Climb | Descend | Energy -->
   <div class="grid grid-cols-3 sm:grid-cols-6 gap-1 sm:gap-2">
     <!-- Gear Chip (link) -->
-    <Chip
-      value={gearPart?.name ?? "-"}
-      label=""
-      href={gearPart?.link()}
-      color="secondary"
-    />
+    <Chip value={gearPart?.name ?? "-"} label="" href={gearPart?.link()} />
     <!-- Time -->
     <Chip
       value={fmtSeconds(activity.time || activity.duration || 0)}
       label="h"
-      color="secondary"
     />
     <!-- Distance -->
     <Chip
       value={fmtNumber(Math.round((activity.distance || 0) / 1000))}
       label="km"
-      color="secondary"
     />
     <!-- Climb -->
-    <Chip value={fmtNumber(activity.climb || 0)} label="↑m" color="secondary" />
+    <Chip value={fmtNumber(activity.climb || 0)} label="↑m" />
     <!-- Descend -->
     <Chip
       value={fmtNumber(activity.descend || activity.climb || 0)}
       label="↓m"
-      color="secondary"
     />
     <!-- Energy (only if > 0) -->
     {#if (activity.energy || 0) > 0}
-      <Chip
-        value={fmtNumber(activity.energy || 0)}
-        label="kJ"
-        color="secondary"
-      />
+      <Chip value={fmtNumber(activity.energy || 0)} label="kJ" />
     {/if}
   </div>
 </div>

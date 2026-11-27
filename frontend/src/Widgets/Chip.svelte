@@ -21,14 +21,13 @@
 <script lang="ts">
   import { Spinner } from "flowbite-svelte";
   import type { Due } from "../lib/serviceplan";
-  import { colorClasses, type Color } from "./color.js";
+  import { fill } from "./color.js";
   import ServiceBadge from "./ServiceBadge.svelte";
 
   let {
     label,
     value,
     href = undefined,
-    color = "secondary",
     due = undefined,
     onclick = undefined,
     indicator = undefined,
@@ -37,18 +36,15 @@
     label: string;
     value: string;
     href?: string;
-    color?: Color;
     due?: Due;
     onclick?: () => void;
     indicator?: string;
     disabled?: boolean;
   } = $props();
 
-  // A Chip renders a fill (dark-step background + white text), like a button.
-  // A chip inside a card is authored with that card's color by its caller
-  // (widgets match their card); a standalone chip on the page base falls
-  // back to the darker tone.
-  const background = $derived(colorClasses[color].fill);
+  // A Chip renders the single uniform fill (dark-step background + white
+  // text), like a button. It does not vary by color.
+  const background = fill;
   let isButton = $derived(!!onclick && !disabled);
   let isLinked = $derived(!!href);
 </script>

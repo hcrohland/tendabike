@@ -56,13 +56,13 @@ describe("AdminCard", () => {
     expect(screen.getByText("Disabled")).toBeTruthy();
   });
 
-  it("renders the card's secondary surface and its chips as secondary fills", () => {
+  it("renders the card's secondary surface and its chips with the uniform fill", () => {
     const { utils } = renderCard();
     expectSurface(utils.container.querySelector(".rounded-lg"), "secondary");
-    // the parts-count chip is a fill: dark-step background + white text
+    // the parts-count chip uses the single uniform fill, not a per-color one
     const chip = screen.getByText("2");
     const chipRoot = chip.closest(".shrink-0");
-    expect(chipRoot?.classList.contains("bg-secondary-700")).toBe(true);
+    expect(chipRoot?.classList.contains("bg-primary-500")).toBe(true);
     expect(chipRoot?.classList.contains("bg-secondary-100")).toBe(false);
     expect(chip.classList.contains("text-white")).toBe(true);
   });

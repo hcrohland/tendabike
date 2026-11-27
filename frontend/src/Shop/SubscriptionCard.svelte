@@ -45,11 +45,7 @@
   <div class="flex items-center justify-between gap-1 sm:gap-2 p-1">
     <span class="font-medium text-sm min-w-0 truncate">{name}</span>
     <div class="flex items-center gap-1 sm:gap-2 shrink-0">
-      <Chip
-        value={statusLabel(subscription.status)}
-        label=""
-        color="secondary"
-      />
+      <Chip value={statusLabel(subscription.status)} label="" />
       <span class={"text-xs " + mainText}>
         {new Date(subscription.created_at).toLocaleDateString()}
       </span>

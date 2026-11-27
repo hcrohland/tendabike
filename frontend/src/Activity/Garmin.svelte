@@ -7,6 +7,7 @@
   } from "flowbite-svelte";
   import { checkStatus, handleError } from "../lib/utils";
   import Modal from "../Widgets/Modal.svelte";
+  import { fillBg } from "../Widgets/color.js";
   import * as m from "../../paraglide/messages";
 
   let files: FileList | undefined = $state();
@@ -72,14 +73,19 @@
   {#snippet footer()}
     <div class="flex justify-end w-full gap-2">
       {#if !result}
-        <Button onclick={sendFile} color="secondary" class="border" {disabled}>
+        <Button
+          onclick={sendFile}
+          color="secondary"
+          class={"border" + fillBg}
+          {disabled}
+        >
           {m.action_synchronize()}
         </Button>
-        <Button onclick={reset} color="secondary">
+        <Button onclick={reset} color="secondary" class={fillBg}>
           {m.action_cancel()}
         </Button>
       {:else}
-        <Button onclick={reset} color="secondary">
+        <Button onclick={reset} color="secondary" class={fillBg}>
           {m.action_ok()}
         </Button>
       {/if}

@@ -12,11 +12,11 @@ describe("ActCard", () => {
     expect(card?.classList.contains("bg-primary-100")).toBe(false);
   });
 
-  it("renders its metric chips as secondary fills (dark step + white text)", () => {
+  it("renders its metric chips with the single uniform fill", () => {
     render(ActCard, { activity: activity() });
     const time = screen.getByText("1:00");
-    // a fill is the dark step with white text
-    const fill = time.closest(".bg-secondary-700");
+    // the uniform fill is one value, not per-color: primary-500 in light mode
+    const fill = time.closest(".bg-primary-500");
     expect(fill).toBeTruthy();
     expect(time.classList.contains("text-white")).toBe(true);
   });

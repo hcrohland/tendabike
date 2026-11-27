@@ -71,6 +71,7 @@
   import { createTextNote, createFileNote } from "../lib/partnote";
   import { handleError } from "../lib/utils";
   import Modal from "../Widgets/Modal.svelte";
+  import { fillBg } from "../Widgets/color.js";
   import * as m from "../../paraglide/messages";
 
   let fileInput = $state<HTMLInputElement | null>(null);
@@ -207,13 +208,18 @@
 
   {#snippet footer()}
     <div class="flex justify-end w-full gap-2">
-      <Button color="secondary" onclick={() => (modal.open = false)}>
+      <Button
+        color="secondary"
+        class={fillBg}
+        onclick={() => (modal.open = false)}
+      >
         {m.action_cancel()}
       </Button>
       <Button
         type="submit"
         value="commit"
         color="secondary"
+        class={fillBg}
         disabled={!modal.removeFile &&
           !(modal.name.trim().length > 0 || modal.file !== null)}
       >

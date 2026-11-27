@@ -103,6 +103,6 @@
     </p>
 
     <!-- Stat chips -->
-    <UsageChips id={part.usage} ref={part.id} {gridclass} color="primary" />
+    <UsageChips id={part.usage} ref={part.id} {gridclass} />
   </div>
 </Card>

@@ -115,13 +115,7 @@
       </div>
 
       <!-- Stats -->
-      <UsageChips
-        id={part.usage}
-        ref={part.id}
-        color={!part.disposed_at && !mounted_on(part.id, date)
-          ? "primary"
-          : "secondary"}
-      />
+      <UsageChips id={part.usage} ref={part.id} />
 
       <!-- Attached to -->
       {#if attachee > 0}

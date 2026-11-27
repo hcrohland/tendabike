@@ -2,7 +2,7 @@
   import { Button, Tooltip } from "flowbite-svelte";
   import { ClockOutline, CloseCircleOutline } from "flowbite-svelte-icons";
   import { m } from "../../paraglide/messages";
-  import type { Color } from "./color.js";
+  import { fillBg, type Color } from "./color.js";
 
   interface Props {
     show_more: boolean;
@@ -27,7 +27,8 @@
 <Button
   size="sm"
   {color}
-  class="align-middle justify-center rounded-full border-0 p-0 m-0 mx-1"
+  class={"align-middle justify-center rounded-full border-0 p-0 m-0 mx-1 " +
+    fillBg}
   {onclick}
 >
   {#if show_more}

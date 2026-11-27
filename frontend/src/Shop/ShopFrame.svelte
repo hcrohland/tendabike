@@ -2,6 +2,7 @@
   import { Button } from "flowbite-svelte";
   import * as m from "../../paraglide/messages";
   import { exitShop, getShop } from "../lib/shop.svelte";
+  import { fillBg } from "../Widgets/color.js";
 
   let { children = () => {} } = $props();
 </script>
@@ -12,7 +13,7 @@
     : ""}
 >
   {#if getShop()}
-    <Button onclick={exitShop} color="secondary" class="mb-8">
+    <Button onclick={exitShop} color="secondary" class={"mb-8" + fillBg}>
       {m.shop_exit({ name: getShop()!.name })}
     </Button>
     {@render children()}

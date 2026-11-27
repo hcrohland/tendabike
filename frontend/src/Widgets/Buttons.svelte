@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button } from "flowbite-svelte";
   import { m } from "../../paraglide/messages";
-  import type { Color } from "./color.js";
+  import { fillBg, type Color } from "./color.js";
 
   interface Props {
     open: boolean;
@@ -23,11 +23,11 @@
 <div class="flex justify-end w-full gap-2">
   <!-- <div class="ms-auto"> -->
   {#if label}
-    <Button {onclick} {color}>{m.action_cancel()}</Button>
-    <Button type="submit" value="commit" {color}>
+    <Button {onclick} {color} class={fillBg}>{m.action_cancel()}</Button>
+    <Button type="submit" value="commit" {color} class={fillBg}>
       {label}
     </Button>
   {:else}
-    <Button {onclick} {color}>{m.action_close()}</Button>
+    <Button {onclick} {color} class={fillBg}>{m.action_close()}</Button>
   {/if}
 </div>

@@ -6,7 +6,7 @@
   import type { ShopSubscription } from "../lib/subscription";
   import { shops } from "../lib/shop.svelte";
   import SubscriptionCard from "./SubscriptionCard.svelte";
-  import { mainText } from "../Widgets/color.js";
+  import { mainText, fillBg } from "../Widgets/color.js";
 
   interface Props {
     shopId: number;
@@ -87,7 +87,12 @@
           {m.shop_pending_requests()}
         </h3>
 
-        <Button size="sm" color="secondary" onclick={loadSubscriptions}>
+        <Button
+          size="sm"
+          color="secondary"
+          class={fillBg}
+          onclick={loadSubscriptions}
+        >
           {m.header_refresh()}
         </Button>
       </div>
@@ -137,6 +142,7 @@
                   <Button
                     size="xs"
                     color="secondary"
+                    class={fillBg}
                     onclick={cancelResponding}
                   >
                     {m.action_cancel()}

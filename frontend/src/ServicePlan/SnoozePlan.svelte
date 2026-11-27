@@ -25,6 +25,7 @@
 <script lang="ts">
   import { Button, ButtonGroup, Input, InputAddon } from "flowbite-svelte";
   import Buttons from "../Widgets/Buttons.svelte";
+  import { fillBg } from "../Widgets/color.js";
   import Modal from "../Widgets/Modal.svelte";
   import { m } from "../../paraglide/messages";
 
@@ -61,7 +62,7 @@
     />
     <InputAddon>%</InputAddon>
     {#each presets as p}
-      <Button color="secondary" onclick={() => snooze(p / 100)}>
+      <Button color="secondary" class={fillBg} onclick={() => snooze(p / 100)}>
         {p}%
       </Button>
     {/each}

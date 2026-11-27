@@ -32,7 +32,7 @@
   import { getLocale, setLocale, locales } from "../paraglide/runtime";
   import { onDestroy } from "svelte";
   import NotificationBell from "./Widgets/NotificationBell.svelte";
-  import { mainText } from "./Widgets/color.js";
+  import { mainText, fillBg } from "./Widgets/color.js";
 
   let openGarmin = $state(false);
 
@@ -200,7 +200,7 @@
          already there, so it only shows elsewhere. -->
     <div class="flex items-center md:order-2">
       {#if activeUrl !== "/about"}
-        <Button color="secondary" href="/about#connect"
+        <Button color="secondary" class={fillBg} href="/about#connect"
           >{m.header_connect()}</Button
         >
       {/if}

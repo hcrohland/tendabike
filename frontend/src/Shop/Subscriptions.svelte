@@ -12,7 +12,7 @@
   import { allGear, Part, parts } from "../lib/part";
   import { stateValues } from "../lib/mapable.svelte";
   import { getCategory } from "../lib/types.svelte";
-  import { mainText } from "../Widgets/color.js";
+  import { mainText, fillBg } from "../Widgets/color.js";
 
   interface Props {
     shopid?: number;
@@ -117,7 +117,12 @@
         {m.shop_my_subscriptions()}
       </h3>
 
-      <Button size="sm" color="secondary" onclick={loadSubscriptions}>
+      <Button
+        size="sm"
+        color="secondary"
+        class={fillBg}
+        onclick={loadSubscriptions}
+      >
         {m.header_refresh()}
       </Button>
     </div>
@@ -199,6 +204,7 @@
                 <Button
                   size="xs"
                   color="secondary"
+                  class={fillBg}
                   onclick={cancelConfirmation}
                 >
                   {m.action_cancel()}

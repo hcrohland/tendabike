@@ -6,6 +6,7 @@
   import CreateSync from "./CreateSync.svelte";
   import DeleteUser from "./DeleteUser.svelte";
   import * as m from "../../paraglide/messages";
+  import { fillBg } from "../Widgets/color.js";
 
   let promise: Promise<void>, createSync: any;
   let request: Promise<AdminRow[]> | AdminRow[] = [];
@@ -40,10 +41,10 @@
     {/each}
   </div>
   <ButtonGroup class="p-6">
-    <Button color="secondary" onclick={() => createSync.start()}
+    <Button color="secondary" class={fillBg} onclick={() => createSync.start()}
       >{m.admin_add_sync_event_all()}</Button
     >
-    <Button color="secondary" onclick={rescan}>
+    <Button color="secondary" class={fillBg} onclick={rescan}>
       {#await promise}
         <Spinner />
       {:then}
@@ -51,7 +52,9 @@
       {/await}
     </Button>
   </ButtonGroup>
-  <Button color="secondary" onclick={refresh}>{m.action_refresh()}</Button>
+  <Button color="secondary" class={fillBg} onclick={refresh}
+    >{m.action_refresh()}</Button
+  >
 {/await}
 <CreateSync {refresh} bind:this={createSync} />
 <DeleteUser bind:this={deleteuser} {refresh} />
