@@ -11,7 +11,7 @@ Shared conventions (the seam model, writing conventions, the mockall `.times` go
 | `queue.rs` | Provider-agnostic event-queue kernel (spec #1029): `get_event` (the read-side rules — rate-limit gate, latest-per-key dedup) and `fail_event` (the four-arm failure policy) — written once, generic over the `ProviderSpec` marker, driven through the single `Store` interface (the event identity is the marker's type-level accessors) |
 | `strava/` | Strava driver: `user` (onboard, gear, stats), `event` (sync enqueue, processing — one event per `process` call), `gear`, `activity`, `session` (token cache) |
 | `icu/` | intervals.icu driver: `user` (onboard, gear, stats), `event` (sync enqueue, processing — one event per `process` call, one `SYNC` batch per call), `gear`, `activity`, `http` |
-| `test_support.rs` | Shared provider kit: canned-response kit (`queue`, `queue_error`, `requests`, `begin_test`) |
+| `test_support.rs` | Shared provider kit: canned-response kit (`queue`, `queue_error`, `requests`, `begin_test`) and the dummy oauth client (`DummyClient`, `dummy_client`, `basic_dummy_client`) |
 
 ## Shared pattern
 

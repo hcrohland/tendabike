@@ -12,13 +12,25 @@
 //!   [`requests`]). The kit owns the thread-local and the accessors; a
 //!   driver's seam keeps only its fixture constructors and its
 //!   provider-specific canned data.
+//! - The **dummy oauth client** the driver and token test seams share
+//!   (spec #1062): the [`DummyClient`] type alias (generic over the
+//!   token-response type), [`dummy_client`] (the owned build), and
+//!   [`basic_dummy_client`] (the shared `&'static` for the
+//!   [`BasicTokenResponse`] shape).
 //!
 //! [`EntityFacade`]: crate::EntityFacade
 //! [`EntityFacadeImpl`]: crate::EntityFacadeImpl
 
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
+use std::sync::OnceLock;
 
+use oauth2::{
+    AuthUrl, ClientId, EndpointNotSet, EndpointSet, TokenResponse, TokenUrl,
+    basic::BasicTokenResponse,
+};
+
+use crate::client::ProviderClient;
 use crate::facade::{Error, TbResult};
 
 pub use crate::facade::MockEntityFacade;
@@ -144,4 +156,52 @@ pub fn pop_test_canned(uri: &str, provider: &str) -> Option<TbResult<String>> {
 /// The requested URIs, in order (assert on these to verify API calls).
 pub fn requests() -> Vec<String> {
     CANNED.with(|c| c.borrow().requests.clone())
+}
+
+/// The dummy oauth client type the driver and token test seams share
+/// (spec #1062): the common provider client over the token-response type,
+/// with the endpoint markers left generic (so `::new` — defined only on the
+/// all-unset client — is resolved through the un-instantiated markers, and
+/// the setter chain flips them).
+pub type DummyClient<
+    TokenResponse,
+    HasAuthUrl = EndpointSet,
+    HasDeviceAuthUrl = EndpointNotSet,
+    HasIntrospectionUrl = EndpointNotSet,
+    HasRevocationUrl = EndpointNotSet,
+    HasTokenUrl = EndpointSet,
+> = ProviderClient<
+    TokenResponse,
+    HasAuthUrl,
+    HasDeviceAuthUrl,
+    HasIntrospectionUrl,
+    HasRevocationUrl,
+    HasTokenUrl,
+>;
+
+/// Build a dummy oauth client (locally-pointing auth/token URLs): a client
+/// that satisfies the [`OauthClient`](crate::client::OauthClient) bound for
+/// tests that never reach the network — the token hooks and exchange
+/// branches return before a request is sent.
+pub fn dummy_client<T: TokenResponse>(client_id: &str) -> DummyClient<T> {
+    DummyClient::<
+        T,
+        EndpointNotSet,
+        EndpointNotSet,
+        EndpointNotSet,
+        EndpointNotSet,
+        EndpointNotSet,
+    >::new(ClientId::new(client_id.to_string()))
+    .set_auth_uri(AuthUrl::new("http://localhost/oauth/authorize".to_string()).unwrap())
+    .set_token_uri(TokenUrl::new("http://localhost/oauth/token".to_string()).unwrap())
+}
+
+/// The shared dummy oauth client for the [`BasicTokenResponse`] shape: the
+/// `&'static` the driver trait's `client()` returns, shared by every
+/// provider-agnostic test module whose `Client` is over the basic token
+/// response (the `fn client() -> &'static` forces a per-type static, so the
+/// shared one for this shape lives here).
+pub fn basic_dummy_client() -> &'static DummyClient<BasicTokenResponse> {
+    static CLIENT: OnceLock<DummyClient<BasicTokenResponse>> = OnceLock::new();
+    CLIENT.get_or_init(|| dummy_client("test"))
 }

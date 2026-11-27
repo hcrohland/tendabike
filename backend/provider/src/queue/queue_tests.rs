@@ -1,9 +1,6 @@
-use std::sync::OnceLock;
-
 use super::{fail_event, get_event};
 use crate::Provider;
 use crate::ProviderSpec;
-use crate::client::ProviderClient;
 use crate::driver::Provider as Driver;
 use crate::facade::{
     ActivityId, EntityFacade, Error, Part, PartId, Session, Summary, TbResult, UserId,
@@ -11,7 +8,7 @@ use crate::facade::{
 use crate::lane::QueueRead;
 use crate::store::Store;
 use crate::test_support::MockStore;
-use oauth2::{AuthUrl, ClientId, EndpointNotSet, EndpointSet, TokenUrl, basic::BasicTokenResponse};
+use oauth2::basic::BasicTokenResponse;
 
 /// A queued event row for the queue-op tests: the identity the ops key on.
 #[derive(Debug, Clone, PartialEq)]
@@ -72,43 +69,16 @@ impl ProviderSpec for TestSpec {
 /// rules run over the single [`MockStore`] double without a real provider.
 struct TestDriver;
 
-/// The stub's dummy client's type: the common provider client over the basic
-/// token response, with the endpoint markers left generic (so `::new` —
-/// defined only on the all-unset client — is resolved through the
-/// un-instantiated markers, and the setter chain flips them).
-type DummyClient<
-    HasAuthUrl = EndpointSet,
-    HasDeviceAuthUrl = EndpointNotSet,
-    HasIntrospectionUrl = EndpointNotSet,
-    HasRevocationUrl = EndpointNotSet,
-    HasTokenUrl = EndpointSet,
-> = ProviderClient<
-    BasicTokenResponse,
-    HasAuthUrl,
-    HasDeviceAuthUrl,
-    HasIntrospectionUrl,
-    HasRevocationUrl,
-    HasTokenUrl,
->;
-
-/// The stub's dummy oauth client (locally-pointing auth/token URLs): never
-/// called from the queue ops (the token hooks are the trait's defaults).
-fn dummy_client() -> &'static DummyClient {
-    static CLIENT: OnceLock<DummyClient> = OnceLock::new();
-    CLIENT.get_or_init(|| {
-        DummyClient::new(ClientId::new("test".to_string()))
-            .set_auth_uri(AuthUrl::new("http://localhost/oauth/authorize".to_string()).unwrap())
-            .set_token_uri(TokenUrl::new("http://localhost/oauth/token".to_string()).unwrap())
-    })
-}
-
 #[async_trait::async_trait]
 impl Driver<TestSpec> for TestDriver {
     type TokenResponse = BasicTokenResponse;
-    type Client = DummyClient;
+    type Client = crate::test_support::DummyClient<BasicTokenResponse>;
 
+    /// The shared dummy oauth client (locally-pointing auth/token URLs):
+    /// never called from the queue ops (the token hooks are the trait's
+    /// defaults).
     fn client() -> &'static Self::Client {
-        dummy_client()
+        crate::test_support::basic_dummy_client()
     }
 
     // The provider-specific core: inert stubs, never called from the queue

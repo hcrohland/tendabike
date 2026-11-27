@@ -273,42 +273,6 @@ pub(crate) async fn get_owner_id<P: ProviderSpec, S: Store<P>>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::client::ProviderClient;
-    use oauth2::{
-        AuthUrl, ClientId, EndpointNotSet, EndpointSet, TokenUrl, basic::BasicTokenResponse,
-    };
-    use std::sync::OnceLock;
-
-    /// The dummy client's type: the common provider client over the basic
-    /// token response, with the endpoint markers left generic (so `::new` —
-    /// defined only on the all-unset client — is resolved through the
-    /// un-instantiated markers, and the setter chain flips them).
-    type DummyClient<
-        HasAuthUrl = EndpointSet,
-        HasDeviceAuthUrl = EndpointNotSet,
-        HasIntrospectionUrl = EndpointNotSet,
-        HasRevocationUrl = EndpointNotSet,
-        HasTokenUrl = EndpointSet,
-    > = ProviderClient<
-        BasicTokenResponse,
-        HasAuthUrl,
-        HasDeviceAuthUrl,
-        HasIntrospectionUrl,
-        HasRevocationUrl,
-        HasTokenUrl,
-    >;
-
-    /// A dummy oauth client (locally-pointing auth/token URLs): the
-    /// absent-token exchange test needs a client that satisfies the
-    /// [`OauthClient`] bound — the branch never reaches the network.
-    fn dummy_client() -> &'static DummyClient {
-        static CLIENT: OnceLock<DummyClient> = OnceLock::new();
-        CLIENT.get_or_init(|| {
-            DummyClient::new(ClientId::new("dummy".to_string()))
-                .set_auth_uri(AuthUrl::new("http://localhost/oauth/authorize".to_string()).unwrap())
-                .set_token_uri(TokenUrl::new("http://localhost/oauth/token".to_string()).unwrap())
-        })
-    }
 
     /// A known expiry in the past is expired (the cache-miss state's
     /// `UNIX_EPOCH` expiry always reads as expired).
@@ -337,7 +301,7 @@ mod tests {
     /// exchange touches the client, so no network and no store.
     #[tokio::test]
     async fn refresh_exchange_absent_token_is_not_auth() {
-        let res = refresh_exchange(dummy_client(), None).await;
+        let res = refresh_exchange(crate::test_support::basic_dummy_client(), None).await;
         assert!(
             matches!(
                 res,
