@@ -25,9 +25,9 @@ use crate::facade::UserId;
 /// A provider driver declares its wire shapes by implementing [`ProviderSpec`]:
 /// the user row type, the event row type, the owner id type (the queue's
 /// partition key), the event's dedup key type, and the driver type (the unit
-/// struct that implements [`TokenRefresh<Self>`](crate::token::TokenRefresh),
-/// so the kit's generic token refresh can reach the driver's associated
-/// functions).
+/// struct that implements the full
+/// [`Provider`](crate::driver::Provider) driver trait — the marker's
+/// `Driver` is the driver's single home, spec #1062).
 /// The marker also carries the provider's enum value as a constant (the
 /// marker → enum direction), the type-level constructor for the sync event
 /// (how this event type represents a sync), and the event-identity accessors
@@ -58,11 +58,13 @@ pub trait ProviderSpec: Send + Sync + Sized {
     /// interesting.
     type Key: Clone + Debug + Send + Sync + 'static;
 
-    /// The driver type: the unit struct that implements
-    /// [`TokenRefresh<Self>`](crate::token::TokenRefresh) — so the kit's
-    /// generic token refresh can reach the driver's associated functions (the
-    /// refresh exchange and the refresh-token accessor, spec #1056).
-    type Driver: crate::token::TokenRefresh<Self>;
+    /// The driver type: the unit struct that implements the full
+    /// [`Provider`](crate::driver::Provider) driver trait (spec #1029; the
+    /// bound consolidated from the narrow token-refresh trait in spec
+    /// #1062). The marker's `Driver` is the driver's single home: the kit's
+    /// generic token machinery reaches the driver's token hooks through
+    /// this bound, and the lane drives the marker's driver.
+    type Driver: crate::driver::Provider<Self>;
 
     /// The type-level constructor for the sync event: how this event type
     /// represents a sync (the durable backfill cursor). `owner` is the

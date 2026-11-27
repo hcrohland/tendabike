@@ -1,16 +1,20 @@
-//! The provider-agnostic token-refresh machinery (spec #1056): the
-//! per-provider [`TokenState`] (the owner id plus the token fields the
-//! refresh drives), the process-wide [`TokenCache`], and the generic
-//! [`get_token`] / [`get_owner_id`] the driver's thin forwards drive.
+//! The provider-agnostic token-refresh machinery (spec #1056, consolidated
+//! in spec #1062): the per-provider [`TokenState`] (the owner id plus the
+//! token fields the refresh drives), the process-wide [`TokenCache`], the
+//! kit's [`refresh_exchange`] (the standard oauth2 refresh-token call,
+//! written once), and the generic [`get_token`] / [`get_owner_id`] the
+//! driver's thin forwards drive.
 //!
 //! The kit owns the cache, the cache lookup (a hit clones; a miss builds
-//! from the DB row and inserts), the refresh-if-expired flow, and the
-//! rotated-token persist (through the store's generic
+//! from the DB row and inserts), the refresh-if-expired flow, the refresh
+//! exchange, and the rotated-token persist (through the store's generic
 //! [`user_update_token`](Store::user_update_token) op). The driver supplies
-//! only its refresh exchange and its refresh-token accessor, as
-//! [`TokenRefresh`] associated functions — the exchange is required (a
-//! durable-token provider overrides it with a no-op) and the accessor
-//! defaults to `None`.
+//! its refresh-token accessor (default: absent) and its shared client (the
+//! exchange's input) as [`Provider`](crate::driver::Provider) associated
+//! functions; the driver's `refresh` default is the exchange, so no
+//! provider re-implements it — a durable-token provider's token path reads
+//! the durable token directly from the user row and never reaches this
+//! flow.
 //!
 //! The generic types are state-free: a provider keeps a named `static`
 //! [`TokenCache`] and the kit reaches it by borrowing a reference (the same
@@ -24,48 +28,21 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
 use log::debug;
-use oauth2::{AccessToken, RefreshToken};
+use oauth2::{AccessToken, RefreshToken, TokenResponse};
 
 use crate::ProviderSpec;
+use crate::client::{HTTP_CLIENT, OauthClient};
+use crate::driver::Provider;
 use crate::facade::{Error, TbResult, UserId};
 use crate::store::Store;
-
-/// The driver's token-refresh hooks (spec #1056): the exchange and the
-/// refresh-token accessor the kit's generic refresh flow reaches through the
-/// marker's `Driver` bound. A dedicated, narrow trait — the kit's token
-/// machinery uses only these two functions, so a `ProviderSpec`'s `Driver`
-/// bound names this trait rather than the full driver, and a durable-token
-/// provider (or a test stub) implements nothing at all (both default).
-#[async_trait::async_trait]
-pub trait TokenRefresh<P: ProviderSpec>: Send + Sync {
-    /// Refresh the user's access token (spec #1056): take the current
-    /// refresh token, perform the exchange using the driver's client, and
-    /// return the kit's [`RefreshedToken`] (the new access token, the
-    /// optional expiry duration, and the optional rotated refresh token —
-    /// the signal for whether a persist is needed).
-    ///
-    /// The core of a `TokenRefresh`: a provider whose tokens are durable
-    /// (intervals.icu) overrides it with a no-op (its tokens never refresh;
-    /// the kit's refresh flow never reaches it).
-    async fn refresh(refresh_token: RefreshToken) -> TbResult<RefreshedToken>;
-
-    /// Read the refresh token out of the user row (spec #1056) — the durable
-    /// fallback the token cache's miss builds from.
-    ///
-    /// Default: `None` (a provider whose tokens are durable has no refresh
-    /// token).
-    fn refresh_token(_user: &P::User) -> Option<RefreshToken> {
-        None
-    }
-}
 
 /// The result of a token refresh (spec #1056): the new access token, the
 /// optional expiry duration, and the optional rotated refresh token — the
 /// signal for whether a persist is needed.
 ///
-/// `pub` (the fields `pub(crate)`): it is the return type of the
-/// [`TokenRefresh::refresh`] associated function on the public driver
-/// trait.
+/// `pub` (the fields `pub(crate)`): it is the return type of the driver
+/// trait's [`refresh`](crate::driver::Provider::refresh) method — publicly
+/// reachable through the driver module (re-exported there).
 #[derive(Debug, Clone)]
 pub struct RefreshedToken {
     /// The new access token.
@@ -75,6 +52,42 @@ pub struct RefreshedToken {
     /// The rotated refresh token, if the exchange issued a new one (the
     /// signal for whether a persist is needed).
     pub(crate) refresh_token: Option<RefreshToken>,
+}
+
+/// The refresh exchange (spec #1056, consolidated into the kit's free
+/// function in spec #1062): the standard oauth2 refresh-token call, written
+/// once, generic over the provider client's token response type (the
+/// [`OauthClient`] bound names the shape).
+///
+/// Takes the provider's shared oauth2 client and the optional refresh token:
+/// an absent token is the `NotAuth` — the single home of the no-refresh-token
+/// rule — an exchange failure maps to `NotAuth`, and the success returns the
+/// [`RefreshedToken`] (the new access token, the optional expiry, the
+/// optional rotated refresh token — the persist signal).
+pub(crate) async fn refresh_exchange<C>(
+    client: &C,
+    refresh_token: Option<RefreshToken>,
+) -> TbResult<RefreshedToken>
+where
+    C: OauthClient,
+{
+    let Some(refresh_token) = refresh_token else {
+        return Err(Error::NotAuth(
+            "No Refresh Token provided and Access Token expired".to_string(),
+        ));
+    };
+
+    let token = client
+        .exchange_refresh_token(&refresh_token)
+        .request_async(&*HTTP_CLIENT)
+        .await
+        .map_err(|err| Error::NotAuth(err.to_string()))?;
+
+    Ok(RefreshedToken {
+        access_token: token.access_token().clone(),
+        expires_in: token.expires_in(),
+        refresh_token: token.refresh_token().cloned(),
+    })
 }
 
 /// A one-line expiry check: a known expiry in the past is expired; an unknown
@@ -113,8 +126,9 @@ impl<P: ProviderSpec> TokenState<P> {
     /// Build the token state from a stored user row: an empty access token
     /// with a past expiry, so the first request forces a token refresh
     /// (spec #1056). The refresh token is read out of the row by the
-    /// driver's [`TokenRefresh::refresh_token`] accessor (the durable
-    /// fallback).
+    /// driver's
+    /// [`refresh_token`](crate::driver::Provider::refresh_token) accessor
+    /// (the durable fallback).
     fn from_user(user: &P::User) -> Self {
         Self {
             owner: P::user_owner(user).clone(),
@@ -147,19 +161,21 @@ impl<P: ProviderSpec> TokenState<P> {
     }
 
     /// Ensure a valid access token, refreshing in place if expired (the
-    /// driver's [`TokenRefresh::refresh`] exchange). Returns the *new*
-    /// refresh token only when a refresh issued a new rotating token (the
-    /// signal for whether a persist is needed).
+    /// driver's
+    /// [`refresh`](crate::driver::Provider::refresh) — the kit's exchange).
+    /// Returns the *new* refresh token only when a refresh issued a new
+    /// rotating token (the signal for whether a persist is needed).
+    ///
+    /// The no-refresh-token rule is not here: the option is passed through,
+    /// and the exchange is its single home (an absent token is the
+    /// exchange's `NotAuth`).
     async fn refresh_if_expired(&mut self) -> TbResult<Option<RefreshToken>> {
         if !is_expired(&self.expires_at) {
             return Ok(None);
         }
 
-        let current_refresh = self.refresh_token.clone().ok_or_else(|| {
-            Error::NotAuth("No Refresh Token provided and Access Token expired".to_string())
-        })?;
         debug!("refreshing provider token");
-        let token = P::Driver::refresh(current_refresh).await?;
+        let token = P::Driver::refresh(self.refresh_token.clone()).await?;
 
         self.access_token = token.access_token.clone();
         self.expires_at = token.expires_in.map(|d| SystemTime::now() + d);
@@ -257,6 +273,42 @@ pub(crate) async fn get_owner_id<P: ProviderSpec, S: Store<P>>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::client::ProviderClient;
+    use oauth2::{
+        AuthUrl, ClientId, EndpointNotSet, EndpointSet, TokenUrl, basic::BasicTokenResponse,
+    };
+    use std::sync::OnceLock;
+
+    /// The dummy client's type: the common provider client over the basic
+    /// token response, with the endpoint markers left generic (so `::new` —
+    /// defined only on the all-unset client — is resolved through the
+    /// un-instantiated markers, and the setter chain flips them).
+    type DummyClient<
+        HasAuthUrl = EndpointSet,
+        HasDeviceAuthUrl = EndpointNotSet,
+        HasIntrospectionUrl = EndpointNotSet,
+        HasRevocationUrl = EndpointNotSet,
+        HasTokenUrl = EndpointSet,
+    > = ProviderClient<
+        BasicTokenResponse,
+        HasAuthUrl,
+        HasDeviceAuthUrl,
+        HasIntrospectionUrl,
+        HasRevocationUrl,
+        HasTokenUrl,
+    >;
+
+    /// A dummy oauth client (locally-pointing auth/token URLs): the
+    /// absent-token exchange test needs a client that satisfies the
+    /// [`OauthClient`] bound — the branch never reaches the network.
+    fn dummy_client() -> &'static DummyClient {
+        static CLIENT: OnceLock<DummyClient> = OnceLock::new();
+        CLIENT.get_or_init(|| {
+            DummyClient::new(ClientId::new("dummy".to_string()))
+                .set_auth_uri(AuthUrl::new("http://localhost/oauth/authorize".to_string()).unwrap())
+                .set_token_uri(TokenUrl::new("http://localhost/oauth/token".to_string()).unwrap())
+        })
+    }
 
     /// A known expiry in the past is expired (the cache-miss state's
     /// `UNIX_EPOCH` expiry always reads as expired).
@@ -277,5 +329,22 @@ mod tests {
     #[test]
     fn is_expired_no_expiry_is_not_expired() {
         assert!(!is_expired(&None));
+    }
+
+    /// The absent-refresh-token branch: no refresh token is the `NotAuth`
+    /// (the single home of the no-refresh-token rule) — the message is the
+    /// existing one, preserved verbatim. Pure: the branch returns before the
+    /// exchange touches the client, so no network and no store.
+    #[tokio::test]
+    async fn refresh_exchange_absent_token_is_not_auth() {
+        let res = refresh_exchange(dummy_client(), None).await;
+        assert!(
+            matches!(
+                res,
+                Err(Error::NotAuth(ref msg))
+                    if msg == "No Refresh Token provided and Access Token expired"
+            ),
+            "the absent token is the exchange's NotAuth, got {res:?}"
+        );
     }
 }

@@ -4,12 +4,11 @@
 //! are unchanged; this type is the seam a future provider-agnostic call site
 //! (the lane, the dispatch) drives through.
 
-use crate::RefreshedToken;
 use crate::driver::Provider;
 use crate::facade::{ActivityId, EntityFacade, Part, PartId, Session, Summary, TbResult, UserId};
 use crate::store::Store;
+use crate::strava::client::{StravaClient, StravaTokenResponse};
 use crate::strava::{StravaId, StravaSpec, StravaUser};
-use crate::token::TokenRefresh;
 use oauth2::RefreshToken;
 
 /// The Strava driver type (spec #1029, ticket #1032): the
@@ -41,6 +40,17 @@ impl StravaDriver {
 
 #[async_trait::async_trait]
 impl Provider<StravaSpec> for StravaDriver {
+    type TokenResponse = StravaTokenResponse;
+    type Client = StravaClient;
+
+    fn client() -> &'static Self::Client {
+        super::client::strava_client()
+    }
+
+    fn refresh_token(user: &StravaUser) -> Option<RefreshToken> {
+        user.refresh_token()
+    }
+
     fn new_user(id: StravaId, tbid: UserId, token: Option<String>) -> StravaUser {
         StravaUser {
             id,
@@ -212,31 +222,5 @@ impl Provider<StravaSpec> for StravaDriver {
     async fn user_url<S: Store<StravaSpec>>(id: UserId, store: &mut S) -> TbResult<String> {
         let user = store.user_get_by_tbid(id).await?;
         Ok(format!("https://strava.com/athletes/{}", user.strava_id()))
-    }
-}
-
-#[async_trait::async_trait]
-impl TokenRefresh<StravaSpec> for StravaDriver {
-    async fn refresh(refresh_token: RefreshToken) -> TbResult<RefreshedToken> {
-        use super::client::strava_client;
-        use crate::client::HTTP_CLIENT;
-        use crate::facade::Error;
-        use oauth2::TokenResponse;
-
-        let token = strava_client()
-            .exchange_refresh_token(&refresh_token)
-            .request_async(&*HTTP_CLIENT)
-            .await
-            .map_err(|err| Error::NotAuth(err.to_string()))?;
-
-        Ok(RefreshedToken {
-            access_token: token.access_token().clone(),
-            expires_in: token.expires_in(),
-            refresh_token: token.refresh_token().cloned(),
-        })
-    }
-
-    fn refresh_token(user: &StravaUser) -> Option<RefreshToken> {
-        user.refresh_token()
     }
 }

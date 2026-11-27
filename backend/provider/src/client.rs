@@ -1,11 +1,14 @@
 //! The shared client scaffolding both providers use (spec #838): the
 //! no-redirect `reqwest` client — built once and shared by every provider
-//! call — and the oauth2 client type alias, parameterized by the token
-//! response type. The providers keep their own client *values* (built from
-//! their own env vars and endpoints) and their token-response wire types.
+//! call — the oauth2 client type alias, parameterized by the token response
+//! type, and the [`OauthClient`] helper trait (the full oauth2 client shape
+//! named once, spec #1062). The providers keep their own client *values*
+//! (built from their own env vars and endpoints) and their token-response
+//! wire types.
 
 use oauth2::{
-    Client, EndpointNotSet, EndpointSet, StandardRevocableToken,
+    Client, EndpointNotSet, EndpointSet, EndpointState, RefreshToken, RefreshTokenRequest,
+    StandardRevocableToken, TokenResponse,
     basic::{BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse},
     reqwest,
 };
@@ -50,3 +53,49 @@ pub type ProviderClient<
     HasRevocationUrl,
     HasTokenUrl,
 >;
+
+/// The full oauth2 client shape (spec #1062): the common provider client's
+/// exact endpoint-marker set — the auth and token URLs set, the device-auth
+/// and introspection URLs unset, the revocation URL free (a provider with a
+/// revocation endpoint sets it — Strava — and one without leaves it unset —
+/// intervals.icu).
+///
+/// A helper trait the driver trait's `Client` associated type is bounded by:
+/// the common provider client is a type alias ([`ProviderClient`]), which
+/// cannot appear in a trait bound, so the shape is named by the trait.
+/// Blanket-implemented for every provider client (every
+/// [`ProviderClient`] over the marker set above), so a new provider's client
+/// is checked against the shape at the trait bound, not at the exchange call
+/// site. The trait carries the one method the kit's refresh exchange drives
+/// (the standard oauth2 refresh-token request), so the exchange is generic
+/// over the bound, not over the concrete client type. `Sync` and the
+/// token response's `Send` are part of the shape: the driver trait's
+/// `refresh` default awaits the exchange across a thread (the `async_trait`
+/// `Send` bound), holding the shared client and the response type.
+pub trait OauthClient: Sync {
+    /// The client's token response type (the wire shape the exchange parses).
+    type TokenResponse: TokenResponse + Send;
+
+    /// The standard oauth2 refresh-token request (the kit's exchange drives
+    /// it over the shared no-redirect HTTP client).
+    fn exchange_refresh_token<'a>(
+        &'a self,
+        refresh_token: &'a RefreshToken,
+    ) -> RefreshTokenRequest<'a, BasicErrorResponse, Self::TokenResponse>;
+}
+
+impl<TR, R> OauthClient
+    for ProviderClient<TR, EndpointSet, EndpointNotSet, EndpointNotSet, R, EndpointSet>
+where
+    TR: TokenResponse + Send + Sync,
+    R: EndpointState + Send + Sync,
+{
+    type TokenResponse = TR;
+
+    fn exchange_refresh_token<'a>(
+        &'a self,
+        refresh_token: &'a RefreshToken,
+    ) -> RefreshTokenRequest<'a, BasicErrorResponse, TR> {
+        self.exchange_refresh_token(refresh_token)
+    }
+}

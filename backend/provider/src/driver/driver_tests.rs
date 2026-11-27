@@ -1,13 +1,17 @@
+use std::sync::OnceLock;
+
 use super::Provider;
 use crate::ProviderSpec;
+use crate::client::ProviderClient;
 use crate::facade::{
     ActivityId, EntityFacade, MockEntityFacade, OnboardingStatus, Part, PartId, Session, Stat,
     Summary, TbResult, User, UserId, mock_session, mock_session_admin,
 };
 use crate::store::Store;
+use crate::strava::client::StravaTokenResponse;
 use crate::strava::{StravaId, StravaSpec, StravaUser};
 use crate::test_support::MockStore;
-use oauth2::RefreshToken;
+use oauth2::{AuthUrl, ClientId, EndpointNotSet, EndpointSet, RefreshToken, TokenUrl};
 
 /// The test user row for [`StravaSpec`].
 fn user(tbid: i32, stravaid: i64, enabled: bool) -> StravaUser {
@@ -23,8 +27,46 @@ fn user(tbid: i32, stravaid: i64, enabled: bool) -> StravaUser {
 /// for real over the single [`MockStore`] double (spec #1029, ticket #1032).
 struct TestDriver;
 
+/// The canned driver's dummy client's type: the common provider client over
+/// the Strava token response, with the endpoint markers left generic (so
+/// `::new` — defined only on the all-unset client — is resolved through the
+/// un-instantiated markers, and the setter chain flips them).
+type DummyClient<
+    HasAuthUrl = EndpointSet,
+    HasDeviceAuthUrl = EndpointNotSet,
+    HasIntrospectionUrl = EndpointNotSet,
+    HasRevocationUrl = EndpointNotSet,
+    HasTokenUrl = EndpointSet,
+> = ProviderClient<
+    StravaTokenResponse,
+    HasAuthUrl,
+    HasDeviceAuthUrl,
+    HasIntrospectionUrl,
+    HasRevocationUrl,
+    HasTokenUrl,
+>;
+
+/// The canned driver's dummy oauth client (locally-pointing auth/token
+/// URLs): the token hooks' `Client` associated type — the skeleton tests
+/// never refresh, so the client is never called (spec #1062).
+fn dummy_client() -> &'static DummyClient {
+    static CLIENT: OnceLock<DummyClient> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        DummyClient::new(ClientId::new("test".to_string()))
+            .set_auth_uri(AuthUrl::new("http://localhost/oauth/authorize".to_string()).unwrap())
+            .set_token_uri(TokenUrl::new("http://localhost/oauth/token".to_string()).unwrap())
+    })
+}
+
 #[async_trait::async_trait]
 impl Provider<StravaSpec> for TestDriver {
+    type TokenResponse = StravaTokenResponse;
+    type Client = DummyClient;
+
+    fn client() -> &'static Self::Client {
+        dummy_client()
+    }
+
     fn new_user(id: StravaId, tbid: UserId, token: Option<String>) -> StravaUser {
         StravaUser {
             id,

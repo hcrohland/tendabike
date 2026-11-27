@@ -65,7 +65,7 @@ async fn my_test() -> TbResult<()> {
 
 | File | Covers |
 |------|--------|
-| `queue/queue_tests.rs` | The kit's event-queue kernel (spec #1029): `get_event` (the read-side rules — the rate-limit gate, the latest-per-key dedup, the drop-of-older) and `fail_event` (the four-arm failure policy), driven by a single `MockStore` over a test `ProviderSpec` marker — the marker's `Driver` is a `TestDriver` stub that implements only the `TokenRefresh` trait (the queue ops never touch the driver's token refresh) |
+| `queue/queue_tests.rs` | The kit's event-queue kernel (spec #1029): `get_event` (the read-side rules — the rate-limit gate, the latest-per-key dedup, the drop-of-older) and `fail_event` (the four-arm failure policy), driven by a single `MockStore` over a test `ProviderSpec` marker — the marker's `Driver` is a `TestDriver` stub that implements the full driver trait (inert stubs for the provider-specific core, never called from the queue ops, plus a dummy client with locally-pointing auth/token URLs — spec #1062) |
 | `activity/activity_tests.rs` | Activity import: JSON → `Activity` mapping, type mapping, stub detection, gear reference |
 | `gear/gear_tests.rs` | Gear import: JSON → `Part` mapping, `into_partid` upsert |
 | `event/event_tests.rs` | Event queue: `process` (one event per call), `insert_sync`, `process_sync` (one batch per call), `accept` |
