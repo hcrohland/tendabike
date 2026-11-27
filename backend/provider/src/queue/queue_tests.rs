@@ -1,11 +1,14 @@
 use super::{fail_event, get_event};
 use crate::Provider;
 use crate::ProviderSpec;
-use crate::RefreshedToken;
-use crate::facade::{Error, Summary, TbResult, UserId};
+use crate::driver::Provider as Driver;
+use crate::facade::{
+    ActivityId, EntityFacade, Error, Part, PartId, Session, Summary, TbResult, UserId,
+};
 use crate::lane::QueueRead;
+use crate::store::Store;
 use crate::test_support::MockStore;
-use oauth2::RefreshToken;
+use oauth2::basic::BasicTokenResponse;
 
 /// A queued event row for the queue-op tests: the identity the ops key on.
 #[derive(Debug, Clone, PartialEq)]
@@ -59,17 +62,88 @@ impl ProviderSpec for TestSpec {
     }
 }
 
-/// A test driver stub for the marker's `Driver` associated type: the queue
-/// ops never touch the driver's token refresh, so the `TokenRefresh` impl is
-/// a no-op `refresh` (the durable default) and the default `None` accessor.
+/// A test driver stub for the marker's `Driver` associated type (spec
+/// #1062): the full driver trait — inert stubs for the provider-specific
+/// core (never called from the queue ops) plus a dummy client
+/// (locally-pointing auth/token URLs) — so the queue's read and failure
+/// rules run over the single [`MockStore`] double without a real provider.
 struct TestDriver;
 
 #[async_trait::async_trait]
-impl crate::token::TokenRefresh<TestSpec> for TestDriver {
-    async fn refresh(_refresh_token: RefreshToken) -> TbResult<RefreshedToken> {
-        Err(Error::NotAuth(
-            "no token refresh for this provider".to_string(),
-        ))
+impl Driver<TestSpec> for TestDriver {
+    type TokenResponse = BasicTokenResponse;
+    type Client = crate::test_support::DummyClient<BasicTokenResponse>;
+
+    /// The shared dummy oauth client (locally-pointing auth/token URLs):
+    /// never called from the queue ops (the token hooks are the trait's
+    /// defaults).
+    fn client() -> &'static Self::Client {
+        crate::test_support::basic_dummy_client()
+    }
+
+    // The provider-specific core: inert stubs, never called from the queue
+    // ops (the read and failure rules drive the store only).
+
+    fn new_user(id: i32, tbid: UserId, _token: Option<String>) -> TestUser {
+        TestUser { tbid, owner: id }
+    }
+
+    fn disabled(_user: &TestUser) -> bool {
+        false
+    }
+
+    fn authorize_url(_state: &str, _code_verifier: Option<&str>) -> String {
+        "authorize".to_string()
+    }
+
+    async fn login<S: Store<TestSpec>, D: EntityFacade<S>>(
+        _code: &str,
+        _scope: &str,
+        _verifier: Option<&str>,
+        _facade: &D,
+        _store: &mut S,
+    ) -> TbResult<(UserId, bool)> {
+        Ok((UserId::from(0), false))
+    }
+
+    async fn accept_event<S: Store<TestSpec>>(
+        _body: &str,
+        _store: &mut S,
+    ) -> TbResult<Vec<UserId>> {
+        Ok(Vec::new())
+    }
+
+    async fn import_gear<S: Store<TestSpec>, D: EntityFacade<S>>(
+        _user_id: UserId,
+        _facade: &D,
+        _store: &mut S,
+    ) -> TbResult<Vec<PartId>> {
+        Ok(Vec::new())
+    }
+
+    async fn process<S: Store<TestSpec>, D: EntityFacade<S>>(
+        _user_id: UserId,
+        _facade: &D,
+        _store: &mut S,
+    ) -> TbResult<Summary> {
+        Ok(Summary::default())
+    }
+
+    async fn activity_url<S: Store<TestSpec>, D: EntityFacade<S>>(
+        _session: Box<dyn Session>,
+        _id: ActivityId,
+        _facade: &D,
+        _store: &mut S,
+    ) -> TbResult<String> {
+        Ok("activity-url".to_string())
+    }
+
+    fn gear_url(_part: &Part) -> TbResult<Option<String>> {
+        Ok(None)
+    }
+
+    async fn user_url<S: Store<TestSpec>>(_id: UserId, _store: &mut S) -> TbResult<String> {
+        Ok("user-url".to_string())
     }
 }
 

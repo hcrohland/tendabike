@@ -38,22 +38,18 @@ async fn main() -> anyhow::Result<()> {
     // The unified provider lane (ADR-0014): the registry drives a single
     // lane, which resolves the user's provider and dispatches to the right
     // driver internally — so an icu user's queued events are processed
-    // through their own (marker, driver) lane, and the registry is
+    // through their own per-provider lane, and the registry is
     // provider-ignorant.
     let registry = tb_exec::Registry::with_defaults(
         tb_exec::DetachedBegin::new(db_pool),
         tb_exec::DomainFacadeImpl,
         tb_provider::UnifiedLaneImpl::<_>::new(
-            tb_provider::ProviderLaneImpl::<
-                tb_provider::strava::StravaSpec,
-                _,
-                tb_provider::strava::driver::StravaDriver,
-            >::new(tb_provider::EntityFacadeImpl),
-            tb_provider::ProviderLaneImpl::<
-                tb_provider::icu::IcuSpec,
-                _,
-                tb_provider::icu::driver::IcuDriver,
-            >::new(tb_provider::EntityFacadeImpl),
+            tb_provider::ProviderLaneImpl::<tb_provider::strava::StravaSpec, _>::new(
+                tb_provider::EntityFacadeImpl,
+            ),
+            tb_provider::ProviderLaneImpl::<tb_provider::icu::IcuSpec, _>::new(
+                tb_provider::EntityFacadeImpl,
+            ),
         ),
     );
     let api = std::sync::Arc::new(registry.clone()) as std::sync::Arc<dyn tb_exec::ServiceApi>;

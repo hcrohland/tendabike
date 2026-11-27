@@ -46,9 +46,12 @@
 //!
 //! [`driver`] — [`Provider`](crate::driver::Provider), the provider driver:
 //! the single driver interface, generic over the marker — the
-//! provider-specific core the author writes plus the shared user-lifecycle
-//! skeleton as default methods (spec #1029). Namespaced under `driver` (not
-//! re-exported at the crate root) beside the [`Provider`] enum.
+//! provider-specific core the author writes (the token hooks included — the
+//! token response, the shared oauth2 client, the refresh-token accessor)
+//! plus the shared user-lifecycle skeleton and the token `refresh` (the kit's
+//! refresh exchange) as default methods (spec #1029, consolidated in spec
+//! #1062). Namespaced under `driver` (not re-exported at the crate root)
+//! beside the [`Provider`] enum.
 //!
 //! [`spec`] — [`ProviderSpec`], the provider marker: the type-only carrier of
 //! a provider's wire shapes (the user row, the event row, the owner id, the
@@ -97,7 +100,10 @@ mod ratelimit;
 pub(crate) use ratelimit::{Cadence, RateLimitHandle, UsageKind, WindowSpec};
 
 mod token;
-pub(crate) use token::{RefreshedToken, TokenCache};
+// `RefreshedToken` is publicly reachable through the driver module (it is
+// named in the public trait signature); the crate root keeps the cache
+// re-export for the kit's internal callers.
+pub(crate) use token::TokenCache;
 
 mod failure;
 pub use failure::*;
