@@ -41,7 +41,7 @@ export const colorClasses: Record<Color, ColorClasses> = {
  * The single uniform fill for every chip and neutral button: a dark-step
  * background + white text. It is one value, not per-color — light mode sits at
  * `primary-500` and dark mode at `secondary-700`, both chosen to stay visible
- * on the lighter (secondary) card surface in their mode. (ADR-0018.)
+ * on the lighter (secondary) card surface in their mode. (ADR-0019.)
  */
 export const fill = "bg-primary-500 dark:bg-secondary-700 text-white";
 

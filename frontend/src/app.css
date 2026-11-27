@@ -11,7 +11,7 @@
    * app's neutral color: two neutral gray tones (primary = light, secondary =
    * darker). A uniform `color` prop selects the tone; the component's role
    * selects the step — cards and the Tone block read a surface, buttons and
-   * chips a fill (ADR-0018). Status colors use the standard (vivid) Tailwind
+   * chips a fill (ADR-0019). Status colors use the standard (vivid) Tailwind
    * hue scales — the theme defines no status scales of its own.
    *
    * Each scale is defined once (no per-mode values). flowbite's components and

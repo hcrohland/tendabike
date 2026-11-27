@@ -2,7 +2,7 @@
 
 ## Status
 
-**Superseded by [ADR-0018](../0018-a-uniform-explicit-color-prop.md).** The surface/tone flip (the context-based card/content contrast) is superseded by ADR-0018's uniform explicit `color` prop. ADR-0017's other accepted decisions stand and are recorded in ADR-0018: the gray-first two-tone palette (primary light, secondary darker) and the vivid status-hue mapping (danger=red, warning/due-soon=yellow, success=green, info/unread=blue). Retained here for history.
+**Superseded by [ADR-0019](../0019-a-uniform-explicit-color-prop.md).** The surface/tone flip (the context-based card/content contrast) is superseded by ADR-0019's uniform explicit `color` prop. ADR-0017's other accepted decisions stand and are recorded in ADR-0019: the gray-first two-tone palette (primary light, secondary darker) and the vivid status-hue mapping (danger=red, warning/due-soon=yellow, success=green, info/unread=blue). Retained here for history.
 
 ## Context
 
