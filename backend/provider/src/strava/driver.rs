@@ -4,6 +4,7 @@
 //! are unchanged; this type is the seam a future provider-agnostic call site
 //! (the lane, the dispatch) drives through.
 
+use crate::RefreshedToken;
 use crate::driver::Provider;
 use crate::facade::{ActivityId, EntityFacade, Part, PartId, Session, Summary, TbResult, UserId};
 use crate::store::Store;
@@ -78,6 +79,30 @@ impl Provider<StravaSpec> for StravaDriver {
             .context("token exchange failed")?;
         debug!("user {} token revoked", strava_id);
         Ok(())
+    }
+
+    async fn refresh(refresh_token: String) -> TbResult<RefreshedToken> {
+        use super::client::strava_client;
+        use crate::client::HTTP_CLIENT;
+        use crate::facade::Error;
+        use oauth2::TokenResponse;
+
+        let current = RefreshToken::new(refresh_token);
+        let token = strava_client()
+            .exchange_refresh_token(&current)
+            .request_async(&*HTTP_CLIENT)
+            .await
+            .map_err(|err| Error::NotAuth(err.to_string()))?;
+
+        Ok(RefreshedToken {
+            access_token: token.access_token().clone(),
+            expires_in: token.expires_in(),
+            refresh_token: token.refresh_token().map(|t| t.secret().to_string()),
+        })
+    }
+
+    fn refresh_token(user: &StravaUser) -> Option<String> {
+        user.refresh_token().map(|t| t.secret().to_string())
     }
 
     fn authorize_url(state: &str, _code_verifier: Option<&str>) -> String {
@@ -160,12 +185,12 @@ impl Provider<StravaSpec> for StravaDriver {
         store: &mut S,
     ) -> TbResult<Summary> {
         use super::event::ObjectType;
-        use super::session::get_strava_id;
+        use super::session::get_owner_id;
         use crate::lane::QueueRead;
         use crate::queue::get_event;
         use log::{info, warn};
 
-        let strava_id = get_strava_id(user_id, store).await?;
+        let strava_id = get_owner_id(user_id, store).await?;
         let read = get_event(strava_id, store).await?;
         let event = match read {
             QueueRead::Event(event) => event,

@@ -15,7 +15,10 @@ use crate::facade::UserId;
 
 /// The icu provider marker (spec #1029): the type carrier for icu's wire
 /// shapes — the [`IcuUser`] row, the [`IcuEvent`] row, the [`IcuId`] owner,
-/// the `String` dedup key (the `activity_id`).
+/// the `String` dedup key (the `activity_id`), and the
+/// [`IcuDriver`](super::driver::IcuDriver) ([`ProviderSpec::Driver`]). The
+/// driver uses the refresh hooks' default no-ops: intervals.icu tokens are
+/// durable (no cache, no refresh).
 pub struct IcuSpec;
 
 impl ProviderSpec for IcuSpec {
@@ -24,6 +27,7 @@ impl ProviderSpec for IcuSpec {
     type Event = IcuEvent;
     type Owner = IcuId;
     type Key = String;
+    type Driver = super::driver::IcuDriver;
     fn make_sync(owner: IcuId, time: i64) -> IcuEvent {
         IcuEvent::new_sync(owner, time)
     }

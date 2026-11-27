@@ -15,7 +15,8 @@ use crate::facade::UserId;
 
 /// The Strava provider marker (spec #1029): the type carrier for Strava's wire
 /// shapes — the [`StravaUser`] row, the [`Event`] row, the [`StravaId`] owner,
-/// the `i64` dedup key (the `object_id`).
+/// the `i64` dedup key (the `object_id`), and the
+/// [`StravaDriver`](super::driver::StravaDriver) ([`ProviderSpec::Driver`]).
 pub struct StravaSpec;
 
 impl ProviderSpec for StravaSpec {
@@ -24,6 +25,7 @@ impl ProviderSpec for StravaSpec {
     type Event = Event;
     type Owner = StravaId;
     type Key = i64;
+    type Driver = super::driver::StravaDriver;
     fn make_sync(owner: StravaId, time: i64) -> Event {
         Event {
             id: None,

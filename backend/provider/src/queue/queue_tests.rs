@@ -1,8 +1,11 @@
 use super::{fail_event, get_event};
 use crate::Provider;
 use crate::ProviderSpec;
-use crate::facade::{Error, Summary, UserId};
+use crate::facade::{
+    ActivityId, EntityFacade, Error, Part, PartId, Session, Summary, TbResult, UserId,
+};
 use crate::lane::QueueRead;
+use crate::store::Store;
 use crate::test_support::MockStore;
 
 /// A queued event row for the queue-op tests: the identity the ops key on.
@@ -32,6 +35,7 @@ impl ProviderSpec for TestSpec {
     type Event = TestEvent;
     type Owner = i32;
     type Key = i64;
+    type Driver = TestDriver;
     fn make_sync(owner: i32, _time: i64) -> TestEvent {
         TestEvent {
             id: None,
@@ -53,6 +57,75 @@ impl ProviderSpec for TestSpec {
     }
     fn user_owner(user: &TestUser) -> &i32 {
         &user.owner
+    }
+}
+
+/// A test driver stub for the marker's `Driver` associated type: the queue
+/// ops never touch the driver, so every op is an unimplemented stub.
+struct TestDriver;
+
+#[async_trait::async_trait]
+impl crate::driver::Provider<TestSpec> for TestDriver {
+    fn new_user(_id: i32, _tbid: UserId, _token: Option<String>) -> TestUser {
+        panic!("the queue tests never construct a user")
+    }
+
+    fn disabled(_user: &TestUser) -> bool {
+        panic!("the queue tests never check the disabled flag")
+    }
+
+    fn authorize_url(_state: &str, _code_verifier: Option<&str>) -> String {
+        panic!("the queue tests never build an authorize URL")
+    }
+
+    async fn login<S: Store<TestSpec>, D: EntityFacade<S>>(
+        _code: &str,
+        _scope: &str,
+        _verifier: Option<&str>,
+        _facade: &D,
+        _store: &mut S,
+    ) -> TbResult<(UserId, bool)> {
+        panic!("the queue tests never log in")
+    }
+
+    async fn accept_event<S: Store<TestSpec>>(
+        _body: &str,
+        _store: &mut S,
+    ) -> TbResult<Vec<UserId>> {
+        panic!("the queue tests never accept an event")
+    }
+
+    async fn import_gear<S: Store<TestSpec>, D: EntityFacade<S>>(
+        _user_id: UserId,
+        _facade: &D,
+        _store: &mut S,
+    ) -> TbResult<Vec<PartId>> {
+        panic!("the queue tests never import gear")
+    }
+
+    async fn process<S: Store<TestSpec>, D: EntityFacade<S>>(
+        _user_id: UserId,
+        _facade: &D,
+        _store: &mut S,
+    ) -> TbResult<Summary> {
+        panic!("the queue tests never process an event")
+    }
+
+    async fn activity_url<S: Store<TestSpec>, D: EntityFacade<S>>(
+        _session: Box<dyn Session>,
+        _id: ActivityId,
+        _facade: &D,
+        _store: &mut S,
+    ) -> TbResult<String> {
+        panic!("the queue tests never resolve an activity URL")
+    }
+
+    fn gear_url(_part: &Part) -> TbResult<Option<String>> {
+        panic!("the queue tests never resolve a gear URL")
+    }
+
+    async fn user_url<S: Store<TestSpec>>(_id: UserId, _store: &mut S) -> TbResult<String> {
+        panic!("the queue tests never resolve a user URL")
     }
 }
 

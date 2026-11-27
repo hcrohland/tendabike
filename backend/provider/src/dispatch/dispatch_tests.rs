@@ -909,7 +909,7 @@ async fn sync_users_queues_strava_users() -> TbResult<()> {
         .expect_user_get_all()
         .returning(|| Ok(vec![strava_user(UserId::from(7), 42, true)]));
     store.icu.expect_user_get_all().returning(|| Ok(Vec::new()));
-    // The `insert_sync`'s `get_strava_id` read + the queue insert.
+    // The `insert_sync`'s `get_owner_id` read + the queue insert.
     let strava = strava_user(UserId::from(7), 42, true);
     store
         .strava

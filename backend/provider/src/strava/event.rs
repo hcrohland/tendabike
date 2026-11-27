@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use super::ActivityId;
 use super::activity::StravaActivity;
 use super::http::request_json;
-use super::session::get_strava_id;
+use super::session::get_owner_id;
 use super::{Error, StravaId, StravaSpec, Summary, TbResult, UserId, activity, get_time};
 use crate::EntityFacade;
 use crate::store::Store;
@@ -379,7 +379,7 @@ pub async fn insert_sync(
     if event_time > get_time() {
         return Err(Error::BadRequest(format!("eventtime {event_time} > now!")));
     }
-    let owner_id = get_strava_id(user_id, store).await?;
+    let owner_id = get_owner_id(user_id, store).await?;
     let event = Event {
         owner_id,
         object_id: 0,
@@ -399,7 +399,7 @@ pub async fn is_sync_for_user(
     event_time: i64,
     store: &mut impl Store<StravaSpec>,
 ) -> TbResult<bool> {
-    let strava_id = get_strava_id(user_id, store).await?;
+    let strava_id = get_owner_id(user_id, store).await?;
     Ok(event.object_type == ObjectType::Sync
         && event.owner_id == strava_id
         && event.event_time == event_time)
@@ -413,7 +413,7 @@ pub async fn sync_queued_for_user(
     event_time: i64,
     store: &mut impl Store<StravaSpec>,
 ) -> TbResult<bool> {
-    let strava_id = get_strava_id(user_id, store).await?;
+    let strava_id = get_owner_id(user_id, store).await?;
     let syncs = store.event_get_later(0, strava_id).await?;
     Ok(syncs.iter().any(|event| event.event_time == event_time))
 }
