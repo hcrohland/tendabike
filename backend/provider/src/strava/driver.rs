@@ -217,15 +217,14 @@ impl Provider<StravaSpec> for StravaDriver {
 
 #[async_trait::async_trait]
 impl TokenRefresh<StravaSpec> for StravaDriver {
-    async fn refresh(refresh_token: String) -> TbResult<RefreshedToken> {
+    async fn refresh(refresh_token: RefreshToken) -> TbResult<RefreshedToken> {
         use super::client::strava_client;
         use crate::client::HTTP_CLIENT;
         use crate::facade::Error;
         use oauth2::TokenResponse;
 
-        let current = RefreshToken::new(refresh_token);
         let token = strava_client()
-            .exchange_refresh_token(&current)
+            .exchange_refresh_token(&refresh_token)
             .request_async(&*HTTP_CLIENT)
             .await
             .map_err(|err| Error::NotAuth(err.to_string()))?;
@@ -233,11 +232,11 @@ impl TokenRefresh<StravaSpec> for StravaDriver {
         Ok(RefreshedToken {
             access_token: token.access_token().clone(),
             expires_in: token.expires_in(),
-            refresh_token: token.refresh_token().map(|t| t.secret().to_string()),
+            refresh_token: token.refresh_token().cloned(),
         })
     }
 
-    fn refresh_token(user: &StravaUser) -> Option<String> {
-        user.refresh_token().map(|t| t.secret().to_string())
+    fn refresh_token(user: &StravaUser) -> Option<RefreshToken> {
+        user.refresh_token()
     }
 }

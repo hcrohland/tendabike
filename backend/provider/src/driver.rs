@@ -45,7 +45,7 @@ use crate::store::Store;
 /// store's `event_create`).
 #[async_trait::async_trait]
 pub trait Provider<P: ProviderSpec>: Send + Sync {
-    // ── the author writes: the row/token hooks ──────────────────────────────
+    // ── the author writes: the row/token hooks ─────────────────────────────
 
     /// Construct the provider's user row from the provider id, the
     /// TendaBike user id, and the normalized optional token (the provider's

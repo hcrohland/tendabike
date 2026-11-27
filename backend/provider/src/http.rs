@@ -86,7 +86,7 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
     // The real-HTTP path: the one bearer GET, context-wrapped for the
     // provider (the offline seam above returns before this, so a canned
     // error — a `NotAuth`, a `TryAgain` — propagates typed, unwrapped).
-    let r = bearer_get(base, token.secret(), uri, on_headers, provider)
+    let r = bearer_get(base, token, uri, on_headers, provider)
         .await
         .with_context(|| format!("Could not reach {provider}"))?;
     trace!("{uri}:\n{r}");
@@ -104,14 +104,14 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
 /// it across threads).
 pub(crate) async fn bearer_get(
     base: &str,
-    token: &str,
+    token: &AccessToken,
     uri: &str,
     on_headers: impl Fn(&HeaderMap) + Sync,
     provider: &str,
 ) -> TbResult<String> {
     let resp = HTTP_CLIENT
         .get(format!("{base}{uri}"))
-        .bearer_auth(token)
+        .bearer_auth(token.secret())
         .send()
         .await
         .context("Could not reach the provider API")?;

@@ -34,10 +34,7 @@ impl StravaId {
     ///
     /// sets a five minute buffer for the access token
     /// returns the updated user
-    ///
-    /// `allow(dead_code)`: driven by the direct-op test; the refresh's
-    /// rotated-token persist goes through the store's `user_update_token` op.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) async fn update_token(
         self,
         refresh: Option<String>,
@@ -75,10 +72,7 @@ impl StravaUser {
     /// # Errors
     ///
     /// Returns an `Error` if the user is not registered.
-    ///
-    /// `allow(dead_code)`: driven by the direct-op test; the token cache's
-    /// miss reads the row through the store's `user_get_by_tbid` op.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) async fn read(id: UserId, store: &mut impl Store<StravaSpec>) -> TbResult<Self> {
         store.user_get_by_tbid(id).await
     }

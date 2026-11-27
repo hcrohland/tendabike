@@ -17,7 +17,7 @@ use crate::facade::UserId;
 /// shapes — the [`IcuUser`] row, the [`IcuEvent`] row, the [`IcuId`] owner,
 /// the `String` dedup key (the `activity_id`), and the
 /// [`IcuDriver`](super::driver::IcuDriver) ([`ProviderSpec::Driver`]). The
-/// driver uses the refresh hooks' default no-ops: intervals.icu tokens are
+/// driver's refresh hooks are the durable no-ops: intervals.icu tokens are
 /// durable (no cache, no refresh).
 pub struct IcuSpec;
 

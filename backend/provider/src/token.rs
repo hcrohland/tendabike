@@ -8,8 +8,9 @@
 //! rotated-token persist (through the store's generic
 //! [`user_update_token`](Store::user_update_token) op). The driver supplies
 //! only its refresh exchange and its refresh-token accessor, as
-//! [`TokenRefresh`] associated functions with default no-ops — a
-//! durable-token provider needs no refresh impl at all.
+//! [`TokenRefresh`] associated functions — the exchange is required (a
+//! durable-token provider overrides it with a no-op) and the accessor
+//! defaults to `None`.
 //!
 //! The generic types are state-free: a provider keeps a named `static`
 //! [`TokenCache`] and the kit reaches it by borrowing a reference (the same
@@ -23,7 +24,7 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
 use log::debug;
-use oauth2::AccessToken;
+use oauth2::{AccessToken, RefreshToken};
 
 use crate::ProviderSpec;
 use crate::facade::{Error, TbResult, UserId};
@@ -43,20 +44,17 @@ pub trait TokenRefresh<P: ProviderSpec>: Send + Sync {
     /// optional expiry duration, and the optional rotated refresh token —
     /// the signal for whether a persist is needed).
     ///
-    /// Default: an error (a provider whose tokens are durable has no
-    /// refresh; the kit's refresh flow never reaches it).
-    async fn refresh(_refresh_token: String) -> TbResult<RefreshedToken> {
-        Err(Error::NotAuth(
-            "no token refresh for this provider".to_string(),
-        ))
-    }
+    /// The core of a `TokenRefresh`: a provider whose tokens are durable
+    /// (intervals.icu) overrides it with a no-op (its tokens never refresh;
+    /// the kit's refresh flow never reaches it).
+    async fn refresh(refresh_token: RefreshToken) -> TbResult<RefreshedToken>;
 
     /// Read the refresh token out of the user row (spec #1056) — the durable
     /// fallback the token cache's miss builds from.
     ///
     /// Default: `None` (a provider whose tokens are durable has no refresh
     /// token).
-    fn refresh_token(_user: &P::User) -> Option<String> {
+    fn refresh_token(_user: &P::User) -> Option<RefreshToken> {
         None
     }
 }
@@ -76,7 +74,7 @@ pub struct RefreshedToken {
     pub(crate) expires_in: Option<Duration>,
     /// The rotated refresh token, if the exchange issued a new one (the
     /// signal for whether a persist is needed).
-    pub(crate) refresh_token: Option<String>,
+    pub(crate) refresh_token: Option<RefreshToken>,
 }
 
 /// A one-line expiry check: a known expiry in the past is expired; an unknown
@@ -97,7 +95,7 @@ pub(crate) struct TokenState<P: ProviderSpec> {
     owner: P::Owner,
     access_token: AccessToken,
     expires_at: Option<SystemTime>,
-    refresh_token: Option<String>,
+    refresh_token: Option<RefreshToken>,
 }
 
 impl<P: ProviderSpec> Clone for TokenState<P> {
@@ -134,7 +132,7 @@ impl<P: ProviderSpec> TokenState<P> {
             owner,
             access_token: AccessToken::new(access_token.to_string()),
             expires_at: Some(SystemTime::now() + Duration::from_secs(3600)),
-            refresh_token: Some("test-token".to_string()),
+            refresh_token: Some(RefreshToken::new("test-token".to_string())),
         }
     }
 
@@ -152,7 +150,7 @@ impl<P: ProviderSpec> TokenState<P> {
     /// driver's [`TokenRefresh::refresh`] exchange). Returns the *new*
     /// refresh token only when a refresh issued a new rotating token (the
     /// signal for whether a persist is needed).
-    async fn refresh_if_expired(&mut self) -> TbResult<Option<String>> {
+    async fn refresh_if_expired(&mut self) -> TbResult<Option<RefreshToken>> {
         if !is_expired(&self.expires_at) {
             return Ok(None);
         }
@@ -235,7 +233,7 @@ pub(crate) async fn get_token<P: ProviderSpec, S: Store<P>>(
     let owner = state.owner().clone();
     if let Some(refresh) = rotated {
         store
-            .user_update_token(owner.clone(), Some(refresh))
+            .user_update_token(owner.clone(), Some(refresh.secret().to_string()))
             .await?;
     }
     let access = state.access_token().clone();
