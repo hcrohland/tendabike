@@ -18,17 +18,17 @@
 
 */
 
-//! The thin Strava HTTP calls: [`request_json`], [`deauthorize`], and
-//! [`access_token`].
+//! The thin Strava HTTP calls: [`request_json`] and [`access_token`].
 //!
 //! [`access_token`] owns the one piece of refresh machinery the HTTP calls
 //! share: it calls the `TokenCache`'s `get_token` and persists the refresh
-//! token to the DB when a refresh issued a new one. `request_json` and
-//! `deauthorize` then make the one HTTP call (the bearer GET, or the token
-//! revocation) and know nothing about refresh mechanics.
+//! token to the DB when a refresh issued a new one. `request_json` then
+//! resolves the token, handles Strava's own extra offline seam (the
+//! process-wide canned-response global), and makes the one HTTP call through
+//! the kit's shared request — it knows nothing about refresh mechanics.
 
+#[cfg(feature = "test-support")]
 use anyhow::Context;
-use log::trace;
 use oauth2::AccessToken;
 use serde::de::DeserializeOwned;
 
@@ -49,17 +49,13 @@ pub(crate) async fn access_token(
     get_token(user_id, store).await
 }
 
-/// A bearer GET of `uri` for `user`, parsed as `T`.
-///
-/// `get_token` → persist the refresh token to the DB if a refresh issued a new
-/// one → bearer GET + parse. Knows nothing about refresh mechanics.
+/// A bearer GET of `uri` for `user`, parsed as `T`: resolve the token
+/// (refresh vs durable), Strava's own extra offline seam, then the kit's
+/// shared request (the shared per-thread offline seam, the bearer GET, the
+/// parse). Knows nothing about refresh mechanics.
 ///
 /// `get_token` runs before the offline seams so a rotated refresh token is
-/// persisted even when a canned response stands in for the API. In a
-/// `test-support` build the seams below exhaust every URI (canned or panic),
-/// so the bearer GET is unreachable and its `access` goes unused — expected
-/// there, hence the targeted allow.
-#[cfg_attr(feature = "test-support", allow(unused_variables, unreachable_code))]
+/// persisted even when a canned response stands in for the API.
 pub(crate) async fn request_json<T: DeserializeOwned>(
     user_id: UserId,
     uri: &str,
@@ -67,37 +63,32 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
 ) -> TbResult<T> {
     let (_strava_id, access) = access_token(user_id, store).await?;
 
-    // The offline seams (test-only): first the kit's thread-local canned
-    // response (per-test isolation: each test runs on its own thread), then
-    // the process-wide `CANNED_STRAVA` global (the seam suite's session, run
-    // in a spawned task on a thread the test-local map never reached). A
-    // test-support build has no real Strava API: an unscripted URI panics
-    // rather than pretend (the seam suite's stubs never import from Strava;
-    // the onboarding test expects the loop to panic on the sync's fetch).
-    #[cfg(any(test, feature = "test-support"))]
-    if let Some(body) = crate::test_support::pop_test_canned(uri, "strava") {
-        let body = body?;
-        return Ok(serde_json::from_str(&body).context("Could not parse response body")?);
-    }
+    // Strava's extra offline seam (test-only): the process-wide
+    // `CANNED_STRAVA` global (the seam suite's session, run in a spawned task
+    // on a thread the test-local map never reached). A test-support build has
+    // no real Strava API: an unscripted URI panics rather than pretend (the
+    // seam suite's stubs never import from Strava; the onboarding test
+    // expects the loop to panic on the sync's fetch).
     #[cfg(feature = "test-support")]
     match super::test_support::global_canned_response(uri) {
         Some(json) => {
             return Ok(serde_json::from_str(&json).context("Could not parse response body")?);
         }
+        // In test mode the kit's shared per-thread canned-response seam is
+        // the next stop; the seam suite's threads are never in test mode, so
+        // an unscripted URI panics there.
+        None if crate::test_support::in_test_mode() => {}
         None => panic!("unexpected strava request: {uri}"),
     }
 
-    let r = crate::http::bearer_get(
+    crate::http::request_json::<T>(
         API,
-        access.secret(),
+        &access,
         uri,
         &super::ratelimit::update_from_headers,
         "Strava",
     )
     .await
-    .with_context(|| "Could not reach strava")?;
-    trace!("{uri}:\n{r}");
-    Ok(serde_json::from_str::<T>(&r).context("Could not parse response body")?)
 }
 
 #[cfg(test)]

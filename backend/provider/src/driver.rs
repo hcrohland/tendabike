@@ -1,13 +1,16 @@
-//! The provider driver trait (spec #1029, ticket #1032): the single driver
-//! interface, generic over the [`ProviderSpec`](crate::ProviderSpec) marker.
+//! The provider driver trait (spec #1029, ticket #1032; consolidated in spec
+//! #1062): the single driver interface, generic over the
+//! [`ProviderSpec`](crate::ProviderSpec) marker.
 //!
 //! [`Provider`] is the driver a provider author implements. It splits into
 //! the genuinely provider-specific operations the author writes (the OAuth
 //! login, the webhook intake, the gear import, the processing loop body, the
-//! activity/gear/user URL operations, the authorize URL, and the row/token
-//! hooks) and the shared user-lifecycle skeleton the author gets free as
-//! default methods (upsert, deauthorize, delete, all-stats, onboard, and
-//! insert-sync).
+//! activity/gear/user URL operations, the authorize URL, the token hooks —
+//! the token response, the shared oauth2 client, and the refresh-token
+//! accessor — and the row hooks) and the shared user-lifecycle skeleton the
+//! author gets free as default methods (upsert, deauthorize, delete,
+//! all-stats, onboard, insert-sync, and the token `refresh` — the kit's
+//! refresh exchange over the provider's shared client).
 //!
 //! The split rule: a method is on the trait only if it has a genuinely
 //! provider-specific core the author must write (an OAuth exchange, a wire
@@ -16,36 +19,100 @@
 //! [`Store`](crate::store::Store) operation. Concrete-provider knowledge is
 //! type-level (on the marker); generic behavior is on the trait.
 //!
+//! The token concern sits in one place on the trait, beside the other
+//! row/token hooks (spec #1062): the refresh exchange is the kit's free
+//! function (the [`refresh`](Provider::refresh) default), and a durable-token
+//! provider omits the override entirely — its token path reads the durable
+//! token directly from the user row and never reaches the token cache's
+//! refresh flow.
+//!
 //! The trait is namespaced under `driver` (not re-exported at the crate root)
 //! because the crate root's [`Provider`](crate::Provider) is the provider
 //! enum — the same namespacing the
 //! [`dispatch`](crate::dispatch) module keeps for its generic op names.
 
 use log::{debug, warn};
+use oauth2::RefreshToken;
 
 use crate::ProviderSpec;
+use crate::client::OauthClient;
 use crate::facade::{
     ActivityId, EntityFacade, Error, Part, PartId, Session, Summary, TbResult, UserId, UserStat,
 };
 use crate::store::Store;
 
-/// The provider driver (spec #1029): the single driver interface, generic
-/// over the [`ProviderSpec`](crate::ProviderSpec) marker.
+/// The refreshed-token value the driver trait's
+/// [`refresh`](Provider::refresh) returns (re-exported: it is named in the
+/// public trait signature and lives in the crate-internal `token` module).
+pub use crate::token::RefreshedToken;
+
+/// The provider driver (spec #1029, consolidated in spec #1062): the single
+/// driver interface, generic over the [`ProviderSpec`](crate::ProviderSpec)
+/// marker.
 ///
 /// The author writes the provider-specific core: the OAuth login, the webhook
 /// intake, the gear import, the processing loop body, the activity/gear/user
-/// URL operations, the authorize URL, and the row/token hooks (construct a
-/// user row from a normalized optional token, the disabled check, and the
-/// remote token revocation — a default no-op for a provider whose tokens are
-/// durable).
+/// URL operations, the authorize URL, the token hooks (the token response,
+/// the shared oauth2 client, and the refresh-token accessor — a default
+/// absence for a provider whose tokens are durable), and the row hooks
+/// (construct a user row from a normalized optional token, the disabled
+/// check, and the remote token revocation — a default no-op for a provider
+/// whose tokens are durable).
 ///
 /// The author gets the shared user-lifecycle skeleton free as default
 /// methods: `upsert`, `user_deauthorize`, `user_delete`, `all_stats`,
-/// `onboard`, and `insert_sync` (the marker's `make_sync` composed with the
-/// store's `event_create`).
+/// `onboard`, `insert_sync` (the marker's `make_sync` composed with the
+/// store's `event_create`), and `refresh` (the kit's refresh exchange over
+/// the provider's shared client — a provider whose tokens are durable
+/// omits the override entirely; its token path never reaches the exchange).
 #[async_trait::async_trait]
 pub trait Provider<P: ProviderSpec>: Send + Sync {
-    // ── the author writes: the row/token hooks ─────────────────────────────
+    // ── the author writes: the token hooks ──────────────────────────────────
+
+    /// The provider's token response type: the wire shape of the oauth2
+    /// token response (the standard response plus the provider's extra
+    /// fields). `Send` (the `refresh` default's `async_trait` `Send` bound
+    /// holds the response across the exchange's await).
+    type TokenResponse: oauth2::TokenResponse + Send;
+
+    /// The provider's oauth2 client: the full client shape the refresh
+    /// exchange and the authorize URL need — the shared client module's
+    /// [`OauthClient`] helper trait (the common provider client is a type
+    /// alias, which cannot appear in a trait bound, so the shape is named
+    /// by the trait). `'static` (the client is a process-wide static — the
+    /// shared reference outlives every call).
+    type Client: OauthClient<TokenResponse = Self::TokenResponse> + 'static;
+
+    /// The provider's shared oauth2 client (a static reference: built once
+    /// from the provider config, shared by every provider call — the same
+    /// shape as the rate-limit handle and the token cache).
+    fn client() -> &'static Self::Client;
+
+    /// Refresh the user's access token (spec #1056): the kit's refresh
+    /// exchange over the provider's shared client — the standard oauth2
+    /// refresh-token call, written once in the kit. Takes the optional
+    /// refresh token: an absent token is the exchange's `NotAuth` (the
+    /// single home of the no-refresh-token rule).
+    ///
+    /// Default: the exchange (no provider re-implements it). A provider
+    /// whose tokens are durable (intervals.icu) does not override this: its
+    /// token path reads the durable token directly from the user row and
+    /// never reaches the token cache's refresh flow, so its inherited
+    /// exchange is never called.
+    async fn refresh(refresh_token: Option<RefreshToken>) -> TbResult<RefreshedToken> {
+        crate::token::refresh_exchange(Self::client(), refresh_token).await
+    }
+
+    /// Read the refresh token out of the user row (spec #1056) — the durable
+    /// fallback the token cache's miss builds from.
+    ///
+    /// Default: `None` (a provider whose tokens are durable has no refresh
+    /// token).
+    fn refresh_token(_user: &P::User) -> Option<RefreshToken> {
+        None
+    }
+
+    // ── the author writes: the row hooks ────────────────────────────────────
 
     /// Construct the provider's user row from the provider id, the
     /// TendaBike user id, and the normalized optional token (the provider's

@@ -7,6 +7,7 @@
 use crate::driver::Provider;
 use crate::facade::{ActivityId, EntityFacade, Part, PartId, Session, Summary, TbResult, UserId};
 use crate::store::Store;
+use crate::strava::client::{StravaClient, StravaTokenResponse};
 use crate::strava::{StravaId, StravaSpec, StravaUser};
 use oauth2::RefreshToken;
 
@@ -39,6 +40,17 @@ impl StravaDriver {
 
 #[async_trait::async_trait]
 impl Provider<StravaSpec> for StravaDriver {
+    type TokenResponse = StravaTokenResponse;
+    type Client = StravaClient;
+
+    fn client() -> &'static Self::Client {
+        super::client::strava_client()
+    }
+
+    fn refresh_token(user: &StravaUser) -> Option<RefreshToken> {
+        user.refresh_token()
+    }
+
     fn new_user(id: StravaId, tbid: UserId, token: Option<String>) -> StravaUser {
         StravaUser {
             id,
@@ -160,12 +172,12 @@ impl Provider<StravaSpec> for StravaDriver {
         store: &mut S,
     ) -> TbResult<Summary> {
         use super::event::ObjectType;
-        use super::session::get_strava_id;
+        use super::session::get_owner_id;
         use crate::lane::QueueRead;
         use crate::queue::get_event;
         use log::{info, warn};
 
-        let strava_id = get_strava_id(user_id, store).await?;
+        let strava_id = get_owner_id(user_id, store).await?;
         let read = get_event(strava_id, store).await?;
         let event = match read {
             QueueRead::Event(event) => event,

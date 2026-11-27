@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use super::Provider;
 use crate::ProviderSpec;
 use crate::facade::{
@@ -5,6 +7,7 @@ use crate::facade::{
     Summary, TbResult, User, UserId, mock_session, mock_session_admin,
 };
 use crate::store::Store;
+use crate::strava::client::StravaTokenResponse;
 use crate::strava::{StravaId, StravaSpec, StravaUser};
 use crate::test_support::MockStore;
 use oauth2::RefreshToken;
@@ -23,8 +26,27 @@ fn user(tbid: i32, stravaid: i64, enabled: bool) -> StravaUser {
 /// for real over the single [`MockStore`] double (spec #1029, ticket #1032).
 struct TestDriver;
 
+/// The canned driver's dummy client's type: the shared dummy oauth client
+/// over the Strava token response (the endpoint markers at their defaults).
+type DummyClient = crate::test_support::DummyClient<StravaTokenResponse>;
+
+/// The canned driver's dummy oauth client (locally-pointing auth/token
+/// URLs): the token hooks' `Client` associated type — the skeleton tests
+/// never refresh, so the client is never called (spec #1062).
+fn dummy_client() -> &'static DummyClient {
+    static CLIENT: OnceLock<DummyClient> = OnceLock::new();
+    CLIENT.get_or_init(|| crate::test_support::dummy_client("test"))
+}
+
 #[async_trait::async_trait]
 impl Provider<StravaSpec> for TestDriver {
+    type TokenResponse = StravaTokenResponse;
+    type Client = DummyClient;
+
+    fn client() -> &'static Self::Client {
+        dummy_client()
+    }
+
     fn new_user(id: StravaId, tbid: UserId, token: Option<String>) -> StravaUser {
         StravaUser {
             id,

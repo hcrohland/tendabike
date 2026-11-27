@@ -1,16 +1,17 @@
-//! Provider-agnostic rate-limit kernel and shared shim: the window model,
+//! Provider-agnostic rate-limit kernel and shared handle: the window model,
 //! header-pair parsing, boundary math, and the "latest exhausted window"
-//! gate, plus the [`RateLimitShim`] scaffolding a provider module wraps its
+//! gate, plus the [`RateLimitHandle`] scaffolding a provider module wraps its
 //! process-wide limiter in.
 //!
-//! A provider keeps a `static` [`RateLimitShim`] constructed with its own
-//! label and [`WindowSpec`]s (header names + cadence), getting an
-//! independent, process-wide limiter. The state is in-memory: on restart it
-//! starts empty and learns from the first response.
+//! A provider keeps a `static` [`RateLimitHandle`] constructed with its own
+//! label and [`WindowSpec`]s (header names + cadence), getting an independent,
+//! process-wide limiter. The state is in-memory: on restart it starts empty
+//! and learns from the first response. The test-only override is a single
+//! shared kit thread-local (the same shape as the shared canned-response
+//! thread-local), so a third provider's tests do not each declare their own.
 
 use std::cell::RefCell;
 use std::sync::Mutex;
-use std::thread::LocalKey;
 
 use http::{HeaderMap, HeaderName, HeaderValue};
 
@@ -111,6 +112,14 @@ impl RateLimiter {
             was_limited: false,
             was_missing: false,
         }
+    }
+
+    /// A fresh limiter in the shape of this one (same label and specs, no
+    /// window data) — the "no data" state the test seam's override is built
+    /// from.
+    #[cfg(test)]
+    fn fresh_empty(&self) -> RateLimiter {
+        RateLimiter::new(self.label, self.specs.clone())
     }
 
     /// The current window states, in spec order.
@@ -216,14 +225,10 @@ impl RateLimiter {
     }
 }
 
-/// The shared rate-limit shim: the scaffolding each provider module wraps
-/// around the [`RateLimiter`] kernel — a process-wide limiter behind a
-/// [`Mutex`], parameterized by the provider's label and [`WindowSpec`]s.
-///
-/// A provider keeps a `static` of this (constructed with its own label and
-/// specs), its own per-thread test-override `thread_local` (a thread-local
-/// can't live in a struct instance), and thin `limited_until` /
-/// `update_from_headers` passthroughs to the shim's methods.
+/// The shared rate-limit shim: a process-wide limiter behind a [`Mutex`],
+/// parameterized by the provider's label and [`WindowSpec`]s. The
+/// [`RateLimitHandle`] wraps one; the shim's methods are the stateful core the
+/// handle's methods reach.
 pub(crate) struct RateLimitShim(Mutex<RateLimiter>);
 
 impl RateLimitShim {
@@ -267,35 +272,92 @@ impl RateLimitShim {
         limiter.update_from_headers(&headers);
         limiter
     }
-}
 
-/// The test-override-aware rate-limit gate: reports from the per-thread
-/// `override_key` limiter when it is set (the test seam: parallel
-/// rate-limiter tests can't observe each other's process-global state), else
-/// from the process-wide `global` limiter.
-pub(crate) fn limited_until(
-    global: &RateLimitShim,
-    override_key: &'static LocalKey<RefCell<Option<RateLimiter>>>,
-) -> Option<i64> {
-    if let Some(until) = override_key.with(|o| o.borrow().as_ref().map(|l| l.gate())) {
-        return until;
+    /// A fresh limiter in the shape of the process-wide one (this shim's label
+    /// and specs), with no window data — the "no data" state the test seam's
+    /// override is built from (an empty limiter has no exhausted window, so
+    /// [`limited_until`] reports no limit).
+    #[cfg(test)]
+    pub(crate) fn fresh_empty_limiter(&self) -> RateLimiter {
+        self.0.lock().unwrap().fresh_empty()
     }
-    global.limited_until()
 }
 
-/// The test-seam hook: set the per-thread `override_key` limiter to a fresh
-/// limiter in the shape of the process-wide one (the given label and specs),
-/// populated from the given `"header", "value"` pairs — the logic a driver's
-/// `test_set_not_limited` thin wrapper drives.
+/// The shared rate-limit handle: the kit's scaffolding a provider module wraps
+/// its process-wide limiter in — a per-provider `static` of this, constructed
+/// with the provider's label and [`WindowSpec`]s (header names + cadence).
+///
+/// The handle owns the process-wide [`RateLimitShim`] and exposes the two
+/// driver-facing operations as methods: [`limited_until`] (the gate the
+/// event-queue read consults) and [`update_from_headers`] (the header update
+/// the HTTP layer feeds it). The test-only [`test_set_not_limited`] seam
+/// drives the kit's single shared per-thread override thread-local
+/// ([`TEST_OVERRIDE`]), so a third provider's tests do not each declare their
+/// own.
+///
+/// The state is process-wide (shared across all executors) and in-memory: on
+/// restart it starts empty and learns from the first response.
+pub(crate) struct RateLimitHandle {
+    /// The process-wide limiter behind a [`Mutex`].
+    shim: RateLimitShim,
+}
+
+impl RateLimitHandle {
+    /// Create a new handle: a fresh [`RateLimitShim`] with the given label and
+    /// specs.
+    pub(crate) fn new(label: &'static str, specs: Vec<WindowSpec>) -> Self {
+        Self {
+            shim: RateLimitShim::new(label, specs),
+        }
+    }
+
+    /// The rate-limit gate: the unix time at which the exhausted window
+    /// resets, or `None` if budget remains (or no data yet).
+    ///
+    /// Emits a WARN log on transition into or out of the rate-limited state.
+    /// Reports from the shared per-thread test-override limiter when it is set
+    /// (the test seam: parallel rate-limiter tests can't observe each other's
+    /// process-global state), else from the process-wide limiter.
+    pub(crate) fn limited_until(&self) -> Option<i64> {
+        if let Some(until) = TEST_OVERRIDE.with(|o| o.borrow().as_ref().map(|l| l.gate())) {
+            return until;
+        }
+        self.shim.limited_until()
+    }
+
+    /// Parses the provider's rate-limit response headers into the shared
+    /// state. Each header is a `"15min,daily"` comma-separated pair of
+    /// integers. Missing or malformed headers are ignored (the state keeps its
+    /// previous values for those fields).
+    pub(crate) fn update_from_headers(&self, headers: &HeaderMap) {
+        self.shim.update_from_headers(headers);
+    }
+
+    /// Sets the shared per-thread test-override limiter to "no data" (allows
+    /// all requests), so [`limited_until`] reports no limit. A test-only seam:
+    /// parallel rate-limiter tests can't observe each other's process-global
+    /// state (each test runs on its own thread).
+    #[cfg(test)]
+    pub(crate) fn test_set_not_limited(&self) {
+        set_test_override(self.shim.fresh_empty_limiter());
+    }
+}
+
+// The single shared per-thread test-override limiter (per-test isolation:
+// each test runs on its own thread, so the override is fresh per test). A
+// thread-local can't live in a struct instance, so the kit owns it here; the
+// [`RateLimitHandle`] methods reach it directly.
+thread_local! {
+    static TEST_OVERRIDE: RefCell<Option<RateLimiter>> = const { RefCell::new(None) };
+}
+
+/// Sets the shared per-thread test-override limiter (the test seam the
+/// [`RateLimitHandle::test_set_not_limited`] method and the kit's own tests
+/// drive).
 #[cfg(test)]
-pub(crate) fn set_override(
-    override_key: &'static LocalKey<RefCell<Option<RateLimiter>>>,
-    label: &'static str,
-    specs: &[WindowSpec],
-    pairs: &[(&str, &str)],
-) {
-    override_key.with(|o| {
-        *o.borrow_mut() = Some(RateLimitShim::limiter_from_headers(label, specs, pairs));
+fn set_test_override(limiter: RateLimiter) {
+    TEST_OVERRIDE.with(|o| {
+        *o.borrow_mut() = Some(limiter);
     });
 }
 
@@ -627,61 +689,74 @@ mod tests {
         assert!(limiter.limited_until().is_some());
     }
 
-    // ─── Wrapper (the shared scaffolding over the kernel) ──────────────────
+    // ─── Handle (the shared scaffolding over the kernel) ───────────────────
     //
-    // A per-thread override for the wrapper tests: the same shape a driver's
-    // named `TEST_OVERRIDE` thread-local carries. Each test runs on its own
-    // thread, so the override is fresh per test.
+    // The handle's `limited_until` reports from the shared per-thread
+    // `TEST_OVERRIDE` thread-local when it is set (the test seam), else from
+    // the process-wide limiter. Each test runs on its own thread, so the
+    // override is fresh per test.
 
-    thread_local! {
-        static TEST_OVERRIDE: RefCell<Option<RateLimiter>> = const { RefCell::new(None) };
-    }
-
-    /// The test-override-aware gate reports a boundary when the override is
-    /// set to an exhausted window (a 15-minute mark in the future).
+    /// The handle's gate reports a boundary when the override is set to an
+    /// exhausted window (a 15-minute mark in the future).
     #[test]
     fn limited_until_reports_from_the_override_when_exhausted() {
-        set_override(
-            &TEST_OVERRIDE,
+        set_test_override(RateLimitShim::limiter_from_headers(
             "test",
             &test_specs(),
             &[("X-Read-Limit", "100,1000"), ("X-Read-Usage", "100,500")],
-        );
-        let global = RateLimitShim::new("test", test_specs());
-        let until =
-            limited_until(&global, &TEST_OVERRIDE).expect("exhausted override reports a boundary");
+        ));
+        let handle = RateLimitHandle::new("test", test_specs());
+        let until = handle
+            .limited_until()
+            .expect("exhausted override reports a boundary");
         assert!(until > now_unix(), "boundary is in the future");
         assert_eq!(until % 900, 0, "boundary is a 15-min mark");
     }
 
-    /// The test-override-aware gate reports no limit when the override has
-    /// budget (no exhausted window).
+    /// The handle's gate reports no limit when the override has budget (no
+    /// exhausted window).
     #[test]
     fn limited_until_is_none_when_the_override_has_budget() {
-        set_override(
-            &TEST_OVERRIDE,
+        set_test_override(RateLimitShim::limiter_from_headers(
             "test",
             &test_specs(),
             &[("X-Read-Limit", "100,1000"), ("X-Read-Usage", "0,0")],
-        );
-        let global = RateLimitShim::new("test", test_specs());
-        assert_eq!(limited_until(&global, &TEST_OVERRIDE), None);
+        ));
+        let handle = RateLimitHandle::new("test", test_specs());
+        assert_eq!(handle.limited_until(), None);
     }
 
-    /// The remaining-style (intervals.icu) header shape feeds the wrapper: a
+    /// The remaining-style (intervals.icu) header shape feeds the handle: a
     /// 0-remaining 15-minute window reads as exhausted and reports a boundary.
     #[test]
-    fn remaining_style_headers_report_a_boundary_through_the_wrapper() {
-        set_override(
-            &TEST_OVERRIDE,
+    fn remaining_style_headers_report_a_boundary_through_the_handle() {
+        set_test_override(RateLimitShim::limiter_from_headers(
             "icu",
             &remaining_spec(),
             &[("X-Limit", "2500,5000"), ("X-Remaining", "0,4500")],
-        );
-        let global = RateLimitShim::new("icu", remaining_spec());
-        let until = limited_until(&global, &TEST_OVERRIDE)
+        ));
+        let handle = RateLimitHandle::new("icu", remaining_spec());
+        let until = handle
+            .limited_until()
             .expect("exhausted 15-minute window reports a boundary");
         assert!(until > now_unix(), "boundary is in the future");
         assert_eq!(until % 900, 0, "boundary is a 15-min mark");
+    }
+
+    /// The handle's test seam sets the override to "no data": the gate reports
+    /// no limit even when the process-wide limiter is exhausted.
+    #[test]
+    fn test_set_not_limited_reports_no_limit() {
+        let handle = RateLimitHandle::new("test", test_specs());
+        // Exhaust the process-wide limiter so the global path would report a
+        // boundary.
+        handle.update_from_headers(&headers(&[
+            ("X-Limit", "200,2000"),
+            ("X-Usage", "200,2000"),
+        ]));
+        assert!(handle.limited_until().is_some(), "global is exhausted");
+        // The test seam overrides with "no data": the gate reports no limit.
+        handle.test_set_not_limited();
+        assert_eq!(handle.limited_until(), None);
     }
 }

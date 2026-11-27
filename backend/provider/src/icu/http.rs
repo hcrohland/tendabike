@@ -1,15 +1,16 @@
 //! The thin intervals.icu HTTP calls: [`request_json`].
 //!
 //! Unlike the Strava driver there is no refresh machinery — intervals.icu
-//! tokens are durable, so [`access_token`] reads the (durable) access token
-//! straight from `icu_users` and [`request_json`] makes the one bearer GET.
-//! A `401` (a revoked token) is `Error::NotAuth` (the caller disables the
-//! user); a `429` / `5xx` is `Error::TryAgain` (the rate-limit state is
-//! already updated from the response headers, so the queue's probe reports
-//! the window boundary and the loop sleeps until it).
+//! tokens are durable, so [`access_token`] reads the (durable) typed access
+//! token straight from `icu_users` and [`request_json`] resolves it, then
+//! makes the one bearer GET through the kit's shared request (the shared
+//! offline seam, the bearer GET, the parse). A `401` (a revoked token) is
+//! `Error::NotAuth` (the caller disables the user); a `429` / `5xx` is
+//! `Error::TryAgain` (the rate-limit state is already updated from the
+//! response headers, so the queue's probe reports the window boundary and
+//! the loop sleeps until it).
 
-use anyhow::Context;
-use log::trace;
+use oauth2::AccessToken;
 use serde::de::DeserializeOwned;
 
 use super::{IcuId, IcuSpec};
@@ -18,47 +19,29 @@ use crate::store::Store;
 
 const API: &str = "https://intervals.icu/api/v1";
 
-/// A valid access token for `user_id`: the (durable) token stored in
+/// A valid access token for `user_id`: the (durable) typed token stored in
 /// `icu_users`. No refresh — intervals.icu tokens never rotate.
 async fn access_token(
     user_id: UserId,
     store: &mut impl Store<IcuSpec>,
-) -> TbResult<(IcuId, String)> {
+) -> TbResult<(IcuId, AccessToken)> {
     let user = store.user_get_by_tbid(user_id).await?;
     let token = user
         .access_token
-        .as_ref()
+        .clone()
         .ok_or_else(|| Error::NotAuth(format!("no icu access token for user {user_id}")))?;
-    Ok((user.id, token.secret().to_string()))
+    Ok((user.id, token))
 }
 
-/// A bearer GET of `uri` for `user`, parsed as `T`.
-///
-/// `access_token` → bearer GET + parse.
-///
-/// `access_token` runs before the offline seams so a token read is exercised
-/// even when a canned response stands in for the API. In a `test-support`
-/// build the seam below exhausts every URI (canned or panic), so the bearer
-/// GET is unreachable — expected there, hence the targeted allow.
-#[cfg_attr(feature = "test-support", allow(unused_variables, unreachable_code))]
+/// A bearer GET of `uri` for `user`, parsed as `T`: resolve the (durable)
+/// token, then the kit's shared request.
 pub(crate) async fn request_json<T: DeserializeOwned>(
     user_id: UserId,
     uri: &str,
     store: &mut impl Store<IcuSpec>,
 ) -> TbResult<T> {
     let (_icuid, access) = access_token(user_id, store).await?;
-
-    // The offline seam (test-only): the kit's thread-local canned response
-    // (per-test isolation: each test runs on its own thread). A test-support
-    // build has no real intervals.icu API: an unscripted URI panics rather
-    // than pretend.
-    #[cfg(any(test, feature = "test-support"))]
-    if let Some(body) = crate::test_support::pop_test_canned(uri, "icu") {
-        let body = body?;
-        return Ok(serde_json::from_str(&body).context("Could not parse response body")?);
-    }
-
-    let r = crate::http::bearer_get(
+    crate::http::request_json::<T>(
         API,
         &access,
         uri,
@@ -66,9 +49,6 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
         "intervals.icu",
     )
     .await
-    .with_context(|| "Could not reach intervals.icu")?;
-    trace!("{uri}:\n{r}");
-    Ok(serde_json::from_str::<T>(&r).context("Could not parse response body")?)
 }
 
 #[cfg(test)]

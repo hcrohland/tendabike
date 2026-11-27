@@ -3,7 +3,7 @@
 ## Commands
 
 - `cargo sqlx prepare` (run from `backend/sqlx/`) - Regenerate the crate-local offline query metadata in `backend/sqlx/.sqlx/`
-- **rust-analyzer MCP**: available as direct tools (`rust-analyzer_rust_analyzer_references`, `…_symbols`, `…_hover`, `…_diagnostics`). Set the workspace first: `rust-analyzer_rust_analyzer_set_workspace` with `"."` (the project root — the Cargo workspace root). Use `references` for cross-module reference resolution.
+- **rust-analyzer MCP**: direct tools for fast, incremental feedback (cheaper than a full `cargo` build). Set the workspace first: `rust-analyzer_rust_analyzer_set_workspace` with `"."` (the project root — the Cargo workspace root). Use `…_diagnostics` for compile feedback **between edits** (`cargo check` / `cargo test` stay the final gate), `…_rename` for symbol renames (workspace-wide, including a module's file), and `…_references` / `…_definition` / `…_symbols` / `…_hover` for cross-module navigation.
 
 ## Architecture
 

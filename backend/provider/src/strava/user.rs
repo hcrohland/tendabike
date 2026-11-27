@@ -34,6 +34,7 @@ impl StravaId {
     ///
     /// sets a five minute buffer for the access token
     /// returns the updated user
+    #[cfg(test)]
     pub(crate) async fn update_token(
         self,
         refresh: Option<String>,
@@ -71,6 +72,7 @@ impl StravaUser {
     /// # Errors
     ///
     /// Returns an `Error` if the user is not registered.
+    #[cfg(test)]
     pub(crate) async fn read(id: UserId, store: &mut impl Store<StravaSpec>) -> TbResult<Self> {
         store.user_get_by_tbid(id).await
     }

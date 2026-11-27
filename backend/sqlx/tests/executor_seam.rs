@@ -94,9 +94,7 @@ use tb_provider::Provider;
 use tb_provider::ProviderLane;
 use tb_provider::ProviderService;
 use tb_provider::icu::IcuSpec;
-use tb_provider::icu::driver::IcuDriver;
 use tb_provider::strava::StravaSpec;
-use tb_provider::strava::driver::StravaDriver;
 use tb_provider::strava::event::Event as StravaEvent;
 use tb_provider::strava::{
     StravaId,
@@ -172,7 +170,7 @@ fn loop_ctx(
         UserId::from(1),
         frames,
         Box::new(NoopPusher),
-        ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
+        ProviderLaneImpl::<StravaSpec, _>::new(EntityFacadeImpl),
         events,
         IDLE_TIMEOUT,
         Arc::new(Notify::new()),
@@ -937,8 +935,8 @@ async fn sync_enqueues() {
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
         UnifiedLaneImpl::<_>::new(
-            ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
-            ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<StravaSpec, _>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<IcuSpec, _>::new(EntityFacadeImpl),
         ),
         Duration::from_secs(3600),
     );
@@ -1005,8 +1003,8 @@ async fn trigger_processing_drains_each_queued_user() {
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
         UnifiedLaneImpl::<_>::new(
-            ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
-            ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<StravaSpec, _>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<IcuSpec, _>::new(EntityFacadeImpl),
         ),
         Duration::from_secs(3600),
     );
@@ -1128,8 +1126,8 @@ fn registry(
         DetachedBegin::new(pool.clone()),
         DomainFacadeImpl,
         UnifiedLaneImpl::<_>::new(
-            ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
-            ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<StravaSpec, _>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<IcuSpec, _>::new(EntityFacadeImpl),
         ),
         IDLE_TIMEOUT,
     )
@@ -1584,8 +1582,8 @@ async fn shop_subscribe_policy() {
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
         UnifiedLaneImpl::<_>::new(
-            ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
-            ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<StravaSpec, _>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<IcuSpec, _>::new(EntityFacadeImpl),
         ),
         Duration::from_secs(3600),
     );
@@ -1689,8 +1687,8 @@ async fn attached_stream_keeps_the_executor_alive() {
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
         UnifiedLaneImpl::<_>::new(
-            ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
-            ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<StravaSpec, _>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<IcuSpec, _>::new(EntityFacadeImpl),
         ),
         Duration::from_millis(300),
     );
@@ -1745,8 +1743,8 @@ async fn stream_survives_executor_reap() {
         DetachedBegin::new(seam.pool.clone()),
         DomainFacadeImpl,
         UnifiedLaneImpl::<_>::new(
-            ProviderLaneImpl::<StravaSpec, _, StravaDriver>::new(EntityFacadeImpl),
-            ProviderLaneImpl::<IcuSpec, _, IcuDriver>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<StravaSpec, _>::new(EntityFacadeImpl),
+            ProviderLaneImpl::<IcuSpec, _>::new(EntityFacadeImpl),
         ),
         Duration::from_millis(300),
     );
@@ -1782,7 +1780,7 @@ async fn stream_survives_executor_reap() {
 /// The icu-lane regression (spec #1029, user story 13): an icu user's queued
 /// event must be driven through the lane. The user is icu-only (no Strava
 /// row) with a queued icu `ACTIVITY` event; the registry's lane must select
-/// the icu (marker, driver) for the user, so the probe reads the **icu**
+/// the icu lane for the user, so the probe reads the **icu**
 /// queue (not the Strava queue). A single-Strava-lane registry probes the
 /// Strava store → `NotFound` → `Probe::UserGone` → the loop exits cleanly
 /// (`Reaped`), and the icu event is never processed. With both lanes driven,
