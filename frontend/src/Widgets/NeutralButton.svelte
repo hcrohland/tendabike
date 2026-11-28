@@ -44,9 +44,9 @@
   // The standard neutral button shape (the library's sizing steps).
   const shape = $derived(
     size === "xs"
-      ? "px-3 py-1.5 text-xs"
+      ? "px-2 py-1 text-xs"
       : size === "sm"
-        ? "px-4 py-2 text-sm"
+        ? "p-0 text-sm"
         : "px-5 py-2.5 text-sm",
   );
 

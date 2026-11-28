@@ -40,7 +40,7 @@
   let provider = $derived(providerOfActivityId(activity.id));
 </script>
 
-<div class="rounded-lg border surface-secondary p-2 sm:p-3">
+<div class="rounded-lg border surface-primary p-2 sm:p-3">
   <!-- Header Row: 4-column grid layout (same on mobile and desktop) -->
   <!-- Col 1-3 (col-span-3): Date + Time + Activity Name (wraps freely) -->
   <!-- Col 4 (col-span-1): Device name (right-aligned) + Menu (shrink-0) -->
