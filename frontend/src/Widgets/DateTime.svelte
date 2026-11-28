@@ -8,13 +8,7 @@
   import { preventDefault } from "svelte/legacy";
 
   import { roundTime } from "../lib/utils";
-  import {
-    Button,
-    ButtonGroup,
-    Datepicker,
-    Input,
-    Popover,
-  } from "flowbite-svelte";
+  import { ButtonGroup, Datepicker, Input, Popover } from "flowbite-svelte";
   import {
     AngleLeftOutline,
     AngleRightOutline,
@@ -22,7 +16,7 @@
     ClockOutline,
   } from "flowbite-svelte-icons";
   import { getLocale } from "../../paraglide/runtime";
-  import { fillBg } from "./color.js";
+  import NeutralButton from "./NeutralButton.svelte";
 
   type Props = {
     date?: any;
@@ -79,6 +73,64 @@
       : "Pick date & time",
   );
 
+  // The group's buttons in order: the date trigger always first, then the
+  // history-jump (or min-jump), the now-jump, and the max-jump. The plain
+  // elements carry the group's size and edge rounding by position — the
+  // component library's group context only reaches its own buttons.
+  let buttons = $derived.by(() => {
+    const bs: {
+      key: string;
+      disabled: boolean;
+      onclick?: (e: MouseEvent) => void;
+      label: string;
+      icon: "calendar" | "left" | "clock" | "right";
+    }[] = [
+      {
+        key: "trigger",
+        disabled: false,
+        label: label,
+        icon: "calendar",
+      },
+    ];
+    if (prevdate) {
+      const next = prevdate(date);
+      bs.push({
+        key: "prev",
+        disabled: !next,
+        onclick: preventDefault(() => (date = next ?? date)),
+        label: "",
+        icon: "left",
+      });
+    } else if (mindate) {
+      bs.push({
+        key: "min",
+        disabled: false,
+        onclick: preventDefault(() => (date = min())),
+        label: "",
+        icon: "left",
+      });
+    }
+    if (!(mindate && mindate > now) && !(max() && max()! < now)) {
+      bs.push({
+        key: "now",
+        disabled: false,
+        onclick: preventDefault(() => (date = now)),
+        label: "",
+        icon: "clock",
+      });
+    }
+    if (maxdate) {
+      bs.push({
+        key: "next",
+        disabled: false,
+        onclick: preventDefault(() => (date = max())),
+        label: "",
+        icon: "right",
+      });
+    }
+    return bs;
+  });
+
   function setDatePart(day: Date | undefined) {
     if (!day) return;
     // carry the rounded time over so the merged date stays on the grid
@@ -98,52 +150,28 @@
 </script>
 
 <ButtonGroup>
-  <Button
-    id={btnId}
-    color="secondary"
-    class={(rounded ? "rounded-l-md" : "") + fillBg}
-  >
-    <CalendarMonthOutline class="me-2 h-4 w-4" />
-    {label}
-  </Button>
-
-  {#if prevdate}
-    {@const next = prevdate(date)}
-    <Button
-      disabled={!next}
-      color="secondary"
-      class={fillBg}
-      onclick={preventDefault(() => (date = next ?? date))}
+  {#each buttons as b, i (b.key)}
+    <NeutralButton
+      size="sm"
+      id={b.key === "trigger" ? btnId : undefined}
+      disabled={b.disabled}
+      onclick={b.onclick}
+      class={(b.key === "trigger" && rounded ? "rounded-l-md " : "") +
+        (i === 0 ? "rounded-s-lg" : "rounded-s-none") +
+        (i === buttons.length - 1 ? "" : " rounded-e-none")}
     >
-      <AngleLeftOutline class="shrink-0 h-5 w-5" />
-    </Button>
-  {:else if mindate}
-    <Button
-      color="secondary"
-      class={fillBg}
-      onclick={preventDefault(() => (date = min()))}
-    >
-      <AngleLeftOutline class="shrink-0 h-5 w-5" />
-    </Button>
-  {/if}
-  {#if !(mindate && mindate > now) && !(max() && max()! < now)}
-    <Button
-      color="secondary"
-      class={fillBg}
-      onclick={preventDefault(() => (date = now))}
-    >
-      <ClockOutline class="shrink-0 h-5 w-5" />
-    </Button>
-  {/if}
-  {#if maxdate}
-    <Button
-      color="secondary"
-      class={fillBg}
-      onclick={preventDefault(() => (date = max()))}
-    >
-      <AngleRightOutline class="shrink-0 h-5 w-5" />
-    </Button>
-  {/if}
+      {#if b.icon === "calendar"}
+        <CalendarMonthOutline class="me-2 h-4 w-4" />
+        {b.label}
+      {:else if b.icon === "left"}
+        <AngleLeftOutline class="shrink-0 h-5 w-5" />
+      {:else if b.icon === "clock"}
+        <ClockOutline class="shrink-0 h-5 w-5" />
+      {:else}
+        <AngleRightOutline class="shrink-0 h-5 w-5" />
+      {/if}
+    </NeutralButton>
+  {/each}
 </ButtonGroup>
 
 <Popover

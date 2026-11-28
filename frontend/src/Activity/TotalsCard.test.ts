@@ -32,16 +32,16 @@ describe("TotalsCard", () => {
     render(TotalsCard, props);
     const card = screen
       .getByText("Activity Totals")
-      .closest(".bg-secondary-100");
+      .closest(".surface-secondary");
     expect(card).toBeTruthy();
-    expect(card?.classList.contains("bg-primary-100")).toBe(false);
+    expect(card?.classList.contains("surface-primary")).toBe(false);
   });
 
   it("renders its metric chips with the single uniform fill", () => {
     render(TotalsCard, props);
     const time = screen.getByText("1:00");
-    // the uniform fill is one value, not per-color: primary-500 in light mode
-    expect(time.closest(".bg-primary-500")).toBeTruthy();
+    // the uniform fill is one theme role class, not per-color
+    expect(time.closest(".fill")).toBeTruthy();
     expect(time.classList.contains("text-white")).toBe(true);
   });
 
@@ -49,6 +49,6 @@ describe("TotalsCard", () => {
     render(TotalsCard, props);
     const input = screen.getByPlaceholderText("Search...");
     // a nested control flips to the opposite of the card's secondary surface
-    expect(input.classList.contains("bg-primary-100")).toBe(true);
+    expect(input.classList.contains("surface-primary")).toBe(true);
   });
 });

@@ -55,7 +55,6 @@ describe("OfflineBanner", () => {
     const { container } = render(OfflineBanner);
     const banner = screen.getByText(BANNER_TEXT);
     expectSurface(banner, "secondary");
-    expect(banner.classList.contains("border-secondary-400")).toBe(true);
     expect(container.firstChild).toBeTruthy();
   });
 

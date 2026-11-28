@@ -85,10 +85,10 @@ describe("ConnectProviders", () => {
     render(ConnectProviders);
     const strava = await screen.findByText("Strava");
     // the card the Strava name sits in is the light (primary) surface
-    const card = strava.closest(".bg-primary-100");
+    const card = strava.closest(".surface-primary");
     expect(card).toBeTruthy();
     // a primary surface is the light tone, not the darker one
-    expect(card?.classList.contains("bg-secondary-100")).toBe(false);
+    expect(card?.classList.contains("surface-secondary")).toBe(false);
   });
 
   it("offers only the enabled providers", async () => {

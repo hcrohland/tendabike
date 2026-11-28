@@ -28,7 +28,6 @@
   import { changeActivity } from "./ChangeActivity.svelte";
   import { fmtDateTime, fmtNumber, fmtSeconds } from "../lib/utils";
   import { providerOfActivityId, providerMeta } from "../lib/provider.svelte";
-  import { colorClasses, mainText } from "../Widgets/color.js";
   import * as m from "../../paraglide/messages";
 
   let { activity }: { activity: Activity } = $props();
@@ -41,11 +40,7 @@
   let provider = $derived(providerOfActivityId(activity.id));
 </script>
 
-<div
-  class={"rounded-lg border " +
-    colorClasses["secondary"].surface +
-    " p-2 sm:p-3"}
->
+<div class="rounded-lg border surface-secondary p-2 sm:p-3">
   <!-- Header Row: 4-column grid layout (same on mobile and desktop) -->
   <!-- Col 1-3 (col-span-3): Date + Time + Activity Name (wraps freely) -->
   <!-- Col 4 (col-span-1): Device name (right-aligned) + Menu (shrink-0) -->
@@ -56,12 +51,12 @@
       <div class="flex items-center gap-x-0.5 sm:gap-x-1">
         <!-- Date + Time (fmtDateTime is the single format source; the search
              filter in ActList matches against the same string) -->
-        <span class={"text-sm " + mainText + " shrink-0"}>
+        <span class="text-sm shrink-0">
           {fmtDateTime(activity.start)}
         </span>
         <!-- Gap between Start and Title (em-dash on desktop, thin space on mobile) -->
-        <span class={"hidden sm:inline " + mainText}> — </span>
-        <span class={"sm:hidden " + mainText}>&thinsp;</span>
+        <span class="hidden sm:inline"> — </span>
+        <span class="sm:hidden">&thinsp;</span>
         <!-- Title (wraps on long names) -->
         <a
           href="/source/activities/{activity.id}"
@@ -83,10 +78,7 @@
     <!-- Column 4: Device (right-aligned, truncates) + Menu -->
     <div class="col-span-1 flex items-center justify-end gap-1 shrink-0">
       <!-- Device name (right-aligned via sm:text-right, truncates on overflow) -->
-      <span
-        class={"text-xs " + mainText + " truncate sm:text-right"}
-        title={activity.device_name}
-      >
+      <span class="text-xs truncate sm:text-right" title={activity.device_name}>
         {activity.device_name || "-"}
       </span>
       <!-- Edit Menu -->

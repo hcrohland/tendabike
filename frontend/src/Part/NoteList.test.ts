@@ -86,9 +86,9 @@ describe("NoteList", () => {
     render(NoteList, { part });
     const card = screen
       .getByText("Replace chain soon")
-      .closest(".bg-secondary-100");
+      .closest(".surface-secondary");
     expect(card).toBeTruthy();
-    expect(card?.classList.contains("bg-primary-100")).toBe(false);
+    expect(card?.classList.contains("surface-primary")).toBe(false);
   });
 
   it("links the file of a file note", () => {

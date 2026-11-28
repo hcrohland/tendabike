@@ -129,7 +129,6 @@
 </script>
 
 <script lang="ts">
-  import { Button } from "flowbite-svelte";
   import Admin from "../src/Admin/Admin.svelte";
   import DeleteShopModal from "../src/Shop/DeleteShop.svelte";
   import Card from "../src/Widgets/Card.svelte";
@@ -141,7 +140,7 @@
   import SpareType from "../src/Spares/SpareType.svelte";
   import AdminCard from "../src/Admin/AdminCard.svelte";
   import OfflineBanner from "../src/OfflineBanner.svelte";
-  import { fillBg } from "../src/Widgets/color.js";
+  import NeutralButton from "../src/Widgets/NeutralButton.svelte";
   import { stateValues } from "../src/lib/mapable.svelte";
   import { loadProviders } from "../src/lib/provider.svelte";
   import type { AdminRow } from "../src/lib/user.svelte";
@@ -212,12 +211,8 @@
       uniform fill (identical for primary & secondary)
     </p>
     <div class="flex flex-wrap gap-2">
-      <Button color="primary" class={fillBg} data-testid="fill-primary"
-        >primary</Button
-      >
-      <Button color="secondary" class={fillBg} data-testid="fill-secondary"
-        >secondary</Button
-      >
+      <NeutralButton data-testid="fill-primary">primary</NeutralButton>
+      <NeutralButton data-testid="fill-secondary">secondary</NeutralButton>
     </div>
   </section>
 

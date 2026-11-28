@@ -199,10 +199,10 @@ describe("InitialSyncDialog", () => {
     render(InitialSyncDialog);
     const chip = await screen.findByText("Canyon Aeroad");
     // the gear chip is a secondary (darker) surface…
-    expect(chip.closest(".bg-secondary-100")).toBeTruthy();
+    expect(chip.closest(".surface-secondary")).toBeTruthy();
     // …sitting in the primary (light) dialog body
-    const body = chip.closest(".bg-primary-100");
+    const body = chip.closest(".surface-primary");
     expect(body).toBeTruthy();
-    expect(body?.classList.contains("bg-secondary-100")).toBe(false);
+    expect(body?.classList.contains("surface-secondary")).toBe(false);
   });
 });

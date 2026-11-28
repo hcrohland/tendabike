@@ -57,8 +57,8 @@ describe("SubscriptionCard", () => {
     // the status chip uses the single uniform fill, not a per-color one
     const chip = screen.getByText("Pending");
     const chipRoot = chip.closest(".shrink-0");
-    expect(chipRoot?.classList.contains("bg-primary-500")).toBe(true);
-    expect(chipRoot?.classList.contains("bg-secondary-100")).toBe(false);
+    expect(chipRoot?.classList.contains("fill")).toBe(true);
+    expect(chipRoot?.classList.contains("surface-secondary")).toBe(false);
     expect(chip.classList.contains("text-white")).toBe(true);
   });
 });

@@ -81,8 +81,8 @@ describe("PlanList", () => {
     seedPlan();
     const block = screen
       .getByText(/^Wheel Service/)
-      .closest(".bg-secondary-100");
+      .closest(".surface-secondary");
     expect(block).toBeTruthy();
-    expect(block?.classList.contains("bg-primary-100")).toBe(false);
+    expect(block?.classList.contains("surface-primary")).toBe(false);
   });
 });

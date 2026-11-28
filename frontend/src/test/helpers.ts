@@ -89,13 +89,13 @@ export function activity(): Activity {
   });
 }
 
-/// Assert that `el` renders the given color's surface background and not the
+/// Assert that `el` renders the given color's surface role class and not the
 /// other color's.
 export function expectSurface(el: Element | null | undefined, color: Color) {
   const other: Color = color === "primary" ? "secondary" : "primary";
   expect(el).toBeTruthy();
-  expect(el!.classList.contains(`bg-${color}-100`)).toBe(true);
-  expect(el!.classList.contains(`bg-${other}-100`)).toBe(false);
+  expect(el!.classList.contains(`surface-${color}`)).toBe(true);
+  expect(el!.classList.contains(`surface-${other}`)).toBe(false);
 }
 
 /// The all-empty Summary fixture: every one of the nine collections an empty

@@ -6,7 +6,7 @@
   import type { ShopSubscription } from "../lib/subscription";
   import { shops } from "../lib/shop.svelte";
   import SubscriptionCard from "./SubscriptionCard.svelte";
-  import { mainText, fillBg } from "../Widgets/color.js";
+  import NeutralButton from "../Widgets/NeutralButton.svelte";
 
   interface Props {
     shopId: number;
@@ -83,24 +83,19 @@
   {#if !(shops[shopId].auto_approve && subscriptions.length === 0)}
     <div>
       <div class="mb-4 flex items-center justify-between">
-        <h3 class={"text-lg font-semibold " + mainText}>
+        <h3 class="text-lg font-semibold">
           {m.shop_pending_requests()}
         </h3>
 
-        <Button
-          size="sm"
-          color="secondary"
-          class={fillBg}
-          onclick={loadSubscriptions}
-        >
+        <NeutralButton size="sm" onclick={loadSubscriptions}>
           {m.header_refresh()}
-        </Button>
+        </NeutralButton>
       </div>
 
       {#if loading}
-        <p class={mainText}>{m.loading()}</p>
+        <p>{m.loading()}</p>
       {:else if subscriptions.length === 0}
-        <p class={mainText}>
+        <p>
           {m.shop_no_pending_requests()}
         </p>
       {:else}
@@ -139,14 +134,9 @@
                   >
                     {m.action_reject()}
                   </Button>
-                  <Button
-                    size="xs"
-                    color="secondary"
-                    class={fillBg}
-                    onclick={cancelResponding}
-                  >
+                  <NeutralButton size="xs" onclick={cancelResponding}>
                     {m.action_cancel()}
-                  </Button>
+                  </NeutralButton>
                 </div>
               </div>
             {/snippet}

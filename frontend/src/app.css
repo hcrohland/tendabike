@@ -10,9 +10,10 @@
    * Unified gray-first color scheme. The theme is the single source of the
    * app's neutral color: two neutral gray tones (primary = light, secondary =
    * darker). A uniform `color` prop selects the tone; the component's role
-   * selects the step — cards and the Tone block read a surface, buttons and
-   * chips a fill (ADR-0019). Status colors use the standard (vivid) Tailwind
-   * hue scales — the theme defines no status scales of its own.
+   * selects the step — cards and the Tone block render a surface, chips and
+   * neutral buttons the single uniform fill (ADR-0019). Status colors use the
+   * standard (vivid) Tailwind hue scales — the theme defines no status scales
+   * of its own.
    *
    * Each scale is defined once (no per-mode values). flowbite's components and
    * the app pick the step per mode — a light-mode background lives at step 100
@@ -51,7 +52,52 @@
 @source "../../node_modules/flowbite-svelte/dist";
 @source "../../node_modules/flowbite-svelte-icons/dist";
 
+/*
+ * The theme-defined neutral role classes: the complete neutral style of a
+ * component role, built from the scale values above. A surface role per color
+ * (background + text + border) — `primary` the light surface, `secondary` the
+ * darker one — and the single uniform fill (one tone, background + white
+ * text, stable between the two surfaces). Each class carries a light-mode
+ * step and a dark-mode step, so the same class reads correctly in both
+ * modes. Text inside a surface inherits the surface's text color; muted
+ * (caption) text is its own class; page-base text comes from the base layer.
+ * (ADR-0019.)
+ */
+@layer components {
+  .surface-primary {
+    @apply bg-primary-100 text-secondary-900 border-secondary-400;
+    @variant dark {
+      @apply bg-primary-900 text-secondary-100 border-secondary-700;
+    }
+  }
+  .surface-secondary {
+    @apply bg-secondary-100 text-secondary-900 border-secondary-400;
+    @variant dark {
+      @apply bg-secondary-900 text-secondary-100 border-secondary-700;
+    }
+  }
+  .fill {
+    @apply bg-primary-500 text-white;
+    @variant dark {
+      @apply bg-secondary-700;
+    }
+  }
+  .text-muted {
+    @apply text-secondary-600;
+    @variant dark {
+      @apply text-secondary-300;
+    }
+  }
+}
+
 @layer base {
+  /* page-base text (outside any surface); no page-base background */
+  body {
+    @apply text-secondary-900;
+    @variant dark {
+      @apply text-secondary-100;
+    }
+  }
   /* disable chrome cancel button */
   input[type="search"]::-webkit-search-cancel-button {
     display: none;

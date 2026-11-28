@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { Button } from "flowbite-svelte";
   import * as m from "../../paraglide/messages";
   import { exitShop, getShop } from "../lib/shop.svelte";
-  import { fillBg } from "../Widgets/color.js";
+  import NeutralButton from "../Widgets/NeutralButton.svelte";
 
   let { children = () => {} } = $props();
 </script>
@@ -13,9 +12,9 @@
     : ""}
 >
   {#if getShop()}
-    <Button onclick={exitShop} color="secondary" class={"mb-8" + fillBg}>
+    <NeutralButton onclick={exitShop} class="mb-8">
       {m.shop_exit({ name: getShop()!.name })}
-    </Button>
+    </NeutralButton>
     {@render children()}
   {:else}
     {@render children()}

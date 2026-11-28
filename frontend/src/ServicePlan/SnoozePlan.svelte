@@ -23,9 +23,9 @@
 </script>
 
 <script lang="ts">
-  import { Button, ButtonGroup, Input, InputAddon } from "flowbite-svelte";
+  import { ButtonGroup, Input, InputAddon } from "flowbite-svelte";
   import Buttons from "../Widgets/Buttons.svelte";
-  import { fillBg } from "../Widgets/color.js";
+  import NeutralButton from "../Widgets/NeutralButton.svelte";
   import Modal from "../Widgets/Modal.svelte";
   import { m } from "../../paraglide/messages";
 
@@ -61,10 +61,14 @@
       placeholder={m.snoozeplan_percent()}
     />
     <InputAddon>%</InputAddon>
-    {#each presets as p}
-      <Button color="secondary" class={fillBg} onclick={() => snooze(p / 100)}>
+    {#each presets as p, i}
+      <NeutralButton
+        size="sm"
+        class={i === 0 ? "rounded-s-lg" : "rounded-s-none"}
+        onclick={() => snooze(p / 100)}
+      >
         {p}%
-      </Button>
+      </NeutralButton>
     {/each}
   </ButtonGroup>
   {#snippet footer()}

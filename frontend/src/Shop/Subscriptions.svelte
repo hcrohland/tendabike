@@ -12,7 +12,7 @@
   import { allGear, Part, parts } from "../lib/part";
   import { stateValues } from "../lib/mapable.svelte";
   import { getCategory } from "../lib/types.svelte";
-  import { mainText, fillBg } from "../Widgets/color.js";
+  import NeutralButton from "../Widgets/NeutralButton.svelte";
 
   interface Props {
     shopid?: number;
@@ -113,24 +113,19 @@
 <div class="space-y-6">
   <div>
     <div class="mb-4 flex items-center justify-between">
-      <h3 class={"text-lg font-semibold " + mainText}>
+      <h3 class="text-lg font-semibold">
         {m.shop_my_subscriptions()}
       </h3>
 
-      <Button
-        size="sm"
-        color="secondary"
-        class={fillBg}
-        onclick={loadSubscriptions}
-      >
+      <NeutralButton size="sm" onclick={loadSubscriptions}>
         {m.header_refresh()}
-      </Button>
+      </NeutralButton>
     </div>
 
     {#if loading}
-      <p class={mainText}>{m.loading()}</p>
+      <p>{m.loading()}</p>
     {:else if subscriptions.length === 0}
-      <p class={mainText}>
+      <p>
         {m.shop_no_subscriptions()}
       </p>
     {:else}
@@ -186,7 +181,7 @@
 
           {#snippet body()}
             <div class="flex flex-col gap-2 min-w-48">
-              <p class={"text-sm " + mainText}>
+              <p class="text-sm">
                 {confirmingAction!.action === "unsubscribe"
                   ? m.shop_confirm_unsubscribe()
                   : m.shop_confirm_delete_request()}
@@ -201,14 +196,9 @@
                   {m.action_confirm()}
                 </Button>
 
-                <Button
-                  size="xs"
-                  color="secondary"
-                  class={fillBg}
-                  onclick={cancelConfirmation}
-                >
+                <NeutralButton size="xs" onclick={cancelConfirmation}>
                   {m.action_cancel()}
-                </Button>
+                </NeutralButton>
               </div>
             </div>
           {/snippet}

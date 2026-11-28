@@ -112,8 +112,8 @@ describe("UsageChips", () => {
   it("renders its chips with the single uniform fill", () => {
     render(UsageChips, { usage: usageData() });
     const chip = screen.getByText("42");
-    // the uniform fill is one value, not per-color: primary-500 in light mode
-    expect(chip.closest(".bg-primary-500")).toBeTruthy();
+    // the uniform fill is one theme role class, not per-color
+    expect(chip.closest(".fill")).toBeTruthy();
     expect(chip.classList.contains("text-white")).toBe(true);
   });
 });

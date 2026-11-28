@@ -62,6 +62,10 @@ describe("PartHist", () => {
   it("renders the nested attachment cards on the contrasting (secondary) surface", () => {
     seed();
     const { container } = render(PartHist, { id: 7 });
-    expectSurface(container.querySelector(".m-2 .rounded-lg"), "secondary");
+    // the attachment cards sit in the list under the header row
+    expectSurface(
+      container.querySelector(".m-2 .mt-3 > .rounded-lg"),
+      "secondary",
+    );
   });
 });

@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { Input, ButtonGroup, Button } from "flowbite-svelte";
+  import { Input, ButtonGroup } from "flowbite-svelte";
   import { types, Type, localizeGroupName } from "../lib/types.svelte";
   import { Attachment } from "../lib/attachment";
   import { type Map, filterValues } from "../lib/mapable.svelte";
   import Card from "../Widgets/Card.svelte";
+  import NeutralButton from "../Widgets/NeutralButton.svelte";
   import Switch from "../Widgets/Switch.svelte";
   import { Part } from "../lib/part";
-  import { mainText, fillBg } from "../Widgets/color.js";
   import { m } from "../../paraglide/messages";
 
   let { gear, attachees }: { gear: Part; attachees: Attachment[] } = $props();
@@ -104,15 +104,11 @@
 {#if !gear.disposed_at && groups.length > 0}
   <div>
     {#if show_button}
-      <Button
-        color="secondary"
-        class={"mt-8" + fillBg}
-        onclick={() => (show_button = false)}
-      >
+      <NeutralButton class="mt-8" onclick={() => (show_button = false)}>
         {m.wizard_add_more_groups()}
-      </Button>
+      </NeutralButton>
     {:else}
-      <p class={"mb-2 text-sm font-semibold " + mainText}>
+      <p class="mb-2 text-sm font-semibold">
         {m.wizard_add_groups()}
       </p>
       <div class="flex flex-col gap-1 sm:gap-2">
@@ -142,14 +138,9 @@
           </Card>
         {/each}
       </div>
-      <Button
-        color="secondary"
-        {disabled}
-        class={"mt-2" + fillBg}
-        onclick={save}
-      >
+      <NeutralButton {disabled} class="mt-2" onclick={save}>
         {m.action_set()}
-      </Button>
+      </NeutralButton>
     {/if}
   </div>
 {/if}

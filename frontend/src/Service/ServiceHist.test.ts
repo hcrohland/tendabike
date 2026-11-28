@@ -58,7 +58,7 @@ describe("ServiceHist", () => {
     fireEvent.click(showMore!);
     flushSync();
     // the nested history block takes the contrasting primary surface
-    const block = container.querySelector(".bg-primary-100");
+    const block = container.querySelector(".surface-primary");
     expect(block).toBeTruthy();
   });
 });

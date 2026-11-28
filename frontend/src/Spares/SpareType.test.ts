@@ -47,8 +47,8 @@ describe("SpareType", () => {
     );
     // the usage chip uses the single uniform fill, not a per-color one
     const chip = container.querySelector(".relative.rounded-lg")!;
-    expect(chip.classList.contains("bg-primary-500")).toBe(true);
-    expect(chip.classList.contains("bg-primary-100")).toBe(false);
+    expect(chip.classList.contains("fill")).toBe(true);
+    expect(chip.classList.contains("surface-primary")).toBe(false);
   });
 
   it("renders the disposed part card on the secondary surface with the uniform chip fill", () => {
@@ -62,10 +62,13 @@ describe("SpareType", () => {
     const partCard = container.querySelector(
       "div.flex.flex-col > div.rounded-lg",
     );
-    expectSurface(partCard, "secondary");
+    // a disposed card is an exceptional layout: it composes the background
+    // utility and a custom border directly, not the surface role class
+    expect(partCard?.classList.contains("bg-secondary-100")).toBe(true);
+    expect(partCard?.classList.contains("surface-secondary")).toBe(false);
     // the chip is the uniform fill regardless of the card's surface color
     const chip = partCard!.querySelector(".relative.rounded-lg")!;
-    expect(chip.classList.contains("bg-primary-500")).toBe(true);
-    expect(chip.classList.contains("bg-secondary-100")).toBe(false);
+    expect(chip.classList.contains("fill")).toBe(true);
+    expect(chip.classList.contains("surface-secondary")).toBe(false);
   });
 });

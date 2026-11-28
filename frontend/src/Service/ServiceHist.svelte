@@ -1,7 +1,6 @@
 <script lang="ts">
   import { Service } from "../lib/service";
   import Card from "../Widgets/Card.svelte";
-  import { colorClasses } from "../Widgets/color.js";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import ServiceRow from "./ServiceRow.svelte";
   import { parts } from "../lib/part";
@@ -21,12 +20,10 @@
 
 <Card color="secondary">
   <ServiceRow {part} {service} {successor}>
-    <ShowMore bind:show_more title={m.partcard_history()} color="secondary" />
+    <ShowMore bind:show_more title={m.partcard_history()} />
   </ServiceRow>
   {#if show_more}
-    <div
-      class={"rounded-lg border " + colorClasses["primary"].surface + " p-2"}
-    >
+    <div class="rounded-lg border surface-primary p-2">
       <div class="flex flex-col gap-2 mt-2">
         {#each service.history(1) as s (s.service?.id + "-" + s.successor?.id)}
           <ServiceRow {part} {...s} />

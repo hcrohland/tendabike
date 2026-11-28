@@ -21,7 +21,6 @@
 <script lang="ts">
   import { Spinner } from "flowbite-svelte";
   import type { Due } from "../lib/serviceplan";
-  import { fill } from "./color.js";
   import ServiceBadge from "./ServiceBadge.svelte";
 
   let {
@@ -42,9 +41,8 @@
     disabled?: boolean;
   } = $props();
 
-  // A Chip renders the single uniform fill (dark-step background + white
-  // text), like a button. It does not vary by color.
-  const background = fill;
+  // A Chip renders the theme's single uniform fill role class, like a
+  // neutral button. It does not vary by color.
   let isButton = $derived(!!onclick && !disabled);
   let isLinked = $derived(!!href);
 </script>
@@ -74,7 +72,7 @@
   <button
     {onclick}
     {disabled}
-    class="cursor-pointer focus:outline-none focus:ring-2 focus:ring-secondary-500 rounded-lg {background} shrink-0"
+    class="cursor-pointer focus:outline-none focus:ring-2 focus:ring-secondary-500 rounded-lg fill shrink-0"
   >
     <a
       {href}
@@ -88,7 +86,7 @@
   <button
     {onclick}
     {disabled}
-    class="cursor-pointer focus:outline-none focus:ring-2 focus:ring-secondary-500 rounded-lg {background} shrink-0"
+    class="cursor-pointer focus:outline-none focus:ring-2 focus:ring-secondary-500 rounded-lg fill shrink-0"
   >
     <div
       class="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-2 w-full relative"
@@ -97,7 +95,7 @@
     </div>
   </button>
 {:else if isLinked}
-  <div class="relative rounded-lg shrink-0 {background}">
+  <div class="relative rounded-lg shrink-0 fill">
     <a
       {href}
       class="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-2 text-reset no-underline"
@@ -106,7 +104,7 @@
     </a>
   </div>
 {:else}
-  <div class="relative rounded-lg shrink-0 {background}">
+  <div class="relative rounded-lg shrink-0 fill">
     <div class="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-2">
       {@render chipContent()}
     </div>

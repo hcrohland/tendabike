@@ -6,7 +6,6 @@
   import ServiceMenu from "./ServiceMenu.svelte";
   import ServiceBadge from "../Widgets/ServiceBadge.svelte";
   import type { Due, limit_keys } from "../lib/serviceplan";
-  import { mutedText } from "../Widgets/color.js";
   import { m } from "../../paraglide/messages";
 
   interface Props {
@@ -28,7 +27,7 @@
   let { days, usage } = $derived(Service.period(service, part, successor));
 </script>
 
-<span class={"text-xs " + mutedText + " mt-1"}>
+<span class="text-xs text-muted mt-1">
   {days}
   {m.time_days()}
   <ServiceBadge due={due_list?.days} />
@@ -45,17 +44,17 @@
         <span class="font-medium text-sm">
           {service.name}
         </span>
-        <span class={"text-xs " + mutedText + " mt-1"}>
+        <span class="text-xs text-muted mt-1">
           · {fmtRange(service ? service.time : part.purchase, successor?.time)}
         </span>
       </span>
       {#if service.notes.length > 0}
-        <p class={"text-xs " + mutedText + " mt-1"}>
+        <p class="text-xs text-muted mt-1">
           {service.notes}
         </p>
       {/if}
     {:else}
-      <span class={"text-xs " + mutedText + " mt-1"}>
+      <span class="text-xs text-muted mt-1">
         {#if !successor}
           {m.time_since()}
         {/if}
