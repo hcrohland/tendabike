@@ -47,10 +47,10 @@
 
 {#snippet chipContent()}
   <ServiceBadge {due} pos="absolute -top-3 -right-0" />
-  <span class="font-semibold text-sm text-white">
+  <span class="font-semibold text-sm">
     {value}
   </span>
-  <span class="font-normal text-xs uppercase tracking-wide text-white">
+  <span class="font-normal text-xs uppercase tracking-wide">
     {label}
   </span>
   {#if indicator}
@@ -59,7 +59,7 @@
         <Spinner size="4" color="red" />
       </span>
     {:else}
-      <span class="text-xs font-bold text-white">
+      <span class="text-xs font-bold">
         {indicator}
       </span>
     {/if}

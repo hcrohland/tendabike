@@ -54,7 +54,7 @@ describe("Chip", () => {
     expect(badge).toBeTruthy();
   });
 
-  it("renders the theme's single uniform fill (single tone, white text)", () => {
+  it("renders the theme's single uniform fill (single tone)", () => {
     render(Chip, { label: "L", value: "V" });
     expectFill(screen.getByText("V"));
   });

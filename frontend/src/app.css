@@ -56,10 +56,11 @@
  * The theme-defined neutral role classes: the complete neutral style of a
  * component role, built from the scale values above. A surface role per color
  * (background + text + border) — `primary` the light surface, `secondary` the
- * darker one — and the single uniform fill (one tone, background + white
- * text, stable between the two surfaces). Each class carries a light-mode
- * step and a dark-mode step, so the same class reads correctly in both
- * modes. Text inside a surface inherits the surface's text color; muted
+ * darker one — and the single uniform fill (one tone, background + text —
+ * dark in light mode, white in dark mode — stable between the two surfaces).
+ * Each class carries a light-mode step and a dark-mode step, so the same
+ * class reads correctly in both modes. Text inside a surface inherits the
+ * surface's text color; muted
  * (caption) text is its own class; page-base text comes from the base layer.
  * (ADR-0019.)
  */
@@ -77,9 +78,9 @@
     }
   }
   .fill {
-    @apply bg-primary-500 text-white;
+    @apply bg-primary-200 text-secondary-900;
     @variant dark {
-      @apply bg-secondary-700;
+      @apply bg-secondary-700 text-white;
     }
   }
   .text-muted {

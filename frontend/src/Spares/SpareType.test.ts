@@ -51,7 +51,7 @@ describe("SpareType", () => {
       "primary",
     );
     // the usage chip is the uniform fill, not the card's surface
-    expectFill(container.querySelector(".relative.rounded-lg span.text-white"));
+    expectFill(container.querySelector(".relative.rounded-lg span"));
   });
 
   it("renders the disposed part card on the secondary surface with the uniform chip fill", () => {
@@ -70,6 +70,6 @@ describe("SpareType", () => {
     expect(partCard?.classList.contains("bg-secondary-100")).toBe(true);
     expect(partCard?.classList.contains("surface-secondary")).toBe(false);
     // the chip is the uniform fill regardless of the card's surface color
-    expectFill(partCard!.querySelector(".relative.rounded-lg span.text-white"));
+    expectFill(partCard!.querySelector(".relative.rounded-lg span"));
   });
 });
