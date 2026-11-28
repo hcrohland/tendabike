@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { activity } from "../test/helpers";
+import { activity, expectFill } from "../test/helpers";
 import TotalsCard from "./TotalsCard.svelte";
 
 class ResizeObserverStub {
@@ -32,23 +32,20 @@ describe("TotalsCard", () => {
     render(TotalsCard, props);
     const card = screen
       .getByText("Activity Totals")
-      .closest(".bg-secondary-100");
+      .closest(".surface-secondary");
     expect(card).toBeTruthy();
-    expect(card?.classList.contains("bg-primary-100")).toBe(false);
+    expect(card?.classList.contains("surface-primary")).toBe(false);
   });
 
   it("renders its metric chips with the single uniform fill", () => {
     render(TotalsCard, props);
-    const time = screen.getByText("1:00");
-    // the uniform fill is one value, not per-color: primary-500 in light mode
-    expect(time.closest(".bg-primary-500")).toBeTruthy();
-    expect(time.classList.contains("text-white")).toBe(true);
+    expectFill(screen.getByText("1:00"));
   });
 
   it("renders its search input on the contrasting (primary) surface", () => {
     render(TotalsCard, props);
     const input = screen.getByPlaceholderText("Search...");
     // a nested control flips to the opposite of the card's secondary surface
-    expect(input.classList.contains("bg-primary-100")).toBe(true);
+    expect(input.classList.contains("surface-primary")).toBe(true);
   });
 });

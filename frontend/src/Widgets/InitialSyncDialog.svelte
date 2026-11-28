@@ -29,7 +29,7 @@
     type Provider,
   } from "../lib/provider.svelte";
   import ProviderMark from "./ProviderMark.svelte";
-  import { colorClasses, mainText, fillBg } from "./color.js";
+  import NeutralButton from "./NeutralButton.svelte";
   import { m } from "../../paraglide/messages";
 
   /// A gear item the onboarding gear import discovered (spec #829): the
@@ -142,49 +142,42 @@
         {m.initialsync_header({ provider: meta.name })}
       </span>
     </div>
-    <div class={"p-4 sm:p-6 " + colorClasses["primary"].surface}>
+    <div class="p-4 sm:p-6 surface-primary">
       <div class="text-center">
-        <Heading tag="h3" class={"mb-5 text-lg font-normal " + mainText}>
+        <Heading tag="h3" class="mb-5 text-lg font-normal">
           {m.initialsync_welcome()}
         </Heading>
         <P class="mb-4 text-left">
           {m.initialsync_question({ provider: meta.name })}
         </P>
-        <P class={"mb-6 text-left text-sm " + mainText}>
+        <P class="mb-6 text-left text-sm">
           {m.initialsync_desc1()}
         </P>
-        <P class={"mb-6 text-left text-sm " + mainText}>
+        <P class="mb-6 text-left text-sm">
           {m.initialsync_desc2()}
         </P>
         {#if provider === "strava"}
-          <P class={"mb-6 text-left text-sm " + mainText}>
+          <P class="mb-6 text-left text-sm">
             {m.initialsync_desc3({
               sync: m.header_sync(),
               historic: m.header_import_historic(),
             })}
           </P>
         {/if}
-        <P class={"mb-6 text-left text-sm " + mainText}>
+        <P class="mb-6 text-left text-sm">
           {m.initialsync_desc4()} <br />
         </P>
         {#if gear.length > 0}
           <!-- The gear the import discovered (spec #829): compact chips in a
                flex-wrap row, shown once the gear import's response lands. -->
           <div class="mb-6 text-left">
-            <div
-              class={"text-xs font-medium " +
-                mainText +
-                " uppercase tracking-wide mb-2"}
-            >
+            <div class="text-xs font-medium uppercase tracking-wide mb-2">
               {m.initialsync_gear()}
             </div>
             <div class="flex flex-wrap gap-2">
               {#each gear as item (item.name)}
                 <span
-                  class={"inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border " +
-                    colorClasses["secondary"].surface +
-                    " " +
-                    mainText}
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border surface-secondary"
                 >
                   <!-- The part type's flaticon (mountain-bike for a bike,
                        run for a shoe, ...) via the shared icons map. -->
@@ -200,22 +193,22 @@
              activity sync in one screen (spec #829). The skip is
              provider-agnostic (spec #974). -->
         <div class="flex justify-center gap-4">
-          <Button
-            color={provider === "strava" ? "orange" : "primary"}
-            class={provider === "strava" ? "" : fillBg}
-            disabled={loading}
-            onclick={importActivities}
-          >
-            {loading ? m.action_importing() : m.header_import_activities()}
-          </Button>
-          <Button
-            color="primary"
-            class={fillBg}
-            disabled={loading}
-            onclick={skipSync}
-          >
+          {#if provider === "strava"}
+            <Button
+              color="orange"
+              disabled={loading}
+              onclick={importActivities}
+            >
+              {loading ? m.action_importing() : m.header_import_activities()}
+            </Button>
+          {:else}
+            <NeutralButton disabled={loading} onclick={importActivities}>
+              {loading ? m.action_importing() : m.header_import_activities()}
+            </NeutralButton>
+          {/if}
+          <NeutralButton disabled={loading} onclick={skipSync}>
             {m.initialsync_skip()}
-          </Button>
+          </NeutralButton>
         </div>
       </div>
     </div>

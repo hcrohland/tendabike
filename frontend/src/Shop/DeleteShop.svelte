@@ -20,7 +20,7 @@
   import type { Snippet } from "svelte";
   import * as m from "../../paraglide/messages";
   import Modal from "../Widgets/Modal.svelte";
-  import { fillBg } from "../Widgets/color.js";
+  import NeutralButton from "../Widgets/NeutralButton.svelte";
 
   interface Props {
     children?: Snippet;
@@ -51,13 +51,9 @@
   </div>
 
   {#snippet footer()}
-    <Button
-      color="secondary"
-      class={fillBg}
-      onclick={() => (modal.open = false)}
-    >
+    <NeutralButton onclick={() => (modal.open = false)}>
       {m.action_cancel()}
-    </Button>
+    </NeutralButton>
     <Button color="red" onclick={onaction}>
       {m.action_delete()}
     </Button>

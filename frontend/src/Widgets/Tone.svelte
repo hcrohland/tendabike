@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { colorClasses, type Color } from "./color.js";
+  import type { Color } from "./color.js";
 
   let {
     color,
@@ -10,13 +10,12 @@
     class?: string;
     children: import("svelte").Snippet;
   } = $props();
-
-  // A Tone block is a nested surface: it renders the surface (background +
-  // border) of its color. The caller writes it explicitly — a Tone inside a
-  // card flips relative to that card, like any nested card.
-  const surface = $derived(colorClasses[color].surface);
 </script>
 
-<div class={"rounded-lg " + surface + (extraClass ? " " + extraClass : "")}>
+<div
+  class={"rounded-lg " + (extraClass ? extraClass : "")}
+  class:surface-primary={color === "primary"}
+  class:surface-secondary={color === "secondary"}
+>
   {@render children()}
 </div>

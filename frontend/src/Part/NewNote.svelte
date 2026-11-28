@@ -61,7 +61,7 @@
 </script>
 
 <script lang="ts">
-  import { Button, Textarea } from "flowbite-svelte";
+  import { Textarea } from "flowbite-svelte";
   import {
     EditOutline,
     PaperClipOutline,
@@ -71,7 +71,7 @@
   import { createTextNote, createFileNote } from "../lib/partnote";
   import { handleError } from "../lib/utils";
   import Modal from "../Widgets/Modal.svelte";
-  import { fillBg } from "../Widgets/color.js";
+  import NeutralButton from "../Widgets/NeutralButton.svelte";
   import * as m from "../../paraglide/messages";
 
   let fileInput = $state<HTMLInputElement | null>(null);
@@ -208,18 +208,12 @@
 
   {#snippet footer()}
     <div class="flex justify-end w-full gap-2">
-      <Button
-        color="secondary"
-        class={fillBg}
-        onclick={() => (modal.open = false)}
-      >
+      <NeutralButton onclick={() => (modal.open = false)}>
         {m.action_cancel()}
-      </Button>
-      <Button
+      </NeutralButton>
+      <NeutralButton
         type="submit"
         value="commit"
-        color="secondary"
-        class={fillBg}
         disabled={!modal.removeFile &&
           !(modal.name.trim().length > 0 || modal.file !== null)}
       >
@@ -228,7 +222,7 @@
         {:else}
           {m.action_create()}
         {/if}
-      </Button>
+      </NeutralButton>
     </div>
   {/snippet}
 </Modal>

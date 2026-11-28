@@ -13,7 +13,6 @@
   } from "../lib/user.svelte";
   import ShopOwnerMenu from "./ShopOwnerMenu.svelte";
   import { type Map } from "../lib/mapable.svelte";
-  import { mainText } from "../Widgets/color.js";
 
   interface Props {
     shops: Shop[];
@@ -47,7 +46,7 @@
 
 {#if shops.length === 0}
   <div class="py-12 text-center">
-    <p class={mainText}>
+    <p>
       {m.shop_none_found()}
     </p>
   </div>

@@ -3,7 +3,12 @@ import { flushSync } from "svelte";
 import { beforeEach, describe, expect, it } from "vitest";
 import { Part, parts } from "../lib/part";
 import { usages } from "../lib/usage";
-import { expectSurface, partData, standardUsage } from "../test/helpers";
+import {
+  expectFill,
+  expectSurface,
+  partData,
+  standardUsage,
+} from "../test/helpers";
 import { Type } from "../lib/types.svelte";
 import SpareType from "./SpareType.svelte";
 
@@ -45,10 +50,8 @@ describe("SpareType", () => {
       container.querySelector("div.flex.flex-col > div.rounded-lg"),
       "primary",
     );
-    // the usage chip uses the single uniform fill, not a per-color one
-    const chip = container.querySelector(".relative.rounded-lg")!;
-    expect(chip.classList.contains("bg-primary-500")).toBe(true);
-    expect(chip.classList.contains("bg-primary-100")).toBe(false);
+    // the usage chip is the uniform fill, not the card's surface
+    expectFill(container.querySelector(".relative.rounded-lg span"));
   });
 
   it("renders the disposed part card on the secondary surface with the uniform chip fill", () => {
@@ -62,10 +65,11 @@ describe("SpareType", () => {
     const partCard = container.querySelector(
       "div.flex.flex-col > div.rounded-lg",
     );
-    expectSurface(partCard, "secondary");
+    // a disposed card is an exceptional layout: it composes the background
+    // utility and a custom border directly, not the surface role class
+    expect(partCard?.classList.contains("bg-secondary-100")).toBe(true);
+    expect(partCard?.classList.contains("surface-secondary")).toBe(false);
     // the chip is the uniform fill regardless of the card's surface color
-    const chip = partCard!.querySelector(".relative.rounded-lg")!;
-    expect(chip.classList.contains("bg-primary-500")).toBe(true);
-    expect(chip.classList.contains("bg-secondary-100")).toBe(false);
+    expectFill(partCard!.querySelector(".relative.rounded-lg span"));
   });
 });

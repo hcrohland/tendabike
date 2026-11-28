@@ -1,4 +1,5 @@
 <script module lang="ts">
+  import { Activity, activities } from "../src/lib/activity";
   import { Part, parts } from "../src/lib/part";
   import { Service, services } from "../src/lib/service";
   import { ServicePlan, plans } from "../src/lib/serviceplan";
@@ -24,6 +25,23 @@
 
   // Seed the state objects the components read, so the harness renders real
   // Part/Service/ServicePlan components without the full stack.
+  activities.setMap([
+    new Activity({
+      id: "a1",
+      user_id: 1,
+      what: 1,
+      name: "Morning Ride",
+      start: "2024-06-15T08:00:00Z",
+      gear: 5,
+      climb: 120,
+      descend: 110,
+      distance: 25000,
+      time: 3600,
+      duration: 3600,
+      energy: 250,
+      device_name: "Garmin",
+    }),
+  ]);
   parts.setMap([
     new Part({
       id: 5,
@@ -129,7 +147,6 @@
 </script>
 
 <script lang="ts">
-  import { Button } from "flowbite-svelte";
   import Admin from "../src/Admin/Admin.svelte";
   import DeleteShopModal from "../src/Shop/DeleteShop.svelte";
   import Card from "../src/Widgets/Card.svelte";
@@ -141,7 +158,9 @@
   import SpareType from "../src/Spares/SpareType.svelte";
   import AdminCard from "../src/Admin/AdminCard.svelte";
   import OfflineBanner from "../src/OfflineBanner.svelte";
-  import { fillBg } from "../src/Widgets/color.js";
+  import NeutralButton from "../src/Widgets/NeutralButton.svelte";
+  import ActCard from "../src/Activity/ActCard.svelte";
+  import DateTime from "../src/Widgets/DateTime.svelte";
   import { stateValues } from "../src/lib/mapable.svelte";
   import { loadProviders } from "../src/lib/provider.svelte";
   import type { AdminRow } from "../src/lib/user.svelte";
@@ -212,12 +231,8 @@
       uniform fill (identical for primary & secondary)
     </p>
     <div class="flex flex-wrap gap-2">
-      <Button color="primary" class={fillBg} data-testid="fill-primary"
-        >primary</Button
-      >
-      <Button color="secondary" class={fillBg} data-testid="fill-secondary"
-        >secondary</Button
-      >
+      <NeutralButton data-testid="fill-primary">primary</NeutralButton>
+      <NeutralButton data-testid="fill-secondary">secondary</NeutralButton>
     </div>
   </section>
 
@@ -289,5 +304,29 @@
       initial-sync dialog, icu branch (import: uniform fill)
     </p>
     <InitialSyncDialog />
+  </section>
+
+  <section data-testid="scenario-actcard">
+    <p class="text-sm font-semibold mb-2">ActCard (primary surface)</p>
+    {#each stateValues(activities) as act (act.id)}
+      <ActCard activity={act} />
+    {/each}
+  </section>
+
+  <section data-testid="scenario-btn-sizes">
+    <p class="text-sm font-semibold mb-2">
+      NeutralButton sm + xs (padding check)
+    </p>
+    <div class="flex flex-wrap gap-2">
+      <NeutralButton size="sm" data-testid="btn-sm">sm</NeutralButton>
+      <NeutralButton size="xs" data-testid="btn-xs">xs</NeutralButton>
+    </div>
+  </section>
+
+  <section data-testid="scenario-datetime">
+    <p class="text-sm font-semibold mb-2">
+      DateTime (datepicker trigger at the widget's default size)
+    </p>
+    <DateTime />
   </section>
 </div>

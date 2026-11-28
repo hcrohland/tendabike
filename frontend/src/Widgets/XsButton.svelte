@@ -1,15 +1,24 @@
 <script lang="ts">
-  import { Button } from "flowbite-svelte";
-  import { fillBg } from "./color.js";
+  import NeutralButton from "./NeutralButton.svelte";
 
-  let { children, ...rest } = $props();
+  let {
+    onclick = undefined,
+    disabled = false,
+    class: extraClass = "",
+    children,
+  }: {
+    onclick?: (e: MouseEvent) => void;
+    disabled?: boolean;
+    class?: string;
+    children: import("svelte").Snippet;
+  } = $props();
 </script>
 
-<Button
+<NeutralButton
   size="xs"
-  color="secondary"
-  class={"py-0 px-1 ms-2 rounded-xs cursor-pointer " + fillBg}
-  {...rest}
+  {disabled}
+  {onclick}
+  class={"ms-2 " + (extraClass ? extraClass : "")}
 >
   {@render children()}
-</Button>
+</NeutralButton>

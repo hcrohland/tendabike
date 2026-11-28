@@ -8,7 +8,6 @@
   import { type ShopSubscription } from "../lib/subscription";
   import { getUser, type UserPublic } from "../lib/user.svelte";
   import { type Map } from "../lib/mapable.svelte";
-  import { mainText } from "../Widgets/color.js";
 
   interface Props {
     subscriptions: ShopSubscription[];
@@ -61,7 +60,7 @@
 <hr class="my-4 border-secondary-400 dark:border-secondary-700" />
 
 <div>
-  <h3 class={"mb-4 text-lg font-semibold " + mainText}>
+  <h3 class="mb-4 text-lg font-semibold">
     {m.shop_search_header()}
   </h3>
 
@@ -83,7 +82,7 @@
     {:else if searchResults.length > 0}
       <ShopList shops={searchResults} {users} />
     {:else if searchQuery.trim()}
-      <p class={"py-8 text-center " + mainText}>
+      <p class="py-8 text-center">
         {m.shop_search_none({ query: searchQuery })}
       </p>
     {/if}

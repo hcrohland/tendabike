@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/svelte";
 import { describe, expect, it } from "vitest";
 import { Due } from "../lib/serviceplan";
+import { expectFill } from "../test/helpers";
 import Chip from "./Chip.svelte";
 
 describe("Chip", () => {
@@ -53,11 +54,8 @@ describe("Chip", () => {
     expect(badge).toBeTruthy();
   });
 
-  it("renders the single uniform fill (dark-step background + white text)", () => {
+  it("renders the theme's single uniform fill (single tone)", () => {
     render(Chip, { label: "L", value: "V" });
-    const el = screen.getByText("V");
-    // the uniform fill is one value, not per-color: primary-500 in light mode
-    expect(el.closest(".bg-primary-500")).toBeTruthy();
-    expect(el.classList.contains("text-white")).toBe(true);
+    expectFill(screen.getByText("V"));
   });
 });

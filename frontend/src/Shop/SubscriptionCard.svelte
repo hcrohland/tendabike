@@ -9,7 +9,6 @@
     SubscriptionStatus,
   } from "../lib/subscription";
   import { shops } from "../lib/shop.svelte";
-  import { mainText } from "../Widgets/color.js";
 
   interface Props {
     subscription: ShopSubscription;
@@ -46,7 +45,7 @@
     <span class="font-medium text-sm min-w-0 truncate">{name}</span>
     <div class="flex items-center gap-1 sm:gap-2 shrink-0">
       <Chip value={statusLabel(subscription.status)} label="" />
-      <span class={"text-xs " + mainText}>
+      <span class="text-xs">
         {new Date(subscription.created_at).toLocaleDateString()}
       </span>
       {#if menu}

@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { Button, ButtonGroup, Spinner } from "flowbite-svelte";
+  import { ButtonGroup, Spinner } from "flowbite-svelte";
   import { handleError, myfetch } from "../lib/utils";
   import { type AdminRow, type User } from "../lib/user.svelte";
   import AdminCard from "./AdminCard.svelte";
   import CreateSync from "./CreateSync.svelte";
   import DeleteUser from "./DeleteUser.svelte";
   import * as m from "../../paraglide/messages";
-  import { fillBg } from "../Widgets/color.js";
+  import NeutralButton from "../Widgets/NeutralButton.svelte";
 
   let promise: Promise<void>, createSync: any;
   let request: Promise<AdminRow[]> | AdminRow[] = [];
@@ -41,20 +41,18 @@
     {/each}
   </div>
   <ButtonGroup class="p-6">
-    <Button color="secondary" class={fillBg} onclick={() => createSync.start()}
-      >{m.admin_add_sync_event_all()}</Button
-    >
-    <Button color="secondary" class={fillBg} onclick={rescan}>
+    <NeutralButton onclick={() => createSync.start()}>
+      {m.admin_add_sync_event_all()}
+    </NeutralButton>
+    <NeutralButton onclick={rescan}>
       {#await promise}
         <Spinner />
       {:then}
         {m.admin_rescan_all()}
       {/await}
-    </Button>
+    </NeutralButton>
   </ButtonGroup>
-  <Button color="secondary" class={fillBg} onclick={refresh}
-    >{m.action_refresh()}</Button
-  >
+  <NeutralButton onclick={refresh}>{m.action_refresh()}</NeutralButton>
 {/await}
 <CreateSync {refresh} bind:this={createSync} />
 <DeleteUser bind:this={deleteuser} {refresh} />

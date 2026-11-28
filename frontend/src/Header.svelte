@@ -13,7 +13,6 @@
     Spinner,
     DarkMode,
     Select,
-    Button,
   } from "flowbite-svelte";
   import { handleError, myfetch } from "./lib/utils";
   import { refresh, getUser, setUser } from "./lib/user.svelte";
@@ -32,7 +31,7 @@
   import { getLocale, setLocale, locales } from "../paraglide/runtime";
   import { onDestroy } from "svelte";
   import NotificationBell from "./Widgets/NotificationBell.svelte";
-  import { mainText, fillBg } from "./Widgets/color.js";
+  import NeutralButton from "./Widgets/NeutralButton.svelte";
 
   let openGarmin = $state(false);
 
@@ -86,7 +85,7 @@
   }
 </script>
 
-<Navbar class={mainText}>
+<Navbar>
   <NavBrand href="/cat">
     <img
       src="/favicon.png"
@@ -200,8 +199,7 @@
          already there, so it only shows elsewhere. -->
     <div class="flex items-center md:order-2">
       {#if activeUrl !== "/about"}
-        <Button color="secondary" class={fillBg} href="/about#connect"
-          >{m.header_connect()}</Button
+        <NeutralButton href="/about#connect">{m.header_connect()}</NeutralButton
         >
       {/if}
     </div>

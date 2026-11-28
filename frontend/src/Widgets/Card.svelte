@@ -19,7 +19,7 @@
  -->
 
 <script lang="ts">
-  import { colorClasses, type Color } from "./color.js";
+  import type { Color } from "./color.js";
 
   let {
     color = "secondary",
@@ -30,18 +30,12 @@
     class?: string;
     children: import("svelte").Snippet;
   } = $props();
-
-  // A Card renders the surface (background + border) of its color. A
-  // top-level card defaults to the darker tone; a nested card is authored
-  // with the opposite color by its caller — there is no context and no
-  // automatic flip.
-  const surface = $derived(colorClasses[color].surface);
 </script>
 
 <div
-  class={"rounded-lg border p-1 sm:p-2 " +
-    surface +
-    (extraClass ? " " + extraClass : "")}
+  class={"rounded-lg border p-1 sm:p-2 " + (extraClass ? extraClass : "")}
+  class:surface-primary={color === "primary"}
+  class:surface-secondary={color === "secondary"}
 >
   {@render children()}
 </div>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button, Tabs, TabItem } from "flowbite-svelte";
+  import { Tabs, TabItem } from "flowbite-svelte";
   import * as m from "../../paraglide/messages";
 
   import ShopList from "./ShopList.svelte";
@@ -9,7 +9,7 @@
   import { getUser, users } from "../lib/user.svelte";
   import { stateValues } from "../lib/mapable.svelte";
   import ShopSubscriptions from "./ShopSubscriptions.svelte";
-  import { mainText, fillBg } from "../Widgets/color.js";
+  import NeutralButton from "../Widgets/NeutralButton.svelte";
 
   /// The /shops page accepts a tab selector in the route (a notification can
   /// deep-link to the correct tab); it defaults to the subscriptions tab when
@@ -47,17 +47,13 @@
       <div class="py-4 space-y-8">
         {#if myShops.length === 0}
           <div class="py-12 text-center">
-            <p class={"mb-4 " + mainText}>
+            <p class="mb-4">
               {m.shop_none_owned()}
             </p>
 
-            <Button
-              color="secondary"
-              class={fillBg}
-              onclick={() => createShop()}
-            >
+            <NeutralButton onclick={() => createShop()}>
               {m.shop_create_first()}
-            </Button>
+            </NeutralButton>
           </div>
         {:else}
           <div>
@@ -68,9 +64,9 @@
             </ShopList>
           </div>
 
-          <Button color="secondary" class={fillBg} onclick={() => createShop()}>
+          <NeutralButton onclick={() => createShop()}>
             {m.shop_create()}
-          </Button>
+          </NeutralButton>
         {/if}
       </div>
     </TabItem>

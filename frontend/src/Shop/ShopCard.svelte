@@ -8,7 +8,6 @@
   import type { Shop } from "../lib/shop.svelte";
   import { type UserPublic } from "../lib/user.svelte";
   import { type Map } from "../lib/mapable.svelte";
-  import { mainText } from "../Widgets/color.js";
 
   interface Props {
     shop: Shop;
@@ -71,7 +70,7 @@
   </div>
 
   {#if !isOwner && owner.firstname && owner.name}
-    <div class={"mt-1 text-sm " + mainText}>
+    <div class="mt-1 text-sm">
       {m.shop_by()}
       {owner.firstname}
       {owner.name}
@@ -79,7 +78,7 @@
   {/if}
 
   {#if shop.description}
-    <div class={"mt-1 text-sm " + mainText}>
+    <div class="mt-1 text-sm">
       {shop.description}
     </div>
   {/if}
@@ -94,7 +93,7 @@
     </div>
   {/if}
 
-  <div class={"mt-2 text-xs " + mainText}>
+  <div class="mt-2 text-xs">
     {m.shop_created()}
     {new Date(shop.created_at).toLocaleDateString()}
   </div>

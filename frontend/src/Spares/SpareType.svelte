@@ -3,7 +3,6 @@
   import UsageChips from "../Usage/UsageChips.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import { DropdownItem } from "flowbite-svelte";
-  import { colorClasses, mainText, mutedText } from "../Widgets/color.js";
   import Menu from "../Widgets/Menu.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
   import { mounted_on } from "../lib/attachment";
@@ -37,29 +36,18 @@
   );
 </script>
 
-<div
-  class={"flex flex-col gap-1 rounded-lg border " +
-    colorClasses["secondary"].surface +
-    " p-3"}
->
+<div class="flex flex-col gap-1 rounded-lg border surface-secondary p-3">
   <!-- Type header -->
   <div class="flex items-center justify-between gap-2 pb-2">
     <div class="flex items-center gap-2">
       {#if subparts.length > 0}
-        <ShowMore
-          bind:show_more
-          {update}
-          title={m.sparetype_attached()}
-          color="secondary"
-        />
+        <ShowMore bind:show_more {update} title={m.sparetype_attached()} />
       {/if}
-      <span class="text-xs uppercase tracking-wide {mainText}">
+      <span class="text-xs uppercase tracking-wide">
         {type.localizedName()}
       </span>
     </div>
-    <XsButton color="secondary" onclick={() => newPart(type)}
-      >{m.action_new()}</XsButton
-    >
+    <XsButton onclick={() => newPart(type)}>{m.action_new()}</XsButton>
   </div>
 
   <!-- Part cards -->
@@ -67,12 +55,10 @@
     <div
       class={"rounded-lg border p-3 " +
         (part.disposed_at
-          ? colorClasses["secondary"].surfaceBg +
-            " opacity-70 border-secondary-600 dark:border-secondary-400"
+          ? "bg-secondary-100 dark:bg-secondary-900 opacity-70 border-secondary-600 dark:border-secondary-400"
           : mounted_on(part.id, date)
-            ? colorClasses["secondary"].surfaceBg +
-              " border-secondary-600 dark:border-secondary-400"
-            : colorClasses["primary"].surface)}
+            ? "bg-secondary-100 dark:bg-secondary-900 border-secondary-600 dark:border-secondary-400"
+            : "surface-primary")}
     >
       <!-- Name + menu -->
       <div class="flex items-center justify-between gap-2">
@@ -81,7 +67,7 @@
             <PartLink {part} />
           </span>
           <span
-            class={"text-xs " + mutedText + " ml-1"}
+            class="text-xs text-muted ml-1"
             title={part.vendor +
               " " +
               part.model +
@@ -119,7 +105,7 @@
 
       <!-- Attached to -->
       {#if attachee > 0}
-        <div class={"mt-2 text-xs " + mutedText}>
+        <div class="mt-2 text-xs text-muted">
           {#if part.disposed_at}
             {m.sparetype_disposed()} {fmtDate(part.disposed_at)}
           {:else}

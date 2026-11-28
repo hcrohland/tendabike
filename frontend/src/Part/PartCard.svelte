@@ -1,7 +1,7 @@
 <script lang="ts">
   import { DropdownItem } from "flowbite-svelte";
   import Card from "../Widgets/Card.svelte";
-  import { colorClasses, mutedText, type Color } from "../Widgets/color.js";
+  import type { Color } from "../Widgets/color.js";
   import Menu from "../Widgets/Menu.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import UsageChips from "../Usage/UsageChips.svelte";
@@ -42,7 +42,6 @@
   let oppositeColor: Color = $derived(
     color === "primary" ? "secondary" : "primary",
   );
-  let background2 = $derived(colorClasses[oppositeColor].surface);
   let show_more = $state(false);
 
   let { list, att, part, due_list } = $derived.by(() => {
@@ -61,7 +60,7 @@
     <!-- Header row: type · name · menu -->
     <div class="flex items-center justify-between gap-1 sm:gap-2">
       <div class="flex items-center gap-1 sm:gap-2 p-1 sm:p-2 min-w-0">
-        <span class={"text-xs uppercase " + mutedText + " shrink-0 truncate"}>
+        <span class="text-xs uppercase text-muted shrink-0 truncate">
           {type.localizedName()}
         </span>
         {#if att.isAttached()}
@@ -73,14 +72,14 @@
             {/if}
           </span>
           ·
-          <span class={"text-xs " + mutedText}>
+          <span class="text-xs text-muted">
             {m.time_since()}
             {att.fmtTime()}
           </span>
           <ServiceBadge due={due_list?.days} />
         {/if}
         {#if attachments.length > 1 || (part && usages[part.usage].count != usages[att.usage].count)}
-          <ShowMore bind:show_more title={m.partcard_history()} {color} />
+          <ShowMore bind:show_more title={m.partcard_history()} />
         {/if}
       </div>
       <div class="flex items-center gap-1 sm:gap-2 shrink-0">
@@ -98,7 +97,7 @@
             </DropdownItem>
           </Menu>
         {:else}
-          <XsButton {color} onclick={() => replacePart(att)}>
+          <XsButton onclick={() => replacePart(att)}>
             {m.partcard_add()}
           </XsButton>
         {/if}
@@ -115,7 +114,11 @@
       <div class="mt-3 flex flex-col gap-1 sm:gap-2 p-2 sm:p-3">
         <!-- History: compact padding on mobile -->
         {#each list as { att: a, part: p } (a.idx)}
-          <div class={"rounded-lg border opacity-70 p-1 sm:p-2 " + background2}>
+          <div
+            class="rounded-lg border opacity-70 p-1 sm:p-2"
+            class:surface-primary={oppositeColor === "primary"}
+            class:surface-secondary={oppositeColor === "secondary"}
+          >
             <div class="flex items-center justify-between gap-1 sm:gap-2">
               <!-- History card header: compact spacing -->
               <div class="flex items-center gap-1 sm:gap-2 min-w-0">
@@ -126,7 +129,7 @@
                     {a.name}
                   {/if}
                 </span>
-                <span class={"text-xs " + mutedText + " shrink-0"}>
+                <span class="text-xs text-muted shrink-0">
                   {a.fmtTime()}
                 </span>
               </div>

@@ -7,7 +7,6 @@
     duesForPlans,
     ServicePlan,
   } from "../lib/serviceplan";
-  import { colorClasses } from "../Widgets/color.js";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import * as m from "../../paraglide/messages";
   import Menu from "../Widgets/Menu.svelte";
@@ -38,7 +37,7 @@
 </script>
 
 {#if part}
-  <div class={"rounded-lg border " + colorClasses["primary"].surface + " p-3"}>
+  <div class="rounded-lg border surface-primary p-3">
     <!-- Header -->
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-2 min-w-0">
@@ -56,11 +55,7 @@
         {/if}
 
         {#if serviceList.length > 0}
-          <ShowMore
-            bind:show_more
-            title={m.planrow_service_history()}
-            color="primary"
-          />
+          <ShowMore bind:show_more title={m.planrow_service_history()} />
         {/if}
       </div>
       {#if plan.what == part.what}
@@ -83,7 +78,7 @@
           {/if}
         </Menu>
       {:else}
-        <XsButton color="primary" onclick={() => installPart(part)}>
+        <XsButton onclick={() => installPart(part)}>
           {m.action_new()}
         </XsButton>
       {/if}

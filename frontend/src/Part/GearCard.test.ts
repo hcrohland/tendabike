@@ -133,9 +133,9 @@ describe("GearCard", () => {
     ]);
     const { container } = render(GearCard, { part });
     const header = container.querySelector(".text-xl");
-    expect(header?.classList.contains("bg-secondary-100")).toBe(true);
-    expect(header?.classList.contains("bg-primary-100")).toBe(false);
-    const body = container.querySelector(".bg-primary-100");
+    expect(header?.classList.contains("surface-secondary")).toBe(true);
+    expect(header?.classList.contains("surface-primary")).toBe(false);
+    const body = container.querySelector(".surface-primary");
     expect(body).toBeTruthy();
   });
 

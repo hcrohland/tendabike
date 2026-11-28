@@ -1,6 +1,5 @@
 <script lang="ts">
   import {
-    Button,
     ButtonGroup,
     Dropdown,
     DropdownItem,
@@ -13,7 +12,7 @@
     type limit_keys,
   } from "../lib/serviceplan";
   import { CircleMinusOutline, CirclePlusOutline } from "flowbite-svelte-icons";
-  import { fillBg } from "../Widgets/color.js";
+  import NeutralButton from "../Widgets/NeutralButton.svelte";
 
   interface Props {
     select: any;
@@ -39,23 +38,22 @@
           required
         />
         <InputAddon>{localizeLimitKey(key)}</InputAddon>
-        <Button
-          color="secondary"
-          class={fillBg}
+        <NeutralButton
+          size="sm"
           onclick={() => {
             select[key] = null;
             selected = selected.filter((k) => k != key);
           }}
         >
           <CircleMinusOutline class="shrink-0 h-6 w-6 justify-end" />
-        </Button>
+        </NeutralButton>
       </ButtonGroup>
     </div>
   {/each}
 </div>
-<Button color="secondary" class={fillBg}>
+<NeutralButton>
   <CirclePlusOutline class="shrink-0 h-6 w-6 justify-end" />
-</Button>
+</NeutralButton>
 <Dropdown>
   {#each Limits.keys.filter((k) => !selected.includes(k)) as key}
     <DropdownItem
