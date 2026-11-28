@@ -152,7 +152,6 @@
 <ButtonGroup>
   {#each buttons as b, i (b.key)}
     <NeutralButton
-      size="sm"
       id={b.key === "trigger" ? btnId : undefined}
       disabled={b.disabled}
       onclick={b.onclick}

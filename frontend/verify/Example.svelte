@@ -160,6 +160,7 @@
   import OfflineBanner from "../src/OfflineBanner.svelte";
   import NeutralButton from "../src/Widgets/NeutralButton.svelte";
   import ActCard from "../src/Activity/ActCard.svelte";
+  import DateTime from "../src/Widgets/DateTime.svelte";
   import { stateValues } from "../src/lib/mapable.svelte";
   import { loadProviders } from "../src/lib/provider.svelte";
   import type { AdminRow } from "../src/lib/user.svelte";
@@ -320,5 +321,12 @@
       <NeutralButton size="sm" data-testid="btn-sm">sm</NeutralButton>
       <NeutralButton size="xs" data-testid="btn-xs">xs</NeutralButton>
     </div>
+  </section>
+
+  <section data-testid="scenario-datetime">
+    <p class="text-sm font-semibold mb-2">
+      DateTime (datepicker trigger at the widget's default size)
+    </p>
+    <DateTime />
   </section>
 </div>
