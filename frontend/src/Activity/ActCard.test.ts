@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/svelte";
 import { describe, expect, it } from "vitest";
-import { activity } from "../test/helpers";
+import { activity, expectFill } from "../test/helpers";
 import ActCard from "./ActCard.svelte";
 
 describe("ActCard", () => {
@@ -14,10 +14,6 @@ describe("ActCard", () => {
 
   it("renders its metric chips with the single uniform fill", () => {
     render(ActCard, { activity: activity() });
-    const time = screen.getByText("1:00");
-    // the uniform fill is one theme role class, not per-color
-    const fill = time.closest(".fill");
-    expect(fill).toBeTruthy();
-    expect(time.classList.contains("text-white")).toBe(true);
+    expectFill(screen.getByText("1:00"));
   });
 });

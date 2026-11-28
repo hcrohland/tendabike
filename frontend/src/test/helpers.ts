@@ -98,6 +98,18 @@ export function expectSurface(el: Element | null | undefined, color: Color) {
   expect(el!.classList.contains(`surface-${other}`)).toBe(false);
 }
 
+/// Assert that a chip's `value` text sits on the theme's single uniform fill:
+/// its nearest `.fill` ancestor is the fill (not a surface role class) and
+/// the text is white.
+export function expectFill(value: Element | null | undefined) {
+  expect(value).toBeTruthy();
+  const fill = value!.closest(".fill");
+  expect(fill).toBeTruthy();
+  expect(fill!.classList.contains("surface-primary")).toBe(false);
+  expect(fill!.classList.contains("surface-secondary")).toBe(false);
+  expect(value!.classList.contains("text-white")).toBe(true);
+}
+
 /// The all-empty Summary fixture: every one of the nine collections an empty
 /// object, accepting per-field overrides. The wire shape is a uniform object
 /// with stringified id keys and `null` for tombstones.

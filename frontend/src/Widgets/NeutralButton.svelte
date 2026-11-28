@@ -19,12 +19,6 @@
 	 -->
 
 <script lang="ts">
-  // A neutral button: a plain element carrying the theme's single uniform
-  // fill role class, like a chip. The component library's button is not
-  // used — it composes its color classes from a hard-coded internal table
-  // by plain concatenation, and a theme class cannot override them, so a
-  // neutral button is a plain element (ADR-0019). Status buttons remain
-  // library-native.
   let {
     onclick = undefined,
     href = undefined,
@@ -47,8 +41,7 @@
     [key: string]: any;
   } = $props();
 
-  // The standard neutral button shape (the library's sizing steps): the
-  // color is the theme's fill, not a per-color step.
+  // The standard neutral button shape (the library's sizing steps).
   const shape = $derived(
     size === "xs"
       ? "px-3 py-2 text-xs"

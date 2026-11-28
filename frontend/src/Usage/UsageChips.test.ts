@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/svelte";
 import { flushSync } from "svelte";
 import { beforeEach, describe, expect, it } from "vitest";
 import { Usage, usages } from "../lib/usage";
+import { expectFill } from "../test/helpers";
 import UsageChips from "./UsageChips.svelte";
 
 describe("UsageChips", () => {
@@ -111,9 +112,6 @@ describe("UsageChips", () => {
 
   it("renders its chips with the single uniform fill", () => {
     render(UsageChips, { usage: usageData() });
-    const chip = screen.getByText("42");
-    // the uniform fill is one theme role class, not per-color
-    expect(chip.closest(".fill")).toBeTruthy();
-    expect(chip.classList.contains("text-white")).toBe(true);
+    expectFill(screen.getByText("42"));
   });
 });

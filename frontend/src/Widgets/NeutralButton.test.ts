@@ -2,11 +2,8 @@ import { render, screen } from "@testing-library/svelte";
 import { describe, expect, it } from "vitest";
 import NeutralButtonHost from "./NeutralButtonHost.svelte";
 
-// The neutral button is a plain element carrying the theme's single uniform
-// fill role class. The component library's button is not used: its color
-// classes come from a hard-coded internal table that a theme class cannot
-// override, so a theme fill class only works on a plain element. We assert
-// the rendered role class, never the mechanism.
+// The neutral button renders the theme's single uniform fill role class; the
+// tests assert only the rendered class, never the mechanism.
 
 describe("NeutralButton", () => {
   it("renders a plain button with the theme's fill class", () => {

@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/svelte";
 import { flushSync } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AdminRow, User } from "../lib/user.svelte";
-import { expectSurface, resp } from "../test/helpers";
+import { expectFill, expectSurface, resp } from "../test/helpers";
 import AdminCard from "./AdminCard.svelte";
 
 const user: User = {
@@ -59,12 +59,7 @@ describe("AdminCard", () => {
   it("renders the card's secondary surface and its chips with the uniform fill", () => {
     const { utils } = renderCard();
     expectSurface(utils.container.querySelector(".rounded-lg"), "secondary");
-    // the parts-count chip uses the single uniform fill, not a per-color one
-    const chip = screen.getByText("2");
-    const chipRoot = chip.closest(".shrink-0");
-    expect(chipRoot?.classList.contains("fill")).toBe(true);
-    expect(chipRoot?.classList.contains("surface-secondary")).toBe(false);
-    expect(chip.classList.contains("text-white")).toBe(true);
+    expectFill(screen.getByText("2"));
   });
 
   it("shows the admin role for an admin user", () => {

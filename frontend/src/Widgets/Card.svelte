@@ -30,11 +30,6 @@
     class?: string;
     children: import("svelte").Snippet;
   } = $props();
-
-  // A Card renders the theme's surface role class of its color (background +
-  // text + border). A top-level card defaults to the darker tone; a nested
-  // card is authored with the opposite color by its caller — there is no
-  // context and no automatic flip.
 </script>
 
 <div

@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { activity } from "../test/helpers";
+import { activity, expectFill } from "../test/helpers";
 import TotalsCard from "./TotalsCard.svelte";
 
 class ResizeObserverStub {
@@ -39,10 +39,7 @@ describe("TotalsCard", () => {
 
   it("renders its metric chips with the single uniform fill", () => {
     render(TotalsCard, props);
-    const time = screen.getByText("1:00");
-    // the uniform fill is one theme role class, not per-color
-    expect(time.closest(".fill")).toBeTruthy();
-    expect(time.classList.contains("text-white")).toBe(true);
+    expectFill(screen.getByText("1:00"));
   });
 
   it("renders its search input on the contrasting (primary) surface", () => {

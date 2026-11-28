@@ -42,9 +42,6 @@
   let oppositeColor: Color = $derived(
     color === "primary" ? "secondary" : "primary",
   );
-  let oppositeSurface = $derived(
-    oppositeColor === "primary" ? "surface-primary" : "surface-secondary",
-  );
   let show_more = $state(false);
 
   let { list, att, part, due_list } = $derived.by(() => {
@@ -118,7 +115,9 @@
         <!-- History: compact padding on mobile -->
         {#each list as { att: a, part: p } (a.idx)}
           <div
-            class={"rounded-lg border opacity-70 p-1 sm:p-2 " + oppositeSurface}
+            class="rounded-lg border opacity-70 p-1 sm:p-2"
+            class:surface-primary={oppositeColor === "primary"}
+            class:surface-secondary={oppositeColor === "secondary"}
           >
             <div class="flex items-center justify-between gap-1 sm:gap-2">
               <!-- History card header: compact spacing -->

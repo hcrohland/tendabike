@@ -10,11 +10,6 @@
     class?: string;
     children: import("svelte").Snippet;
   } = $props();
-
-  // A Tone block is a nested surface: it renders the theme's surface role
-  // class of its color (background + text + border). The caller writes it
-  // explicitly — a Tone inside a card flips relative to that card, like any
-  // nested card.
 </script>
 
 <div

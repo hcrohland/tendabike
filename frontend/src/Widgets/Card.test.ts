@@ -2,12 +2,8 @@ import { render, screen } from "@testing-library/svelte";
 import { describe, expect, it } from "vitest";
 import CardHost from "./CardHost.svelte";
 
-// The Card renders the theme's surface role class of its `color`:
-// `surface-primary` is the light surface, `surface-secondary` the darker
-// one, and a top-level card defaults to `secondary`. A nested card is
-// authored with the opposite color by its caller — there is no context and
-// no automatic flip. We assert only the rendered role class, never the
-// mechanism.
+// The Card renders the theme's surface role class of its `color`; the tests
+// assert only the rendered class, never the mechanism.
 
 describe("Card", () => {
   it("renders the darker surface by default", () => {

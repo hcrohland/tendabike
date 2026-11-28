@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/svelte";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, it, vi } from "vitest";
 import { Shop } from "../lib/shop.svelte";
-import { expectSurface, resp } from "../test/helpers";
+import { expectFill, expectSurface, resp } from "../test/helpers";
 import ShopCard from "./ShopCard.svelte";
 
 const owner = {
@@ -38,11 +38,6 @@ describe("ShopCard", () => {
       isOwner: true,
     });
     expectSurface(container.querySelector(".rounded-lg"), "secondary");
-    // the owner chip uses the single uniform fill, not a per-color one
-    const chip = screen.getByText("Owner");
-    const chipRoot = chip.closest(".shrink-0");
-    expect(chipRoot?.classList.contains("fill")).toBe(true);
-    expect(chipRoot?.classList.contains("surface-secondary")).toBe(false);
-    expect(chip.classList.contains("text-white")).toBe(true);
+    expectFill(screen.getByText("Owner"));
   });
 });

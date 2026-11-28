@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/svelte";
 import { describe, expect, it } from "vitest";
 import { Due } from "../lib/serviceplan";
+import { expectFill } from "../test/helpers";
 import Chip from "./Chip.svelte";
 
 describe("Chip", () => {
@@ -53,10 +54,8 @@ describe("Chip", () => {
     expect(badge).toBeTruthy();
   });
 
-  it("renders the theme's single uniform fill class (no color prop)", () => {
+  it("renders the theme's single uniform fill (single tone, white text)", () => {
     render(Chip, { label: "L", value: "V" });
-    const el = screen.getByText("V");
-    // the uniform fill is one theme role class, not per-color
-    expect(el.closest(".fill")).toBeTruthy();
+    expectFill(screen.getByText("V"));
   });
 });

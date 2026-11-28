@@ -41,8 +41,6 @@
     disabled?: boolean;
   } = $props();
 
-  // A Chip renders the theme's single uniform fill role class, like a
-  // neutral button. It does not vary by color.
   let isButton = $derived(!!onclick && !disabled);
   let isLinked = $derived(!!href);
 </script>
