@@ -80,6 +80,17 @@ describe("ConnectProviders", () => {
     expect(screen.getByText("intervals.icu")).toBeTruthy();
   });
 
+  it("renders each provider card on the primary (light) surface", async () => {
+    await load(["strava", "icu"]);
+    render(ConnectProviders);
+    const strava = await screen.findByText("Strava");
+    // the card the Strava name sits in is the light (primary) surface
+    const card = strava.closest(".bg-primary-100");
+    expect(card).toBeTruthy();
+    // a primary surface is the light tone, not the darker one
+    expect(card?.classList.contains("bg-secondary-100")).toBe(false);
+  });
+
   it("offers only the enabled providers", async () => {
     await load(["strava"]);
     render(ConnectProviders);

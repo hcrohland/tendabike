@@ -1,4 +1,8 @@
+import { expect, vi } from "vitest";
+import { Activity } from "../lib/activity";
+import { Part } from "../lib/part";
 import { Usage } from "../lib/usage";
+import { type Color } from "../Widgets/color";
 
 export function resp(body: any, status = 200, ok = true, statusText = "") {
   return {
@@ -22,6 +26,76 @@ export function usage(id: string, o: Partial<any> = {}): Usage {
     energy: 0,
     ...o,
   });
+}
+
+/// The common Part seed data; callers extend it (a spare-type part adds
+/// vendor/model).
+export function partData(overrides: Partial<any> = {}): any {
+  return {
+    id: 7,
+    owner: 1,
+    what: 10,
+    name: "Wheel",
+    purchase: "2023-01-01T00:00:00Z",
+    last_used: "2024-01-01T00:00:00Z",
+    usage: "u1",
+    ...overrides,
+  };
+}
+
+/// The standard `u1` usage seed: one ride's worth (one ride, 1000 m, an hour,
+/// 100 kJ).
+export function standardUsage(overrides: Partial<any> = {}): Usage {
+  return usage("u1", {
+    count: 1,
+    distance: 1000,
+    time: 3600,
+    duration: 3600,
+    energy: 100,
+    ...overrides,
+  });
+}
+
+/// A fetch mock for the `/api/types/*` endpoints the part components load:
+/// one part type ("Wheel"), no activity types.
+export function typesFetch() {
+  return vi.fn((url: string) => {
+    if (url.includes("/api/types/part")) {
+      return Promise.resolve(
+        resp([{ id: 10, name: "Wheel", main: 1, hooks: [1], order: 1 }]),
+      );
+    }
+    if (url.includes("/api/types/activity")) {
+      return Promise.resolve(resp([]));
+    }
+    return Promise.resolve(resp(null));
+  });
+}
+
+/// The shared Activity fixture.
+export function activity(): Activity {
+  return new Activity({
+    id: "icu:100",
+    user_id: 1,
+    what: 301,
+    name: "Ride",
+    start: "2024-05-01T08:00:00Z",
+    distance: 20000,
+    time: 3600,
+    duration: 3600,
+    climb: 100,
+    descend: 80,
+    energy: 50,
+  });
+}
+
+/// Assert that `el` renders the given color's surface background and not the
+/// other color's.
+export function expectSurface(el: Element | null | undefined, color: Color) {
+  const other: Color = color === "primary" ? "secondary" : "primary";
+  expect(el).toBeTruthy();
+  expect(el!.classList.contains(`bg-${color}-100`)).toBe(true);
+  expect(el!.classList.contains(`bg-${other}-100`)).toBe(false);
 }
 
 /// The all-empty Summary fixture: every one of the nine collections an empty

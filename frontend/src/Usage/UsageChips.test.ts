@@ -95,4 +95,25 @@ describe("UsageChips", () => {
     const link = screen.getByRole("link");
     expect((link as HTMLAnchorElement).href).toContain("/activities/99");
   });
+
+  function usageData() {
+    return new Usage({
+      id: "1",
+      count: 42,
+      climb: 0,
+      descend: 0,
+      distance: 1000,
+      time: 60,
+      duration: 60,
+      energy: 0,
+    });
+  }
+
+  it("renders its chips with the single uniform fill", () => {
+    render(UsageChips, { usage: usageData() });
+    const chip = screen.getByText("42");
+    // the uniform fill is one value, not per-color: primary-500 in light mode
+    expect(chip.closest(".bg-primary-500")).toBeTruthy();
+    expect(chip.classList.contains("text-white")).toBe(true);
+  });
 });

@@ -42,7 +42,7 @@
   }
 </script>
 
-<Card>
+<Card color="secondary">
   <div class="flex items-start gap-2">
     <div
       class="flex-1 min-w-0 text-gray-700 dark:text-gray-300 whitespace-pre-wrap"

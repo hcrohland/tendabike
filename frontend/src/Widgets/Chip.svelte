@@ -21,14 +21,13 @@
 <script lang="ts">
   import { Spinner } from "flowbite-svelte";
   import type { Due } from "../lib/serviceplan";
-  import { bg, mainText, mutedText, type Tone } from "./tone.js";
+  import { fill } from "./color.js";
   import ServiceBadge from "./ServiceBadge.svelte";
 
   let {
     label,
     value,
     href = undefined,
-    light = false,
     due = undefined,
     onclick = undefined,
     indicator = undefined,
@@ -37,28 +36,25 @@
     label: string;
     value: string;
     href?: string;
-    light?: boolean;
     due?: Due;
     onclick?: () => void;
     indicator?: string;
     disabled?: boolean;
   } = $props();
 
-  // The Chip's tone. The `light` prop keeps its current direction (light ⇒ the
-  // darker tone, contrasting the light-tone surface it sits on; plain ⇒ the
-  // light tone), and the background comes from the flip's tone mapping.
-  const tone: Tone = $derived(light ? "secondary" : "primary");
-  let background = $derived(bg(tone));
+  // A Chip renders the single uniform fill (dark-step background + white
+  // text), like a button. It does not vary by color.
+  const background = fill;
   let isButton = $derived(!!onclick && !disabled);
   let isLinked = $derived(!!href);
 </script>
 
 {#snippet chipContent()}
   <ServiceBadge {due} pos="absolute -top-3 -right-0" />
-  <span class="font-semibold text-sm {mainText()}">
+  <span class="font-semibold text-sm text-white">
     {value}
   </span>
-  <span class="font-normal text-xs uppercase tracking-wide {mutedText()}">
+  <span class="font-normal text-xs uppercase tracking-wide text-white">
     {label}
   </span>
   {#if indicator}
@@ -67,7 +63,7 @@
         <Spinner size="4" color="red" />
       </span>
     {:else}
-      <span class="text-xs font-bold {mainText()}">
+      <span class="text-xs font-bold text-white">
         {indicator}
       </span>
     {/if}

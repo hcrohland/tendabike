@@ -7,7 +7,7 @@
     duesForPlans,
     ServicePlan,
   } from "../lib/serviceplan";
-  import { bg, border } from "../Widgets/tone.js";
+  import { colorClasses } from "../Widgets/color.js";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import * as m from "../../paraglide/messages";
   import Menu from "../Widgets/Menu.svelte";
@@ -38,7 +38,7 @@
 </script>
 
 {#if part}
-  <div class={"rounded-lg border " + border() + " " + bg("primary") + " p-3"}>
+  <div class={"rounded-lg border " + colorClasses["primary"].surface + " p-3"}>
     <!-- Header -->
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-2 min-w-0">
@@ -56,7 +56,11 @@
         {/if}
 
         {#if serviceList.length > 0}
-          <ShowMore bind:show_more title={m.planrow_service_history()} />
+          <ShowMore
+            bind:show_more
+            title={m.planrow_service_history()}
+            color="primary"
+          />
         {/if}
       </div>
       {#if plan.what == part.what}
@@ -79,7 +83,7 @@
           {/if}
         </Menu>
       {:else}
-        <XsButton onclick={() => installPart(part)}>
+        <XsButton color="primary" onclick={() => installPart(part)}>
           {m.action_new()}
         </XsButton>
       {/if}
@@ -88,13 +92,13 @@
     {#if plan.what == part.what}
       <!-- Service history -->
       <div class="flex flex-col gap-2 mt-3">
-        <ServiceRow {part} service={ActiveService} {due_list} light />
+        <ServiceRow {part} service={ActiveService} {due_list} />
         {#if show_more}
           {#each serviceList as service, i (service.id)}
             {@const successor = i > 0 ? serviceList[i - 1] : ActiveService}
-            <ServiceRow {part} {service} {successor} light />
+            <ServiceRow {part} {service} {successor} />
           {/each}
-          <ServiceRow {part} successor={serviceList.at(-1)} light />
+          <ServiceRow {part} successor={serviceList.at(-1)} />
         {/if}
       </div>
     {/if}

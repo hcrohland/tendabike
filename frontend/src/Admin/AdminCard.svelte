@@ -7,7 +7,7 @@
   import { providerMeta } from "../lib/provider.svelte";
   import { handleError, myfetch } from "../lib/utils";
   import type { AdminRow, User } from "../lib/user.svelte";
-  import { mainText } from "../Widgets/tone.js";
+  import { mainText } from "../Widgets/color.js";
   import * as m from "../../paraglide/messages";
 
   let {
@@ -49,7 +49,7 @@
   }
 </script>
 
-<Card>
+<Card color="secondary">
   <!-- Header row: name · role · menu -->
   <div class="flex items-center justify-between gap-1 sm:gap-2">
     <div class="flex items-center gap-1 sm:gap-2 p-1 sm:p-2 min-w-0">
@@ -65,7 +65,7 @@
       >
         <ProviderMark {provider} size="sm" />
       </a>
-      <span class={"text-xs " + mainText() + " shrink-0"}>
+      <span class={"text-xs " + mainText + " shrink-0"}>
         {role}
       </span>
     </div>

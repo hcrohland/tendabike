@@ -81,6 +81,16 @@ describe("NoteList", () => {
     unmount();
   });
 
+  it("renders the note card's secondary surface", () => {
+    partNotes.setMap([textNote]);
+    render(NoteList, { part });
+    const card = screen
+      .getByText("Replace chain soon")
+      .closest(".bg-secondary-100");
+    expect(card).toBeTruthy();
+    expect(card?.classList.contains("bg-primary-100")).toBe(false);
+  });
+
   it("links the file of a file note", () => {
     partNotes.setMap([fileNote]);
     render(NoteList, { part });

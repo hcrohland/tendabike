@@ -81,6 +81,13 @@ describe("PlanRow", () => {
     vi.useRealTimers();
   });
 
+  it("renders the row on the primary surface (the contrast to the enclosing block card)", () => {
+    const { container } = renderRow(plan(), 50000);
+    const row = container.querySelector(".rounded-lg");
+    expect(row?.classList.contains("bg-primary-100")).toBe(true);
+    expect(row?.classList.contains("bg-secondary-100")).toBe(false);
+  });
+
   it("does not offer the snooze action when the (part, plan) is ok", async () => {
     const { container } = renderRow(plan(), 50000);
     await openMenu(container);

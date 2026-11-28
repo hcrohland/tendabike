@@ -1,0 +1,7 @@
+/* The app's real theme, plus the app's source tree as a candidate source.
+   The harness's Vite root is verify/, so Tailwind's auto-detection never
+   scans src/ on its own — app classes would only be generated when the same
+   name also appears in the @source'd flowbite dist. Declaring src/ here makes
+   the harness render the app's classes as the app does. */
+@import "../src/app.css";
+@source "../src";

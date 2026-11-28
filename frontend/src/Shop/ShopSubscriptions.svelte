@@ -6,7 +6,7 @@
   import type { ShopSubscription } from "../lib/subscription";
   import { shops } from "../lib/shop.svelte";
   import SubscriptionCard from "./SubscriptionCard.svelte";
-  import { mainText } from "../Widgets/tone.js";
+  import { mainText, fillBg } from "../Widgets/color.js";
 
   interface Props {
     shopId: number;
@@ -83,19 +83,24 @@
   {#if !(shops[shopId].auto_approve && subscriptions.length === 0)}
     <div>
       <div class="mb-4 flex items-center justify-between">
-        <h3 class={"text-lg font-semibold " + mainText()}>
+        <h3 class={"text-lg font-semibold " + mainText}>
           {m.shop_pending_requests()}
         </h3>
 
-        <Button size="sm" color="secondary" onclick={loadSubscriptions}>
+        <Button
+          size="sm"
+          color="secondary"
+          class={fillBg}
+          onclick={loadSubscriptions}
+        >
           {m.header_refresh()}
         </Button>
       </div>
 
       {#if loading}
-        <p class={mainText()}>{m.loading()}</p>
+        <p class={mainText}>{m.loading()}</p>
       {:else if subscriptions.length === 0}
-        <p class={mainText()}>
+        <p class={mainText}>
           {m.shop_no_pending_requests()}
         </p>
       {:else}
@@ -136,7 +141,8 @@
                   </Button>
                   <Button
                     size="xs"
-                    color="alternative"
+                    color="secondary"
+                    class={fillBg}
                     onclick={cancelResponding}
                   >
                     {m.action_cancel()}

@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
+import { expectSurface } from "./test/helpers";
 import OfflineBanner from "./OfflineBanner.svelte";
 import { loadProviders } from "./lib/provider.svelte";
 
@@ -46,6 +47,16 @@ describe("OfflineBanner", () => {
     await loadProviders();
     render(OfflineBanner);
     expect(screen.getByText(BANNER_TEXT)).toBeTruthy();
+  });
+
+  it("renders the banner on the secondary surface", async () => {
+    stubProviders([]);
+    await loadProviders();
+    const { container } = render(OfflineBanner);
+    const banner = screen.getByText(BANNER_TEXT);
+    expectSurface(banner, "secondary");
+    expect(banner.classList.contains("border-secondary-400")).toBe(true);
+    expect(container.firstChild).toBeTruthy();
   });
 
   it("is hidden with a non-empty provider set", async () => {

@@ -19,49 +19,28 @@
  -->
 
 <script lang="ts">
-  import { getContext, setContext, untrack } from "svelte";
-  import { ToneContext, bg, border, opposite, type Tone } from "./tone.js";
+  import { colorClasses, type Color } from "./color.js";
 
   let {
-    light = undefined,
+    color = "secondary",
     class: extraClass = "",
     children,
   }: {
-    light?: boolean;
+    color?: Color;
     class?: string;
     children: import("svelte").Snippet;
   } = $props();
 
-  // A Card's tone. The explicit `light` prop wins and keeps its current
-  // direction (light ⇒ the light tone, dark ⇒ the darker tone); otherwise a
-  // Card flips the tone its parent Card provides, and a top-level Card
-  // defaults to the darker tone.
-  const parentTone = getContext(ToneContext) as Tone | undefined;
-  const tone: Tone = $derived(
-    light === true
-      ? "primary"
-      : light === false
-        ? "secondary"
-        : parentTone
-          ? opposite(parentTone)
-          : "secondary",
-  );
-
-  // The tone is fixed once the Card mounts (it depends only on the `light`
-  // prop and the parent's tone), so publish the resolved value, not a live ref.
-  setContext(
-    ToneContext,
-    untrack(() => tone),
-  );
-
-  const background = $derived(bg(tone));
+  // A Card renders the surface (background + border) of its color. A
+  // top-level card defaults to the darker tone; a nested card is authored
+  // with the opposite color by its caller — there is no context and no
+  // automatic flip.
+  const surface = $derived(colorClasses[color].surface);
 </script>
 
 <div
-  class={"rounded-lg border " +
-    border() +
-    " p-1 sm:p-2 " +
-    background +
+  class={"rounded-lg border p-1 sm:p-2 " +
+    surface +
     (extraClass ? " " + extraClass : "")}
 >
   {@render children()}

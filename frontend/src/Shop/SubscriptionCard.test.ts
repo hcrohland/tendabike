@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/svelte";
 import { describe, expect, it } from "vitest";
 import { ShopSubscription } from "../lib/subscription";
+import { expectSurface } from "../test/helpers";
 import SubscriptionCard from "./SubscriptionCard.svelte";
 
 function shopData(overrides: Partial<any> = {}): any {
@@ -46,5 +47,18 @@ describe("SubscriptionCard", () => {
     });
     expect(screen.queryByText("Please let me subscribe!")).toBeNull();
     expect(screen.queryByText("Sure, approved.")).toBeNull();
+  });
+
+  it("renders the card's secondary surface and its chip with the uniform fill", () => {
+    const { container } = render(SubscriptionCard, {
+      subscription: new ShopSubscription(subscriptionData()),
+    });
+    expectSurface(container.querySelector(".rounded-lg"), "secondary");
+    // the status chip uses the single uniform fill, not a per-color one
+    const chip = screen.getByText("Pending");
+    const chipRoot = chip.closest(".shrink-0");
+    expect(chipRoot?.classList.contains("bg-primary-500")).toBe(true);
+    expect(chipRoot?.classList.contains("bg-secondary-100")).toBe(false);
+    expect(chip.classList.contains("text-white")).toBe(true);
   });
 });

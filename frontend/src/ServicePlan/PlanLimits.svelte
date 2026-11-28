@@ -13,6 +13,7 @@
     type limit_keys,
   } from "../lib/serviceplan";
   import { CircleMinusOutline, CirclePlusOutline } from "flowbite-svelte-icons";
+  import { fillBg } from "../Widgets/color.js";
 
   interface Props {
     select: any;
@@ -39,7 +40,8 @@
         />
         <InputAddon>{localizeLimitKey(key)}</InputAddon>
         <Button
-          color="light"
+          color="secondary"
+          class={fillBg}
           onclick={() => {
             select[key] = null;
             selected = selected.filter((k) => k != key);
@@ -51,7 +53,7 @@
     </div>
   {/each}
 </div>
-<Button color="alternative">
+<Button color="secondary" class={fillBg}>
   <CirclePlusOutline class="shrink-0 h-6 w-6 justify-end" />
 </Button>
 <Dropdown>

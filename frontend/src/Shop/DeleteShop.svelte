@@ -20,6 +20,7 @@
   import type { Snippet } from "svelte";
   import * as m from "../../paraglide/messages";
   import Modal from "../Widgets/Modal.svelte";
+  import { fillBg } from "../Widgets/color.js";
 
   interface Props {
     children?: Snippet;
@@ -50,7 +51,11 @@
   </div>
 
   {#snippet footer()}
-    <Button color="alternative" onclick={() => (modal.open = false)}>
+    <Button
+      color="secondary"
+      class={fillBg}
+      onclick={() => (modal.open = false)}
+    >
       {m.action_cancel()}
     </Button>
     <Button color="red" onclick={onaction}>

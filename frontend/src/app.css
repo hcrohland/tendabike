@@ -9,9 +9,10 @@
   /*
    * Unified gray-first color scheme. The theme is the single source of the
    * app's neutral color: two neutral gray tones (primary = light, secondary =
-   * darker) that form a card/content flip. Status colors use the standard
-   * (vivid) Tailwind hue scales — the theme defines no status scales of its
-   * own.
+   * darker). A uniform `color` prop selects the tone; the component's role
+   * selects the step — cards and the Tone block read a surface, buttons and
+   * chips a fill (ADR-0019). Status colors use the standard (vivid) Tailwind
+   * hue scales — the theme defines no status scales of its own.
    *
    * Each scale is defined once (no per-mode values). flowbite's components and
    * the app pick the step per mode — a light-mode background lives at step 100

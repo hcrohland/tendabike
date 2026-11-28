@@ -22,6 +22,7 @@
     ClockOutline,
   } from "flowbite-svelte-icons";
   import { getLocale } from "../../paraglide/runtime";
+  import { fillBg } from "./color.js";
 
   type Props = {
     date?: any;
@@ -97,7 +98,11 @@
 </script>
 
 <ButtonGroup>
-  <Button id={btnId} color="light" class={rounded ? "rounded-l-md" : ""}>
+  <Button
+    id={btnId}
+    color="secondary"
+    class={(rounded ? "rounded-l-md" : "") + fillBg}
+  >
     <CalendarMonthOutline class="me-2 h-4 w-4" />
     {label}
   </Button>
@@ -106,22 +111,36 @@
     {@const next = prevdate(date)}
     <Button
       disabled={!next}
+      color="secondary"
+      class={fillBg}
       onclick={preventDefault(() => (date = next ?? date))}
     >
       <AngleLeftOutline class="shrink-0 h-5 w-5" />
     </Button>
   {:else if mindate}
-    <Button onclick={preventDefault(() => (date = min()))}>
+    <Button
+      color="secondary"
+      class={fillBg}
+      onclick={preventDefault(() => (date = min()))}
+    >
       <AngleLeftOutline class="shrink-0 h-5 w-5" />
     </Button>
   {/if}
   {#if !(mindate && mindate > now) && !(max() && max()! < now)}
-    <Button onclick={preventDefault(() => (date = now))}>
+    <Button
+      color="secondary"
+      class={fillBg}
+      onclick={preventDefault(() => (date = now))}
+    >
       <ClockOutline class="shrink-0 h-5 w-5" />
     </Button>
   {/if}
   {#if maxdate}
-    <Button onclick={preventDefault(() => (date = max()))}>
+    <Button
+      color="secondary"
+      class={fillBg}
+      onclick={preventDefault(() => (date = max()))}
+    >
       <AngleRightOutline class="shrink-0 h-5 w-5" />
     </Button>
   {/if}

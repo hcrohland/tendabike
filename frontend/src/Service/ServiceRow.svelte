@@ -6,14 +6,13 @@
   import ServiceMenu from "./ServiceMenu.svelte";
   import ServiceBadge from "../Widgets/ServiceBadge.svelte";
   import type { Due, limit_keys } from "../lib/serviceplan";
-  import { mutedText } from "../Widgets/tone.js";
+  import { mutedText } from "../Widgets/color.js";
   import { m } from "../../paraglide/messages";
 
   interface Props {
     service?: Service | undefined;
     successor?: Service | null;
     part: Part;
-    light?: boolean;
     due_list?: Partial<Record<limit_keys, Due>>;
     children?: import("svelte").Snippet;
   }
@@ -22,7 +21,6 @@
     service = undefined,
     successor = null,
     part,
-    light = false,
     due_list,
     children,
   }: Props = $props();
@@ -30,7 +28,7 @@
   let { days, usage } = $derived(Service.period(service, part, successor));
 </script>
 
-<span class={"text-xs " + mutedText() + " mt-1"}>
+<span class={"text-xs " + mutedText + " mt-1"}>
   {days}
   {m.time_days()}
   <ServiceBadge due={due_list?.days} />
@@ -38,7 +36,7 @@
 
 {@render children?.()}
 
-<UsageChips {usage} {light} {due_list} />
+<UsageChips {usage} {due_list} />
 
 <div class="flex items-start justify-between gap-2">
   <div class="min-w-0">
@@ -47,17 +45,17 @@
         <span class="font-medium text-sm">
           {service.name}
         </span>
-        <span class={"text-xs " + mutedText() + " mt-1"}>
+        <span class={"text-xs " + mutedText + " mt-1"}>
           · {fmtRange(service ? service.time : part.purchase, successor?.time)}
         </span>
       </span>
       {#if service.notes.length > 0}
-        <p class={"text-xs " + mutedText() + " mt-1"}>
+        <p class={"text-xs " + mutedText + " mt-1"}>
           {service.notes}
         </p>
       {/if}
     {:else}
-      <span class={"text-xs " + mutedText() + " mt-1"}>
+      <span class={"text-xs " + mutedText + " mt-1"}>
         {#if !successor}
           {m.time_since()}
         {/if}

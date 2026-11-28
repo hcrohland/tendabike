@@ -39,3 +39,10 @@ or a component that needs data from the app — use the full stack in
 tone classes, so a broken import, stub, or entry is caught by the test gate
 when the stack moves. It is not a rendering check: the theme is verified in
 a real browser, in step 3.
+
+The entry imports `verify/theme.css`, which pulls in the app's real theme and
+declares `src/` as a Tailwind candidate source: the harness's Vite root is
+`verify/`, so Tailwind's auto-detection never scans `src/` on its own.
+Without the `@source`, an app class renders only when the same name also
+appears in the `@source`d flowbite dist — a silent drift that only the
+rendered check in step 3 catches.

@@ -35,9 +35,7 @@ describe("PlanList", () => {
     await getTypes();
   });
 
-  it("re-renders when the plans collection changes", () => {
-    const { unmount } = render(PlanList);
-    expect(screen.queryByText(/^Wheel Service/)).toBeNull();
+  function seedPlan() {
     parts.setMap([
       new Part({
         id: 5,
@@ -68,7 +66,23 @@ describe("PlanList", () => {
       }),
     ]);
     flushSync();
+  }
+
+  it("re-renders when the plans collection changes", () => {
+    const { unmount } = render(PlanList);
+    expect(screen.queryByText(/^Wheel Service/)).toBeNull();
+    seedPlan();
     expect(screen.getByText(/^Wheel Service/)).toBeTruthy();
     unmount();
+  });
+
+  it("renders the plan block card's secondary surface", () => {
+    render(PlanList);
+    seedPlan();
+    const block = screen
+      .getByText(/^Wheel Service/)
+      .closest(".bg-secondary-100");
+    expect(block).toBeTruthy();
+    expect(block?.classList.contains("bg-primary-100")).toBe(false);
   });
 });
